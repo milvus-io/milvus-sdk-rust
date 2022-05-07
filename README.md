@@ -1,2 +1,2 @@
-# milvus-sdk-rust
-Rust SDK for Milvus.WIP
+# Milvus Rust SDK
+Rust SDK for Milvus. WIP
