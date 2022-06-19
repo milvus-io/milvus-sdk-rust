@@ -15,11 +15,14 @@
 // limitations under the License.
 
 use crate::proto::{
-  common::{ConsistencyLevel, KeyValuePair},
-  milvus::{milvus_service_client::MilvusServiceClient, CreateCollectionRequest},
+  common::{ConsistencyLevel, ErrorCode, KeyValuePair},
+  milvus::{
+    milvus_service_client::MilvusServiceClient, CreateCollectionRequest, DropCollectionRequest,
+    HasCollectionRequest,
+  },
   schema::{CollectionSchema, DataType, FieldSchema},
 };
-use anyhow::Result;
+use anyhow::{bail, Result};
 use prost::{bytes::BytesMut, Message};
 use tonic::{transport::Channel, Request};
 
@@ -54,9 +57,42 @@ impl Client {
 
     let response = self.client.create_collection(request).await?;
 
-    println!("RESPONSE={:?}", response);
+    println!("CREATE COLLECTION RESPONSE={:?}", response);
 
     Ok(())
+  }
+
+  pub async fn drop_collection(&mut self, name: &str) -> Result<()> {
+    let request = Request::new(DropCollectionRequest {
+      base: None,
+      db_name: String::new(),
+      collection_name: name.to_owned(),
+    });
+
+    let response = self.client.drop_collection(request).await?;
+
+    println!("DROP COLLECTION RESPONSE={:?}", response);
+
+    Ok(())
+  }
+
+  pub async fn has_collection(&mut self, name: &str) -> Result<bool> {
+    let request = Request::new(HasCollectionRequest {
+      base: None,
+      db_name: String::new(),
+      collection_name: name.to_owned(),
+      time_stamp: 0,
+    });
+
+    let response = self.client.has_collection(request).await?.into_inner();
+
+    if let Some(status) = response.status {
+      if status.error_code != ErrorCode::Success as i32 {
+        bail!(status.reason);
+      }
+    }
+
+    Ok(response.value)
   }
 }
 
@@ -74,7 +110,9 @@ enum FieldType {
   Int64,
   Float,
   Double,
+  // BinaryVector(dim)
   BinaryVector(i16),
+  // FloatVector(dim)
   FloatVector(i16),
 }
 
@@ -205,8 +243,12 @@ mod tests {
   async fn create_collection() -> Result<()> {
     let mut client = Client::new(None).await?;
 
+    if client.has_collection("new_schema").await? {
+      client.drop_collection("new_schema").await?;
+    }
+
     let schema = CollectionDef {
-      name: "New Schema".to_owned(),
+      name: "new_schema".to_owned(),
       description: "description".to_owned(),
       auto_id: false,
       fields: vec![FieldDef::primary_key_field("book_id", false)],
