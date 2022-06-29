@@ -14,17 +14,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
-
 use crate::proto::{
   common::{ConsistencyLevel, ErrorCode, KeyValuePair},
   milvus::{
     milvus_service_client::MilvusServiceClient, CreateAliasRequest, CreateCollectionRequest,
-    DropCollectionRequest, HasCollectionRequest, InsertRequest, LoadCollectionRequest,
-    MutationResult, ReleaseCollectionRequest, ShowCollectionsRequest, ShowCollectionsResponse,
-    ShowType,
+    DeleteRequest, DropCollectionRequest, HasCollectionRequest, InsertRequest,
+    LoadCollectionRequest, MutationResult, ReleaseCollectionRequest, ShowCollectionsRequest,
+    ShowCollectionsResponse, ShowType,
   },
-  schema::{field_data::Field, CollectionSchema, DataType, FieldData, FieldSchema},
+  schema::{CollectionSchema, DataType, FieldData, FieldSchema},
 };
 use anyhow::{bail, Result};
 use prost::{bytes::BytesMut, Message};
@@ -208,6 +206,35 @@ impl Client {
 
     Ok(result)
   }
+
+  pub async fn delete<T>(
+    &mut self,
+    collection_name: T,
+    partition_name: Option<T>,
+    expr: T,
+  ) -> Result<MutationResult>
+  where
+    T: Into<String>,
+  {
+    let request = Request::new(DeleteRequest {
+      base: None,
+      db_name: String::new(),
+      collection_name: collection_name.into(),
+      partition_name: partition_name.map(|s| s.into()).unwrap_or(String::new()),
+      expr: expr.into(),
+      hash_keys: Vec::new(),
+    });
+
+    let result = self.client.delete(request).await?.into_inner();
+
+    if let Some(status) = &result.status {
+      if status.error_code != ErrorCode::Success as i32 {
+        bail!(status.reason.clone());
+      }
+    }
+
+    Ok(result)
+  }
 }
 
 struct FieldDef {
@@ -357,12 +384,14 @@ mod tests {
   async fn create_collection() -> Result<()> {
     let mut client = Client::new(None).await?;
 
-    if client.has_collection("new_schema").await? {
-      client.drop_collection("new_schema").await?;
+    let collection_name = "test_schema";
+
+    if client.has_collection(collection_name).await? {
+      client.drop_collection(collection_name).await?;
     }
 
     let schema = CollectionDef {
-      name: "new_schema".to_owned(),
+      name: collection_name.to_owned(),
       description: "description".to_owned(),
       auto_id: false,
       fields: vec![
@@ -376,7 +405,7 @@ mod tests {
 
     client
       .insert(
-        "new_schema",
+        collection_name,
         None,
         vec![
           ("book_id", vec![0i64; 12]).into(),
@@ -385,6 +414,10 @@ mod tests {
         ],
         12,
       )
+      .await?;
+
+    client
+      .delete(collection_name, None, "book_id in [0,1]")
       .await?;
 
     Ok(())
