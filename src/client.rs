@@ -24,7 +24,7 @@ use crate::proto::{
     MutationResult, ReleaseCollectionRequest, ShowCollectionsRequest, ShowCollectionsResponse,
     ShowType,
   },
-  schema::{CollectionSchema, DataType, FieldData, FieldSchema},
+  schema::{field_data::Field, CollectionSchema, DataType, FieldData, FieldSchema},
 };
 use anyhow::{bail, Result};
 use prost::{bytes::BytesMut, Message};
@@ -178,11 +178,12 @@ impl Client {
     Ok(())
   }
 
-  pub async fn insert<T, R>(
+  pub async fn insert<T>(
     &mut self,
     collection_name: T,
     partition_name: Option<T>,
     fields_data: Vec<FieldData>,
+    num_rows: u32,
   ) -> Result<MutationResult>
   where
     T: Into<String>,
@@ -194,7 +195,7 @@ impl Client {
       partition_name: partition_name.map(|s| s.into()).unwrap_or(String::new()),
       fields_data,
       hash_keys: Vec::new(),
-      num_rows: 0,
+      num_rows,
     });
 
     let result = self.client.insert(request).await?.into_inner();
@@ -364,10 +365,27 @@ mod tests {
       name: "new_schema".to_owned(),
       description: "description".to_owned(),
       auto_id: false,
-      fields: vec![FieldDef::primary_key_field("book_id", false)],
+      fields: vec![
+        FieldDef::primary_key_field("book_id", false),
+        FieldDef::float_field("Age"),
+        FieldDef::float_vector_field("calories", 24),
+      ],
     };
 
     client.create_collection(schema, 2).await?;
+
+    client
+      .insert(
+        "new_schema",
+        None,
+        vec![
+          ("book_id", vec![0i64; 12]).into(),
+          ("Age", vec![0i32; 12]).into(),
+          ("calories", vec![12f32; 12 * 24], 24i64).into(),
+        ],
+        12,
+      )
+      .await?;
 
     Ok(())
   }
