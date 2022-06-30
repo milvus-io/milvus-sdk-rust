@@ -1,5 +1,5 @@
 [package]
-name = "milvus-sdk-rust"
+name = "milvus-sdk"
 version = "0.1.0"
 edition = "2021"
 
@@ -16,3 +16,7 @@ tokio = { version = "1.17.0", features = ["full"] }
 
 [build-dependencies]
 tonic-build = "0.7"
+
+
+[[example]]
+name = "main_example"

@@ -62,30 +62,30 @@ impl Client {
 
     let response = self.client.create_collection(request).await?;
 
-    println!("CREATE COLLECTION RESPONSE={:?}", response);
+    // println!("CREATE COLLECTION RESPONSE={:?}", response);
 
     Ok(())
   }
 
-  pub async fn drop_collection(&mut self, name: impl Into<String>) -> Result<()> {
+  pub async fn drop_collection(&mut self, collection_name: impl Into<String>) -> Result<()> {
     let request = Request::new(DropCollectionRequest {
       base: None,
       db_name: String::new(),
-      collection_name: name.into(),
+      collection_name: collection_name.into(),
     });
 
     let response = self.client.drop_collection(request).await?;
 
-    println!("DROP COLLECTION RESPONSE={:?}", response);
+    // println!("DROP COLLECTION RESPONSE={:?}", response);
 
     Ok(())
   }
 
-  pub async fn has_collection(&mut self, name: impl Into<String>) -> Result<bool> {
+  pub async fn has_collection(&mut self, collection_name: impl Into<String>) -> Result<bool> {
     let request = Request::new(HasCollectionRequest {
       base: None,
       db_name: String::new(),
-      collection_name: name.into(),
+      collection_name: collection_name.into(),
       time_stamp: 0,
     });
 
@@ -237,7 +237,7 @@ impl Client {
   }
 }
 
-struct FieldDef {
+pub struct FieldDef {
   name: String,
   field_type: FieldType,
   data_type: i32,
@@ -355,10 +355,10 @@ impl From<FieldDef> for FieldSchema {
 }
 
 pub struct CollectionDef {
-  name: String,
-  description: String,
-  auto_id: bool,
-  fields: Vec<FieldDef>,
+  pub name: String,
+  pub description: String,
+  pub auto_id: bool,
+  pub fields: Vec<FieldDef>,
 }
 
 impl From<CollectionDef> for CollectionSchema {
