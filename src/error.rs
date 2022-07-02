@@ -13,8 +13,21 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+// For custom error handling
+// TODO
 
-#[test]
-fn connect() {
-    unimplemented!()
+use std::error::Error as OtherError;
+use std::result;
+use thiserror::Error;
+use tonic::transport::Error as GrpcError;
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("{0:?}")]
+    Other(#[from] Box<dyn OtherError + Send + Sync>),
+
+    #[error("{0:?}")]
+    Grpc(#[from] GrpcError),
 }
+
+pub type Result<T> = result::Result<T, Error>;
