@@ -15,7 +15,7 @@
 // limitations under the License.
 
 use crate::proto::{
-  common::{ConsistencyLevel, ErrorCode, KeyValuePair},
+  common::{ConsistencyLevel, ErrorCode, KeyValuePair, Status},
   milvus::{
     milvus_service_client::MilvusServiceClient, CreateAliasRequest, CreateCollectionRequest,
     DeleteRequest, DropCollectionRequest, HasCollectionRequest, InsertRequest,
@@ -44,7 +44,11 @@ impl Client {
     Ok(Self { client })
   }
 
-  pub async fn create_collection(&mut self, schema: CollectionDef, shards_num: i32) -> Result<()> {
+  pub async fn create_collection(
+    &mut self,
+    schema: CollectionDef,
+    shards_num: i32,
+  ) -> Result<Status> {
     let schema = CollectionSchema::from(schema);
 
     let mut buf = BytesMut::new();
@@ -62,12 +66,10 @@ impl Client {
 
     let response = self.client.create_collection(request).await?;
 
-    // println!("CREATE COLLECTION RESPONSE={:?}", response);
-
-    Ok(())
+    Ok(response.into_inner())
   }
 
-  pub async fn drop_collection(&mut self, collection_name: impl Into<String>) -> Result<()> {
+  pub async fn drop_collection(&mut self, collection_name: impl Into<String>) -> Result<Status> {
     let request = Request::new(DropCollectionRequest {
       base: None,
       db_name: String::new(),
@@ -76,9 +78,7 @@ impl Client {
 
     let response = self.client.drop_collection(request).await?;
 
-    // println!("DROP COLLECTION RESPONSE={:?}", response);
-
-    Ok(())
+    Ok(response.into_inner())
   }
 
   pub async fn has_collection(&mut self, collection_name: impl Into<String>) -> Result<bool> {
@@ -100,11 +100,11 @@ impl Client {
     Ok(response.value)
   }
 
-  pub async fn describe_collection(&mut self, name: impl Into<String>) -> Result<()> {
+  pub async fn describe_collection(&self, _name: impl Into<String>) -> Result<()> {
     unimplemented!()
   }
 
-  pub async fn get_collection_statistics(&mut self, name: impl Into<String>) -> Result<()> {
+  pub async fn get_collection_statistics(&self, _name: impl Into<String>) -> Result<()> {
     unimplemented!()
   }
 
@@ -235,6 +235,31 @@ impl Client {
 
     Ok(result)
   }
+
+  //pub async fn search<T>(
+  //  &self,
+  //  collection_name: impl Into<String>,
+  //  output_fields: Vec<impl Into<String>>,
+  //) -> Result<()> {
+  //  let request = Request::new(SearchRequest {
+  //    base: None,
+  //    // database names are not used right now
+  //    db_name: String::new(),
+  //    collection_name: collection_name.into(),
+  //    // TODO: implement thoughtfully
+  //    partition_names: Vec::new(),
+  //    dsl: String::new(),
+  //    placeholder_group: Vec::new(),
+  //    dsl_type: DslType::Dsl as i32,
+  //    output_fields: output_fields.into_iter().map(|f| f.into()).collect(),
+  //    // TODO: implement thoughtfully
+  //    search_params: Vec::new(),
+  //    travel_timestamp: 0,
+  //    guarantee_timestamp: 0,
+  //  });
+  //
+  //  Ok(())
+  //}
 }
 
 pub struct FieldDef {
