@@ -12,6 +12,8 @@ name = "milvus"
 tonic = "0.6.2"
 prost = "0.9.0"
 tokio = { version = "1.17.0", features = ["full"] }
+thiserror = "1.0"
+futures = "0.3.21"
 
 [build-dependencies]
 tonic-build = "0.6.2"

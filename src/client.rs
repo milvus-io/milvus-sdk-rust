@@ -14,4 +14,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub struct Client {}
+use crate::error::{Error, Result};
+use crate::proto::milvus::milvus_service_client::MilvusServiceClient;
+use tonic::codegen::StdError;
+use tonic::transport::Channel;
+
+pub struct Client {
+    client: MilvusServiceClient<Channel>,
+}
+
+impl Client {
+    pub async fn new<D>(dst: D) -> Result<Self>
+    where
+        D: std::convert::TryInto<tonic::transport::Endpoint>,
+        D::Error: Into<StdError>,
+    {
+        match MilvusServiceClient::connect(dst).await {
+            Ok(i) => Ok(Self { client: i }),
+            Err(e) => Err(Error::Grpc(e)),
+        }
+    }
+}
