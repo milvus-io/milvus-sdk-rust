@@ -32,7 +32,5 @@ async fn create_collection() -> Result<()> {
 
   assert!(!client.has_collection(collection_name).await?);
 
-  
-
   Ok(())
 }

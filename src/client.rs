@@ -15,12 +15,12 @@
 // limitations under the License.
 
 use crate::proto::{
-  common::{ConsistencyLevel, DslType, ErrorCode, KeyValuePair, Status},
+  common::{ConsistencyLevel, ErrorCode, KeyValuePair, Status},
   milvus::{
     milvus_service_client::MilvusServiceClient, CreateAliasRequest, CreateCollectionRequest,
     DeleteRequest, DropCollectionRequest, HasCollectionRequest, InsertRequest,
-    LoadCollectionRequest, MutationResult, ReleaseCollectionRequest, SearchRequest,
-    ShowCollectionsRequest, ShowCollectionsResponse, ShowType,
+    LoadCollectionRequest, MutationResult, ReleaseCollectionRequest, ShowCollectionsRequest,
+    ShowCollectionsResponse, ShowType,
   },
   schema::{CollectionSchema, DataType, FieldData, FieldSchema},
 };
@@ -238,27 +238,10 @@ impl Client {
 
   pub async fn search<T>(
     &self,
-    collection_name: impl Into<String>,
-    output_fields: Vec<impl Into<String>>,
+    _collection_name: impl Into<String>,
+    _output_fields: Vec<impl Into<String>>,
   ) -> Result<()> {
-    let request = Request::new(SearchRequest {
-      base: None,
-      // database names are not used right now
-      db_name: String::new(),
-      collection_name: collection_name.into(),
-      // TODO: implement thoughtfully
-      partition_names: Vec::new(),
-      dsl: String::new(),
-      placeholder_group: Vec::new(),
-      dsl_type: DslType::Dsl as i32,
-      output_fields: output_fields.into_iter().map(|f| f.into()).collect(),
-      // TODO: implement thoughtfully
-      search_params: Vec::new(),
-      travel_timestamp: 0,
-      guarantee_timestamp: 0,
-    });
-
-    Ok(())
+    unimplemented!()
   }
 }
 
