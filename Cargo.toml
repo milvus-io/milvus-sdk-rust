@@ -1,7 +1,13 @@
 [package]
-name = "milvus-sdk-rust"
-version = "0.1.0"
+name = "milvus-sdk"
+version = "0.0.1-pre-alpha"
 edition = "2021"
+license = "Apache-2.0"
+description = "Milvus client SDK"
+categories = ["database"]
+keywords = ["milvus", "database", "vector", "client", "sdk"]
+authors = ["Dakota Brink <git@kota.is>", "yah01 <yang.cen@zilliz.com>"]
+repository = "https://github.com/milvus-io/milvus-sdk-rust"
 
 [lib]
 name = "milvus"
@@ -9,9 +15,13 @@ name = "milvus"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tonic = "0.6.2"
-prost = "0.9.0"
+anyhow = "1"
+tonic = "0.7"
+prost = "0.10"
 tokio = { version = "1.17.0", features = ["full"] }
 
 [build-dependencies]
-tonic-build = "0.6.2"
+tonic-build = "0.7"
+
+[[example]]
+name = "main_example"

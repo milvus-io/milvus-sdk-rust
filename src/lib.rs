@@ -15,4 +15,6 @@
 // limitations under the License.
 
 pub mod client;
-mod proto;
+pub mod data;
+pub mod prelude;
+pub mod proto;
