@@ -11,7 +11,7 @@ where
 {
     fn into(self) -> FieldData {
         let (field_name, data, dim) = self;
-        float_vector(field_name, data, dim)
+        FieldData::float_vector(field_name, data, dim)
     }
 }
 
@@ -21,7 +21,7 @@ where
 {
     fn into(self) -> FieldData {
         let (field_name, data) = self;
-        int_data(field_name, data)
+        FieldData::int_data(field_name, data)
     }
 }
 
@@ -31,7 +31,7 @@ where
 {
     fn into(self) -> FieldData {
         let (field_name, data) = self;
-        long_data(field_name, data)
+        FieldData::long_data(field_name, data)
     }
 }
 
@@ -41,7 +41,7 @@ where
 {
     fn into(self) -> FieldData {
         let (field_name, data) = self;
-        float_data(field_name, data)
+        FieldData::float_data(field_name, data)
     }
 }
 impl<T> Into<FieldData> for (T, Vec<String>)
@@ -50,87 +50,89 @@ where
 {
     fn into(self) -> FieldData {
         let (field_name, data) = self;
-        string_data(field_name, data)
+        FieldData::string_data(field_name, data)
     }
 }
 
-pub fn binary_vector(field_name: impl Into<String>, data: Vec<bool>, dim: i64) -> FieldData {
-    let bool_array = BoolArray { data };
-    let mut buf = BytesMut::new();
-    bool_array
-        .encode(&mut buf)
-        .expect("Could not encode binary vec");
-    let buf = buf.freeze();
+impl FieldData {
+    pub fn binary_vector(field_name: impl Into<String>, data: Vec<bool>, dim: i64) -> FieldData {
+        let bool_array = BoolArray { data };
+        let mut buf = BytesMut::new();
+        bool_array
+            .encode(&mut buf)
+            .expect("Could not encode binary vec");
+        let buf = buf.freeze();
 
-    FieldData {
-        r#type: DataType::BinaryVector as i32,
-        field_name: field_name.into(),
-        field_id: 0,
-        field: Some(field_data::Field::Vectors(VectorField {
-            dim,
-            data: Some(vector_field::Data::BinaryVector(buf.to_vec())),
-        })),
-    }
-}
-
-pub fn float_vector(
-    field_name: impl Into<String>,
-    data: impl Into<Vec<f32>>,
-    dim: i64,
-) -> FieldData {
-    FieldData {
-        r#type: DataType::FloatVector as i32,
-        field_name: field_name.into(),
-        field_id: 0,
-        field: Some(field_data::Field::Vectors(VectorField {
-            dim,
-            data: Some(vector_field::Data::FloatVector(FloatArray {
-                data: data.into(),
+        FieldData {
+            r#type: DataType::BinaryVector as i32,
+            field_name: field_name.into(),
+            field_id: 0,
+            field: Some(field_data::Field::Vectors(VectorField {
+                dim,
+                data: Some(vector_field::Data::BinaryVector(buf.to_vec())),
             })),
-        })),
+        }
     }
-}
 
-pub fn int_data(field_name: impl Into<String>, data: Vec<i32>) -> FieldData {
-    FieldData {
-        r#type: DataType::Int32 as i32,
-        field_name: field_name.into(),
-        field_id: 0,
-        field: Some(field_data::Field::Scalars(ScalarField {
-            data: Some(scalar_field::Data::IntData(IntArray { data })),
-        })),
+    pub fn float_vector(
+        field_name: impl Into<String>,
+        data: impl Into<Vec<f32>>,
+        dim: i64,
+    ) -> FieldData {
+        FieldData {
+            r#type: DataType::FloatVector as i32,
+            field_name: field_name.into(),
+            field_id: 0,
+            field: Some(field_data::Field::Vectors(VectorField {
+                dim,
+                data: Some(vector_field::Data::FloatVector(FloatArray {
+                    data: data.into(),
+                })),
+            })),
+        }
     }
-}
 
-pub fn long_data(field_name: impl Into<String>, data: Vec<i64>) -> FieldData {
-    FieldData {
-        r#type: DataType::Int64 as i32,
-        field_name: field_name.into(),
-        field_id: 0,
-        field: Some(field_data::Field::Scalars(ScalarField {
-            data: Some(scalar_field::Data::LongData(LongArray { data })),
-        })),
+    pub fn int_data(field_name: impl Into<String>, data: Vec<i32>) -> FieldData {
+        FieldData {
+            r#type: DataType::Int32 as i32,
+            field_name: field_name.into(),
+            field_id: 0,
+            field: Some(field_data::Field::Scalars(ScalarField {
+                data: Some(scalar_field::Data::IntData(IntArray { data })),
+            })),
+        }
     }
-}
 
-fn float_data(field_name: impl Into<String>, data: Vec<f32>) -> FieldData {
-    FieldData {
-        r#type: DataType::Float as i32,
-        field_name: field_name.into(),
-        field_id: 0,
-        field: Some(field_data::Field::Scalars(ScalarField {
-            data: Some(scalar_field::Data::FloatData(FloatArray { data })),
-        })),
+    pub fn long_data(field_name: impl Into<String>, data: Vec<i64>) -> FieldData {
+        FieldData {
+            r#type: DataType::Int64 as i32,
+            field_name: field_name.into(),
+            field_id: 0,
+            field: Some(field_data::Field::Scalars(ScalarField {
+                data: Some(scalar_field::Data::LongData(LongArray { data })),
+            })),
+        }
     }
-}
 
-fn string_data(field_name: impl Into<String>, data: Vec<String>) -> FieldData {
-    FieldData {
-        r#type: DataType::String as i32,
-        field_name: field_name.into(),
-        field_id: 0,
-        field: Some(field_data::Field::Scalars(ScalarField {
-            data: Some(scalar_field::Data::StringData(StringArray { data })),
-        })),
+    fn float_data(field_name: impl Into<String>, data: Vec<f32>) -> FieldData {
+        FieldData {
+            r#type: DataType::Float as i32,
+            field_name: field_name.into(),
+            field_id: 0,
+            field: Some(field_data::Field::Scalars(ScalarField {
+                data: Some(scalar_field::Data::FloatData(FloatArray { data })),
+            })),
+        }
+    }
+
+    fn string_data(field_name: impl Into<String>, data: Vec<String>) -> FieldData {
+        FieldData {
+            r#type: DataType::String as i32,
+            field_name: field_name.into(),
+            field_id: 0,
+            field: Some(field_data::Field::Scalars(ScalarField {
+                data: Some(scalar_field::Data::StringData(StringArray { data })),
+            })),
+        }
     }
 }
