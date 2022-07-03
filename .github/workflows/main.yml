@@ -1,0 +1,44 @@
+name: Unittest
+
+on:
+  push:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'milvus-proto/**'
+      - 'build.rs'
+  # Triggers the workflow on push or pull request events but only for the master branch
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'milvus-proto/**'
+      - 'build.rs'
+
+
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    name: Unittest AMD64 Ubuntu ${{ matrix.ubuntu }}
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        ubuntu: [18.04]
+    env:
+      UBUNTU: ${{ matrix.ubuntu }}
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v3
+      # Runs a single command using the runners shell
+      - name: Run Unittest
+        run: cargo test --verbose
+      # - name: Upload coverage to Codecov
+      #   if: github.repository == 'milvus-io/milvus-sdk-go'
+      #   uses: codecov/codecov-action@v1
+      #   with:
+      #     token: ${{ secrets.CODECOV_TOKEN }} 
+      #     file: ./coverage.project.out
+      #     name: ubuntu-${{ matrix.ubuntu }}-unittests
