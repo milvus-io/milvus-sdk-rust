@@ -1,59 +1,59 @@
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Status {
-    #[prost(enumeration="ErrorCode", tag="1")]
+    #[prost(enumeration = "ErrorCode", tag = "1")]
     pub error_code: i32,
-    #[prost(string, tag="2")]
+    #[prost(string, tag = "2")]
     pub reason: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct KeyValuePair {
-    #[prost(string, tag="1")]
+    #[prost(string, tag = "1")]
     pub key: ::prost::alloc::string::String,
-    #[prost(string, tag="2")]
+    #[prost(string, tag = "2")]
     pub value: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct KeyDataPair {
-    #[prost(string, tag="1")]
+    #[prost(string, tag = "1")]
     pub key: ::prost::alloc::string::String,
-    #[prost(bytes="vec", tag="2")]
+    #[prost(bytes = "vec", tag = "2")]
     pub data: ::prost::alloc::vec::Vec<u8>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Blob {
-    #[prost(bytes="vec", tag="1")]
+    #[prost(bytes = "vec", tag = "1")]
     pub value: ::prost::alloc::vec::Vec<u8>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Address {
-    #[prost(string, tag="1")]
+    #[prost(string, tag = "1")]
     pub ip: ::prost::alloc::string::String,
-    #[prost(int64, tag="2")]
+    #[prost(int64, tag = "2")]
     pub port: i64,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct MsgBase {
-    #[prost(enumeration="MsgType", tag="1")]
+    #[prost(enumeration = "MsgType", tag = "1")]
     pub msg_type: i32,
-    #[prost(int64, tag="2")]
+    #[prost(int64, tag = "2")]
     pub msg_id: i64,
-    #[prost(uint64, tag="3")]
+    #[prost(uint64, tag = "3")]
     pub timestamp: u64,
-    #[prost(int64, tag="4")]
+    #[prost(int64, tag = "4")]
     pub source_id: i64,
 }
 /// Don't Modify This. @czs
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct MsgHeader {
-    #[prost(message, optional, tag="1")]
+    #[prost(message, optional, tag = "1")]
     pub base: ::core::option::Option<MsgBase>,
 }
 /// Don't Modify This. @czs
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DmlMsgHeader {
-    #[prost(message, optional, tag="1")]
+    #[prost(message, optional, tag = "1")]
     pub base: ::core::option::Option<MsgBase>,
-    #[prost(string, tag="2")]
+    #[prost(string, tag = "2")]
     pub shard_name: ::prost::alloc::string::String,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -120,7 +120,7 @@ pub enum SegmentState {
 #[repr(i32)]
 pub enum MsgType {
     Undefined = 0,
-    /// DEFINITION REQUESTS: COLLECTION 
+    /// DEFINITION REQUESTS: COLLECTION
     CreateCollection = 100,
     DropCollection = 101,
     HasCollection = 102,
@@ -132,7 +132,7 @@ pub enum MsgType {
     CreateAlias = 108,
     DropAlias = 109,
     AlterAlias = 110,
-    /// DEFINITION REQUESTS: PARTITION 
+    /// DEFINITION REQUESTS: PARTITION
     CreatePartition = 200,
     DropPartition = 201,
     HasPartition = 202,
@@ -140,7 +140,7 @@ pub enum MsgType {
     ShowPartitions = 204,
     LoadPartitions = 205,
     ReleasePartitions = 206,
-    /// DEFINE REQUESTS: SEGMENT 
+    /// DEFINE REQUESTS: SEGMENT
     ShowSegments = 250,
     DescribeSegment = 251,
     LoadSegments = 252,
@@ -148,15 +148,15 @@ pub enum MsgType {
     HandoffSegments = 254,
     LoadBalanceSegments = 255,
     DescribeSegments = 256,
-    /// DEFINITION REQUESTS: INDEX 
+    /// DEFINITION REQUESTS: INDEX
     CreateIndex = 300,
     DescribeIndex = 301,
     DropIndex = 302,
-    /// MANIPULATION REQUESTS 
+    /// MANIPULATION REQUESTS
     Insert = 400,
     Delete = 401,
     Flush = 402,
-    /// QUERY 
+    /// QUERY
     Search = 500,
     SearchResult = 501,
     GetIndexState = 502,
@@ -173,12 +173,12 @@ pub enum MsgType {
     WatchDeltaChannels = 513,
     GetShardLeaders = 514,
     GetReplicas = 515,
-    /// DATA SERVICE 
+    /// DATA SERVICE
     SegmentInfo = 600,
     SystemInfo = 601,
     GetRecoveryInfo = 602,
     GetSegmentState = 603,
-    /// SYSTEM CONTROL 
+    /// SYSTEM CONTROL
     TimeTick = 1200,
     /// GOOSE TODO: Remove kQueryNodeStats
     QueryNodeStats = 1201,
@@ -189,7 +189,7 @@ pub enum MsgType {
     SegmentStatistics = 1206,
     SegmentFlushDone = 1207,
     DataNodeTt = 1208,
-    /// Credential 
+    /// Credential
     CreateCredential = 1500,
     GetCredential = 1501,
     DeleteCredential = 1502,

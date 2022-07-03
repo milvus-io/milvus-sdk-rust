@@ -19,18 +19,18 @@ use milvus::prelude::*;
 
 #[tokio::test]
 async fn create_collection() -> Result<()> {
-  let client = Client::new(None).await;
+    let client = Client::new(None).await;
 
-  assert!(client.is_ok());
-  let mut client = client?;
+    assert!(client.is_ok());
+    let mut client = client?;
 
-  let collection_name = "test_schema";
+    let collection_name = "test_schema";
 
-  if client.has_collection(collection_name).await? {
-    client.drop_collection(collection_name).await?;
-  }
+    if client.has_collection(collection_name).await? {
+        client.drop_collection(collection_name).await?;
+    }
 
-  assert!(!client.has_collection(collection_name).await?);
+    assert!(!client.has_collection(collection_name).await?);
 
-  Ok(())
+    Ok(())
 }
