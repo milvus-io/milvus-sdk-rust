@@ -25,6 +25,21 @@ pub struct Blob {
     pub value: ::prost::alloc::vec::Vec<u8>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PlaceholderValue {
+    #[prost(string, tag = "1")]
+    pub tag: ::prost::alloc::string::String,
+    #[prost(enumeration = "PlaceholderType", tag = "2")]
+    pub r#type: i32,
+    /// values is a 2d-array, every array contains a vector
+    #[prost(bytes = "vec", repeated, tag = "3")]
+    pub values: ::prost::alloc::vec::Vec<::prost::alloc::vec::Vec<u8>>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PlaceholderGroup {
+    #[prost(message, repeated, tag = "1")]
+    pub placeholders: ::prost::alloc::vec::Vec<PlaceholderValue>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Address {
     #[prost(string, tag = "1")]
     pub ip: ::prost::alloc::string::String,
@@ -55,6 +70,15 @@ pub struct DmlMsgHeader {
     pub base: ::core::option::Option<MsgBase>,
     #[prost(string, tag = "2")]
     pub shard_name: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PrivilegeExt {
+    #[prost(enumeration = "ResourceType", tag = "1")]
+    pub resource_type: i32,
+    #[prost(enumeration = "ResourcePrivilege", tag = "2")]
+    pub resource_privilege: i32,
+    #[prost(int32, tag = "3")]
+    pub resource_name_index: i32,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
@@ -92,6 +116,19 @@ pub enum ErrorCode {
     DeleteCredentialFailure = 31,
     GetCredentialFailure = 32,
     ListCredUsersFailure = 33,
+    GetUserFailure = 34,
+    CreateRoleFailure = 35,
+    DropRoleFailure = 36,
+    OperateUserRoleFailure = 37,
+    SelectRoleFailure = 38,
+    SelectUserFailure = 39,
+    SelectResourceFailure = 40,
+    OperatePrivilegeFailure = 41,
+    SelectGrantFailure = 42,
+    RefreshPolicyInfoCacheFailure = 43,
+    ListPolicyFailure = 44,
+    NotShardLeader = 45,
+    NoReplicaAvailable = 46,
     /// internal error code.
     DdRequestRace = 1000,
 }
@@ -115,6 +152,13 @@ pub enum SegmentState {
     Flushing = 5,
     Dropped = 6,
     Importing = 7,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum PlaceholderType {
+    None = 0,
+    BinaryVector = 100,
+    FloatVector = 101,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
@@ -156,6 +200,7 @@ pub enum MsgType {
     Insert = 400,
     Delete = 401,
     Flush = 402,
+    ResendSegmentStats = 403,
     /// QUERY
     Search = 500,
     SearchResult = 501,
@@ -195,6 +240,17 @@ pub enum MsgType {
     DeleteCredential = 1502,
     UpdateCredential = 1503,
     ListCredUsernames = 1504,
+    /// RBAC
+    CreateRole = 1600,
+    DropRole = 1601,
+    OperateUserRole = 1602,
+    SelectRole = 1603,
+    SelectUser = 1604,
+    SelectResource = 1605,
+    OperatePrivilege = 1606,
+    SelectGrant = 1607,
+    RefreshPolicyInfoCache = 1608,
+    ListPolicy = 1609,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
@@ -229,7 +285,25 @@ pub enum ImportState {
     ImportDownloaded = 3,
     ImportParsed = 4,
     ImportPersisted = 5,
-    DataQueryable = 6,
-    DataIndexed = 7,
-    ImportCompleted = 8,
+    ImportCompleted = 6,
+    ImportAllocSegment = 10,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum ResourceType {
+    Collection = 0,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum ResourcePrivilege {
+    PrivilegeAll = 0,
+    PrivilegeCreate = 1,
+    PrivilegeDrop = 2,
+    PrivilegeAlter = 3,
+    PrivilegeRead = 4,
+    PrivilegeLoad = 5,
+    PrivilegeRelease = 6,
+    PrivilegeCompact = 7,
+    PrivilegeInsert = 8,
+    PrivilegeDelete = 9,
 }
