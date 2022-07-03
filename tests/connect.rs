@@ -14,7 +14,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// #[test]
-// fn connect() {
-// unimplemented!()
-// }
+use anyhow::Result;
+use milvus::prelude::*;
+
+#[tokio::test]
+async fn create_collection() -> Result<()> {
+  let client = Client::new(None).await;
+
+  assert!(client.is_ok());
+  let mut client = client?;
+
+  let collection_name = "test_schema";
+
+  if client.has_collection(collection_name).await? {
+    client.drop_collection(collection_name).await?;
+  }
+
+  assert!(!client.has_collection(collection_name).await?);
+
+  
+
+  Ok(())
+}
