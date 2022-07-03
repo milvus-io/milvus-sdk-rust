@@ -43,6 +43,8 @@ async fn create_collection() -> Result<()> {
         ],
     };
 
+    client.create_collection(schema, 1).await?;
+
     client
         .insert(
             collection_name,
@@ -54,6 +56,10 @@ async fn create_collection() -> Result<()> {
             ],
             12,
         )
+        .await?;
+
+    client
+        .delete(collection_name, None, "book_id in [0,1]")
         .await?;
 
     Ok(())
