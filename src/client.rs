@@ -409,8 +409,6 @@ mod tests {
             ],
         };
 
-        client.create_collection(schema, 2).await?;
-
         client
             .insert(
                 collection_name,
