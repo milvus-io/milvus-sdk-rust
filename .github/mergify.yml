@@ -1,0 +1,66 @@
+pull_request_rules:
+  - name: Test passed for code changed
+    conditions:
+      - base=main
+      - "status-success=Unittest AMD64 Ubuntu 18.04"
+    actions:
+      label:
+        add:
+          - ci-passed
+
+  - name: Test passed for document changed
+    conditions:
+      - base=main
+      - -files~=^[^\.]+$
+      - -files~=\.(?!md|png)
+    actions:
+      label:
+        add:
+          - ci-passed
+
+  - name: Test passed for mergify changed
+    conditions:
+      - base=main
+      - -files~=^(?!\.github\/mergify\.yml).*$
+    actions:
+      label:
+        add:
+          - ci-passed
+
+  - name: Remove ci-passed when unittest failed
+    conditions:
+      - base=main
+      - "check-failure=Unittest AMD64 Ubuntu 18.04"
+    actions:
+      label:
+        remove:
+          - ci-passed
+
+  - name: Blocking PR if missing a related issue or PR doesn't have kind/improvement label
+    conditions:
+      - base=main
+      - -body~=\#[0-9]{1,6}(\s+|$)
+      - -label=kind/improvement
+      - -title~=\[automated\]
+    actions:
+      label:
+        add:
+          - do-not-merge/missing-related-issue
+      comment:
+        message: |
+          @{{author}} Please associate the related issue to the body of your Pull Request.  (eg. “issue: #187”)
+
+
+  - name: Dismiss block label if related issue be added into PR
+    conditions:
+      - or:
+        - and:
+          - base=main
+          - body~=\#[0-9]{1,6}(\s+|$)
+        - and:
+          - base=main
+          - label=kind/improvement
+    actions:
+      label:
+        remove:
+          - do-not-merge/missing-related-issue
