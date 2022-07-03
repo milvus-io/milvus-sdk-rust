@@ -4,56 +4,6 @@ use crate::proto::schema::{
 };
 use prost::{bytes::BytesMut, Message};
 
-impl<T, R> Into<FieldData> for (T, R, i64)
-where
-    T: Into<String>,
-    R: Into<Vec<f32>>,
-{
-    fn into(self) -> FieldData {
-        let (field_name, data, dim) = self;
-        FieldData::float_vector(field_name, data, dim)
-    }
-}
-
-impl<T> Into<FieldData> for (T, Vec<i32>)
-where
-    T: Into<String>,
-{
-    fn into(self) -> FieldData {
-        let (field_name, data) = self;
-        FieldData::int_data(field_name, data)
-    }
-}
-
-impl<T> Into<FieldData> for (T, Vec<i64>)
-where
-    T: Into<String>,
-{
-    fn into(self) -> FieldData {
-        let (field_name, data) = self;
-        FieldData::long_data(field_name, data)
-    }
-}
-
-impl<T> Into<FieldData> for (T, Vec<f32>)
-where
-    T: Into<String>,
-{
-    fn into(self) -> FieldData {
-        let (field_name, data) = self;
-        FieldData::float_data(field_name, data)
-    }
-}
-impl<T> Into<FieldData> for (T, Vec<String>)
-where
-    T: Into<String>,
-{
-    fn into(self) -> FieldData {
-        let (field_name, data) = self;
-        FieldData::string_data(field_name, data)
-    }
-}
-
 impl FieldData {
     pub fn binary_vector(field_name: impl Into<String>, data: Vec<bool>, dim: i64) -> FieldData {
         let bool_array = BoolArray { data };

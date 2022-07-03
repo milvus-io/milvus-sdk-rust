@@ -15,7 +15,7 @@
 // limitations under the License.
 
 use anyhow::Result;
-use milvus::prelude::*;
+use milvus::{prelude::*, proto::schema::FieldData};
 
 #[tokio::test]
 async fn create_collection() -> Result<()> {
@@ -50,9 +50,9 @@ async fn create_collection() -> Result<()> {
             collection_name,
             None,
             vec![
-                ("book_id", vec![0i64; 12]).into(),
-                ("Age", vec![0i32; 12]).into(),
-                ("calories", vec![12f32; 12 * 24], 24i64).into(),
+                FieldData::long_data("book_id", vec![0; 12]),
+                FieldData::int_data("Age", vec![0; 12]),
+                FieldData::float_vector("calories", vec![12.; 12 * 24], 24),
             ],
             12,
         )
