@@ -257,6 +257,9 @@ pub struct ShowCollectionsResponse {
     /// Load percentage on querynode when type is InMemory
     #[prost(int64, repeated, tag = "6")]
     pub in_memory_percentages: ::prost::alloc::vec::Vec<i64>,
+    /// Indicate whether query service is available
+    #[prost(bool, repeated, tag = "7")]
+    pub query_service_available: ::prost::alloc::vec::Vec<bool>,
 }
 ///
 /// Create partition in created collection.
@@ -656,21 +659,6 @@ pub struct DeleteRequest {
     pub hash_keys: ::prost::alloc::vec::Vec<u32>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct PlaceholderValue {
-    #[prost(string, tag = "1")]
-    pub tag: ::prost::alloc::string::String,
-    #[prost(enumeration = "PlaceholderType", tag = "2")]
-    pub r#type: i32,
-    /// values is a 2d-array, every array contains a vector
-    #[prost(bytes = "vec", repeated, tag = "3")]
-    pub values: ::prost::alloc::vec::Vec<::prost::alloc::vec::Vec<u8>>,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct PlaceholderGroup {
-    #[prost(message, repeated, tag = "1")]
-    pub placeholders: ::prost::alloc::vec::Vec<PlaceholderValue>,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SearchRequest {
     /// must
     #[prost(message, optional, tag = "1")]
@@ -704,6 +692,8 @@ pub struct SearchRequest {
     /// guarantee_timestamp
     #[prost(uint64, tag = "11")]
     pub guarantee_timestamp: u64,
+    #[prost(int64, tag = "12")]
+    pub nq: i64,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Hits {
@@ -879,10 +869,13 @@ pub struct QuerySegmentInfo {
     pub index_name: ::prost::alloc::string::String,
     #[prost(int64, tag = "7")]
     pub index_id: i64,
+    /// deprecated, check node_ids(NodeIds) field
     #[prost(int64, tag = "8")]
     pub node_id: i64,
     #[prost(enumeration = "super::common::SegmentState", tag = "9")]
     pub state: i32,
+    #[prost(int64, repeated, tag = "10")]
+    pub node_ids: ::prost::alloc::vec::Vec<i64>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetQuerySegmentInfoRequest {
@@ -1068,12 +1061,18 @@ pub struct GetImportStateResponse {
     /// auto generated ids if the primary key is autoid
     #[prost(int64, repeated, tag = "4")]
     pub id_list: ::prost::alloc::vec::Vec<i64>,
-    /// more informations about the task, progress percent, file path, failed reason, etc.
+    /// more information about the task, progress percent, file path, failed reason, etc.
     #[prost(message, repeated, tag = "5")]
     pub infos: ::prost::alloc::vec::Vec<super::common::KeyValuePair>,
     /// id of an import task
     #[prost(int64, tag = "6")]
     pub id: i64,
+    /// A flag indicating whether import data are queryable (i.e. loaded in query nodes)
+    #[prost(bool, tag = "7")]
+    pub data_queryable: bool,
+    /// A flag indicating whether import data are indexed.
+    #[prost(bool, tag = "8")]
+    pub data_indexed: bool,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ListImportTasksRequest {}
@@ -1196,6 +1195,221 @@ pub struct ListCredUsersRequest {
     #[prost(message, optional, tag = "1")]
     pub base: ::core::option::Option<super::common::MsgBase>,
 }
+/// <https://wiki.lfaidata.foundation/display/MIL/MEP+29+--+Support+Role-Based+Access+Control>
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RoleEntity {
+    #[prost(string, tag = "1")]
+    pub name: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct UserEntity {
+    #[prost(string, tag = "1")]
+    pub name: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CreateRoleRequest {
+    /// Not useful for now
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    /// role
+    #[prost(message, optional, tag = "2")]
+    pub entity: ::core::option::Option<RoleEntity>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DropRoleRequest {
+    /// Not useful for now
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    /// role name
+    #[prost(string, tag = "2")]
+    pub role_name: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct OperateUserRoleRequest {
+    /// Not useful for now
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    /// username
+    #[prost(string, tag = "2")]
+    pub username: ::prost::alloc::string::String,
+    /// role name
+    #[prost(string, tag = "3")]
+    pub role_name: ::prost::alloc::string::String,
+    /// operation type
+    #[prost(enumeration = "OperateUserRoleType", tag = "4")]
+    pub r#type: i32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SelectRoleRequest {
+    /// Not useful for now
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    /// role
+    #[prost(message, optional, tag = "2")]
+    pub role: ::core::option::Option<RoleEntity>,
+    /// include user info
+    #[prost(bool, tag = "3")]
+    pub include_user_info: bool,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RoleResult {
+    #[prost(message, optional, tag = "1")]
+    pub role: ::core::option::Option<RoleEntity>,
+    #[prost(message, repeated, tag = "2")]
+    pub users: ::prost::alloc::vec::Vec<UserEntity>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SelectRoleResponse {
+    /// Not useful for now
+    #[prost(message, optional, tag = "1")]
+    pub status: ::core::option::Option<super::common::Status>,
+    /// role result array
+    #[prost(message, repeated, tag = "2")]
+    pub results: ::prost::alloc::vec::Vec<RoleResult>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SelectUserRequest {
+    /// Not useful for now
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    /// user
+    #[prost(message, optional, tag = "2")]
+    pub user: ::core::option::Option<UserEntity>,
+    /// include user info
+    #[prost(bool, tag = "3")]
+    pub include_role_info: bool,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct UserResult {
+    #[prost(message, optional, tag = "1")]
+    pub user: ::core::option::Option<UserEntity>,
+    #[prost(message, repeated, tag = "2")]
+    pub roles: ::prost::alloc::vec::Vec<RoleEntity>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SelectUserResponse {
+    /// Not useful for now
+    #[prost(message, optional, tag = "1")]
+    pub status: ::core::option::Option<super::common::Status>,
+    /// user result array
+    #[prost(message, repeated, tag = "2")]
+    pub result: ::prost::alloc::vec::Vec<UserResult>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ResourceEntity {
+    #[prost(string, tag = "1")]
+    pub r#type: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PrivilegeEntity {
+    #[prost(string, tag = "1")]
+    pub name: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SelectResourceRequest {
+    /// Not useful for now
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    /// resource
+    #[prost(message, optional, tag = "2")]
+    pub entity: ::core::option::Option<ResourceEntity>,
+    /// include privilege info
+    #[prost(bool, tag = "3")]
+    pub include_privilege_info: bool,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ResourceResult {
+    #[prost(message, optional, tag = "1")]
+    pub resource: ::core::option::Option<ResourceEntity>,
+    #[prost(message, repeated, tag = "2")]
+    pub privileges: ::prost::alloc::vec::Vec<PrivilegeEntity>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SelectResourceResponse {
+    /// Not useful for now
+    #[prost(message, optional, tag = "1")]
+    pub status: ::core::option::Option<super::common::Status>,
+    /// resource result array
+    #[prost(message, repeated, tag = "2")]
+    pub results: ::prost::alloc::vec::Vec<ResourceResult>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PrincipalEntity {
+    /// principal type, including user, role
+    #[prost(string, tag = "1")]
+    pub principal_type: ::prost::alloc::string::String,
+    /// principal, including user entity or role entity
+    #[prost(oneof = "principal_entity::Principal", tags = "2, 3")]
+    pub principal: ::core::option::Option<principal_entity::Principal>,
+}
+/// Nested message and enum types in `PrincipalEntity`.
+pub mod principal_entity {
+    /// principal, including user entity or role entity
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Principal {
+        #[prost(message, tag = "2")]
+        User(super::UserEntity),
+        #[prost(message, tag = "3")]
+        Role(super::RoleEntity),
+    }
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GrantorEntity {
+    #[prost(message, optional, tag = "1")]
+    pub user: ::core::option::Option<UserEntity>,
+    #[prost(message, optional, tag = "2")]
+    pub privilege: ::core::option::Option<PrivilegeEntity>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GrantEntity {
+    /// principal
+    #[prost(message, optional, tag = "1")]
+    pub principal: ::core::option::Option<PrincipalEntity>,
+    /// resource
+    #[prost(message, optional, tag = "2")]
+    pub resource: ::core::option::Option<ResourceEntity>,
+    /// resource name
+    #[prost(string, tag = "3")]
+    pub resource_name: ::prost::alloc::string::String,
+    /// privilege
+    #[prost(message, optional, tag = "4")]
+    pub grantor: ::core::option::Option<GrantorEntity>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SelectGrantRequest {
+    /// Not useful for now
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    /// grant
+    #[prost(message, optional, tag = "2")]
+    pub entity: ::core::option::Option<GrantEntity>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SelectGrantResponse {
+    /// Not useful for now
+    #[prost(message, optional, tag = "1")]
+    pub status: ::core::option::Option<super::common::Status>,
+    /// grant info array
+    #[prost(message, repeated, tag = "2")]
+    pub entities: ::prost::alloc::vec::Vec<GrantEntity>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct OperatePrivilegeRequest {
+    /// Not useful for now
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    /// grant
+    #[prost(message, optional, tag = "2")]
+    pub entity: ::core::option::Option<GrantEntity>,
+    /// operation type
+    #[prost(enumeration = "OperatePrivilegeType", tag = "3")]
+    pub r#type: i32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MilvusExt {
+    #[prost(string, tag = "1")]
+    pub version: ::prost::alloc::string::String,
+}
 ///
 /// This is for ShowCollectionsRequest type field.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -1208,10 +1422,15 @@ pub enum ShowType {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
-pub enum PlaceholderType {
-    None = 0,
-    BinaryVector = 100,
-    FloatVector = 101,
+pub enum OperateUserRoleType {
+    AddUserToRole = 0,
+    RemoveUserFromRole = 1,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum OperatePrivilegeType {
+    Grant = 0,
+    Revoke = 1,
 }
 #[doc = r" Generated client implementations."]
 pub mod milvus_service_client {
@@ -2024,6 +2243,134 @@ pub mod milvus_service_client {
             );
             self.inner.unary(request.into_request(), path, codec).await
         }
+        #[doc = " https://wiki.lfaidata.foundation/display/MIL/MEP+29+--+Support+Role-Based+Access+Control"]
+        pub async fn create_role(
+            &mut self,
+            request: impl tonic::IntoRequest<super::CreateRoleRequest>,
+        ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/CreateRole",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn drop_role(
+            &mut self,
+            request: impl tonic::IntoRequest<super::DropRoleRequest>,
+        ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path =
+                http::uri::PathAndQuery::from_static("/milvus.proto.milvus.MilvusService/DropRole");
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn operate_user_role(
+            &mut self,
+            request: impl tonic::IntoRequest<super::OperateUserRoleRequest>,
+        ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/OperateUserRole",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn select_role(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SelectRoleRequest>,
+        ) -> Result<tonic::Response<super::SelectRoleResponse>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/SelectRole",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn select_user(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SelectUserRequest>,
+        ) -> Result<tonic::Response<super::SelectUserResponse>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/SelectUser",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn select_resource(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SelectResourceRequest>,
+        ) -> Result<tonic::Response<super::SelectResourceResponse>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/SelectResource",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn operate_privilege(
+            &mut self,
+            request: impl tonic::IntoRequest<super::OperatePrivilegeRequest>,
+        ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/OperatePrivilege",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn select_grant(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SelectGrantRequest>,
+        ) -> Result<tonic::Response<super::SelectGrantResponse>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/SelectGrant",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
     }
 }
 #[doc = r" Generated client implementations."]
@@ -2303,6 +2650,39 @@ pub mod milvus_service_server {
             &self,
             request: tonic::Request<super::ListCredUsersRequest>,
         ) -> Result<tonic::Response<super::ListCredUsersResponse>, tonic::Status>;
+        #[doc = " https://wiki.lfaidata.foundation/display/MIL/MEP+29+--+Support+Role-Based+Access+Control"]
+        async fn create_role(
+            &self,
+            request: tonic::Request<super::CreateRoleRequest>,
+        ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status>;
+        async fn drop_role(
+            &self,
+            request: tonic::Request<super::DropRoleRequest>,
+        ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status>;
+        async fn operate_user_role(
+            &self,
+            request: tonic::Request<super::OperateUserRoleRequest>,
+        ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status>;
+        async fn select_role(
+            &self,
+            request: tonic::Request<super::SelectRoleRequest>,
+        ) -> Result<tonic::Response<super::SelectRoleResponse>, tonic::Status>;
+        async fn select_user(
+            &self,
+            request: tonic::Request<super::SelectUserRequest>,
+        ) -> Result<tonic::Response<super::SelectUserResponse>, tonic::Status>;
+        async fn select_resource(
+            &self,
+            request: tonic::Request<super::SelectResourceRequest>,
+        ) -> Result<tonic::Response<super::SelectResourceResponse>, tonic::Status>;
+        async fn operate_privilege(
+            &self,
+            request: tonic::Request<super::OperatePrivilegeRequest>,
+        ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status>;
+        async fn select_grant(
+            &self,
+            request: tonic::Request<super::SelectGrantRequest>,
+        ) -> Result<tonic::Response<super::SelectGrantResponse>, tonic::Status>;
     }
     #[derive(Debug)]
     pub struct MilvusServiceServer<T: MilvusService> {
@@ -3886,6 +4266,264 @@ pub mod milvus_service_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ListCredUsersSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
+                            accept_compression_encodings,
+                            send_compression_encodings,
+                        );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/milvus.proto.milvus.MilvusService/CreateRole" => {
+                    #[allow(non_camel_case_types)]
+                    struct CreateRoleSvc<T: MilvusService>(pub Arc<T>);
+                    impl<T: MilvusService> tonic::server::UnaryService<super::CreateRoleRequest> for CreateRoleSvc<T> {
+                        type Response = super::super::common::Status;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::CreateRoleRequest>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).create_role(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = CreateRoleSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
+                            accept_compression_encodings,
+                            send_compression_encodings,
+                        );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/milvus.proto.milvus.MilvusService/DropRole" => {
+                    #[allow(non_camel_case_types)]
+                    struct DropRoleSvc<T: MilvusService>(pub Arc<T>);
+                    impl<T: MilvusService> tonic::server::UnaryService<super::DropRoleRequest> for DropRoleSvc<T> {
+                        type Response = super::super::common::Status;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::DropRoleRequest>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).drop_role(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = DropRoleSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
+                            accept_compression_encodings,
+                            send_compression_encodings,
+                        );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/milvus.proto.milvus.MilvusService/OperateUserRole" => {
+                    #[allow(non_camel_case_types)]
+                    struct OperateUserRoleSvc<T: MilvusService>(pub Arc<T>);
+                    impl<T: MilvusService>
+                        tonic::server::UnaryService<super::OperateUserRoleRequest>
+                        for OperateUserRoleSvc<T>
+                    {
+                        type Response = super::super::common::Status;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::OperateUserRoleRequest>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).operate_user_role(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = OperateUserRoleSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
+                            accept_compression_encodings,
+                            send_compression_encodings,
+                        );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/milvus.proto.milvus.MilvusService/SelectRole" => {
+                    #[allow(non_camel_case_types)]
+                    struct SelectRoleSvc<T: MilvusService>(pub Arc<T>);
+                    impl<T: MilvusService> tonic::server::UnaryService<super::SelectRoleRequest> for SelectRoleSvc<T> {
+                        type Response = super::SelectRoleResponse;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SelectRoleRequest>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).select_role(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = SelectRoleSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
+                            accept_compression_encodings,
+                            send_compression_encodings,
+                        );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/milvus.proto.milvus.MilvusService/SelectUser" => {
+                    #[allow(non_camel_case_types)]
+                    struct SelectUserSvc<T: MilvusService>(pub Arc<T>);
+                    impl<T: MilvusService> tonic::server::UnaryService<super::SelectUserRequest> for SelectUserSvc<T> {
+                        type Response = super::SelectUserResponse;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SelectUserRequest>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).select_user(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = SelectUserSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
+                            accept_compression_encodings,
+                            send_compression_encodings,
+                        );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/milvus.proto.milvus.MilvusService/SelectResource" => {
+                    #[allow(non_camel_case_types)]
+                    struct SelectResourceSvc<T: MilvusService>(pub Arc<T>);
+                    impl<T: MilvusService> tonic::server::UnaryService<super::SelectResourceRequest>
+                        for SelectResourceSvc<T>
+                    {
+                        type Response = super::SelectResourceResponse;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SelectResourceRequest>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).select_resource(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = SelectResourceSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
+                            accept_compression_encodings,
+                            send_compression_encodings,
+                        );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/milvus.proto.milvus.MilvusService/OperatePrivilege" => {
+                    #[allow(non_camel_case_types)]
+                    struct OperatePrivilegeSvc<T: MilvusService>(pub Arc<T>);
+                    impl<T: MilvusService>
+                        tonic::server::UnaryService<super::OperatePrivilegeRequest>
+                        for OperatePrivilegeSvc<T>
+                    {
+                        type Response = super::super::common::Status;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::OperatePrivilegeRequest>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).operate_privilege(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = OperatePrivilegeSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
+                            accept_compression_encodings,
+                            send_compression_encodings,
+                        );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/milvus.proto.milvus.MilvusService/SelectGrant" => {
+                    #[allow(non_camel_case_types)]
+                    struct SelectGrantSvc<T: MilvusService>(pub Arc<T>);
+                    impl<T: MilvusService> tonic::server::UnaryService<super::SelectGrantRequest>
+                        for SelectGrantSvc<T>
+                    {
+                        type Response = super::SelectGrantResponse;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SelectGrantRequest>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).select_grant(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = SelectGrantSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
                             accept_compression_encodings,
