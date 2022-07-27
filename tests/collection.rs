@@ -14,7 +14,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod client;
-pub mod collection;
-pub mod error;
-mod proto;
+use milvus::collection::CollectionSchemaBuilder;
+use milvus::collection::FieldSchema;
+use milvus::error::Result;
+#[test]
+fn build_collection() -> Result<()> {
+    let mut csb = CollectionSchemaBuilder::new();
+    csb.add(FieldSchema::new_int64("i64_1", ""));
+    csb.add(FieldSchema::new_bool("bl", ""));
+    csb.set_primary_key("i64_1")?;
+    csb.enable_auto_id()?;
+    csb.build()?;
+    Ok(())
+}
