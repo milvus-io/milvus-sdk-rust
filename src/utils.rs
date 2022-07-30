@@ -14,10 +14,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod client;
-pub mod collection;
-mod config;
-pub mod error;
-mod proto;
-pub mod schema;
-mod utils;
+use crate::proto::common::{MsgBase, MsgType};
+
+pub fn new_msg(mtype: MsgType) -> MsgBase {
+    MsgBase {
+        msg_type: mtype as i32,
+        timestamp: 0,
+        source_id: 0,
+        msg_id: 0,
+    }
+}

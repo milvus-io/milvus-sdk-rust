@@ -14,306 +14,148 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::error;
-use crate::error::Result;
-use crate::proto::common::KeyValuePair;
-use crate::proto::schema;
-use crate::proto::schema::DataType;
-use prost::alloc::vec::Vec;
+use crate::config;
+use crate::error::{Error as SuperError, Result};
+use crate::proto::common::{ErrorCode, MsgType};
+use crate::proto::milvus::milvus_service_client::MilvusServiceClient;
+use crate::proto::milvus::{
+    LoadCollectionRequest, ReleaseCollectionRequest, ShowCollectionsRequest, ShowType,
+};
+use crate::utils::new_msg;
 use std::error::Error as _;
+use std::time::Duration;
+use std::{dbg, thread};
 use thiserror::Error as ThisError;
+use tonic::transport::Channel;
 
-pub struct FieldSchema {
+#[derive(Clone)]
+pub struct Collection {
+    client: MilvusServiceClient<Channel>,
     name: String,
-    description: String,
-    dtype: DataType,
-    is_primary: bool,
-    auto_id: bool,
-    dim: i32,        // only for BinaryVector and FloatVector
-    max_length: i32, // only for VarChar
 }
 
-impl Default for FieldSchema {
-    fn default() -> Self {
+impl Collection {
+    pub fn new(client: MilvusServiceClient<Channel>, name: String) -> Self {
         Self {
-            name: "Field".to_string(),
-            description: "".to_string(),
-            dtype: DataType::None,
-            is_primary: false,
-            auto_id: false,
-            dim: 0,
-            max_length: 0,
-        }
-    }
-}
-
-impl FieldSchema {
-    pub fn new_bool<S>(name: S, description: S) -> Self
-    where
-        S: Into<String>,
-    {
-        Self {
-            name: name.into(),
-            description: description.into(),
-            dtype: DataType::Bool,
-            ..Default::default()
+            client: client,
+            name: name,
         }
     }
 
-    pub fn new_int8<S>(name: S, description: S) -> Self
-    where
-        S: Into<String>,
-    {
-        Self {
-            name: name.into(),
-            description: description.into(),
-            dtype: DataType::Int8,
-            ..Default::default()
-        }
-    }
-
-    pub fn new_int16<S>(name: S, description: S) -> Self
-    where
-        S: Into<String>,
-    {
-        Self {
-            name: name.into(),
-            description: description.into(),
-            dtype: DataType::Int16,
-            ..Default::default()
-        }
-    }
-
-    pub fn new_int32<S>(name: S, description: S) -> Self
-    where
-        S: Into<String>,
-    {
-        Self {
-            name: name.into(),
-            description: description.into(),
-            dtype: DataType::Int32,
-            ..Default::default()
-        }
-    }
-
-    pub fn new_int64<S>(name: S, description: S) -> Self
-    where
-        S: Into<String>,
-    {
-        Self {
-            name: name.into(),
-            description: description.into(),
-            dtype: DataType::Int64,
-            ..Default::default()
-        }
-    }
-
-    pub fn new_float<S>(name: S, description: S) -> Self
-    where
-        S: Into<String>,
-    {
-        Self {
-            name: name.into(),
-            description: description.into(),
-            dtype: DataType::Float,
-            ..Default::default()
-        }
-    }
-
-    pub fn new_double<S>(name: S, description: S) -> Self
-    where
-        S: Into<String>,
-    {
-        Self {
-            name: name.into(),
-            description: description.into(),
-            dtype: DataType::Double,
-            ..Default::default()
-        }
-    }
-
-    pub fn new_string<S>(name: S, description: S) -> Self
-    where
-        S: Into<String>,
-    {
-        Self {
-            name: name.into(),
-            description: description.into(),
-            dtype: DataType::String,
-            ..Default::default()
-        }
-    }
-
-    pub fn new_varchar<S>(name: S, description: S, max_length: i32) -> Self
-    where
-        S: Into<String>,
-    {
-        assert!(max_length > 0, "max_length should be positive");
-        Self {
-            name: name.into(),
-            description: description.into(),
-            dtype: DataType::String,
-            max_length: max_length,
-            ..Default::default()
-        }
-    }
-
-    pub fn new_binary_vector<S>(name: S, description: S, dim: i32) -> Self
-    where
-        S: Into<String>,
-    {
-        assert!(dim > 0, "dim should be positive");
-        Self {
-            name: name.into(),
-            description: description.into(),
-            dtype: DataType::BinaryVector,
-            dim: dim,
-            ..Default::default()
-        }
-    }
-
-    pub fn new_float_vector<S>(name: S, description: S, dim: i32) -> Self
-    where
-        S: Into<String>,
-    {
-        assert!(dim > 0, "dim should be positive");
-        Self {
-            name: name.into(),
-            description: description.into(),
-            dtype: DataType::FloatVector,
-            dim: dim,
-            ..Default::default()
-        }
-    }
-    pub fn convert_field(self) -> schema::FieldSchema {
-        let tp = match self.dtype {
-            DataType::BinaryVector | DataType::FloatVector => vec![KeyValuePair {
-                key: "dim".to_string(),
-                value: self.dim.to_string(),
-            }],
-            DataType::VarChar => vec![KeyValuePair {
-                key: "max_length".to_string(),
-                value: self.max_length.to_string(),
-            }],
-            _ => Vec::new(),
+    async fn load(&self, replica_number: i32) -> Result<()> {
+        dbg!("start load");
+        let status = match self
+            .client
+            .clone()
+            .load_collection(LoadCollectionRequest {
+                base: Some(new_msg(MsgType::LoadCollection)),
+                db_name: "".to_string(),
+                collection_name: self.name.clone(),
+                replica_number: replica_number,
+            })
+            .await
+        {
+            Ok(i) => i.into_inner(),
+            Err(e) => return Err(SuperError::from(e)),
         };
-        schema::FieldSchema {
-            field_id: 0,
-            name: self.name,
-            is_primary_key: self.is_primary,
-            description: self.description,
-            data_type: self.dtype as i32,
-            type_params: tp,
-            index_params: Vec::new(),
-            auto_id: self.auto_id,
+        dbg!("end load");
+        match ErrorCode::from_i32(status.error_code) {
+            Some(i) => match i {
+                ErrorCode::Success => Ok(()),
+                _ => Err(SuperError::from(status)),
+            },
+            None => Err(SuperError::Unknown()),
         }
     }
-}
 
-pub struct CollectionSchema {
-    inner: Vec<FieldSchema>,
-    auto_id: bool,
-}
-
-impl CollectionSchema {
-    pub fn unpack(self) -> (Vec<FieldSchema>, bool) {
-        (self.inner, self.auto_id)
-    }
-}
-
-pub struct CollectionSchemaBuilder {
-    inner: Vec<FieldSchema>,
-}
-
-impl CollectionSchemaBuilder {
-    pub fn new() -> Self {
-        Self { inner: Vec::new() }
+    pub async fn load_unblocked(&self, replica_number: i32) -> Result<()> {
+        dbg!("start load_unblocked");
+        // TODO wrap the error
+        // let rt = Builder::new_current_thread().enable_all().build().unwrap();
+        // rt.block_on(self.load(replica_number))
+        self.load(replica_number).await
     }
 
-    pub fn add(&mut self, schema: FieldSchema) {
-        self.inner.push(schema);
-    }
-
-    pub fn set_primary_key<S>(&mut self, name: S) -> Result<()>
-    where
-        S: Into<String>,
-    {
-        let n = name.into();
-        for f in self.inner.iter_mut() {
-            if f.is_primary {
-                return Err(error::Error::from(Error::DuplicatePrimaryKey(
-                    n,
-                    f.name.to_owned(),
-                )));
+    pub async fn get_load_percent(&self) -> Result<i64> {
+        let response = match self
+            .client
+            .clone()
+            .show_collections(ShowCollectionsRequest {
+                base: Some(new_msg(MsgType::ShowCollections)),
+                db_name: "".to_string(),
+                time_stamp: 0,
+                r#type: ShowType::InMemory as i32,
+                collection_names: vec![self.name.clone()],
+            })
+            .await
+        {
+            Ok(i) => i.into_inner(),
+            Err(e) => return Err(SuperError::from(e)),
+        };
+        let status = match response.status {
+            Some(s) => s,
+            None => return Err(SuperError::Unknown()),
+        };
+        match ErrorCode::from_i32(status.error_code) {
+            Some(i) => match i {
+                ErrorCode::Success => (),
+                _ => return Err(SuperError::from(status)),
+            },
+            None => return Err(SuperError::Unknown()),
+        };
+        let names = response.collection_names;
+        let percent = response.in_memory_percentages;
+        for i in 0..names.len() {
+            if self.name == names[i] {
+                return Ok(percent[i]);
             }
         }
-        for f in self.inner.iter_mut() {
-            if n == f.name {
-                if f.dtype == DataType::Int64 || f.dtype == DataType::VarChar {
-                    f.is_primary = true;
-                    return Ok(());
-                } else {
-                    return Err(error::Error::from(Error::UnsupportedPrimaryKey(
-                        f.dtype.to_owned(),
-                    )));
-                }
-            }
-        }
-        Err(error::Error::from(Error::NoSuchKey(n)))
+        Err(SuperError::Unknown())
     }
 
-    pub fn enable_auto_id(&mut self) -> Result<()> {
-        for f in self.inner.iter_mut() {
-            if f.is_primary {
-                if f.dtype == DataType::Int64 {
-                    f.auto_id = true;
-                    return Ok(());
-                } else {
-                    return Err(error::Error::from(Error::UnsupportedAutoId(
-                        f.dtype.to_owned(),
-                    )));
-                }
+    pub async fn load_blocked(&self, replica_number: i32) -> Result<()> {
+        self.load(replica_number).await?;
+        loop {
+            if self.get_load_percent().await? >= 100 {
+                return Ok(());
             }
+            thread::sleep(Duration::from_millis(config::WAIT_LOAD_DURATION_MS));
         }
-        Err(error::Error::from(Error::NoPrimaryKey()))
     }
 
-    pub fn build(self) -> Result<CollectionSchema> {
-        let mut has_primary = false;
-        let mut auto = false;
-        for f in self.inner.iter() {
-            if f.is_primary {
-                has_primary = true;
-                if f.auto_id {
-                    auto = true;
-                }
-                break;
-            }
+    pub async fn is_load(&self) -> Result<bool> {
+        if self.get_load_percent().await? >= 100 {
+            Ok(true)
+        } else {
+            Ok(false)
         }
-        if !has_primary {
-            return Err(error::Error::from(Error::NoPrimaryKey()));
+    }
+
+    pub async fn release(&self) -> Result<()> {
+        let status = match self
+            .client
+            .clone()
+            .release_collection(ReleaseCollectionRequest {
+                base: Some(new_msg(MsgType::ReleaseCollection)),
+                db_name: "".to_string(),
+                collection_name: self.name.clone(),
+            })
+            .await
+        {
+            Ok(i) => i.into_inner(),
+            Err(e) => return Err(SuperError::from(e)),
+        };
+        match ErrorCode::from_i32(status.error_code) {
+            Some(i) => match i {
+                ErrorCode::Success => Ok(()),
+                _ => Err(SuperError::from(status)),
+            },
+            None => Err(SuperError::Unknown()),
         }
-        Ok(CollectionSchema {
-            inner: self.inner,
-            auto_id: auto,
-        })
     }
 }
 
 #[derive(Debug, ThisError)]
 pub enum Error {
-    #[error("try to set primary key {0:?}, but {1:?} is also key")]
-    DuplicatePrimaryKey(String, String),
-
-    #[error("can not find any primary key")]
-    NoPrimaryKey(),
-
-    #[error("primary key must be int64 or varchar, unsupported type {0:?}")]
-    UnsupportedPrimaryKey(DataType),
-
-    #[error("auto id must be int64, unsupported type {0:?}")]
-    UnsupportedAutoId(DataType),
-
-    #[error("can not find such key {0:?}")]
-    NoSuchKey(String),
+    // TODO
 }
