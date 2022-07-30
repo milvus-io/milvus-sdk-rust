@@ -15,8 +15,8 @@
 // limitations under the License.
 
 use milvus::client::*;
-use milvus::collection::*;
 use milvus::error::Result;
+use milvus::schema::*;
 
 #[tokio::test]
 #[ignore]
@@ -27,6 +27,7 @@ async fn create_client() -> Result<()> {
         Err(e) => panic!("Error is {}.", e),
     }
 }
+
 #[tokio::test]
 #[ignore]
 async fn create_client_wrong_url() -> Result<()> {
@@ -36,6 +37,7 @@ async fn create_client_wrong_url() -> Result<()> {
         Err(_) => return Result::<()>::Ok(()),
     }
 }
+
 #[tokio::test]
 #[ignore]
 async fn create_client_wrong_fmt() -> Result<()> {
@@ -53,10 +55,13 @@ async fn has_collection() -> Result<()> {
     const NAME: &str = "qwerty";
     let client = Client::new(URL).await?;
     match client.has_collection(NAME).await {
-        Ok(i) => match i {
-            false => Ok(()),
-            true => panic!("Expect no such collection."),
-        },
+        Ok(i) => {
+            if i {
+                panic!("Expect no such collection.");
+            } else {
+                Ok(())
+            }
+        }
         Err(e) => Err(e),
     }
 }
@@ -67,14 +72,14 @@ async fn create_has_drop_collection() -> Result<()> {
     const URL: &str = "http://localhost:19530";
     const NAME: &str = "tttest";
     let client = Client::new(URL).await?;
-    let mut csb = CollectionSchemaBuilder::new();
-    csb.add(FieldSchema::new_int64("i64_1", ""));
-    csb.add(FieldSchema::new_bool("bl", ""));
-    csb.set_primary_key("i64_1");
-    csb.enable_auto_id();
-    let cb = csb.build()?;
+    let schema = CollectionSchemaBuilder::new()
+        .add_field(FieldSchema::new_int64("i64_1", ""))
+        .add_field(FieldSchema::new_bool("bl", ""))
+        .set_primary_key("i64_1")?
+        .enable_auto_id()?
+        .build()?;
     client
-        .create_collection(NAME, "tt", cb, 1, ConsistencyLevel::Session)
+        .create_collection(NAME, "tt", schema, 1, ConsistencyLevel::Session)
         .await?;
     match client.has_collection(NAME).await {
         Ok(i) => {

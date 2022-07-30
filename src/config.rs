@@ -14,10 +14,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod client;
-pub mod collection;
-mod config;
-pub mod error;
-mod proto;
-pub mod schema;
-mod utils;
+pub const WAIT_LOAD_DURATION_MS: u64 = 500;
