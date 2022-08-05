@@ -14,7 +14,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::proto::common::{MsgBase, MsgType};
+use crate::{
+    error::Error,
+    proto::common::{ErrorCode, MsgBase, MsgType, Status},
+};
 
 pub fn new_msg(mtype: MsgType) -> MsgBase {
     MsgBase {
@@ -22,5 +25,17 @@ pub fn new_msg(mtype: MsgType) -> MsgBase {
         timestamp: 0,
         source_id: 0,
         msg_id: 0,
+    }
+}
+
+pub fn status_to_result(status: Option<Status>) -> Result<(), Error> {
+    let status = status.ok_or(Error::Unknown())?;
+
+    match ErrorCode::from_i32(status.error_code) {
+        Some(i) => match i {
+            ErrorCode::Success => Ok(()),
+            _ => Err(Error::from(status)),
+        },
+        None => Err(Error::Unknown()),
     }
 }

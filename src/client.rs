@@ -19,11 +19,14 @@ use crate::error::{Error, Result};
 pub use crate::proto::common::ConsistencyLevel;
 use crate::proto::common::{ErrorCode, MsgType};
 use crate::proto::milvus::milvus_service_client::MilvusServiceClient;
-use crate::proto::milvus::{CreateCollectionRequest, DropCollectionRequest, HasCollectionRequest};
+use crate::proto::milvus::{
+    CreateCollectionRequest, DropCollectionRequest, FlushRequest, HasCollectionRequest,
+};
 use crate::schema::CollectionSchema;
-use crate::utils::new_msg;
+use crate::utils::{new_msg, status_to_result};
 use prost::bytes::BytesMut;
 use prost::Message;
+use std::collections::HashMap;
 use std::error::Error as _;
 use tonic::codegen::StdError;
 use tonic::transport::Channel;
@@ -58,9 +61,11 @@ impl Client {
         let name = name.into();
         let schema = schema.convert_collection(name.clone(), description.into());
         let mut buf = BytesMut::new();
+
         //TODO unwrap instead of panic
         schema.encode(&mut buf).unwrap();
-        let status = match self
+
+        let status = self
             .client
             .clone()
             .create_collection(CreateCollectionRequest {
@@ -68,28 +73,22 @@ impl Client {
                 db_name: "".to_string(),
                 collection_name: name.clone(),
                 schema: buf.to_vec(),
-                shards_num: shards_num,
+                shards_num,
                 consistency_level: consistency_level as i32,
             })
-            .await
-        {
-            Ok(i) => i.into_inner(),
-            Err(e) => return Err(Error::from(e)),
-        };
-        match ErrorCode::from_i32(status.error_code) {
-            Some(i) => match i {
-                ErrorCode::Success => Ok(Collection::new(self.client.clone(), name)),
-                _ => Err(Error::from(status)),
-            },
-            None => Err(Error::Unknown()),
-        }
+            .await?
+            .into_inner();
+
+        status_to_result(Some(status))?;
+
+        Ok(Collection::new(self.client.clone(), name))
     }
 
     pub async fn drop_collection<S>(&self, name: S) -> Result<()>
     where
         S: Into<String>,
     {
-        let status = match self
+        let status = self
             .client
             .clone()
             .drop_collection(DropCollectionRequest {
@@ -97,18 +96,10 @@ impl Client {
                 db_name: "".to_string(),
                 collection_name: name.into(),
             })
-            .await
-        {
-            Ok(i) => i.into_inner(),
-            Err(e) => return Err(Error::from(e)),
-        };
-        match ErrorCode::from_i32(status.error_code) {
-            Some(i) => match i {
-                ErrorCode::Success => Ok(()),
-                _ => Err(Error::from(status)),
-            },
-            None => Err(Error::Unknown()),
-        }
+            .await?
+            .into_inner();
+
+        status_to_result(Some(status))
     }
 
     pub async fn has_collection<S>(&self, name: S) -> Result<bool>
@@ -116,7 +107,7 @@ impl Client {
         S: Into<String>,
     {
         let name = name.into();
-        let res = match self
+        let res = self
             .client
             .clone()
             .has_collection(HasCollectionRequest {
@@ -125,22 +116,12 @@ impl Client {
                 collection_name: name.clone(),
                 time_stamp: 0,
             })
-            .await
-        {
-            Ok(i) => i.into_inner(),
-            Err(e) => return Err(Error::from(e)),
-        };
-        let status = match res.status {
-            Some(s) => s,
-            None => return Err(Error::Unknown()),
-        };
-        match ErrorCode::from_i32(status.error_code) {
-            Some(i) => match i {
-                ErrorCode::Success => Ok(res.value),
-                _ => Err(Error::from(status)),
-            },
-            None => Err(Error::Unknown()),
-        }
+            .await?
+            .into_inner();
+
+        status_to_result(res.status)?;
+
+        Ok(res.value)
     }
     pub async fn get_collection<S>(&self, name: S) -> Result<Option<Collection>>
     where
@@ -151,5 +132,30 @@ impl Client {
             true => Ok(Some(Collection::new(self.client.clone(), name))),
             false => Ok(None),
         }
+    }
+
+    pub async fn flush_collections<C>(&self, collections: C) -> Result<HashMap<String, Vec<i64>>>
+    where
+        C: IntoIterator,
+        C::Item: ToString,
+    {
+        let res = self
+            .client
+            .clone()
+            .flush(FlushRequest {
+                base: Some(new_msg(MsgType::Flush)),
+                db_name: "".to_string(),
+                collection_names: collections.into_iter().map(|x| x.to_string()).collect(),
+            })
+            .await?
+            .into_inner();
+
+        status_to_result(res.status)?;
+
+        Ok(res
+            .coll_seg_i_ds
+            .into_iter()
+            .map(|(k, v)| (k, v.data))
+            .collect())
     }
 }

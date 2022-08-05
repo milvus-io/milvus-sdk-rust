@@ -14,21 +14,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::config;
 use crate::error::{Error as SuperError, Result};
 use crate::proto::common::{ErrorCode, MsgType};
 use crate::proto::milvus::milvus_service_client::MilvusServiceClient;
 use crate::proto::milvus::{
-    LoadCollectionRequest, ReleaseCollectionRequest, ShowCollectionsRequest, ShowType,
+    DescribeCollectionRequest, InsertRequest, LoadCollectionRequest, QueryRequest,
+    ReleaseCollectionRequest, ShowCollectionsRequest, ShowType,
 };
-use crate::utils::new_msg;
+use crate::schema::{CollectionFieldsData, FieldData};
+use crate::utils::{new_msg, status_to_result};
+use crate::{config, schema};
 use std::error::Error as _;
 use std::time::Duration;
 use std::{dbg, thread};
 use thiserror::Error as ThisError;
 use tonic::transport::Channel;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Collection {
     client: MilvusServiceClient<Channel>,
     name: String,
@@ -36,10 +38,7 @@ pub struct Collection {
 
 impl Collection {
     pub fn new(client: MilvusServiceClient<Channel>, name: String) -> Self {
-        Self {
-            client: client,
-            name: name,
-        }
+        Self { client, name }
     }
 
     async fn load(&self, replica_number: i32) -> Result<()> {
@@ -51,14 +50,14 @@ impl Collection {
                 base: Some(new_msg(MsgType::LoadCollection)),
                 db_name: "".to_string(),
                 collection_name: self.name.clone(),
-                replica_number: replica_number,
+                replica_number,
             })
             .await
         {
             Ok(i) => i.into_inner(),
             Err(e) => return Err(SuperError::from(e)),
         };
-        dbg!("end load");
+
         match ErrorCode::from_i32(status.error_code) {
             Some(i) => match i {
                 ErrorCode::Success => Ok(()),
@@ -77,7 +76,7 @@ impl Collection {
     }
 
     pub async fn get_load_percent(&self) -> Result<i64> {
-        let response = match self
+        let response = self
             .client
             .clone()
             .show_collections(ShowCollectionsRequest {
@@ -87,22 +86,11 @@ impl Collection {
                 r#type: ShowType::InMemory as i32,
                 collection_names: vec![self.name.clone()],
             })
-            .await
-        {
-            Ok(i) => i.into_inner(),
-            Err(e) => return Err(SuperError::from(e)),
-        };
-        let status = match response.status {
-            Some(s) => s,
-            None => return Err(SuperError::Unknown()),
-        };
-        match ErrorCode::from_i32(status.error_code) {
-            Some(i) => match i {
-                ErrorCode::Success => (),
-                _ => return Err(SuperError::from(status)),
-            },
-            None => return Err(SuperError::Unknown()),
-        };
+            .await?
+            .into_inner();
+
+        status_to_result(response.status)?;
+
         let names = response.collection_names;
         let percent = response.in_memory_percentages;
         for i in 0..names.len() {
@@ -110,6 +98,7 @@ impl Collection {
                 return Ok(percent[i]);
             }
         }
+
         Err(SuperError::Unknown())
     }
 
@@ -132,7 +121,7 @@ impl Collection {
     }
 
     pub async fn release(&self) -> Result<()> {
-        let status = match self
+        let status = self
             .client
             .clone()
             .release_collection(ReleaseCollectionRequest {
@@ -140,18 +129,87 @@ impl Collection {
                 db_name: "".to_string(),
                 collection_name: self.name.clone(),
             })
-            .await
-        {
-            Ok(i) => i.into_inner(),
-            Err(e) => return Err(SuperError::from(e)),
-        };
-        match ErrorCode::from_i32(status.error_code) {
-            Some(i) => match i {
-                ErrorCode::Success => Ok(()),
-                _ => Err(SuperError::from(status)),
-            },
-            None => Err(SuperError::Unknown()),
-        }
+            .await?
+            .into_inner();
+
+        status_to_result(Some(status))
+    }
+
+    pub async fn create_insert_frame(&self) -> Result<schema::CollectionFieldsData> {
+        let response = self
+            .client
+            .clone()
+            .describe_collection(DescribeCollectionRequest {
+                base: Some(new_msg(MsgType::DescribeCollection)),
+                db_name: "".to_string(),
+                time_stamp: 0,
+                collection_name: self.name.clone(),
+                collection_id: 0,
+            })
+            .await?
+            .into_inner();
+
+        status_to_result(response.status)?;
+
+        let schema = response.schema.ok_or(SuperError::Unknown())?;
+        let schema: schema::CollectionSchema = (&schema).into();
+
+        Ok(CollectionFieldsData::new(&schema))
+    }
+
+    pub async fn insert<P: Into<String>>(
+        &self,
+        fields_data: schema::CollectionFieldsData,
+        partition_name: Option<P>,
+    ) -> Result<crate::proto::milvus::MutationResult> {
+        Ok(self
+            .client
+            .clone()
+            .insert(InsertRequest {
+                base: Some(new_msg(MsgType::Insert)),
+                db_name: "".to_string(),
+                collection_name: self.name.clone(),
+                partition_name: partition_name
+                    .map(|pn| pn.into())
+                    .unwrap_or_else(String::new),
+                num_rows: fields_data.len() as _,
+                fields_data: fields_data.convert(),
+                hash_keys: Vec::new(),
+            })
+            .await?
+            .into_inner())
+    }
+
+    pub async fn query<E, F, P>(
+        &self,
+        expr: E,
+        output_fields: F,
+        partition_names: P,
+    ) -> Result<Vec<FieldData>>
+    where
+        E: ToString,
+        F: IntoIterator,
+        F::Item: ToString,
+        P: IntoIterator,
+        P::Item: ToString,
+    {
+        let res = self
+            .client
+            .clone()
+            .query(QueryRequest {
+                base: Some(new_msg(MsgType::Retrieve)),
+                db_name: "".to_string(),
+                collection_name: self.name.clone(),
+                expr: expr.to_string(),
+                output_fields: output_fields.into_iter().map(|x| x.to_string()).collect(),
+                partition_names: partition_names.into_iter().map(|x| x.to_string()).collect(),
+                guarantee_timestamp: 0,
+                travel_timestamp: 0,
+            })
+            .await?
+            .into_inner();
+
+        Ok(res.fields_data.into_iter().map(Into::into).collect())
     }
 }
 
