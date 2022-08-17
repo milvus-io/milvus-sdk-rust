@@ -17,17 +17,17 @@
 use crate::collection::Collection;
 use crate::error::{Error, Result};
 pub use crate::proto::common::ConsistencyLevel;
-use crate::proto::common::{ErrorCode, MsgType};
+use crate::proto::common::MsgType;
 use crate::proto::milvus::milvus_service_client::MilvusServiceClient;
 use crate::proto::milvus::{
     CreateCollectionRequest, DropCollectionRequest, FlushRequest, HasCollectionRequest,
 };
-use crate::schema::CollectionSchema;
+use crate::schema::{self, CollectionSchema};
 use crate::utils::{new_msg, status_to_result};
 use prost::bytes::BytesMut;
 use prost::Message;
 use std::collections::HashMap;
-use std::error::Error as _;
+use std::convert::TryInto;
 use tonic::codegen::StdError;
 use tonic::transport::Channel;
 
@@ -38,7 +38,7 @@ pub struct Client {
 impl Client {
     pub async fn new<D>(dst: D) -> Result<Self>
     where
-        D: std::convert::TryInto<tonic::transport::Endpoint>,
+        D: TryInto<tonic::transport::Endpoint>,
         D::Error: Into<StdError>,
     {
         match MilvusServiceClient::connect(dst).await {
@@ -47,19 +47,16 @@ impl Client {
         }
     }
 
-    pub async fn create_collection<S>(
+    pub async fn create_collection<C, S>(
         &self,
-        name: S,
-        description: S,
-        schema: CollectionSchema,
+        schema: CollectionSchema<'_>,
         shards_num: i32,
         consistency_level: ConsistencyLevel,
-    ) -> Result<Collection>
+    ) -> Result<Collection<C>>
     where
         S: Into<String>,
     {
-        let name = name.into();
-        let schema = schema.convert_collection(name.clone(), description.into());
+        let schema: crate::proto::schema::CollectionSchema = schema.into();
         let mut buf = BytesMut::new();
 
         //TODO unwrap instead of panic
@@ -71,7 +68,7 @@ impl Client {
             .create_collection(CreateCollectionRequest {
                 base: Some(new_msg(MsgType::CreateCollection)),
                 db_name: "".to_string(),
-                collection_name: name.clone(),
+                collection_name: schema.name.to_string(),
                 schema: buf.to_vec(),
                 shards_num,
                 consistency_level: consistency_level as i32,
@@ -81,25 +78,27 @@ impl Client {
 
         status_to_result(Some(status))?;
 
-        Ok(Collection::new(self.client.clone(), name))
+        Ok(Collection::new(
+            self.client.clone(),
+            schema.name.to_string(),
+        ))
     }
 
     pub async fn drop_collection<S>(&self, name: S) -> Result<()>
     where
         S: Into<String>,
     {
-        let status = self
-            .client
-            .clone()
-            .drop_collection(DropCollectionRequest {
-                base: Some(new_msg(MsgType::DropCollection)),
-                db_name: "".to_string(),
-                collection_name: name.into(),
-            })
-            .await?
-            .into_inner();
-
-        status_to_result(Some(status))
+        status_to_result(Some(
+            self.client
+                .clone()
+                .drop_collection(DropCollectionRequest {
+                    base: Some(new_msg(MsgType::DropCollection)),
+                    db_name: "".to_string(),
+                    collection_name: name.into(),
+                })
+                .await?
+                .into_inner(),
+        ))
     }
 
     pub async fn has_collection<S>(&self, name: S) -> Result<bool>
@@ -123,15 +122,10 @@ impl Client {
 
         Ok(res.value)
     }
-    pub async fn get_collection<S>(&self, name: S) -> Result<Option<Collection>>
-    where
-        S: Into<String>,
-    {
-        let name = name.into();
-        match self.has_collection(name.clone()).await? {
-            true => Ok(Some(Collection::new(self.client.clone(), name))),
-            false => Ok(None),
-        }
+
+    pub async fn get_collection<E: schema::Entity>(&self) -> Result<Collection<E>> {
+        E::schema().validate()?;
+        Ok(Collection::new(self.client.clone(), E::NAME))
     }
 
     pub async fn flush_collections<C>(&self, collections: C) -> Result<HashMap<String, Vec<i64>>>

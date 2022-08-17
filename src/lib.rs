@@ -16,8 +16,10 @@
 
 pub mod client;
 pub mod collection;
-mod config;
+pub mod data;
 pub mod error;
-mod proto;
 pub mod schema;
+
+mod config;
+mod proto;
 mod utils;

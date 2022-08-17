@@ -15,56 +15,54 @@
 // limitations under the License.
 
 use crate::error::{Error as SuperError, Result};
-use crate::proto::common::{ErrorCode, MsgType};
+use crate::proto::common::{ConsistencyLevel, MsgType};
 use crate::proto::milvus::milvus_service_client::MilvusServiceClient;
 use crate::proto::milvus::{
-    DescribeCollectionRequest, InsertRequest, LoadCollectionRequest, QueryRequest,
-    ReleaseCollectionRequest, ShowCollectionsRequest, ShowType,
+    CreateCollectionRequest, DropCollectionRequest, FlushRequest, HasCollectionRequest,
+    InsertRequest, LoadCollectionRequest, QueryRequest, ReleaseCollectionRequest,
+    ShowCollectionsRequest, ShowType,
 };
-use crate::schema::{CollectionFieldsData, FieldData};
+use crate::schema::IntoDataFields;
 use crate::utils::{new_msg, status_to_result};
 use crate::{config, schema};
-use std::error::Error as _;
+
+use prost::bytes::BytesMut;
+use prost::Message;
+use std::borrow::Cow;
+use std::marker::PhantomData;
 use std::time::Duration;
-use std::{dbg, thread};
 use thiserror::Error as ThisError;
 use tonic::transport::Channel;
 
 #[derive(Debug, Clone)]
-pub struct Collection {
+pub struct Collection<C> {
     client: MilvusServiceClient<Channel>,
-    name: String,
+    name: Cow<'static, str>,
+    _m: PhantomData<C>,
 }
 
-impl Collection {
-    pub fn new(client: MilvusServiceClient<Channel>, name: String) -> Self {
-        Self { client, name }
+impl<C> Collection<C> {
+    pub fn new<N: Into<Cow<'static, str>>>(client: MilvusServiceClient<Channel>, name: N) -> Self {
+        Self {
+            client,
+            name: name.into(),
+            _m: Default::default(),
+        }
     }
 
     async fn load(&self, replica_number: i32) -> Result<()> {
-        dbg!("start load");
-        let status = match self
-            .client
-            .clone()
-            .load_collection(LoadCollectionRequest {
-                base: Some(new_msg(MsgType::LoadCollection)),
-                db_name: "".to_string(),
-                collection_name: self.name.clone(),
-                replica_number,
-            })
-            .await
-        {
-            Ok(i) => i.into_inner(),
-            Err(e) => return Err(SuperError::from(e)),
-        };
-
-        match ErrorCode::from_i32(status.error_code) {
-            Some(i) => match i {
-                ErrorCode::Success => Ok(()),
-                _ => Err(SuperError::from(status)),
-            },
-            None => Err(SuperError::Unknown()),
-        }
+        status_to_result(Some(
+            self.client
+                .clone()
+                .load_collection(LoadCollectionRequest {
+                    base: Some(new_msg(MsgType::LoadCollection)),
+                    db_name: "".to_string(),
+                    collection_name: self.name.to_string(),
+                    replica_number,
+                })
+                .await?
+                .into_inner(),
+        ))
     }
 
     pub async fn load_unblocked(&self, replica_number: i32) -> Result<()> {
@@ -84,7 +82,7 @@ impl Collection {
                 db_name: "".to_string(),
                 time_stamp: 0,
                 r#type: ShowType::InMemory as i32,
-                collection_names: vec![self.name.clone()],
+                collection_names: vec![self.name.to_string()],
             })
             .await?
             .into_inner();
@@ -99,35 +97,110 @@ impl Collection {
             }
         }
 
-        Err(SuperError::Unknown())
+        Err(SuperError::Unknown)
     }
 
     pub async fn load_blocked(&self, replica_number: i32) -> Result<()> {
         self.load(replica_number).await?;
+
         loop {
             if self.get_load_percent().await? >= 100 {
                 return Ok(());
             }
-            thread::sleep(Duration::from_millis(config::WAIT_LOAD_DURATION_MS));
+
+            tokio::time::sleep(Duration::from_millis(config::WAIT_LOAD_DURATION_MS)).await;
         }
     }
 
     pub async fn is_load(&self) -> Result<bool> {
-        if self.get_load_percent().await? >= 100 {
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+        Ok(self.get_load_percent().await? >= 100)
     }
 
     pub async fn release(&self) -> Result<()> {
+        status_to_result(Some(
+            self.client
+                .clone()
+                .release_collection(ReleaseCollectionRequest {
+                    base: Some(new_msg(MsgType::ReleaseCollection)),
+                    db_name: "".to_string(),
+                    collection_name: self.name.to_string(),
+                })
+                .await?
+                .into_inner(),
+        ))
+    }
+
+    pub async fn drop(&self) -> Result<()> {
+        status_to_result(Some(
+            self.client
+                .clone()
+                .drop_collection(DropCollectionRequest {
+                    base: Some(new_msg(MsgType::DropCollection)),
+                    db_name: "".to_string(),
+                    collection_name: self.name.to_string(),
+                })
+                .await?
+                .into_inner(),
+        ))
+    }
+
+    pub async fn exists(&self) -> Result<bool> {
+        let res = self
+            .client
+            .clone()
+            .has_collection(HasCollectionRequest {
+                base: Some(new_msg(MsgType::HasCollection)),
+                db_name: "".to_string(),
+                collection_name: self.name.to_string(),
+                time_stamp: 0,
+            })
+            .await?
+            .into_inner();
+
+        status_to_result(res.status)?;
+
+        Ok(res.value)
+    }
+
+    pub async fn flush(&self) -> Result<()> {
+        let res = self
+            .client
+            .clone()
+            .flush(FlushRequest {
+                base: Some(new_msg(MsgType::Flush)),
+                db_name: "".to_string(),
+                collection_names: vec![self.name.to_string()],
+            })
+            .await?
+            .into_inner();
+
+        status_to_result(res.status)?;
+
+        Ok(())
+    }
+}
+
+impl<E: schema::Entity> Collection<E> {
+    pub async fn create(
+        &self,
+        shards_num: Option<i32>,
+        consistency_level: Option<ConsistencyLevel>,
+    ) -> Result<()> {
+        let schema: crate::proto::schema::CollectionSchema = E::schema().into();
+
+        let mut buf = BytesMut::new();
+        schema.encode(&mut buf)?;
+
         let status = self
             .client
             .clone()
-            .release_collection(ReleaseCollectionRequest {
-                base: Some(new_msg(MsgType::ReleaseCollection)),
+            .create_collection(CreateCollectionRequest {
+                base: Some(new_msg(MsgType::CreateCollection)),
                 db_name: "".to_string(),
-                collection_name: self.name.clone(),
+                collection_name: schema.name.to_string(),
+                schema: buf.to_vec(),
+                shards_num: shards_num.unwrap_or(1),
+                consistency_level: consistency_level.unwrap_or(ConsistencyLevel::Session) as i32,
             })
             .await?
             .into_inner();
@@ -135,61 +208,10 @@ impl Collection {
         status_to_result(Some(status))
     }
 
-    pub async fn create_insert_frame(&self) -> Result<schema::CollectionFieldsData> {
-        let response = self
-            .client
-            .clone()
-            .describe_collection(DescribeCollectionRequest {
-                base: Some(new_msg(MsgType::DescribeCollection)),
-                db_name: "".to_string(),
-                time_stamp: 0,
-                collection_name: self.name.clone(),
-                collection_id: 0,
-            })
-            .await?
-            .into_inner();
-
-        status_to_result(response.status)?;
-
-        let schema = response.schema.ok_or(SuperError::Unknown())?;
-        let schema: schema::CollectionSchema = (&schema).into();
-
-        Ok(CollectionFieldsData::new(&schema))
-    }
-
-    pub async fn insert<P: Into<String>>(
-        &self,
-        fields_data: schema::CollectionFieldsData,
-        partition_name: Option<P>,
-    ) -> Result<crate::proto::milvus::MutationResult> {
-        Ok(self
-            .client
-            .clone()
-            .insert(InsertRequest {
-                base: Some(new_msg(MsgType::Insert)),
-                db_name: "".to_string(),
-                collection_name: self.name.clone(),
-                partition_name: partition_name
-                    .map(|pn| pn.into())
-                    .unwrap_or_else(String::new),
-                num_rows: fields_data.len() as _,
-                fields_data: fields_data.convert(),
-                hash_keys: Vec::new(),
-            })
-            .await?
-            .into_inner())
-    }
-
-    pub async fn query<E, F, P>(
-        &self,
-        expr: E,
-        output_fields: F,
-        partition_names: P,
-    ) -> Result<Vec<FieldData>>
+    pub async fn query<'a, Exp, F, P>(&self, expr: Exp, partition_names: P) -> Result<F>
     where
-        E: ToString,
-        F: IntoIterator,
-        F::Item: ToString,
+        Exp: ToString,
+        F: schema::Collection<'a, Entity = E> + schema::FromDataFields,
         P: IntoIterator,
         P::Item: ToString,
     {
@@ -199,9 +221,12 @@ impl Collection {
             .query(QueryRequest {
                 base: Some(new_msg(MsgType::Retrieve)),
                 db_name: "".to_string(),
-                collection_name: self.name.clone(),
+                collection_name: self.name.to_string(),
                 expr: expr.to_string(),
-                output_fields: output_fields.into_iter().map(|x| x.to_string()).collect(),
+                output_fields: F::columns()
+                    .into_iter()
+                    .map(|x| x.name.to_string())
+                    .collect(),
                 partition_names: partition_names.into_iter().map(|x| x.to_string()).collect(),
                 guarantee_timestamp: 0,
                 travel_timestamp: 0,
@@ -209,7 +234,32 @@ impl Collection {
             .await?
             .into_inner();
 
-        Ok(res.fields_data.into_iter().map(Into::into).collect())
+        status_to_result(res.status)?;
+
+        Ok(F::from_data_fields(res.fields_data).unwrap())
+    }
+
+    pub async fn insert<'a, P: Into<String>, C: schema::Collection<'a, Entity = E>>(
+        &self,
+        fields_data: C,
+        partition_name: Option<P>,
+    ) -> Result<crate::proto::milvus::MutationResult> {
+        Ok(self
+            .client
+            .clone()
+            .insert(InsertRequest {
+                base: Some(new_msg(MsgType::Insert)),
+                db_name: "".to_string(),
+                collection_name: self.name.to_string(),
+                partition_name: partition_name
+                    .map(|pn| pn.into())
+                    .unwrap_or_else(String::new),
+                num_rows: fields_data.len() as _,
+                fields_data: fields_data.into_data_fields(),
+                hash_keys: Vec::new(),
+            })
+            .await?
+            .into_inner())
     }
 }
 
