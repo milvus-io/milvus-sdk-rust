@@ -16,288 +16,576 @@
 
 use crate::error;
 use crate::error::Result;
-use crate::proto::common::KeyValuePair;
-use crate::proto::schema::VectorField;
-use crate::proto::schema::{
-    self, field_data::Field, scalar_field::Data as ScalarData, DataType, ScalarField,
-};
 use prost::alloc::vec::Vec;
+use std::borrow::Cow;
 use std::collections::HashMap;
-use std::error::Error as _;
+use std::marker::PhantomData;
 use thiserror::Error as ThisError;
 
-#[derive(Debug, Clone)]
-pub struct FieldSchema {
-    name: String,
-    description: String,
-    dtype: DataType,
-    is_primary: bool,
-    auto_id: bool,
-    dim: i32,        // only for BinaryVector and FloatVector
-    max_length: i32, // only for VarChar
+use crate::proto::{
+    common::KeyValuePair,
+    schema::{
+        self, field_data::Field, scalar_field::Data as ScalarData,
+        vector_field::Data as VectorData, DataType, ScalarField, VectorField,
+    },
+};
+
+pub use crate::proto::schema::FieldData;
+
+pub trait HasDataType {
+    fn data_type() -> DataType;
 }
 
-impl Default for FieldSchema {
-    fn default() -> Self {
+macro_rules! impl_has_data_type {
+    ( $($t: ty, $o: expr ),+ ) => {$(
+        impl HasDataType for $t {
+            fn data_type() -> DataType {
+                $o
+            }
+        }
+    )*};
+}
+
+impl_has_data_type! {
+    bool, DataType::Bool,
+    i8, DataType::Int8,
+    i16, DataType::Int16,
+    i32, DataType::Int32,
+    i64, DataType::Int64,
+    f32, DataType::Float,
+    f64, DataType::Double,
+    String, DataType::String,
+    Cow<'_, str>, DataType::String,
+    Vec<f32>, DataType::FloatVector,
+    Vec<u8>, DataType::BinaryVector,
+    Cow<'_, [f32]>, DataType::FloatVector,
+    Cow<'_, [u8]>, DataType::BinaryVector
+}
+
+pub trait Entity {
+    const NAME: &'static str;
+    const DESCRIPTION: Option<&'static str> = None;
+    const SCHEMA: &'static [FieldSchema<'static>];
+
+    fn schema() -> CollectionSchema<'static> {
+        CollectionSchema {
+            name: Cow::Borrowed(Self::NAME),
+            description: Self::DESCRIPTION.map(Cow::Borrowed),
+            fields: Cow::Borrowed(Self::SCHEMA),
+        }
+    }
+
+    type ColumnIntoIter: Iterator<Item = (&'static FieldSchema<'static>, Value<'static>)>;
+    // type ColumnIter<'a>: Iterator<Item = (&'static FieldSchema<'static>, Value<'a>)>;
+
+    fn iter(&self) -> Self::ColumnIntoIter; // Self::ColumnIter<'_>
+    fn into_iter(self) -> Self::ColumnIntoIter;
+
+    fn validate(&self) -> std::result::Result<(), Error> {
+        for (schm, val) in self.iter() {
+            let dtype = val.data_type();
+
+            if dtype != schm.dtype
+                && !(dtype == DataType::String && schm.dtype == DataType::VarChar)
+            {
+                return Err(Error::FieldWrongType(
+                    schm.name.to_string(),
+                    schm.dtype,
+                    val.data_type(),
+                ));
+            }
+
+            match schm.dtype {
+                DataType::VarChar => match &val {
+                    Value::String(d) if d.len() > schm.max_length as _ => {
+                        return Err(Error::DimensionMismatch(
+                            schm.name.to_string(),
+                            schm.max_length as _,
+                            d.len() as _,
+                        ));
+                    }
+                    _ => unreachable!(),
+                },
+                DataType::BinaryVector => match &val {
+                    Value::Binary(d) => {
+                        return Err(Error::DimensionMismatch(
+                            schm.name.to_string(),
+                            schm.dim as _,
+                            d.len() as _,
+                        ));
+                    }
+                    _ => unreachable!(),
+                },
+                DataType::FloatVector => match &val {
+                    Value::FloatArray(d) => {
+                        return Err(Error::DimensionMismatch(
+                            schm.name.to_string(),
+                            schm.dim as _,
+                            d.len() as _,
+                        ));
+                    }
+                    _ => unreachable!(),
+                },
+                _ => (),
+            }
+        }
+
+        Ok(())
+    }
+}
+
+pub trait IntoDataFields {
+    fn into_data_fields(self) -> Vec<FieldData>;
+}
+
+pub trait FromDataFields: Sized {
+    fn from_data_fields(fileds: Vec<FieldData>) -> Option<Self>;
+}
+
+pub trait Collection<'a>: IntoDataFields + FromDataFields {
+    type Entity: Entity;
+    type IterRows: Iterator<Item = Self::Entity> + 'a;
+    type IterColumns: Iterator<Item = FieldColumn<'static>> + 'a;
+
+    fn index(&self, idx: usize) -> Option<Self::Entity>;
+    fn with_capacity(cap: usize) -> Self;
+    fn add(&mut self, entity: Self::Entity);
+    fn len(&self) -> usize;
+    fn iter_columns(&'a self) -> Self::IterColumns;
+
+    fn iter_rows(&self) -> Box<dyn Iterator<Item = Self::Entity> + '_> {
+        Box::new((0..self.len()).filter_map(|idx| self.index(idx)))
+    }
+
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    fn columns() -> &'static [FieldSchema<'static>] {
+        Self::Entity::SCHEMA
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FieldSchema<'a> {
+    pub name: Cow<'a, str>,
+    pub description: Option<Cow<'a, str>>,
+    pub dtype: DataType,
+    pub is_primary: bool,
+    pub auto_id: bool,
+    pub chunk_size: usize,
+    pub dim: i64,        // only for BinaryVector and FloatVector
+    pub max_length: i32, // only for VarChar
+}
+
+impl FieldSchema<'static> {
+    pub const fn const_default() -> Self {
         Self {
-            name: "Field".to_string(),
-            description: "".to_string(),
+            name: Cow::Borrowed("field"),
+            description: None,
             dtype: DataType::None,
             is_primary: false,
             auto_id: false,
+            chunk_size: 0,
             dim: 0,
             max_length: 0,
         }
     }
 }
 
-impl<'a> From<&'a schema::FieldSchema> for FieldSchema {
+impl Default for FieldSchema<'static> {
+    fn default() -> Self {
+        Self::const_default()
+    }
+}
+
+impl<'a> From<&'a schema::FieldSchema> for FieldSchema<'a> {
     fn from(fld: &'a schema::FieldSchema) -> Self {
-        let dim: i32 = fld
+        let dim: i64 = fld
             .type_params
             .iter()
             .find(|k| &k.key == "dim")
             .and_then(|x| x.value.parse().ok())
             .unwrap_or(1);
 
+        let dtype = DataType::from_i32(fld.data_type).unwrap();
+
         FieldSchema {
-            name: fld.name.clone(),
-            description: fld.description.clone(),
-            dtype: DataType::from_i32(fld.data_type).unwrap(),
+            name: Cow::Borrowed(fld.name.as_str()),
+            description: if fld.description.as_str() != "" {
+                Some(Cow::Borrowed(fld.description.as_str()))
+            } else {
+                None
+            },
+            dtype,
             is_primary: fld.is_primary_key,
             auto_id: fld.auto_id,
             max_length: 0,
+            chunk_size: (dim
+                * match dtype {
+                    DataType::BinaryVector => dim / 8,
+                    _ => dim,
+                }) as _,
             dim,
         }
     }
 }
 
-impl FieldSchema {
-    pub fn new_bool<S>(name: S, description: S) -> Self
-    where
-        S: Into<String>,
-    {
+impl<'a> FieldSchema<'a> {
+    pub const fn new_bool(name: &'a str, description: Option<&'a str>) -> Self {
         Self {
-            name: name.into(),
-            description: description.into(),
+            name: Cow::Borrowed(name),
+            description: match description {
+                Some(d) => Some(Cow::Borrowed(d)),
+                None => None,
+            },
             dtype: DataType::Bool,
-            ..Default::default()
+            is_primary: false,
+            auto_id: false,
+            chunk_size: 1,
+            dim: 1,
+            max_length: 0,
         }
     }
 
-    pub fn new_int8<S>(name: S, description: S) -> Self
-    where
-        S: Into<String>,
-    {
+    pub const fn new_int8(name: &'a str, description: Option<&'a str>) -> Self {
         Self {
-            name: name.into(),
-            description: description.into(),
+            name: Cow::Borrowed(name),
+            description: match description {
+                Some(d) => Some(Cow::Borrowed(d)),
+                None => None,
+            },
             dtype: DataType::Int8,
-            ..Default::default()
+            is_primary: false,
+            auto_id: false,
+            chunk_size: 1,
+            dim: 1,
+            max_length: 0,
         }
     }
 
-    pub fn new_int16<S>(name: S, description: S) -> Self
-    where
-        S: Into<String>,
-    {
+    pub const fn new_int16(name: &'a str, description: Option<&'a str>) -> Self {
         Self {
-            name: name.into(),
-            description: description.into(),
+            name: Cow::Borrowed(name),
+            description: match description {
+                Some(d) => Some(Cow::Borrowed(d)),
+                None => None,
+            },
             dtype: DataType::Int16,
-            ..Default::default()
+            is_primary: false,
+            auto_id: false,
+            chunk_size: 1,
+            dim: 1,
+            max_length: 0,
         }
     }
 
-    pub fn new_int32<S>(name: S, description: S) -> Self
-    where
-        S: Into<String>,
-    {
+    pub const fn new_int32(name: &'a str, description: Option<&'a str>) -> Self {
         Self {
-            name: name.into(),
-            description: description.into(),
+            name: Cow::Borrowed(name),
+            description: match description {
+                Some(d) => Some(Cow::Borrowed(d)),
+                None => None,
+            },
             dtype: DataType::Int32,
-            ..Default::default()
+            is_primary: false,
+            auto_id: false,
+            chunk_size: 1,
+            dim: 1,
+            max_length: 0,
         }
     }
 
-    pub fn new_int64<S>(name: S, description: S) -> Self
-    where
-        S: Into<String>,
-    {
+    pub const fn new_int64(name: &'a str, description: Option<&'a str>) -> Self {
         Self {
-            name: name.into(),
-            description: description.into(),
+            name: Cow::Borrowed(name),
+            description: match description {
+                Some(d) => Some(Cow::Borrowed(d)),
+                None => None,
+            },
             dtype: DataType::Int64,
-            ..Default::default()
+            is_primary: false,
+            auto_id: false,
+            chunk_size: 1,
+            dim: 1,
+            max_length: 0,
         }
     }
 
-    pub fn new_float<S>(name: S, description: S) -> Self
-    where
-        S: Into<String>,
-    {
+    pub const fn new_primary_int64(
+        name: &'a str,
+        description: Option<&'a str>,
+        auto_id: bool,
+    ) -> Self {
         Self {
-            name: name.into(),
-            description: description.into(),
+            name: Cow::Borrowed(name),
+            description: match description {
+                Some(d) => Some(Cow::Borrowed(d)),
+                None => None,
+            },
+            dtype: DataType::Int64,
+            is_primary: true,
+            auto_id,
+            chunk_size: 1,
+            dim: 1,
+            max_length: 0,
+        }
+    }
+
+    pub const fn new_primary_varchar(
+        name: &'a str,
+        description: Option<&'a str>,
+        auto_id: bool,
+        max_length: i32,
+    ) -> Self {
+        Self {
+            name: Cow::Borrowed(name),
+            description: match description {
+                Some(d) => Some(Cow::Borrowed(d)),
+                None => None,
+            },
+            dtype: DataType::VarChar,
+            is_primary: true,
+            auto_id,
+            max_length,
+            chunk_size: 1,
+            dim: 1,
+        }
+    }
+
+    pub const fn new_float(name: &'a str, description: Option<&'a str>) -> Self {
+        Self {
+            name: Cow::Borrowed(name),
+            description: match description {
+                Some(d) => Some(Cow::Borrowed(d)),
+                None => None,
+            },
             dtype: DataType::Float,
-            ..Default::default()
+            is_primary: false,
+            auto_id: false,
+            chunk_size: 1,
+            dim: 1,
+            max_length: 0,
         }
     }
 
-    pub fn new_double<S>(name: S, description: S) -> Self
-    where
-        S: Into<String>,
-    {
+    pub const fn new_double(name: &'a str, description: Option<&'a str>) -> Self {
         Self {
-            name: name.into(),
-            description: description.into(),
+            name: Cow::Borrowed(name),
+            description: match description {
+                Some(d) => Some(Cow::Borrowed(d)),
+                None => None,
+            },
             dtype: DataType::Double,
-            ..Default::default()
+            is_primary: false,
+            auto_id: false,
+            chunk_size: 1,
+            dim: 1,
+            max_length: 0,
         }
     }
 
-    pub fn new_string<S>(name: S, description: S) -> Self
-    where
-        S: Into<String>,
-    {
+    pub const fn new_string(name: &'a str, description: Option<&'a str>) -> Self {
         Self {
-            name: name.into(),
-            description: description.into(),
+            name: Cow::Borrowed(name),
+            description: match description {
+                Some(d) => Some(Cow::Borrowed(d)),
+                None => None,
+            },
             dtype: DataType::String,
-            ..Default::default()
+            is_primary: false,
+            auto_id: false,
+            chunk_size: 1,
+            dim: 1,
+            max_length: 0,
         }
     }
 
-    pub fn new_varchar<S>(name: S, description: S, max_length: i32) -> Self
-    where
-        S: Into<String>,
-    {
-        assert!(max_length > 0, "max_length should be positive");
+    pub const fn new_varchar(name: &'a str, description: Option<&'a str>, max_length: i32) -> Self {
+        if max_length <= 0 {
+            panic!("max_length should be positive");
+        }
+
         Self {
-            name: name.into(),
-            description: description.into(),
+            name: Cow::Borrowed(name),
+            description: match description {
+                Some(d) => Some(Cow::Borrowed(d)),
+                None => None,
+            },
             dtype: DataType::String,
             max_length,
-            ..Default::default()
+            is_primary: false,
+            auto_id: false,
+            chunk_size: 1,
+            dim: 1,
         }
     }
 
-    pub fn new_binary_vector<S>(name: S, description: S, dim: i32) -> Self
-    where
-        S: Into<String>,
-    {
-        assert!(dim > 0, "dim should be positive");
+    pub const fn new_binary_vector(name: &'a str, description: Option<&'a str>, dim: i64) -> Self {
+        if dim <= 0 {
+            panic!("dim should be positive");
+        }
+
         Self {
-            name: name.into(),
-            description: description.into(),
+            name: Cow::Borrowed(name),
+            description: match description {
+                Some(d) => Some(Cow::Borrowed(d)),
+                None => None,
+            },
             dtype: DataType::BinaryVector,
+            chunk_size: dim as usize / 8,
             dim,
-            ..Default::default()
+            is_primary: false,
+            auto_id: false,
+            max_length: 0,
         }
     }
 
-    pub fn new_float_vector<S>(name: S, description: S, dim: i32) -> Self
-    where
-        S: Into<String>,
-    {
-        assert!(dim > 0, "dim should be positive");
+    pub const fn new_float_vector(name: &'a str, description: Option<&'a str>, dim: i64) -> Self {
+        if dim <= 0 {
+            panic!("dim should be positive");
+        }
+
         Self {
-            name: name.into(),
-            description: description.into(),
+            name: Cow::Borrowed(name),
+            description: match description {
+                Some(d) => Some(Cow::Borrowed(d)),
+                None => None,
+            },
             dtype: DataType::FloatVector,
+            chunk_size: dim as usize,
             dim,
-            ..Default::default()
+            is_primary: false,
+            auto_id: false,
+            max_length: 0,
         }
     }
-    pub fn convert_field(self) -> schema::FieldSchema {
-        let params = match self.dtype {
+}
+
+impl<'a> From<FieldSchema<'a>> for schema::FieldSchema {
+    fn from(fld: FieldSchema<'a>) -> schema::FieldSchema {
+        let params = match fld.dtype {
             DataType::BinaryVector | DataType::FloatVector => vec![KeyValuePair {
                 key: "dim".to_string(),
-                value: self.dim.to_string(),
+                value: fld.dim.to_string(),
             }],
             DataType::VarChar => vec![KeyValuePair {
                 key: "max_length".to_string(),
-                value: self.max_length.to_string(),
+                value: fld.max_length.to_string(),
             }],
             _ => Vec::new(),
         };
+
         schema::FieldSchema {
             field_id: 0,
-            name: self.name,
-            is_primary_key: self.is_primary,
-            description: self.description,
-            data_type: self.dtype as i32,
+            name: fld.name.into(),
+            is_primary_key: fld.is_primary,
+            description: fld.description.unwrap_or(Cow::Borrowed("")).into(),
+            data_type: fld.dtype as i32,
             type_params: params,
             index_params: Vec::new(),
-            auto_id: self.auto_id,
+            auto_id: fld.auto_id,
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct CollectionSchema {
-    inner: Vec<FieldSchema>,
-    auto_id: bool,
+pub struct CollectionSchema<'a> {
+    pub(crate) name: Cow<'a, str>,
+    pub(crate) description: Option<Cow<'a, str>>,
+    pub(crate) fields: Cow<'a, [FieldSchema<'a>]>,
 }
 
-impl CollectionSchema {
-    pub fn convert_collection<S>(self, name: S, description: S) -> schema::CollectionSchema
-    where
-        S: Into<String>,
-    {
+impl<'a> CollectionSchema<'a> {
+    #[inline]
+    pub fn auto_id(&self) -> bool {
+        self.fields.as_ref().into_iter().any(|x| x.auto_id)
+    }
+
+    pub fn primary_column(&self) -> Option<&FieldSchema<'a>> {
+        self.fields.iter().find(|s| s.is_primary)
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        self.primary_column().ok_or_else(|| Error::NoPrimaryKey)?;
+        // TODO addidtional schema checks need to be added here
+        Ok(())
+    }
+}
+
+impl<'a> From<CollectionSchema<'a>> for schema::CollectionSchema {
+    fn from(col: CollectionSchema<'a>) -> Self {
         schema::CollectionSchema {
-            name: name.into(),
-            description: description.into(),
-            auto_id: self.auto_id,
-            fields: self
-                .inner
+            name: col.name.to_string(),
+            auto_id: col.auto_id(),
+            description: col.description.unwrap_or(Cow::Borrowed("")).to_string(),
+            fields: col
+                .fields
+                .into_owned()
                 .into_iter()
-                .map(FieldSchema::convert_field)
+                .map(Into::into)
                 .collect(),
         }
     }
 }
 
-impl<'a> From<&'a schema::CollectionSchema> for CollectionSchema {
+impl<'a> From<&'a schema::CollectionSchema> for CollectionSchema<'a> {
     fn from(v: &'a schema::CollectionSchema) -> Self {
         CollectionSchema {
-            inner: v.fields.iter().map(Into::into).collect(),
-            auto_id: v.auto_id,
+            fields: v.fields.iter().map(Into::into).collect(),
+            name: Cow::Borrowed(v.name.as_str()),
+            description: if v.description.as_str() != "" {
+                Some(Cow::Borrowed(v.description.as_str()))
+            } else {
+                None
+            },
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct CollectionSchemaBuilder {
-    inner: Vec<FieldSchema>,
+pub struct CollectionSchemaBuilder<'a> {
+    name: Cow<'a, str>,
+    description: Option<Cow<'a, str>>,
+    inner: Vec<FieldSchema<'a>>,
 }
 
-impl CollectionSchemaBuilder {
+impl<'a> Default for CollectionSchemaBuilder<'a> {
+    fn default() -> Self {
+        Self {
+            name: Cow::Borrowed(""),
+            description: None,
+            inner: Vec::new(),
+        }
+    }
+}
+
+impl<'a> CollectionSchemaBuilder<'a> {
     pub fn new() -> Self {
-        Self { inner: Vec::new() }
+        Default::default()
     }
 
-    pub fn add_field(&mut self, schema: FieldSchema) -> &mut Self {
+    pub fn add_field(&mut self, schema: FieldSchema<'a>) -> &mut Self {
         self.inner.push(schema);
         self
     }
 
     pub fn set_primary_key<S>(&mut self, name: S) -> Result<&mut Self>
     where
-        S: Into<String>,
+        S: AsRef<str>,
     {
-        let n = name.into();
+        let n = name.as_ref();
         for f in self.inner.iter_mut() {
             if f.is_primary {
                 return Err(error::Error::from(Error::DuplicatePrimaryKey(
-                    n,
-                    f.name.to_owned(),
+                    n.to_string(),
+                    f.name.to_string(),
                 )));
             }
         }
+
         for f in self.inner.iter_mut() {
-            if n == f.name {
+            if n == f.name.as_ref() {
                 if f.dtype == DataType::Int64 || f.dtype == DataType::VarChar {
                     f.is_primary = true;
                     return Ok(self);
@@ -308,7 +596,8 @@ impl CollectionSchemaBuilder {
                 }
             }
         }
-        Err(error::Error::from(Error::NoSuchKey(n)))
+
+        Err(error::Error::from(Error::NoSuchKey(n.to_string())))
     }
 
     pub fn enable_auto_id(&mut self) -> Result<&mut Self> {
@@ -324,281 +613,269 @@ impl CollectionSchemaBuilder {
                 }
             }
         }
-        Err(error::Error::from(Error::NoPrimaryKey()))
+
+        Err(error::Error::from(Error::NoPrimaryKey))
     }
 
-    pub fn build(&self) -> Result<CollectionSchema> {
+    pub fn build(&mut self) -> Result<CollectionSchema> {
         let mut has_primary = false;
-        let mut auto = false;
+
         for f in self.inner.iter() {
             if f.is_primary {
                 has_primary = true;
-                if f.auto_id {
-                    auto = true;
-                }
                 break;
             }
         }
+
         if !has_primary {
-            return Err(error::Error::from(Error::NoPrimaryKey()));
+            return Err(error::Error::from(Error::NoPrimaryKey));
         }
+
+        let this = std::mem::take(self);
+
         Ok(CollectionSchema {
-            inner: self.inner.clone(),
-            auto_id: auto,
+            fields: this.inner.into(),
+            name: this.name,
+            description: this.description,
         })
     }
 }
 
-pub trait AsFieldDataValue {
-    fn as_field_data_value(&self) -> FieldDataValue<'_>;
+#[derive(Debug, ThisError)]
+pub enum Error {
+    #[error("try to set primary key {0:?}, but {1:?} is also key")]
+    DuplicatePrimaryKey(String, String),
+
+    #[error("can not find any primary key")]
+    NoPrimaryKey,
+
+    #[error("primary key must be int64 or varchar, unsupported type {0:?}")]
+    UnsupportedPrimaryKey(DataType),
+
+    #[error("auto id must be int64, unsupported type {0:?}")]
+    UnsupportedAutoId(DataType),
+
+    #[error("dimension mismatch for {0:?}, expected dim {1:?}, got {2:?}")]
+    DimensionMismatch(String, i32, i32),
+
+    #[error("wrong field data type, field {0} expected to be{1:?}, but got {2:?}")]
+    FieldWrongType(String, DataType, DataType),
+
+    #[error("field does not exists in schema: {0:?}")]
+    FieldDoesNotExists(String),
+
+    #[error("can not find such key {0:?}")]
+    NoSuchKey(String),
 }
 
-impl AsFieldDataValue for i64 {
-    fn as_field_data_value(&self) -> FieldDataValue<'_> {
-        FieldDataValue::Int64(*self)
-    }
-}
-
-impl AsFieldDataValue for i32 {
-    fn as_field_data_value(&self) -> FieldDataValue<'_> {
-        FieldDataValue::Int32(*self)
-    }
-}
-
-impl AsFieldDataValue for i16 {
-    fn as_field_data_value(&self) -> FieldDataValue<'_> {
-        FieldDataValue::Int16(*self)
-    }
-}
-
-impl AsFieldDataValue for i8 {
-    fn as_field_data_value(&self) -> FieldDataValue<'_> {
-        FieldDataValue::Int8(*self)
-    }
-}
-
-impl AsFieldDataValue for [u8] {
-    fn as_field_data_value(&self) -> FieldDataValue<'_> {
-        FieldDataValue::BinaryVector(self)
-    }
-}
-
-impl AsFieldDataValue for Vec<u8> {
-    fn as_field_data_value(&self) -> FieldDataValue<'_> {
-        FieldDataValue::BinaryVector(self)
-    }
-}
-
-impl AsFieldDataValue for [f32] {
-    fn as_field_data_value(&self) -> FieldDataValue<'_> {
-        FieldDataValue::FloatVector(self)
-    }
-}
-
-impl AsFieldDataValue for Vec<f32> {
-    fn as_field_data_value(&self) -> FieldDataValue<'_> {
-        FieldDataValue::FloatVector(self)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum FieldDataValue<'a> {
+pub enum Value<'a> {
     None,
     Bool(bool),
     Int8(i8),
     Int16(i16),
     Int32(i32),
-    Int64(i64),
+    Long(i64),
     Float(f32),
     Double(f64),
-    String(&'a str),
-    BinaryVector(&'a [u8]),
-    FloatVector(&'a [f32]),
+    FloatArray(Cow<'a, [f32]>),
+    Binary(Cow<'a, [u8]>),
+    String(Cow<'a, str>),
 }
 
-impl<'a> FieldDataValue<'a> {
-    pub fn get_dim(&self) -> usize {
+macro_rules! impl_from_for_field_data_column {
+    ( $($t: ty, $o: ident ),+ ) => {$(
+        impl From<$t> for Value<'static> {
+            fn from(v: $t) -> Self {
+                Self::$o(v as _)
+            }
+        }
+    )*};
+}
+
+impl_from_for_field_data_column! {
+    bool, Bool,
+    i8,  Int8,
+    i16, Int16,
+    i32, Int32,
+    i64, Long,
+    f32, Float,
+    f64, Double
+}
+
+impl Value<'_> {
+    fn data_type(&self) -> DataType {
         match self {
-            FieldDataValue::None => 0,
-            FieldDataValue::Bool(_)
-            | FieldDataValue::Int8(_)
-            | FieldDataValue::Int16(_)
-            | FieldDataValue::Int32(_)
-            | FieldDataValue::Int64(_)
-            | FieldDataValue::Float(_)
-            | FieldDataValue::Double(_)
-            | FieldDataValue::String(_) => 1,
-            FieldDataValue::BinaryVector(s) => s.len() * 8,
-            FieldDataValue::FloatVector(s) => s.len(),
+            Value::None => DataType::None,
+            Value::Bool(_) => DataType::Bool,
+            Value::Int8(_) => DataType::Int8,
+            Value::Int16(_) => DataType::Int16,
+            Value::Int32(_) => DataType::Int32,
+            Value::Long(_) => DataType::Int64,
+            Value::Float(_) => DataType::Float,
+            Value::Double(_) => DataType::Double,
+            Value::String(_) => DataType::String,
+            Value::FloatArray(_) => DataType::FloatVector,
+            Value::Binary(_) => DataType::BinaryVector,
         }
     }
+}
 
-    #[inline]
-    pub fn data_type(&self) -> DataType {
-        match self {
-            FieldDataValue::None => DataType::None,
-            FieldDataValue::Bool(_) => DataType::Bool,
-            FieldDataValue::Int8(_) => DataType::Int8,
-            FieldDataValue::Int16(_) => DataType::Int16,
-            FieldDataValue::Int32(_) => DataType::Int32,
-            FieldDataValue::Int64(_) => DataType::Int64,
-            FieldDataValue::Float(_) => DataType::Float,
-            FieldDataValue::Double(_) => DataType::Double,
-            FieldDataValue::String(_) => DataType::String,
-            // FieldDataValue::VarChar(_) => DataType::VarChar,
-            FieldDataValue::BinaryVector(_) => DataType::BinaryVector,
-            FieldDataValue::FloatVector(_) => DataType::FloatVector,
-        }
+impl From<String> for Value<'static> {
+    fn from(v: String) -> Self {
+        Self::String(Cow::Owned(v))
+    }
+}
+
+impl<'a> From<&'a str> for Value<'a> {
+    fn from(v: &'a str) -> Self {
+        Self::String(Cow::Borrowed(v))
+    }
+}
+
+impl<'a> From<&'a [u8]> for Value<'a> {
+    fn from(v: &'a [u8]) -> Self {
+        Self::Binary(Cow::Borrowed(v))
+    }
+}
+
+impl From<Vec<u8>> for Value<'static> {
+    fn from(v: Vec<u8>) -> Self {
+        Self::Binary(Cow::Owned(v))
+    }
+}
+
+impl<'a> From<&'a [f32]> for Value<'a> {
+    fn from(v: &'a [f32]) -> Self {
+        Self::FloatArray(Cow::Borrowed(v))
+    }
+}
+
+impl From<Vec<f32>> for Value<'static> {
+    fn from(v: Vec<f32>) -> Self {
+        Self::FloatArray(Cow::Owned(v))
     }
 }
 
 #[derive(Debug, Clone)]
-pub enum FieldDataKind {
+pub enum ValueVec {
     None,
     Bool(Vec<bool>),
-    Int8(Vec<i32>),
-    Int16(Vec<i32>),
-    Int32(Vec<i32>),
-    Int64(Vec<i64>),
+    Int(Vec<i32>),
+    Long(Vec<i64>),
     Float(Vec<f32>),
     Double(Vec<f64>),
+    Binary(Vec<u8>),
     String(Vec<String>),
-    VarChar(Vec<String>),
-
-    BinaryVector(i64, Vec<u8>),
-    FloatVector(i64, Vec<f32>),
 }
 
-impl FieldDataKind {
-    #[inline]
-    pub fn data_type(&self) -> DataType {
-        match self {
-            FieldDataKind::None => DataType::None,
-            FieldDataKind::Bool(_) => DataType::Bool,
-            FieldDataKind::Int8(_) => DataType::Int8,
-            FieldDataKind::Int16(_) => DataType::Int16,
-            FieldDataKind::Int32(_) => DataType::Int32,
-            FieldDataKind::Int64(_) => DataType::Int64,
-            FieldDataKind::Float(_) => DataType::Float,
-            FieldDataKind::Double(_) => DataType::Double,
-            FieldDataKind::String(_) => DataType::String,
-            FieldDataKind::VarChar(_) => DataType::VarChar,
-            FieldDataKind::BinaryVector(..) => DataType::BinaryVector,
-            FieldDataKind::FloatVector(..) => DataType::FloatVector,
-        }
-    }
-
-    fn push(&mut self, v: FieldDataValue) -> std::result::Result<(), Error> {
-        match (v, self) {
-            (FieldDataValue::Bool(v), FieldDataKind::Bool(vec)) => vec.push(v),
-            (FieldDataValue::Int8(v), FieldDataKind::Int8(vec)) => vec.push(v as _),
-            (FieldDataValue::Int16(v), FieldDataKind::Int16(vec)) => vec.push(v as _),
-            (FieldDataValue::Int32(v), FieldDataKind::Int32(vec)) => vec.push(v),
-            (FieldDataValue::Int64(v), FieldDataKind::Int64(vec)) => vec.push(v),
-            (FieldDataValue::Float(v), FieldDataKind::Float(vec)) => vec.push(v),
-            (FieldDataValue::Double(v), FieldDataKind::Double(vec)) => vec.push(v),
-            (FieldDataValue::String(v), FieldDataKind::String(vec)) => vec.push(v.to_string()),
-            (FieldDataValue::BinaryVector(v), FieldDataKind::BinaryVector(_, vec)) => {
-                vec.extend_from_slice(v)
+macro_rules! impl_from_for_value_vec {
+    ( $($t: ty, $o: ident ),+ ) => {$(
+        impl From<$t> for ValueVec {
+            fn from(v: $t) -> Self {
+                Self::$o(v)
             }
-            (FieldDataValue::FloatVector(v), FieldDataKind::FloatVector(_, vec)) => {
-                vec.extend_from_slice(v)
-            }
-
-            (a, b) => return Err(Error::FieldWrongType(a.data_type(), b.data_type())),
         }
+    )*};
+}
 
-        Ok(())
+impl_from_for_value_vec! {
+    Vec<bool>, Bool,
+    Vec<i32>, Int,
+    Vec<i64>, Long,
+    Vec<String>, String,
+    Vec<u8>, Binary,
+    Vec<f32>, Float,
+    Vec<f64>, Double
+}
+
+impl From<Vec<i8>> for ValueVec {
+    fn from(v: Vec<i8>) -> Self {
+        Self::Int(v.into_iter().map(Into::into).collect())
+    }
+}
+
+impl From<Vec<i16>> for ValueVec {
+    fn from(v: Vec<i16>) -> Self {
+        Self::Int(v.into_iter().map(Into::into).collect())
+    }
+}
+
+impl ValueVec {
+    pub fn new(dtype: DataType) -> Self {
+        match dtype {
+            DataType::None => Self::None,
+            DataType::Bool => Self::Bool(Vec::new()),
+            DataType::Int8 => Self::Int(Vec::new()),
+            DataType::Int16 => Self::Int(Vec::new()),
+            DataType::Int32 => Self::Int(Vec::new()),
+            DataType::Int64 => Self::Long(Vec::new()),
+            DataType::Float => Self::Float(Vec::new()),
+            DataType::Double => Self::Double(Vec::new()),
+            DataType::String => Self::String(Vec::new()),
+            DataType::VarChar => Self::String(Vec::new()),
+            DataType::BinaryVector => Self::Binary(Vec::new()),
+            DataType::FloatVector => Self::Float(Vec::new()),
+        }
     }
 
-    #[inline]
-    fn dim(&self) -> i64 {
-        match self {
-            FieldDataKind::None => 0,
-            FieldDataKind::Bool(_)
-            | FieldDataKind::Int8(_)
-            | FieldDataKind::Int16(_)
-            | FieldDataKind::Int32(_)
-            | FieldDataKind::Int64(_)
-            | FieldDataKind::Float(_)
-            | FieldDataKind::Double(_)
-            | FieldDataKind::String(_)
-            | FieldDataKind::VarChar(_) => 1,
-            FieldDataKind::BinaryVector(d, _) => *d,
-            FieldDataKind::FloatVector(d, _) => *d,
-        }
-    }
-
-    fn convert(self) -> Field {
-        match self {
-            FieldDataKind::None => Field::Scalars(ScalarField { data: None }),
-            FieldDataKind::Bool(v) => Field::Scalars(ScalarField {
-                data: Some(ScalarData::BoolData(schema::BoolArray { data: v })),
-            }),
-            FieldDataKind::Int8(v) => Field::Scalars(ScalarField {
-                data: Some(ScalarData::IntData(schema::IntArray { data: v })),
-            }),
-            FieldDataKind::Int16(v) => Field::Scalars(ScalarField {
-                data: Some(ScalarData::IntData(schema::IntArray { data: v })),
-            }),
-            FieldDataKind::Int32(v) => Field::Scalars(ScalarField {
-                data: Some(ScalarData::IntData(schema::IntArray { data: v })),
-            }),
-            FieldDataKind::Int64(v) => Field::Scalars(ScalarField {
-                data: Some(ScalarData::LongData(schema::LongArray { data: v })),
-            }),
-            FieldDataKind::Float(v) => Field::Scalars(ScalarField {
-                data: Some(ScalarData::FloatData(schema::FloatArray { data: v })),
-            }),
-            FieldDataKind::Double(v) => Field::Scalars(ScalarField {
-                data: Some(ScalarData::DoubleData(schema::DoubleArray { data: v })),
-            }),
-            FieldDataKind::String(v) => Field::Scalars(ScalarField {
-                data: Some(ScalarData::StringData(schema::StringArray { data: v })),
-            }),
-            FieldDataKind::VarChar(v) => Field::Scalars(ScalarField {
-                data: Some(ScalarData::StringData(schema::StringArray { data: v })),
-            }),
-            FieldDataKind::BinaryVector(dim, v) => Field::Vectors(VectorField {
-                data: Some(schema::vector_field::Data::BinaryVector(v)),
-                dim,
-            }),
-            FieldDataKind::FloatVector(dim, v) => Field::Vectors(VectorField {
-                data: Some(schema::vector_field::Data::FloatVector(
-                    schema::FloatArray { data: v },
-                )),
-                dim,
-            }),
+    pub fn check_dtype(&self, dtype: DataType) -> bool {
+        match (self, dtype) {
+            (ValueVec::Binary(..), DataType::BinaryVector)
+            | (ValueVec::Float(..), DataType::FloatVector)
+            | (ValueVec::Float(..), DataType::Float)
+            | (ValueVec::Int(..), DataType::Int8)
+            | (ValueVec::Int(..), DataType::Int16)
+            | (ValueVec::Int(..), DataType::Int32)
+            | (ValueVec::Long(..), DataType::Int64)
+            | (ValueVec::Bool(..), DataType::Bool)
+            | (ValueVec::String(..), DataType::String)
+            | (ValueVec::String(..), DataType::VarChar)
+            | (ValueVec::None, _)
+            | (ValueVec::Double(..), DataType::Double) => true,
+            _ => false,
         }
     }
 
     #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn len(&self) -> usize {
+        match self {
+            ValueVec::None => 0,
+            ValueVec::Bool(v) => v.len(),
+            ValueVec::Int(v) => v.len(),
+            ValueVec::Long(v) => v.len(),
+            ValueVec::Float(v) => v.len(),
+            ValueVec::Double(v) => v.len(),
+            ValueVec::Binary(v) => v.len(),
+            ValueVec::String(v) => v.len(),
+        }
+    }
+
     pub fn clear(&mut self) {
         match self {
-            FieldDataKind::None => (),
-            FieldDataKind::Bool(v) => v.clear(),
-            FieldDataKind::Int8(v) => v.clear(),
-            FieldDataKind::Int16(v) => v.clear(),
-            FieldDataKind::Int32(v) => v.clear(),
-            FieldDataKind::Int64(v) => v.clear(),
-            FieldDataKind::Float(v) => v.clear(),
-            FieldDataKind::Double(v) => v.clear(),
-            FieldDataKind::String(v) => v.clear(),
-            FieldDataKind::VarChar(v) => v.clear(),
-            FieldDataKind::BinaryVector(_, v) => v.clear(),
-            FieldDataKind::FloatVector(_, v) => v.clear(),
+            ValueVec::None => (),
+            ValueVec::Bool(v) => v.clear(),
+            ValueVec::Int(v) => v.clear(),
+            ValueVec::Long(v) => v.clear(),
+            ValueVec::Float(v) => v.clear(),
+            ValueVec::Double(v) => v.clear(),
+            ValueVec::Binary(v) => v.clear(),
+            ValueVec::String(v) => v.clear(),
         }
     }
 }
 
-impl From<Field> for FieldDataKind {
+impl From<Field> for ValueVec {
     fn from(f: Field) -> Self {
         match f {
             Field::Scalars(s) => match s.data {
                 Some(x) => match x {
                     ScalarData::BoolData(v) => Self::Bool(v.data),
-                    ScalarData::IntData(v) => Self::Int32(v.data),
-                    ScalarData::LongData(v) => Self::Int64(v.data),
+                    ScalarData::IntData(v) => Self::Int(v.data),
+                    ScalarData::LongData(v) => Self::Long(v.data),
                     ScalarData::FloatData(v) => Self::Float(v.data),
                     ScalarData::DoubleData(v) => Self::Double(v.data),
                     ScalarData::StringData(v) => Self::String(v.data),
@@ -609,10 +886,8 @@ impl From<Field> for FieldDataKind {
 
             Field::Vectors(arr) => match arr.data {
                 Some(x) => match x {
-                    schema::vector_field::Data::FloatVector(v) => {
-                        Self::FloatVector(arr.dim, v.data)
-                    }
-                    schema::vector_field::Data::BinaryVector(v) => Self::BinaryVector(arr.dim, v),
+                    VectorData::FloatVector(v) => Self::Float(v.data),
+                    VectorData::BinaryVector(v) => Self::Binary(v),
                 },
                 None => Self::None,
             },
@@ -621,161 +896,353 @@ impl From<Field> for FieldDataKind {
 }
 
 #[derive(Debug, Clone)]
-pub struct FieldData {
-    name: String,
-    dim: usize,
-    field: FieldDataKind,
+pub struct FieldColumn<'a> {
+    name: Cow<'a, str>,
+    dtype: DataType,
+    value: ValueVec,
+    dim: i64,
+    max_length: i32,
 }
 
-impl FieldData {
-    fn new(name: String, dim: usize, field: FieldDataKind) -> Self {
-        Self { name, dim, field }
+impl<'a> From<schema::FieldData> for FieldColumn<'a> {
+    fn from(fd: schema::FieldData) -> Self {
+        let (dim, max_length) = fd
+            .field
+            .as_ref()
+            .map(get_dim_max_length)
+            .unwrap_or((None, None));
+
+        let value: ValueVec = fd.field.map(Into::into).unwrap_or(ValueVec::None);
+        let dtype = DataType::from_i32(fd.r#type).unwrap_or(DataType::None);
+
+        FieldColumn {
+            name: Cow::Owned(fd.field_name),
+            dtype,
+            dim: dim.unwrap_or_else(|| match dtype {
+                DataType::None => 0,
+                DataType::Bool
+                | DataType::Int8
+                | DataType::Int16
+                | DataType::Int32
+                | DataType::Int64
+                | DataType::Float
+                | DataType::Double
+                | DataType::String
+                | DataType::VarChar => 1,
+                DataType::BinaryVector => 256,
+                DataType::FloatVector => 128,
+            }),
+            max_length: max_length.unwrap_or(0),
+            value,
+        }
+    }
+}
+
+impl<'a> FieldColumn<'a> {
+    pub fn index(&self, idx: usize) -> Option<Value<'_>> {
+        unimplemented!()
     }
 
-    pub fn convert(self) -> schema::FieldData {
-        schema::FieldData {
-            field_name: self.name,
-            field_id: 0,
-            r#type: self.field.data_type() as _,
-            field: Some(self.field.convert()),
+    fn push(&mut self, val: Value) {
+        match (&mut self.value, val) {
+            (ValueVec::None, Value::None) => (),
+            (ValueVec::Bool(vec), Value::Bool(i)) => vec.push(i),
+            (ValueVec::Int(vec), Value::Int8(i)) => vec.push(i as _),
+            (ValueVec::Int(vec), Value::Int16(i)) => vec.push(i as _),
+            (ValueVec::Int(vec), Value::Int32(i)) => vec.push(i),
+            (ValueVec::Long(vec), Value::Long(i)) => vec.push(i),
+            (ValueVec::Float(vec), Value::Float(i)) => vec.push(i),
+            (ValueVec::Double(vec), Value::Double(i)) => vec.push(i),
+            (ValueVec::String(vec), Value::String(i)) => vec.push(i.to_string()),
+            (ValueVec::Binary(vec), Value::Binary(i)) => vec.extend_from_slice(i.as_ref()),
+            (ValueVec::Float(vec), Value::FloatArray(i)) => vec.extend_from_slice(i.as_ref()),
+            _ => panic!("column type mismatch"),
         }
     }
 
     #[inline]
-    pub fn clear(&mut self) {
-        self.field.clear();
+    fn len(&self) -> usize {
+        self.value.len()
     }
 }
 
-impl From<schema::FieldData> for FieldData {
-    fn from(fd: schema::FieldData) -> Self {
-        let field: FieldDataKind = fd.field.map(Into::into).unwrap_or(FieldDataKind::None);
+fn get_dim_max_length(field: &Field) -> (Option<i64>, Option<i32>) {
+    let dim = match field {
+        Field::Scalars(ScalarField { data: Some(_) }) => 1i64,
+        Field::Vectors(VectorField { dim, .. }) => *dim,
+        _ => 0i64,
+    };
 
-        FieldData {
-            name: fd.field_name,
-            dim: field.dim() as _,
-            field,
+    (Some(dim), None) // no idea how to get max_length
+}
+
+impl<'a> From<FieldColumn<'a>> for schema::FieldData {
+    fn from(this: FieldColumn<'a>) -> schema::FieldData {
+        schema::FieldData {
+            field_name: this.name.to_string(),
+            field_id: 0,
+            r#type: this.dtype as _,
+            field: Some(match this.value {
+                ValueVec::None => Field::Scalars(ScalarField { data: None }),
+                ValueVec::Bool(v) => Field::Scalars(ScalarField {
+                    data: Some(ScalarData::BoolData(schema::BoolArray { data: v })),
+                }),
+                ValueVec::Int(v) => Field::Scalars(ScalarField {
+                    data: Some(ScalarData::IntData(schema::IntArray { data: v })),
+                }),
+                ValueVec::Long(v) => Field::Scalars(ScalarField {
+                    data: Some(ScalarData::LongData(schema::LongArray { data: v })),
+                }),
+                ValueVec::Float(v) => match this.dtype {
+                    DataType::Float => Field::Scalars(ScalarField {
+                        data: Some(ScalarData::FloatData(schema::FloatArray { data: v })),
+                    }),
+                    DataType::FloatVector => Field::Vectors(VectorField {
+                        data: Some(VectorData::FloatVector(schema::FloatArray { data: v })),
+                        dim: this.dim,
+                    }),
+                    _ => unimplemented!(),
+                },
+                ValueVec::Double(v) => Field::Scalars(ScalarField {
+                    data: Some(ScalarData::DoubleData(schema::DoubleArray { data: v })),
+                }),
+                ValueVec::String(v) => Field::Scalars(ScalarField {
+                    data: Some(ScalarData::StringData(schema::StringArray { data: v })),
+                }),
+                ValueVec::Binary(v) => Field::Vectors(VectorField {
+                    data: Some(VectorData::BinaryVector(v)),
+                    dim: this.dim,
+                }),
+            }),
         }
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct CollectionFieldsData {
+pub struct CollectionDataBatch<E> {
     num_rows: usize,
-    fields: HashMap<String, FieldData>,
+    columns: HashMap<Cow<'static, str>, FieldColumn<'static>>,
+    _m: PhantomData<E>,
 }
 
-impl CollectionFieldsData {
-    pub fn add<'a, I: IntoIterator<Item = (&'a str, &'a dyn AsFieldDataValue)>>(
-        &mut self,
-        row: I,
-    ) -> std::result::Result<(), Error> {
-        for (k, v) in row {
-            let v: FieldDataValue = v.as_field_data_value();
-            let x = self
-                .fields
-                .get_mut(k)
-                .ok_or_else(|| Error::FieldDoesNotExists(k.to_string()))?;
+impl<E: Entity> From<Vec<FieldData>> for CollectionDataBatch<E> {
+    fn from(data: Vec<FieldData>) -> Self {
+        let columns: HashMap<Cow<'static, str>, FieldColumn> = data
+            .into_iter()
+            .map(|mut fld| (std::mem::take(&mut fld.field_name).into(), fld.into()))
+            .collect();
 
-            let actual_dim = v.get_dim();
-
-            if actual_dim != x.dim {
-                return Err(Error::DimensionMismatch(
-                    k.to_string(),
-                    actual_dim as _,
-                    x.dim as _,
-                ));
-            }
-
-            x.field.push(v)?;
-        }
-
-        self.num_rows += 1;
-
-        Ok(())
-    }
-
-    pub fn new(schema: &CollectionSchema) -> Self {
-        let mut fields = HashMap::new();
-
-        for fld in schema.inner.iter() {
-            let (dim, knd) = match fld.dtype {
-                DataType::None => (0, FieldDataKind::None),
-                DataType::Bool => (1, FieldDataKind::Bool(Vec::new())),
-                DataType::Int8 => (1, FieldDataKind::Int8(Vec::new())),
-                DataType::Int16 => (1, FieldDataKind::Int16(Vec::new())),
-                DataType::Int32 => (1, FieldDataKind::Int32(Vec::new())),
-                DataType::Int64 => (1, FieldDataKind::Int64(Vec::new())),
-                DataType::Float => (1, FieldDataKind::Float(Vec::new())),
-                DataType::Double => (1, FieldDataKind::Double(Vec::new())),
-                DataType::String => (1, FieldDataKind::String(Vec::new())),
-                DataType::VarChar => (1, FieldDataKind::VarChar(Vec::new())),
-                DataType::BinaryVector => (
-                    fld.dim,
-                    FieldDataKind::BinaryVector(fld.dim as _, Vec::new()),
-                ),
-                DataType::FloatVector => (
-                    fld.dim,
-                    FieldDataKind::FloatVector(fld.dim as _, Vec::new()),
-                ),
-            };
-
-            fields.insert(
-                fld.name.clone(),
-                FieldData::new(fld.name.clone(), dim as _, knd),
-            );
-        }
+        let schema = E::schema();
+        let primary = schema.primary_column().unwrap();
+        let num_rows = columns.get(&primary.name).unwrap().len();
 
         Self {
-            fields,
-            num_rows: 0,
+            num_rows,
+            columns,
+            _m: Default::default(),
         }
     }
+}
 
+impl<E> From<CollectionDataBatch<E>> for Vec<FieldData> {
+    fn from(batch: CollectionDataBatch<E>) -> Vec<FieldData> {
+        batch.columns.into_values().map(Into::into).collect()
+    }
+}
+
+impl<E: Entity> Default for CollectionDataBatch<E> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<E> CollectionDataBatch<E> {
     #[inline]
-    pub fn convert(self) -> Vec<schema::FieldData> {
-        self.fields.into_values().map(|x| x.convert()).collect()
+    pub fn is_empty(&self) -> bool {
+        self.num_rows == 0
     }
 
     #[inline]
     pub fn len(&self) -> usize {
         self.num_rows
     }
+}
 
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.num_rows == 0
+impl<E: Entity> CollectionDataBatch<E> {
+    pub fn new() -> Self {
+        let columns: HashMap<_, _> = E::SCHEMA
+            .iter()
+            .map(|x| {
+                (
+                    x.name.clone(),
+                    FieldColumn {
+                        name: x.name.clone(),
+                        dtype: x.dtype,
+                        value: ValueVec::new(x.dtype),
+                        dim: x.dim,
+                        max_length: x.max_length,
+                    },
+                )
+            })
+            .collect();
+
+        Self {
+            num_rows: 0,
+            columns,
+            _m: Default::default(),
+        }
     }
 
-    pub fn clear(&mut self) {
-        self.num_rows = 0;
-        self.fields.values_mut().for_each(|x| x.clear())
+    #[inline]
+    pub fn add(&mut self, entity: E) {
+        for (schm, val) in entity.iter() {
+            self.columns.get_mut(schm.name.as_ref()).unwrap().push(val);
+        }
+    }
+
+    #[inline]
+    pub fn column(&self, name: &str) -> Option<&FieldColumn> {
+        self.columns.get(name)
     }
 }
 
-#[derive(Debug, ThisError)]
-pub enum Error {
-    #[error("try to set primary key {0:?}, but {1:?} is also key")]
-    DuplicatePrimaryKey(String, String),
+pub struct CollectionDataBatchBuilder<E> {
+    inner: CollectionDataBatch<E>,
+}
 
-    #[error("can not find any primary key")]
-    NoPrimaryKey(),
+impl<E: Entity> CollectionDataBatchBuilder<E> {
+    pub fn new() -> Self {
+        Self {
+            inner: CollectionDataBatch::new(),
+        }
+    }
 
-    #[error("primary key must be int64 or varchar, unsupported type {0:?}")]
-    UnsupportedPrimaryKey(DataType),
+    pub fn set_column_data<D: Into<ValueVec>>(&mut self, col: &str, data: D) {
+        let data: ValueVec = data.into();
+        let col = self.inner.columns.get_mut(col).unwrap();
 
-    #[error("auto id must be int64, unsupported type {0:?}")]
-    UnsupportedAutoId(DataType),
+        assert!(data.check_dtype(col.dtype));
 
-    #[error("dimension mismatch for {0:?}, got {1:?}, expected {2:?}")]
-    DimensionMismatch(String, i32, i32),
+        col.value = data;
+    }
 
-    #[error("wrong data type, got {0:?}, expected {1:?}")]
-    FieldWrongType(DataType, DataType),
+    pub fn build(&mut self) -> Result<CollectionDataBatch<E>> {
+        Ok(std::mem::take(&mut self.inner))
+    }
+}
 
-    #[error("field does not exists in schema: {0:?}")]
-    FieldDoesNotExists(String),
+pub trait FromField: Sized {
+    fn from_field(field: Field) -> Option<Self>;
+}
 
-    #[error("can not find such key {0:?}")]
-    NoSuchKey(String),
+macro_rules! impl_from_field {
+    ( $( $t: ty [$($e:tt)*] ),+ ) => {$(
+
+        impl FromField for $t {
+            fn from_field(v: Field) -> Option<Self> {
+                match v {
+                    $($e)*,
+                    _ => None
+                }
+            }
+        }
+    )*};
+}
+
+impl_from_field! {
+    Vec<bool>[Field::Scalars(ScalarField {data: Some(ScalarData::BoolData(schema::BoolArray { data }))}) => Some(data)],
+    Vec<i8>[Field::Scalars(ScalarField {data: Some(ScalarData::IntData(schema::IntArray { data }))}) => Some(data.into_iter().map(|x|x as _).collect())],
+    Vec<i16>[Field::Scalars(ScalarField {data: Some(ScalarData::IntData(schema::IntArray { data }))}) => Some(data.into_iter().map(|x|x as _).collect())],
+    Vec<i32>[Field::Scalars(ScalarField {data: Some(ScalarData::IntData(schema::IntArray { data }))}) => Some(data)],
+    Vec<i64>[Field::Scalars(ScalarField {data: Some(ScalarData::LongData(schema::LongArray { data }))}) => Some(data)],
+    Vec<String>[Field::Scalars(ScalarField {data: Some(ScalarData::StringData(schema::StringArray { data }))}) => Some(data)],
+    Vec<f64>[Field::Scalars(ScalarField {data: Some(ScalarData::DoubleData(schema::DoubleArray { data }))}) => Some(data)],
+    Vec<u8>[Field::Vectors(VectorField {data: Some(VectorData::BinaryVector(data)), ..}) => Some(data)]
+}
+
+impl FromField for Vec<f32> {
+    fn from_field(field: Field) -> Option<Self> {
+        match field {
+            Field::Scalars(ScalarField {
+                data: Some(ScalarData::FloatData(schema::FloatArray { data })),
+            }) => Some(data),
+
+            Field::Vectors(VectorField {
+                data: Some(VectorData::FloatVector(schema::FloatArray { data })),
+                ..
+            }) => Some(data),
+
+            _ => None,
+        }
+    }
+}
+
+pub fn make_field_data<V: Into<ValueVec>>(schm: &FieldSchema, v: V) -> FieldData {
+    let field_column = FieldColumn {
+        name: schm.name.clone(),
+        dtype: schm.dtype,
+        value: v.into(),
+        dim: schm.dim,
+        max_length: schm.max_length,
+    };
+
+    field_column.into()
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::{FieldSchema, Value};
+
+    struct Test {
+        pub id: i64,
+        pub hash: Vec<u8>,
+        pub listing_id: i32,
+        pub provider: i8,
+    }
+
+    impl super::Entity for Test {
+        const NAME: &'static str = "test";
+        const SCHEMA: &'static [FieldSchema<'static>] = &[
+            FieldSchema::new_primary_int64("id", None, false),
+            FieldSchema::new_binary_vector("hash", None, 1024),
+            FieldSchema::new_int32("listing_id", None),
+            FieldSchema::new_int8("provider", None),
+        ];
+
+        //
+        // Non-static one is wating for GATs (https://github.com/rust-lang/rust/pull/96709)
+        //
+        // type ColumnIter<'a> = std::array::IntoIter<
+        //     (&'static FieldSchema<'static>, Value<'a>),
+        //     { Self::SCHEMA.len() },
+        // >;
+
+        type ColumnIntoIter = std::array::IntoIter<
+            (&'static FieldSchema<'static>, Value<'static>),
+            { Self::SCHEMA.len() },
+        >;
+
+        fn iter(&self) -> Self::ColumnIntoIter {
+            [
+                (&Self::SCHEMA[0], self.id.into()),
+                (&Self::SCHEMA[1], self.hash.clone().into()),
+                (&Self::SCHEMA[2], self.listing_id.into()),
+                (&Self::SCHEMA[3], self.provider.into()),
+            ]
+            .into_iter()
+        }
+
+        fn into_iter(self) -> Self::ColumnIntoIter {
+            [
+                (&Self::SCHEMA[0], self.id.into()),
+                (&Self::SCHEMA[1], self.hash.into()),
+                (&Self::SCHEMA[2], self.listing_id.into()),
+                (&Self::SCHEMA[3], self.provider.into()),
+            ]
+            .into_iter()
+        }
+    }
+
+    #[test]
+    fn test_const_schema() {}
 }

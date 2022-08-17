@@ -45,8 +45,14 @@ pub enum Error {
     #[error("{0:?} {1:?}")]
     Server(ErrorCode, String),
 
+    #[error("Prost encode error: {0:?}")]
+    ProstEncode(#[from] prost::EncodeError),
+
+    #[error("Prost decode error: {0:?}")]
+    ProstDecode(#[from] prost::DecodeError),
+
     #[error("Unknown")]
-    Unknown(),
+    Unknown,
 }
 
 impl From<Status> for Error {
