@@ -18,9 +18,9 @@ use crate::error::{Error as SuperError, Result};
 use crate::proto::common::{ConsistencyLevel, MsgType};
 use crate::proto::milvus::milvus_service_client::MilvusServiceClient;
 use crate::proto::milvus::{
-    CreateCollectionRequest, DropCollectionRequest, FlushRequest, HasCollectionRequest,
-    InsertRequest, LoadCollectionRequest, QueryRequest, ReleaseCollectionRequest,
-    ShowCollectionsRequest, ShowType,
+    CreateCollectionRequest, CreatePartitionRequest, DropCollectionRequest, FlushRequest,
+    HasCollectionRequest, HasPartitionRequest, InsertRequest, LoadCollectionRequest, QueryRequest,
+    ReleaseCollectionRequest, ShowCollectionsRequest, ShowPartitionsRequest, ShowType,
 };
 use crate::utils::{new_msg, status_to_result};
 use crate::{config, schema};
@@ -28,15 +28,24 @@ use crate::{config, schema};
 use prost::bytes::BytesMut;
 use prost::Message;
 use std::borrow::Cow;
+use std::collections::HashSet;
 use std::marker::PhantomData;
 use std::time::Duration;
 use thiserror::Error as ThisError;
+use tokio::sync::Mutex;
 use tonic::transport::Channel;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
+pub struct Partition {
+    pub name: Cow<'static, str>,
+    pub percentage: i64,
+}
+
+#[derive(Debug)]
 pub struct Collection<C> {
     client: MilvusServiceClient<Channel>,
     name: Cow<'static, str>,
+    partitions: Mutex<HashSet<String>>,
     _m: PhantomData<C>,
 }
 
@@ -45,6 +54,7 @@ impl<C> Collection<C> {
         Self {
             client,
             name: name.into(),
+            partitions: Mutex::new(Default::default()),
             _m: Default::default(),
         }
     }
@@ -177,6 +187,73 @@ impl<C> Collection<C> {
 
         Ok(())
     }
+
+    pub async fn load_partition_list(&self) -> Result<()> {
+        let res = self
+            .client
+            .clone()
+            .show_partitions(ShowPartitionsRequest {
+                base: Some(new_msg(MsgType::ShowPartitions)),
+                db_name: "".to_string(),
+                collection_name: self.name.to_string(),
+                collection_id: 0,
+                partition_names: Vec::new(),
+                r#type: 0,
+            })
+            .await?
+            .into_inner();
+
+        let mut partitions = HashSet::new();
+        for name in res.partition_names {
+            partitions.insert(name);
+        }
+
+        std::mem::swap(&mut *self.partitions.lock().await, &mut partitions);
+
+        status_to_result(res.status)?;
+
+        Ok(())
+    }
+
+    pub async fn create_partition(&self, name: String) -> Result<()> {
+        let res = self
+            .client
+            .clone()
+            .create_partition(CreatePartitionRequest {
+                base: Some(new_msg(MsgType::ShowPartitions)),
+                db_name: "".to_string(),
+                collection_name: self.name.to_string(),
+                partition_name: name,
+            })
+            .await?
+            .into_inner();
+
+        status_to_result(Some(res))?;
+
+        Ok(())
+    }
+
+    pub async fn has_partition<P: AsRef<str>>(&self, p: P) -> Result<bool> {
+        if self.partitions.lock().await.contains(p.as_ref()) {
+            return Ok(true);
+        } else {
+            let res = self
+                .client
+                .clone()
+                .has_partition(HasPartitionRequest {
+                    base: Some(new_msg(MsgType::HasPartition)),
+                    db_name: "".to_string(),
+                    collection_name: self.name.to_string(),
+                    partition_name: p.as_ref().to_string(),
+                })
+                .await?
+                .into_inner();
+
+            status_to_result(res.status)?;
+
+            Ok(res.value)
+        }
+    }
 }
 
 impl<E: schema::Entity> Collection<E> {
@@ -243,6 +320,18 @@ impl<E: schema::Entity> Collection<E> {
         fields_data: C,
         partition_name: Option<P>,
     ) -> Result<crate::proto::milvus::MutationResult> {
+        let partition_name = if let Some(p) = partition_name {
+            let p = p.into();
+
+            if !self.has_partition(&p).await? {
+                self.create_partition(p.clone()).await?;
+            }
+
+            p
+        } else {
+            String::new()
+        };
+
         Ok(self
             .client
             .clone()
@@ -250,9 +339,7 @@ impl<E: schema::Entity> Collection<E> {
                 base: Some(new_msg(MsgType::Insert)),
                 db_name: "".to_string(),
                 collection_name: self.name.to_string(),
-                partition_name: partition_name
-                    .map(|pn| pn.into())
-                    .unwrap_or_else(String::new),
+                partition_name,
                 num_rows: fields_data.len() as _,
                 fields_data: fields_data.into_data_fields(),
                 hash_keys: Vec::new(),
