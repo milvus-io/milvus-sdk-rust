@@ -14,9 +14,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use milvus::client::*;
 use milvus::error::Result;
 use milvus::schema::*;
+use milvus::value::Value;
 
 #[tokio::test]
 #[ignore]
@@ -66,22 +69,42 @@ async fn has_collection() -> Result<()> {
     }
 }
 
+struct Stub {}
+
+impl Entity for Stub {
+    const NAME: &'static str = "tttest";
+    const SCHEMA: &'static [FieldSchema<'static>] = &[];
+
+    type ColumnIntoIter = std::iter::Empty<(&'static FieldSchema<'static>, Value<'static>)>;
+
+    fn iter(&self) -> Self::ColumnIntoIter {
+        unimplemented!()
+    }
+
+    fn into_iter(self) -> Self::ColumnIntoIter {
+        unimplemented!()
+    }
+}
+
 #[tokio::test]
 #[ignore]
 async fn create_has_drop_collection() -> Result<()> {
     const URL: &str = "http://localhost:19530";
-    const NAME: &str = "tttest";
+
     let client = Client::new(URL).await?;
-    let schema = CollectionSchemaBuilder::new()
-        .add_field(FieldSchema::new_int64("i64_1", ""))
-        .add_field(FieldSchema::new_bool("bl", ""))
+    let mut schema = CollectionSchemaBuilder::new(Cow::Borrowed(Stub::NAME), None);
+    let schema = schema
+        .add_field(FieldSchema::new_int64("i64_1", None))
+        .add_field(FieldSchema::new_bool("bl", None))
         .set_primary_key("i64_1")?
         .enable_auto_id()?
         .build()?;
-    client
-        .create_collection(NAME, "tt", schema, 1, ConsistencyLevel::Session)
+
+    let stub = client
+        .create_collection::<Stub>(schema, 1, ConsistencyLevel::Session)
         .await?;
-    match client.has_collection(NAME).await {
+
+    match stub.exists().await {
         Ok(i) => {
             if !i {
                 panic!("Cannot find created collection.");
@@ -89,7 +112,8 @@ async fn create_has_drop_collection() -> Result<()> {
         }
         Err(e) => return Err(e),
     };
-    match client.drop_collection(NAME).await {
+
+    match client.drop_collection(Stub::NAME).await {
         Ok(()) => Ok(()),
         Err(e) => Err(e),
     }

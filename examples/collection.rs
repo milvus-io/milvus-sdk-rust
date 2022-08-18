@@ -1,10 +1,11 @@
 use milvus::{
     client::Client,
     collection::Collection,
+    data::{FieldColumn, FromField},
     error::Error,
     schema::Collection as _,
-    schema::FromField,
-    schema::{self, Entity, FieldColumn, FieldSchema, Value},
+    schema::{self, Entity, FieldSchema},
+    value::Value,
 };
 
 use rand::prelude::*;
@@ -68,10 +69,10 @@ impl schema::IntoDataFields for ImageBatch {
     fn into_data_fields(self) -> Vec<schema::FieldData> {
         let scm = <Self as schema::Collection>::Entity::SCHEMA;
         vec![
-            schema::make_field_data(&scm[0], self.id),
-            schema::make_field_data(&scm[1], self.hash),
-            schema::make_field_data(&scm[2], self.listing_id),
-            schema::make_field_data(&scm[3], self.provider),
+            milvus::data::make_field_data(&scm[0], self.id),
+            milvus::data::make_field_data(&scm[1], self.hash),
+            milvus::data::make_field_data(&scm[2], self.listing_id),
+            milvus::data::make_field_data(&scm[3], self.provider),
         ]
     }
 }
@@ -156,9 +157,9 @@ impl schema::IntoDataFields for ImageQueryResult {
     fn into_data_fields(self) -> Vec<schema::FieldData> {
         let scm = <Self as schema::Collection>::Entity::SCHEMA;
         vec![
-            schema::make_field_data(&scm[0], self.id),
-            schema::make_field_data(&scm[1], self.hash),
-            schema::make_field_data(&scm[2], self.listing_id),
+            milvus::data::make_field_data(&scm[0], self.id),
+            milvus::data::make_field_data(&scm[1], self.hash),
+            milvus::data::make_field_data(&scm[2], self.listing_id),
         ]
     }
 }
@@ -262,22 +263,6 @@ async fn main() -> Result<(), Error> {
     for v in x.iter_rows() {
         println!("{:?}", v);
     }
-
-    // images.insert(fields, Option::<String>::None).await?;
-
-    // let x = client.flush_collections(["images"]).await?;
-
-    // println!("{:?}", x);
-
-    // let fields = images
-    //     .query(
-    //         "id < 100",
-    //         ["id", "hash", "listing_id", "provider"],
-    //         [""; 0],
-    //     )
-    //     .await?;
-
-    // println!("{:?}", fields);
 
     Ok(())
 }
