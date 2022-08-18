@@ -16,64 +16,78 @@
 
 use milvus::client::*;
 use milvus::error::Result;
-use milvus::schema::*;
+use milvus::schema::{self, FieldSchema};
+use milvus::value::Value;
 use std::thread;
 use std::time::Duration;
 
-#[test]
-fn build_collection() -> Result<()> {
-    let mut builder = CollectionSchemaBuilder::new();
-    builder
-        .add_field(FieldSchema::new_int64("i64_1", ""))
-        .add_field(FieldSchema::new_bool("bl", ""))
-        .set_primary_key("i64_1")?
-        .enable_auto_id()?
-        .build()?;
-    Ok(())
+struct Test {
+    i64_1: i64,
+    bl: bool,
+}
+
+impl schema::Entity for Test {
+    const NAME: &'static str = "tttest";
+    const SCHEMA: &'static [schema::FieldSchema<'static>] = &[
+        FieldSchema::new_primary_int64("i64_1", None, true),
+        FieldSchema::new_bool("bl", None),
+    ];
+
+    type ColumnIntoIter = std::array::IntoIter<
+        (&'static FieldSchema<'static>, Value<'static>),
+        { Self::SCHEMA.len() },
+    >;
+
+    fn iter(&self) -> Self::ColumnIntoIter {
+        [
+            (&Self::SCHEMA[0], self.i64_1.into()),
+            (&Self::SCHEMA[1], self.bl.into()),
+        ]
+        .into_iter()
+    }
+
+    fn into_iter(self) -> Self::ColumnIntoIter {
+        [
+            (&Self::SCHEMA[0], self.i64_1.into()),
+            (&Self::SCHEMA[1], self.bl.into()),
+        ]
+        .into_iter()
+    }
 }
 
 #[tokio::test]
 #[ignore]
 async fn load_release_collection() -> Result<()> {
     const URL: &str = "http://localhost:19530";
-    const NAME: &str = "tttest";
 
     // create collection
     let client = Client::new(URL).await?;
-    let collection = match client.get_collection(NAME).await? {
-        Some(c) => c,
-        None => {
-            let schema = CollectionSchemaBuilder::new()
-                .add_field(FieldSchema::new_int64("i64_1", ""))
-                .add_field(FieldSchema::new_bool("bl", ""))
-                .set_primary_key("i64_1")?
-                .enable_auto_id()?
-                .build()?;
-            client
-                .create_collection(NAME, "tt", schema, 1, ConsistencyLevel::Session)
-                .await?
-        }
-    };
+    let test = client.get_collection::<Test>().await?;
+
+    if !test.exists().await? {
+        test.create(None, None).await?;
+    }
 
     println!("collection prepared.");
 
     // load with `load_unblocked` and release
-    collection.load_unblocked(1).await?;
+    test.load_unblocked(1).await?;
     loop {
-        if collection.is_load().await? {
+        if test.is_load().await? {
             println!("#");
             break;
         }
         thread::sleep(Duration::from_millis(1000));
     }
-    collection.release().await?;
+
+    test.release().await?;
 
     // load with `load_blocked` and release
-    collection.load_blocked(1).await?;
-    collection.release().await?;
+    test.load_blocked(1).await?;
+    test.release().await?;
 
     // clean data
-    match client.drop_collection(NAME).await {
+    match test.drop().await {
         Ok(()) => Ok(()),
         Err(e) => Err(e),
     }

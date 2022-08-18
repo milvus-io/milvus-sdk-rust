@@ -22,7 +22,6 @@ use crate::proto::milvus::{
     InsertRequest, LoadCollectionRequest, QueryRequest, ReleaseCollectionRequest,
     ShowCollectionsRequest, ShowType,
 };
-use crate::schema::IntoDataFields;
 use crate::utils::{new_msg, status_to_result};
 use crate::{config, schema};
 

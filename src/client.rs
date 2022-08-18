@@ -47,15 +47,12 @@ impl Client {
         }
     }
 
-    pub async fn create_collection<C, S>(
+    pub async fn create_collection<C>(
         &self,
         schema: CollectionSchema<'_>,
         shards_num: i32,
         consistency_level: ConsistencyLevel,
-    ) -> Result<Collection<C>>
-    where
-        S: Into<String>,
-    {
+    ) -> Result<Collection<C>> {
         let schema: crate::proto::schema::CollectionSchema = schema.into();
         let mut buf = BytesMut::new();
 
