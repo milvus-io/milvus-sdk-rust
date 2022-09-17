@@ -47,12 +47,12 @@ impl Client {
         }
     }
 
-    pub async fn create_collection<C>(
+    pub async fn create_collection(
         &self,
-        schema: CollectionSchema<'_>,
+        schema: CollectionSchema,
         shards_num: i32,
         consistency_level: ConsistencyLevel,
-    ) -> Result<Collection<C>> {
+    ) -> Result<Collection> {
         let schema: crate::proto::schema::CollectionSchema = schema.into();
         let mut buf = BytesMut::new();
 
@@ -75,10 +75,7 @@ impl Client {
 
         status_to_result(Some(status))?;
 
-        Ok(Collection::new(
-            self.client.clone(),
-            schema.name.to_string(),
-        ))
+        Ok(Collection::new(self.client.clone(), schema.into()))
     }
 
     pub async fn drop_collection<S>(&self, name: S) -> Result<()>
@@ -120,10 +117,9 @@ impl Client {
         Ok(res.value)
     }
 
-    pub async fn get_collection<E: schema::Entity>(&self) -> Result<Collection<E>> {
-        E::schema().validate()?;
-        Ok(Collection::new(self.client.clone(), E::NAME))
-    }
+    // pub async fn get_collection<E: schema::Schema>(&self,name: &str) -> Result<Collection<E>> {
+    //     Ok(Collection::new(self.client.clone(), E::NAME))
+    // }
 
     pub async fn flush_collections<C>(&self, collections: C) -> Result<HashMap<String, Vec<i64>>>
     where

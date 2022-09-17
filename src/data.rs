@@ -40,15 +40,15 @@ impl_has_data_type! {
 }
 
 #[derive(Debug, Clone)]
-pub struct FieldColumn<'a> {
-    pub name: Cow<'a, str>,
+pub struct FieldColumn {
+    pub name: String,
     pub dtype: DataType,
     pub value: ValueVec,
     pub dim: i64,
     pub max_length: i32,
 }
 
-impl<'a> From<schema::FieldData> for FieldColumn<'a> {
+impl From<schema::FieldData> for FieldColumn {
     fn from(fd: schema::FieldData) -> Self {
         let (dim, max_length) = fd
             .field
@@ -60,7 +60,7 @@ impl<'a> From<schema::FieldData> for FieldColumn<'a> {
         let dtype = DataType::from_i32(fd.r#type).unwrap_or(DataType::None);
 
         FieldColumn {
-            name: Cow::Owned(fd.field_name),
+            name: fd.field_name,
             dtype,
             dim: dim.unwrap_or_else(|| match dtype {
                 DataType::None => 0,
@@ -82,8 +82,18 @@ impl<'a> From<schema::FieldData> for FieldColumn<'a> {
     }
 }
 
-impl<'a> FieldColumn<'a> {
-    pub fn index(&self, idx: usize) -> Option<Value<'_>> {
+impl FieldColumn {
+    pub fn new<V: Into<ValueVec>>(schm: &FieldSchema, v: V) -> FieldColumn {
+        FieldColumn {
+            name: schm.name.clone(),
+            dtype: schm.dtype,
+            value: v.into(),
+            dim: schm.dim,
+            max_length: schm.max_length,
+        }
+    }
+
+    pub fn get(&self, idx: usize) -> Option<Value<'_>> {
         Some(match &self.value {
             ValueVec::None => Value::None,
             ValueVec::Bool(v) => Value::Bool(*v.get(idx)?),
@@ -130,12 +140,12 @@ impl<'a> FieldColumn<'a> {
 
     #[inline]
     pub fn len(&self) -> usize {
-        self.value.len()
+        self.value.len() / self.dim as usize
     }
 }
 
-impl<'a> From<FieldColumn<'a>> for schema::FieldData {
-    fn from(this: FieldColumn<'a>) -> schema::FieldData {
+impl From<FieldColumn> for schema::FieldData {
+    fn from(this: FieldColumn) -> schema::FieldData {
         schema::FieldData {
             field_name: this.name.to_string(),
             field_id: 0,
@@ -220,18 +230,6 @@ impl FromField for Vec<f32> {
             _ => None,
         }
     }
-}
-
-pub fn make_field_data<V: Into<ValueVec>>(schm: &FieldSchema, v: V) -> schema::FieldData {
-    let field_column = FieldColumn {
-        name: schm.name.clone(),
-        dtype: schm.dtype,
-        value: v.into(),
-        dim: schm.dim,
-        max_length: schm.max_length,
-    };
-
-    field_column.into()
 }
 
 fn get_dim_max_length(field: &Field) -> (Option<i64>, Option<i32>) {

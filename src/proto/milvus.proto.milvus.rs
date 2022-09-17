@@ -158,6 +158,49 @@ pub struct DescribeCollectionResponse {
     /// The collection name
     #[prost(string, tag = "12")]
     pub collection_name: ::prost::alloc::string::String,
+    #[prost(bool, tag = "13")]
+    pub loaded: bool,
+    #[prost(string, repeated, tag = "14")]
+    pub loaded_partitions: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+///*
+/// Get Partition meta info like: collectionID, partitionID, if loaded in memory, ...
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DescribePartitionRequest {
+    /// Not useful for now
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    /// Not useful for now
+    #[prost(string, tag = "2")]
+    pub db_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub collection_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub partition_name: ::prost::alloc::string::String,
+}
+///*
+/// DescribeCollection Response
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DescribePartitionResponse {
+    /// Contain error_code and reason
+    #[prost(message, optional, tag = "1")]
+    pub status: ::core::option::Option<super::common::Status>,
+    #[prost(string, tag = "2")]
+    pub collection_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub partition_name: ::prost::alloc::string::String,
+    #[prost(int64, tag = "4")]
+    pub collection_id: i64,
+    #[prost(int64, tag = "5")]
+    pub partition_id: i64,
+    /// Hybrid timestamp in milvus
+    #[prost(uint64, tag = "6")]
+    pub created_timestamp: u64,
+    /// The utc timestamp calculated by created_timestamp
+    #[prost(uint64, tag = "7")]
+    pub created_utc_timestamp: u64,
+    #[prost(bool, tag = "8")]
+    pub loaded: bool,
 }
 ///*
 /// Load collection data into query nodes, then you can do vector search on this collection.
@@ -189,6 +232,39 @@ pub struct ReleaseCollectionRequest {
     /// The collection name you want to release
     #[prost(string, tag = "3")]
     pub collection_name: ::prost::alloc::string::String,
+}
+///*
+/// Get statistics like row_count.
+/// WARNING: This API is experimental and not useful for now.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetStatisticsRequest {
+    /// Not useful for now
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    /// Not useful for now
+    #[prost(string, tag = "2")]
+    pub db_name: ::prost::alloc::string::String,
+    /// The collection name you want get statistics
+    #[prost(string, tag = "3")]
+    pub collection_name: ::prost::alloc::string::String,
+    /// The partition names you want get statistics, empty for all partitions
+    #[prost(string, repeated, tag = "4")]
+    pub partition_names: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// Not useful for now, reserved for future
+    #[prost(uint64, tag = "5")]
+    pub guarantee_timestamp: u64,
+}
+///*
+/// Will return statistics in stats field like \[{key:"row_count",value:"1"}\]
+/// WARNING: This API is experimental and not useful for now.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetStatisticsResponse {
+    /// Contain error_code and reason
+    #[prost(message, optional, tag = "1")]
+    pub status: ::core::option::Option<super::common::Status>,
+    /// Collection statistics data
+    #[prost(message, repeated, tag = "2")]
+    pub stats: ::prost::alloc::vec::Vec<super::common::KeyValuePair>,
 }
 ///*
 /// Get collection statistics like row_count.
@@ -694,6 +770,10 @@ pub struct SearchRequest {
     pub guarantee_timestamp: u64,
     #[prost(int64, tag = "12")]
     pub nq: i64,
+    #[prost(enumeration = "super::common::ConsistencyLevel", tag = "13")]
+    pub consistency_level: i32,
+    #[prost(bool, tag = "14")]
+    pub use_default_consistency: bool,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Hits {
@@ -751,6 +831,13 @@ pub struct QueryRequest {
     /// guarantee_timestamp
     #[prost(uint64, tag = "8")]
     pub guarantee_timestamp: u64,
+    /// optional
+    #[prost(message, repeated, tag = "9")]
+    pub query_params: ::prost::alloc::vec::Vec<super::common::KeyValuePair>,
+    #[prost(enumeration = "super::common::ConsistencyLevel", tag = "10")]
+    pub consistency_level: i32,
+    #[prost(bool, tag = "11")]
+    pub use_default_consistency: bool,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct QueryResults {
@@ -1293,65 +1380,17 @@ pub struct SelectUserResponse {
     pub status: ::core::option::Option<super::common::Status>,
     /// user result array
     #[prost(message, repeated, tag = "2")]
-    pub result: ::prost::alloc::vec::Vec<UserResult>,
+    pub results: ::prost::alloc::vec::Vec<UserResult>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ResourceEntity {
+pub struct ObjectEntity {
     #[prost(string, tag = "1")]
-    pub r#type: ::prost::alloc::string::String,
+    pub name: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PrivilegeEntity {
     #[prost(string, tag = "1")]
     pub name: ::prost::alloc::string::String,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SelectResourceRequest {
-    /// Not useful for now
-    #[prost(message, optional, tag = "1")]
-    pub base: ::core::option::Option<super::common::MsgBase>,
-    /// resource
-    #[prost(message, optional, tag = "2")]
-    pub entity: ::core::option::Option<ResourceEntity>,
-    /// include privilege info
-    #[prost(bool, tag = "3")]
-    pub include_privilege_info: bool,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ResourceResult {
-    #[prost(message, optional, tag = "1")]
-    pub resource: ::core::option::Option<ResourceEntity>,
-    #[prost(message, repeated, tag = "2")]
-    pub privileges: ::prost::alloc::vec::Vec<PrivilegeEntity>,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SelectResourceResponse {
-    /// Not useful for now
-    #[prost(message, optional, tag = "1")]
-    pub status: ::core::option::Option<super::common::Status>,
-    /// resource result array
-    #[prost(message, repeated, tag = "2")]
-    pub results: ::prost::alloc::vec::Vec<ResourceResult>,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct PrincipalEntity {
-    /// principal type, including user, role
-    #[prost(string, tag = "1")]
-    pub principal_type: ::prost::alloc::string::String,
-    /// principal, including user entity or role entity
-    #[prost(oneof = "principal_entity::Principal", tags = "2, 3")]
-    pub principal: ::core::option::Option<principal_entity::Principal>,
-}
-/// Nested message and enum types in `PrincipalEntity`.
-pub mod principal_entity {
-    /// principal, including user entity or role entity
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum Principal {
-        #[prost(message, tag = "2")]
-        User(super::UserEntity),
-        #[prost(message, tag = "3")]
-        Role(super::RoleEntity),
-    }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GrantorEntity {
@@ -1361,16 +1400,21 @@ pub struct GrantorEntity {
     pub privilege: ::core::option::Option<PrivilegeEntity>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GrantPrivilegeEntity {
+    #[prost(message, repeated, tag = "1")]
+    pub entities: ::prost::alloc::vec::Vec<GrantorEntity>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GrantEntity {
-    /// principal
+    /// role
     #[prost(message, optional, tag = "1")]
-    pub principal: ::core::option::Option<PrincipalEntity>,
-    /// resource
+    pub role: ::core::option::Option<RoleEntity>,
+    /// object
     #[prost(message, optional, tag = "2")]
-    pub resource: ::core::option::Option<ResourceEntity>,
-    /// resource name
+    pub object: ::core::option::Option<ObjectEntity>,
+    /// object name
     #[prost(string, tag = "3")]
-    pub resource_name: ::prost::alloc::string::String,
+    pub object_name: ::prost::alloc::string::String,
     /// privilege
     #[prost(message, optional, tag = "4")]
     pub grantor: ::core::option::Option<GrantorEntity>,
@@ -1415,7 +1459,7 @@ pub struct MilvusExt {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum ShowType {
-    /// Will return all colloections
+    /// Will return all collections
     All = 0,
     /// Will return loaded collections with their inMemory_percentages
     InMemory = 1,
@@ -1585,6 +1629,22 @@ pub mod milvus_service_client {
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/DescribeCollection",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn describe_partition(
+            &mut self,
+            request: impl tonic::IntoRequest<super::DescribePartitionRequest>,
+        ) -> Result<tonic::Response<super::DescribePartitionResponse>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/DescribePartition",
             );
             self.inner.unary(request.into_request(), path, codec).await
         }
@@ -2320,22 +2380,6 @@ pub mod milvus_service_client {
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/SelectUser",
-            );
-            self.inner.unary(request.into_request(), path, codec).await
-        }
-        pub async fn select_resource(
-            &mut self,
-            request: impl tonic::IntoRequest<super::SelectResourceRequest>,
-        ) -> Result<tonic::Response<super::SelectResourceResponse>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::Unknown,
-                    format!("Service was not ready: {}", e.into()),
-                )
-            })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/milvus.proto.milvus.MilvusService/SelectResource",
             );
             self.inner.unary(request.into_request(), path, codec).await
         }

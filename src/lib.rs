@@ -22,5 +22,5 @@ pub mod schema;
 pub mod value;
 
 mod config;
-mod proto;
+pub mod proto;
 mod utils;

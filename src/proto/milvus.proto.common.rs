@@ -73,12 +73,14 @@ pub struct DmlMsgHeader {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PrivilegeExt {
-    #[prost(enumeration = "ResourceType", tag = "1")]
-    pub resource_type: i32,
-    #[prost(enumeration = "ResourcePrivilege", tag = "2")]
-    pub resource_privilege: i32,
+    #[prost(enumeration = "ObjectType", tag = "1")]
+    pub object_type: i32,
+    #[prost(enumeration = "ObjectPrivilege", tag = "2")]
+    pub object_privilege: i32,
     #[prost(int32, tag = "3")]
-    pub resource_name_index: i32,
+    pub object_name_index: i32,
+    #[prost(int32, tag = "4")]
+    pub object_name_indexs: i32,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
@@ -129,6 +131,9 @@ pub enum ErrorCode {
     ListPolicyFailure = 44,
     NotShardLeader = 45,
     NoReplicaAvailable = 46,
+    SegmentNotFound = 47,
+    ForceDeny = 48,
+    RateLimit = 49,
     /// internal error code.
     DdRequestRace = 1000,
 }
@@ -273,7 +278,7 @@ pub enum ConsistencyLevel {
     Session = 1,
     Bounded = 2,
     Eventually = 3,
-    /// Users pass their own `guarantee_timestamp`.
+    /// Users pass their own `guarantee_timestamp`. Deprecated
     Customized = 4,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -290,20 +295,38 @@ pub enum ImportState {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
-pub enum ResourceType {
+pub enum ObjectType {
     Collection = 0,
+    Global = 1,
+    User = 2,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
-pub enum ResourcePrivilege {
+pub enum ObjectPrivilege {
     PrivilegeAll = 0,
-    PrivilegeCreate = 1,
-    PrivilegeDrop = 2,
-    PrivilegeAlter = 3,
-    PrivilegeRead = 4,
+    PrivilegeCreateCollection = 1,
+    PrivilegeDropCollection = 2,
+    PrivilegeDescribeCollection = 3,
+    PrivilegeShowCollections = 4,
     PrivilegeLoad = 5,
     PrivilegeRelease = 6,
-    PrivilegeCompact = 7,
+    PrivilegeCompaction = 7,
     PrivilegeInsert = 8,
     PrivilegeDelete = 9,
+    PrivilegeGetStatistics = 10,
+    PrivilegeCreateIndex = 11,
+    PrivilegeIndexDetail = 12,
+    PrivilegeDropIndex = 13,
+    PrivilegeSearch = 14,
+    PrivilegeFlush = 15,
+    PrivilegeQuery = 16,
+    PrivilegeLoadBalance = 17,
+    PrivilegeImport = 18,
+    PrivilegeCreateOwnership = 19,
+    PrivilegeUpdateUser = 20,
+    PrivilegeDropOwnership = 21,
+    PrivilegeSelectOwnership = 22,
+    PrivilegeManageOwnership = 23,
+    PrivilegeSelectUser = 24,
+    PrivilegeDescribePartition = 25,
 }
