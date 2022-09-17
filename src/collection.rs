@@ -14,6 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::data::FieldColumn;
 use crate::error::{Error as SuperError, Result};
 use crate::proto::common::{ConsistencyLevel, MsgType};
 use crate::proto::milvus::milvus_service_client::MilvusServiceClient;
@@ -22,12 +23,12 @@ use crate::proto::milvus::{
     HasCollectionRequest, HasPartitionRequest, InsertRequest, LoadCollectionRequest, QueryRequest,
     ReleaseCollectionRequest, ShowCollectionsRequest, ShowPartitionsRequest, ShowType,
 };
+use crate::schema::CollectionSchema;
 use crate::utils::{new_msg, status_to_result};
-use crate::{config, schema};
+use crate::{config, proto, schema};
 
 use prost::bytes::BytesMut;
 use prost::Message;
-use std::borrow::Cow;
 use std::collections::HashSet;
 use std::marker::PhantomData;
 use std::time::Duration;
@@ -37,25 +38,23 @@ use tonic::transport::Channel;
 
 #[derive(Debug)]
 pub struct Partition {
-    pub name: Cow<'static, str>,
+    pub name: String,
     pub percentage: i64,
 }
 
 #[derive(Debug)]
-pub struct Collection<C> {
+pub struct Collection {
     client: MilvusServiceClient<Channel>,
-    name: Cow<'static, str>,
     partitions: Mutex<HashSet<String>>,
-    _m: PhantomData<C>,
+    schema: CollectionSchema,
 }
 
-impl<C> Collection<C> {
-    pub fn new<N: Into<Cow<'static, str>>>(client: MilvusServiceClient<Channel>, name: N) -> Self {
+impl Collection {
+    pub fn new(client: MilvusServiceClient<Channel>, schema: CollectionSchema) -> Self {
         Self {
             client,
-            name: name.into(),
             partitions: Mutex::new(Default::default()),
-            _m: Default::default(),
+            schema: schema,
         }
     }
 
@@ -66,7 +65,7 @@ impl<C> Collection<C> {
                 .load_collection(LoadCollectionRequest {
                     base: Some(new_msg(MsgType::LoadCollection)),
                     db_name: "".to_string(),
-                    collection_name: self.name.to_string(),
+                    collection_name: self.schema.name.clone(),
                     replica_number,
                 })
                 .await?
@@ -74,6 +73,11 @@ impl<C> Collection<C> {
         ))
     }
 
+    pub fn schema(&self) -> &CollectionSchema {
+        &self.schema
+    }
+
+    // load_unblocked loads collection and returns when request committed
     pub async fn load_unblocked(&self, replica_number: i32) -> Result<()> {
         dbg!("start load_unblocked");
         // TODO wrap the error
@@ -91,7 +95,7 @@ impl<C> Collection<C> {
                 db_name: "".to_string(),
                 time_stamp: 0,
                 r#type: ShowType::InMemory as i32,
-                collection_names: vec![self.name.to_string()],
+                collection_names: vec![self.schema.name.to_string()],
             })
             .await?
             .into_inner();
@@ -101,7 +105,7 @@ impl<C> Collection<C> {
         let names = response.collection_names;
         let percent = response.in_memory_percentages;
         for i in 0..names.len() {
-            if self.name == names[i] {
+            if self.schema.name == names[i] {
                 return Ok(percent[i]);
             }
         }
@@ -109,6 +113,7 @@ impl<C> Collection<C> {
         Err(SuperError::Unknown)
     }
 
+    // load_blocked loads collection and returns when loading done
     pub async fn load_blocked(&self, replica_number: i32) -> Result<()> {
         self.load(replica_number).await?;
 
@@ -121,7 +126,7 @@ impl<C> Collection<C> {
         }
     }
 
-    pub async fn is_load(&self) -> Result<bool> {
+    pub async fn is_loaded(&self) -> Result<bool> {
         Ok(self.get_load_percent().await? >= 100)
     }
 
@@ -132,7 +137,7 @@ impl<C> Collection<C> {
                 .release_collection(ReleaseCollectionRequest {
                     base: Some(new_msg(MsgType::ReleaseCollection)),
                     db_name: "".to_string(),
-                    collection_name: self.name.to_string(),
+                    collection_name: self.schema.name.to_string(),
                 })
                 .await?
                 .into_inner(),
@@ -146,7 +151,7 @@ impl<C> Collection<C> {
                 .drop_collection(DropCollectionRequest {
                     base: Some(new_msg(MsgType::DropCollection)),
                     db_name: "".to_string(),
-                    collection_name: self.name.to_string(),
+                    collection_name: self.schema.name.to_string(),
                 })
                 .await?
                 .into_inner(),
@@ -160,7 +165,7 @@ impl<C> Collection<C> {
             .has_collection(HasCollectionRequest {
                 base: Some(new_msg(MsgType::HasCollection)),
                 db_name: "".to_string(),
-                collection_name: self.name.to_string(),
+                collection_name: self.schema.name.to_string(),
                 time_stamp: 0,
             })
             .await?
@@ -178,7 +183,7 @@ impl<C> Collection<C> {
             .flush(FlushRequest {
                 base: Some(new_msg(MsgType::Flush)),
                 db_name: "".to_string(),
-                collection_names: vec![self.name.to_string()],
+                collection_names: vec![self.schema.name.to_string()],
             })
             .await?
             .into_inner();
@@ -195,7 +200,7 @@ impl<C> Collection<C> {
             .show_partitions(ShowPartitionsRequest {
                 base: Some(new_msg(MsgType::ShowPartitions)),
                 db_name: "".to_string(),
-                collection_name: self.name.to_string(),
+                collection_name: self.schema.name.to_string(),
                 collection_id: 0,
                 partition_names: Vec::new(),
                 r#type: 0,
@@ -215,15 +220,15 @@ impl<C> Collection<C> {
         Ok(())
     }
 
-    pub async fn create_partition(&self, name: String) -> Result<()> {
+    pub async fn create_partition<S: AsRef<str>>(&self, name: S) -> Result<()> {
         let res = self
             .client
             .clone()
             .create_partition(CreatePartitionRequest {
                 base: Some(new_msg(MsgType::ShowPartitions)),
                 db_name: "".to_string(),
-                collection_name: self.name.to_string(),
-                partition_name: name,
+                collection_name: self.schema.name.to_string(),
+                partition_name: name.as_ref().to_owned(),
             })
             .await?
             .into_inner();
@@ -243,7 +248,7 @@ impl<C> Collection<C> {
                 .has_partition(HasPartitionRequest {
                     base: Some(new_msg(MsgType::HasPartition)),
                     db_name: "".to_string(),
-                    collection_name: self.name.to_string(),
+                    collection_name: self.schema.name.to_string(),
                     partition_name: p.as_ref().to_string(),
                 })
                 .await?
@@ -254,15 +259,13 @@ impl<C> Collection<C> {
             Ok(res.value)
         }
     }
-}
 
-impl<E: schema::Entity> Collection<E> {
     pub async fn create(
         &self,
         shards_num: Option<i32>,
         consistency_level: Option<ConsistencyLevel>,
     ) -> Result<()> {
-        let schema: crate::proto::schema::CollectionSchema = E::schema().into();
+        let schema: crate::proto::schema::CollectionSchema = self.schema.clone().into();
 
         let mut buf = BytesMut::new();
         schema.encode(&mut buf)?;
@@ -273,7 +276,7 @@ impl<E: schema::Entity> Collection<E> {
             .create_collection(CreateCollectionRequest {
                 base: Some(new_msg(MsgType::CreateCollection)),
                 db_name: "".to_string(),
-                collection_name: schema.name.to_string(),
+                collection_name: self.schema.name.to_string(),
                 schema: buf.to_vec(),
                 shards_num: shards_num.unwrap_or(1),
                 consistency_level: consistency_level.unwrap_or(ConsistencyLevel::Session) as i32,
@@ -284,10 +287,9 @@ impl<E: schema::Entity> Collection<E> {
         status_to_result(Some(status))
     }
 
-    pub async fn query<'a, Exp, F, P>(&self, expr: Exp, partition_names: P) -> Result<F>
+    pub async fn query<Exp, P>(&self, expr: Exp, partition_names: P) -> Result<Vec<FieldColumn>>
     where
         Exp: ToString,
-        F: schema::Collection<'a, Entity = E> + schema::FromDataFields,
         P: IntoIterator,
         P::Item: ToString,
     {
@@ -297,40 +299,35 @@ impl<E: schema::Entity> Collection<E> {
             .query(QueryRequest {
                 base: Some(new_msg(MsgType::Retrieve)),
                 db_name: "".to_string(),
-                collection_name: self.name.to_string(),
+                collection_name: self.schema.name.clone(),
                 expr: expr.to_string(),
-                output_fields: F::columns()
-                    .into_iter()
-                    .map(|x| x.name.to_string())
-                    .collect(),
+                output_fields: self.schema.fields.iter().map(|f| f.name.clone()).collect(),
                 partition_names: partition_names.into_iter().map(|x| x.to_string()).collect(),
-                guarantee_timestamp: 0,
                 travel_timestamp: 0,
+                guarantee_timestamp: 0,
+                query_params: Vec::new(),
+                consistency_level: 0,
+                use_default_consistency: true,
             })
             .await?
             .into_inner();
 
         status_to_result(res.status)?;
 
-        Ok(F::from_data_fields(res.fields_data).unwrap())
+        Ok(res
+            .fields_data
+            .into_iter()
+            .map(|f| FieldColumn::from(f))
+            .collect())
     }
 
-    pub async fn insert<'a, P: Into<String>, C: schema::Collection<'a, Entity = E>>(
+    pub async fn insert(
         &self,
-        fields_data: C,
-        partition_name: Option<P>,
+        fields_data: Vec<FieldColumn>,
+        partition_name: Option<&str>,
     ) -> Result<crate::proto::milvus::MutationResult> {
-        let partition_name = if let Some(p) = partition_name {
-            let p = p.into();
-
-            if !self.has_partition(&p).await? {
-                self.create_partition(p.clone()).await?;
-            }
-
-            p
-        } else {
-            String::new()
-        };
+        let partition_name = partition_name.unwrap_or("_default").to_owned();
+        let row_num = fields_data.first().map(|c| c.len()).unwrap_or(0);
 
         Ok(self
             .client
@@ -338,10 +335,10 @@ impl<E: schema::Entity> Collection<E> {
             .insert(InsertRequest {
                 base: Some(new_msg(MsgType::Insert)),
                 db_name: "".to_string(),
-                collection_name: self.name.to_string(),
+                collection_name: self.schema.name.to_string(),
                 partition_name,
-                num_rows: fields_data.len() as _,
-                fields_data: fields_data.into_data_fields(),
+                num_rows: row_num as u32,
+                fields_data: fields_data.into_iter().map(|f| f.into()).collect(),
                 hash_keys: Vec::new(),
             })
             .await?

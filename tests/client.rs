@@ -69,52 +69,35 @@ async fn has_collection() -> Result<()> {
     }
 }
 
-struct Stub {}
+// #[tokio::test]
+// #[ignore]
+// async fn create_has_drop_collection() -> Result<()> {
+//     const URL: &str = "http://localhost:19530";
 
-impl Entity for Stub {
-    const NAME: &'static str = "tttest";
-    const SCHEMA: &'static [FieldSchema<'static>] = &[];
+//     let client = Client::new(URL).await?;
+//     let mut schema = CollectionSchemaBuilder::new("", "");
+//     let schema = schema
+//         .add_field(FieldSchema::new_int64("i64_1", None))
+//         .add_field(FieldSchema::new_bool("bl", None))
+//         .set_primary_key("i64_1")?
+//         .enable_auto_id()?
+//         .build()?;
 
-    type ColumnIntoIter = std::iter::Empty<(&'static FieldSchema<'static>, Value<'static>)>;
+//     let stub = client
+//         .create_collection::<Stub>(schema, 1, ConsistencyLevel::Session)
+//         .await?;
 
-    fn iter(&self) -> Self::ColumnIntoIter {
-        unimplemented!()
-    }
+//     match stub.exists().await {
+//         Ok(i) => {
+//             if !i {
+//                 panic!("Cannot find created collection.");
+//             }
+//         }
+//         Err(e) => return Err(e),
+//     };
 
-    fn into_iter(self) -> Self::ColumnIntoIter {
-        unimplemented!()
-    }
-}
-
-#[tokio::test]
-#[ignore]
-async fn create_has_drop_collection() -> Result<()> {
-    const URL: &str = "http://localhost:19530";
-
-    let client = Client::new(URL).await?;
-    let mut schema = CollectionSchemaBuilder::new(Cow::Borrowed(Stub::NAME), None);
-    let schema = schema
-        .add_field(FieldSchema::new_int64("i64_1", None))
-        .add_field(FieldSchema::new_bool("bl", None))
-        .set_primary_key("i64_1")?
-        .enable_auto_id()?
-        .build()?;
-
-    let stub = client
-        .create_collection::<Stub>(schema, 1, ConsistencyLevel::Session)
-        .await?;
-
-    match stub.exists().await {
-        Ok(i) => {
-            if !i {
-                panic!("Cannot find created collection.");
-            }
-        }
-        Err(e) => return Err(e),
-    };
-
-    match client.drop_collection(Stub::NAME).await {
-        Ok(()) => Ok(()),
-        Err(e) => Err(e),
-    }
-}
+//     match client.drop_collection(Stub::NAME).await {
+//         Ok(()) => Ok(()),
+//         Err(e) => Err(e),
+//     }
+// }

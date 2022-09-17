@@ -26,69 +26,40 @@ struct Test {
     bl: bool,
 }
 
-impl schema::Entity for Test {
-    const NAME: &'static str = "tttest";
-    const SCHEMA: &'static [schema::FieldSchema<'static>] = &[
-        FieldSchema::new_primary_int64("i64_1", None, true),
-        FieldSchema::new_bool("bl", None),
-    ];
+// #[tokio::test]
+// #[ignore]
+// async fn load_release_collection() -> Result<()> {
+//     const URL: &str = "http://localhost:19530";
 
-    type ColumnIntoIter = std::array::IntoIter<
-        (&'static FieldSchema<'static>, Value<'static>),
-        { Self::SCHEMA.len() },
-    >;
+//     // create collection
+//     let client = Client::new(URL).await?;
+//     let test = client.get_collection::<Test>().await?;
 
-    fn iter(&self) -> Self::ColumnIntoIter {
-        [
-            (&Self::SCHEMA[0], self.i64_1.into()),
-            (&Self::SCHEMA[1], self.bl.into()),
-        ]
-        .into_iter()
-    }
+//     if !test.exists().await? {
+//         test.create(None, None).await?;
+//     }
 
-    fn into_iter(self) -> Self::ColumnIntoIter {
-        [
-            (&Self::SCHEMA[0], self.i64_1.into()),
-            (&Self::SCHEMA[1], self.bl.into()),
-        ]
-        .into_iter()
-    }
-}
+//     println!("collection prepared.");
 
-#[tokio::test]
-#[ignore]
-async fn load_release_collection() -> Result<()> {
-    const URL: &str = "http://localhost:19530";
+//     // load with `load_unblocked` and release
+//     test.load_unblocked(1).await?;
+//     loop {
+//         if test.is_load().await? {
+//             println!("#");
+//             break;
+//         }
+//         thread::sleep(Duration::from_millis(1000));
+//     }
 
-    // create collection
-    let client = Client::new(URL).await?;
-    let test = client.get_collection::<Test>().await?;
+//     test.release().await?;
 
-    if !test.exists().await? {
-        test.create(None, None).await?;
-    }
+//     // load with `load_blocked` and release
+//     test.load_blocked(1).await?;
+//     test.release().await?;
 
-    println!("collection prepared.");
-
-    // load with `load_unblocked` and release
-    test.load_unblocked(1).await?;
-    loop {
-        if test.is_load().await? {
-            println!("#");
-            break;
-        }
-        thread::sleep(Duration::from_millis(1000));
-    }
-
-    test.release().await?;
-
-    // load with `load_blocked` and release
-    test.load_blocked(1).await?;
-    test.release().await?;
-
-    // clean data
-    match test.drop().await {
-        Ok(()) => Ok(()),
-        Err(e) => Err(e),
-    }
-}
+//     // clean data
+//     match test.drop().await {
+//         Ok(()) => Ok(()),
+//         Err(e) => Err(e),
+//     }
+// }
