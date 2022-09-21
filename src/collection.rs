@@ -16,19 +16,28 @@
 
 use crate::data::FieldColumn;
 use crate::error::{Error as SuperError, Result};
-use crate::proto::common::{ConsistencyLevel, MsgType};
+use crate::proto::common::{
+    ConsistencyLevel, DslType, KeyValuePair, MsgType, PlaceholderType, PlaceholderValue,
+};
 use crate::proto::milvus::milvus_service_client::MilvusServiceClient;
 use crate::proto::milvus::{
     CreateCollectionRequest, CreatePartitionRequest, DropCollectionRequest, FlushRequest,
     HasCollectionRequest, HasPartitionRequest, InsertRequest, LoadCollectionRequest, QueryRequest,
-    ReleaseCollectionRequest, ShowCollectionsRequest, ShowPartitionsRequest, ShowType,
+    ReleaseCollectionRequest, SearchRequest, ShowCollectionsRequest, ShowPartitionsRequest,
+    ShowType,
 };
+use crate::proto::schema::i_ds::IdField::{IntId, StrId};
+use crate::proto::schema::DataType;
 use crate::schema::CollectionSchema;
 use crate::utils::{new_msg, status_to_result};
+use crate::value::{Value, ValueVec};
 use crate::{config, proto, schema};
 
+use bincode::serialize;
 use prost::bytes::BytesMut;
 use prost::Message;
+use serde_json;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::marker::PhantomData;
 use std::time::Duration;
@@ -344,9 +353,215 @@ impl Collection {
             .await?
             .into_inner())
     }
+
+    pub async fn search<D, S, I>(
+        &self,
+        data: Vec<Value<'_>>,
+        vec_field: S,
+        top_k: i32,
+        expr: Option<S>,
+        partition_names: I,
+        metric_type: MetricType,
+        output_fields: I,
+        params: HashMap<String, String>,
+        consistency_level: Option<ConsistencyLevel>,
+    ) -> Result<Vec<SearchResult>>
+    where
+        S: ToString,
+        I: IntoIterator,
+        I::Item: ToString,
+    {
+        // check and prepare params
+
+        if top_k <= 0 {
+            return Err(SuperError::from(Error::IllegalValue(
+                "top_k".to_string(),
+                "positive".to_string(),
+            )));
+        }
+
+        let mut search_params = Vec::new();
+        search_params.push(KeyValuePair {
+            key: "anns_field".to_string(),
+            value: vec_field.to_string(),
+        });
+        search_params.push(KeyValuePair {
+            key: "topk".to_string(),
+            value: format!("{top_k}").to_string(),
+        });
+        search_params.push(KeyValuePair {
+            key: "params".to_string(),
+            value: serde_json::to_string(&params).unwrap(),
+        });
+        search_params.push(KeyValuePair {
+            key: "metric_type".to_string(),
+            value: metric_type.to_string(),
+        });
+        search_params.push(KeyValuePair {
+            key: "round_demical".to_string(),
+            value: "-1".to_string(),
+        });
+        let res = self
+            .client
+            .clone()
+            .search(SearchRequest {
+                base: Some(new_msg(MsgType::Search)),
+                db_name: "".to_string(),
+                collection_name: self.schema.name.clone(),
+                partition_names: partition_names.into_iter().map(|x| x.to_string()).collect(),
+                dsl: expr.map_or("".to_string(), |x| x.to_string()),
+                nq: data.len() as _,
+                placeholder_group: get_place_holder(data)?,
+                dsl_type: DslType::BoolExprV1 as _,
+                output_fields: output_fields.into_iter().map(|f| f.to_string()).collect(),
+                search_params,
+                travel_timestamp: 0,
+                guarantee_timestamp: 0,
+                consistency_level: 0,
+                use_default_consistency: true,
+            })
+            .await?
+            .into_inner();
+        status_to_result(res.status)?;
+        let raw_data = res.results.ok_or(SuperError::Unknown)?;
+        let mut result = Vec::new();
+        let mut offset = 0;
+        let fields_data = raw_data
+            .fields_data
+            .into_iter()
+            .map(Into::into)
+            .collect::<Vec<FieldColumn>>();
+        let raw_id = raw_data.ids.unwrap().id_field.unwrap();
+
+        for k in raw_data.topks {
+            let mut score = Vec::new();
+            for i in offset..offset + k {
+                score.push(raw_data.scores[i as usize]);
+            }
+            let mut result_data = fields_data
+                .iter()
+                .map(FieldColumn::copy_with_metadata)
+                .collect::<Vec<FieldColumn>>();
+            for j in 0..fields_data.len() {
+                for i in offset..offset + k {
+                    result_data[j].push(fields_data[j].get(i as _).ok_or(SuperError::Unknown)?);
+                }
+            }
+
+            let id = match raw_id {
+                IntId(ref d) => {
+                    let mut tmp_id = Vec::<Value>::new();
+                    for i in offset..offset + k {
+                        tmp_id.push(d.data[i as usize].into());
+                    }
+                    tmp_id
+                }
+                StrId(ref d) => {
+                    let mut tmp_id = Vec::<Value>::new();
+                    for i in offset..offset + k {
+                        tmp_id.push(d.data[i as usize].clone().into());
+                    }
+                    tmp_id
+                }
+            };
+
+            result.push(SearchResult {
+                size: k,
+                score,
+                field: result_data,
+                id,
+            });
+
+            offset += k;
+        }
+
+        Ok(result)
+    }
+}
+
+pub enum MetricType {
+    L2,
+    IP,
+    HAMMING,
+    JACCARD,
+    TANIMOTO,
+    SUBSTRUCTURE,
+    SUPERSTRUCTURE,
+}
+
+impl ToString for MetricType {
+    fn to_string(&self) -> String {
+        match self {
+            MetricType::L2 => "L2",
+            MetricType::IP => "IP",
+            MetricType::HAMMING => "HAMMING",
+            MetricType::JACCARD => "JACCARD",
+            MetricType::TANIMOTO => "TANIMOTO",
+            MetricType::SUBSTRUCTURE => "SUBSTRUCTURE",
+            MetricType::SUPERSTRUCTURE => "SUPERSTRUCTURE",
+        }
+        .to_string()
+    }
+}
+
+// search result for a single vector
+pub struct SearchResult<'a> {
+    pub size: i64,
+    pub id: Vec<Value<'a>>,
+    pub field: Vec<FieldColumn>,
+    pub score: Vec<f32>,
 }
 
 #[derive(Debug, ThisError)]
 pub enum Error {
-    // TODO
+    #[error("type mismatched in {0:?}, available types: {1:?}")]
+    IllegalType(String, Vec<DataType>),
+
+    #[error("value mismatched in {0:?}, it must be {1:?}")]
+    IllegalValue(String, String),
+}
+
+fn get_place_holder(vectors: Vec<Value>) -> Result<Vec<u8>> {
+    let mut place_holder = PlaceholderValue {
+        tag: "$0".to_string(),
+        r#type: PlaceholderType::None as _,
+        values: Vec::new(),
+    };
+    // if no vectors, return an empty one
+    if vectors.len() == 0 {
+        let mut buf = BytesMut::new();
+        place_holder.encode(&mut buf).unwrap();
+        return Ok(buf.to_vec());
+    };
+
+    match vectors[0] {
+        Value::FloatArray(_) => place_holder.r#type = PlaceholderType::FloatVector as _,
+        Value::Binary(_) => place_holder.r#type = PlaceholderType::BinaryVector as _,
+        _ => {
+            return Err(SuperError::from(Error::IllegalType(
+                "place holder".to_string(),
+                vec![DataType::BinaryVector, DataType::FloatVector],
+            )))
+        }
+    };
+
+    for v in &vectors {
+        match (v, &vectors[0]) {
+            (Value::FloatArray(d), Value::FloatArray(_)) => {
+                place_holder.values.push(serialize(d.as_ref()).unwrap())
+            }
+            (Value::Binary(d), Value::Binary(_)) => {
+                place_holder.values.push(serialize(d.as_ref()).unwrap())
+            }
+            _ => {
+                return Err(SuperError::from(Error::IllegalType(
+                    "place holder".to_string(),
+                    vec![DataType::BinaryVector, DataType::FloatVector],
+                )))
+            }
+        };
+    }
+    let mut buf = BytesMut::new();
+    place_holder.encode(&mut buf).unwrap();
+    return Ok(buf.to_vec());
 }
