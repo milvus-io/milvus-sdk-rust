@@ -142,6 +142,25 @@ impl FieldColumn {
     pub fn len(&self) -> usize {
         self.value.len() / self.dim as usize
     }
+
+    pub fn copy_with_metadata(&self) -> Self {
+        Self {
+            dim: self.dim,
+            dtype: self.dtype,
+            max_length: self.max_length,
+            name: self.name.clone(),
+            value: match &self.value {
+                ValueVec::None => ValueVec::None,
+                ValueVec::Bool(_) => ValueVec::Bool(Vec::new()),
+                ValueVec::Int(_) => ValueVec::Int(Vec::new()),
+                ValueVec::Long(_) => ValueVec::Long(Vec::new()),
+                ValueVec::Float(_) => ValueVec::Float(Vec::new()),
+                ValueVec::Double(_) => ValueVec::Double(Vec::new()),
+                ValueVec::String(_) => ValueVec::String(Vec::new()),
+                ValueVec::Binary(_) => ValueVec::Binary(Vec::new()),
+            },
+        }
+    }
 }
 
 impl From<FieldColumn> for schema::FieldData {
