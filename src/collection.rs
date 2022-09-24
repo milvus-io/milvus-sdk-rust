@@ -17,14 +17,15 @@
 use crate::data::FieldColumn;
 use crate::error::{Error as SuperError, Result};
 use crate::proto::common::{
-    ConsistencyLevel, DslType, KeyValuePair, MsgType, PlaceholderType, PlaceholderValue,
+    ConsistencyLevel, DslType, IndexState, KeyValuePair, MsgType, PlaceholderType, PlaceholderValue,
 };
 use crate::proto::milvus::milvus_service_client::MilvusServiceClient;
 use crate::proto::milvus::{
-    CreateCollectionRequest, CreatePartitionRequest, DropCollectionRequest, FlushRequest,
-    HasCollectionRequest, HasPartitionRequest, InsertRequest, LoadCollectionRequest, QueryRequest,
-    ReleaseCollectionRequest, SearchRequest, ShowCollectionsRequest, ShowPartitionsRequest,
-    ShowType,
+    CreateCollectionRequest, CreateIndexRequest, CreatePartitionRequest, DescribeIndexRequest,
+    DropCollectionRequest, DropIndexRequest, FlushRequest, GetIndexBuildProgressRequest,
+    GetIndexStateRequest, HasCollectionRequest, HasPartitionRequest, InsertRequest,
+    LoadCollectionRequest, QueryRequest, ReleaseCollectionRequest, SearchRequest,
+    ShowCollectionsRequest, ShowPartitionsRequest, ShowType,
 };
 use crate::proto::schema::i_ds::IdField::{IntId, StrId};
 use crate::proto::schema::DataType;
@@ -477,6 +478,143 @@ impl Collection {
 
         Ok(result)
     }
+
+    pub async fn create_index_unblocked<S>(
+        &self,
+        field_name: S,
+        params: HashMap<String, String>,
+    ) -> Result<()>
+    where
+        S: ToString,
+    {
+        let field_name = field_name.to_string();
+        self.schema.is_valid_vector_field(field_name.clone())?;
+        let status = self
+            .client
+            .clone()
+            .create_index(CreateIndexRequest {
+                base: Some(new_msg(MsgType::CreateIndex)),
+                db_name: "".to_string(),
+                collection_name: self.schema.name.clone(),
+                field_name,
+                extra_params: params
+                    .into_iter()
+                    .map(|(key, value)| KeyValuePair { key, value })
+                    .collect::<Vec<KeyValuePair>>(),
+                index_name: "".to_string(),
+            })
+            .await?
+            .into_inner();
+        status_to_result(Some(status))
+    }
+
+    pub async fn get_index_state<S>(&self, field_name: S) -> Result<IndexState>
+    where
+        S: ToString,
+    {
+        let res = self
+            .client
+            .clone()
+            .get_index_state(GetIndexStateRequest {
+                base: Some(new_msg(MsgType::GetIndexState)),
+                db_name: "".to_string(),
+                collection_name: self.schema.name.clone(),
+                field_name: field_name.to_string(),
+                index_name: "".to_string(),
+            })
+            .await?
+            .into_inner();
+        status_to_result(res.status)?;
+        Ok(IndexState::from_i32(res.state).unwrap())
+    }
+    pub async fn create_index_blocked<S>(
+        &self,
+        field_name: S,
+        params: HashMap<String, String>,
+    ) -> Result<()>
+    where
+        S: ToString,
+    {
+        let field_name = field_name.to_string();
+        self.create_index_unblocked(field_name.clone(), params)
+            .await?;
+        loop {
+            match self.get_index_state(field_name.clone()).await? {
+                IndexState::Finished => return Ok(()),
+                IndexState::Failed => return Err(SuperError::from(Error::IndexBuildFailed)),
+                _ => (),
+            }
+
+            tokio::time::sleep(Duration::from_millis(config::WAIT_CREATE_INDEX_DURATION_MS)).await;
+        }
+    }
+
+    pub async fn describe_index<S>(&self, field_name: S) -> Result<Vec<IndexInfo>>
+    where
+        S: ToString,
+    {
+        let res = self
+            .client
+            .clone()
+            .describe_index(DescribeIndexRequest {
+                base: Some(new_msg(MsgType::DescribeIndex)),
+                db_name: "".to_string(),
+                collection_name: self.schema.name.clone(),
+                field_name: field_name.to_string(),
+                index_name: "".to_string(),
+            })
+            .await?
+            .into_inner();
+        status_to_result(res.status)?;
+
+        Ok(res
+            .index_descriptions
+            .into_iter()
+            .map(|x| IndexInfo::new(x.index_name, x.params))
+            .collect())
+    }
+
+    pub async fn get_index_build_progress<S>(&self, field_name: S) -> Result<IndexProgress>
+    where
+        S: ToString,
+    {
+        let res = self
+            .client
+            .clone()
+            .get_index_build_progress(GetIndexBuildProgressRequest {
+                base: Some(new_msg(MsgType::GetIndexBuildProgress)),
+                db_name: "".to_string(),
+                collection_name: self.schema.name.clone(),
+                field_name: field_name.to_string(),
+                index_name: "".to_string(),
+            })
+            .await?
+            .into_inner();
+        status_to_result(res.status)?;
+        Ok(IndexProgress {
+            total_rows: res.total_rows,
+            indexed_rows: res.indexed_rows,
+        })
+    }
+
+    pub async fn drop_index<S>(&self, field_name: S) -> Result<()>
+    where
+        S: ToString,
+    {
+        let status = self
+            .client
+            .clone()
+            .drop_index(DropIndexRequest {
+                base: Some(new_msg(MsgType::DropIndex)),
+                db_name: "".to_string(),
+                collection_name: self.schema.name.clone(),
+                field_name: field_name.to_string(),
+                index_name: "".to_string(),
+            })
+            .await?
+            .into_inner();
+        status_to_result(Some(status))
+    }
 }
 
 pub enum MetricType {
@@ -512,6 +650,31 @@ pub struct SearchResult<'a> {
     pub score: Vec<f32>,
 }
 
+pub struct IndexInfo {
+    pub name: String,
+    pub params: HashMap<String, String>,
+}
+
+impl IndexInfo {
+    pub fn new<S>(name: S, params: Vec<KeyValuePair>) -> Self
+    where
+        S: ToString,
+    {
+        Self {
+            name: name.to_string(),
+            params: params
+                .into_iter()
+                .map(|p| (p.key, p.value))
+                .collect::<HashMap<String, String>>(),
+        }
+    }
+}
+
+pub struct IndexProgress {
+    pub total_rows: i64,
+    pub indexed_rows: i64,
+}
+
 #[derive(Debug, ThisError)]
 pub enum Error {
     #[error("type mismatched in {0:?}, available types: {1:?}")]
@@ -519,6 +682,9 @@ pub enum Error {
 
     #[error("value mismatched in {0:?}, it must be {1:?}")]
     IllegalValue(String, String),
+
+    #[error("index build failed")]
+    IndexBuildFailed,
 }
 
 fn get_place_holder(vectors: Vec<Value>) -> Result<Vec<u8>> {

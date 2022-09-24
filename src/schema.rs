@@ -452,6 +452,21 @@ impl CollectionSchema {
         let name = name.as_ref();
         self.fields.iter().find(|f| f.name == name)
     }
+
+    pub fn is_valid_vector_field(&self, field_name: String) -> Result<()> {
+        for f in &self.fields {
+            if f.name == field_name {
+                if f.dtype == DataType::BinaryVector || f.dtype == DataType::FloatVector {
+                    return Ok(());
+                } else {
+                    return Err(error::Error::from(Error::NotVectorField(
+                        field_name.to_owned(),
+                    )));
+                }
+            }
+        }
+        return Err(error::Error::from(Error::NoSuchKey(field_name.to_owned())));
+    }
 }
 
 impl From<CollectionSchema> for schema::CollectionSchema {
@@ -592,4 +607,7 @@ pub enum Error {
 
     #[error("can not find such key {0:?}")]
     NoSuchKey(String),
+
+    #[error("field {0:?} must be a vector field")]
+    NotVectorField(String),
 }
