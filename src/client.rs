@@ -42,7 +42,7 @@ impl Client {
         D::Error: Into<StdError>,
     {
         match MilvusServiceClient::connect(dst).await {
-            Ok(i) => Ok(Self { client: i }),
+            Ok(c) => Ok(Self { client: c }),
             Err(e) => Err(Error::Communication(e)),
         }
     }

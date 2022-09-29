@@ -366,7 +366,7 @@ impl Collection {
         output_fields: I,
         params: HashMap<String, String>,
         consistency_level: Option<ConsistencyLevel>,
-    ) -> Result<Vec<SearchResult>>
+    ) -> Result<Vec<SearchResult<'_>>>
     where
         S: ToString,
         I: IntoIterator,
