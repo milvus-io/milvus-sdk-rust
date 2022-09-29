@@ -22,7 +22,6 @@ use milvus::schema::*;
 use milvus::value::Value;
 
 #[tokio::test]
-#[ignore]
 async fn create_client() -> Result<()> {
     const URL: &str = "http://localhost:19530";
     match Client::new(URL).await {
@@ -32,7 +31,6 @@ async fn create_client() -> Result<()> {
 }
 
 #[tokio::test]
-#[ignore]
 async fn create_client_wrong_url() -> Result<()> {
     const URL: &str = "http://localhost:9999";
     match Client::new(URL).await {
@@ -42,7 +40,6 @@ async fn create_client_wrong_url() -> Result<()> {
 }
 
 #[tokio::test]
-#[ignore]
 async fn create_client_wrong_fmt() -> Result<()> {
     const URL: &str = "9999";
     match Client::new(URL).await {
@@ -52,14 +49,13 @@ async fn create_client_wrong_fmt() -> Result<()> {
 }
 
 #[tokio::test]
-#[ignore]
 async fn has_collection() -> Result<()> {
     const URL: &str = "http://localhost:19530";
     const NAME: &str = "qwerty";
     let client = Client::new(URL).await?;
     match client.has_collection(NAME).await {
-        Ok(i) => {
-            if i {
+        Ok(has) => {
+            if has {
                 panic!("Expect no such collection.");
             } else {
                 Ok(())
