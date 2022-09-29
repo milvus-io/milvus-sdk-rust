@@ -17,7 +17,8 @@
 use crate::data::FieldColumn;
 use crate::error::{Error as SuperError, Result};
 use crate::proto::common::{
-    ConsistencyLevel, DslType, IndexState, KeyValuePair, MsgType, PlaceholderType, PlaceholderValue,
+    ConsistencyLevel, DslType, IndexState, KeyValuePair, MsgType, PlaceholderGroup,
+    PlaceholderType, PlaceholderValue,
 };
 use crate::proto::milvus::milvus_service_client::MilvusServiceClient;
 use crate::proto::milvus::{
@@ -34,7 +35,6 @@ use crate::utils::{new_msg, status_to_result};
 use crate::value::{Value, ValueVec};
 use crate::{config, proto, schema};
 
-use bincode::serialize;
 use prost::bytes::BytesMut;
 use prost::Message;
 use serde_json;
@@ -355,7 +355,7 @@ impl Collection {
             .into_inner())
     }
 
-    pub async fn search<D, S, I>(
+    pub async fn search<S, I>(
         &self,
         data: Vec<Value<'_>>,
         vec_field: S,
@@ -412,7 +412,7 @@ impl Collection {
                 partition_names: partition_names.into_iter().map(|x| x.to_string()).collect(),
                 dsl: expr.map_or("".to_string(), |x| x.to_string()),
                 nq: data.len() as _,
-                placeholder_group: get_place_holder(data)?,
+                placeholder_group: get_place_holder_group(data)?,
                 dsl_type: DslType::BoolExprV1 as _,
                 output_fields: output_fields.into_iter().map(|f| f.to_string()).collect(),
                 search_params,
@@ -487,6 +487,18 @@ impl Collection {
     where
         S: ToString,
     {
+        let mut extra_params = HashMap::new();
+        let mut params = params.clone();
+        extra_params.insert(
+            "index_type",
+            params.remove("index_type").ok_or(SuperError::Unknown)?,
+        );
+        extra_params.insert(
+            "metric_type",
+            params.remove("metric_type").ok_or(SuperError::Unknown)?,
+        );
+        extra_params.insert("params", serde_json::to_string(&params).unwrap());
+
         let field_name = field_name.to_string();
         self.schema.is_valid_vector_field(field_name.clone())?;
         let status = self
@@ -497,9 +509,12 @@ impl Collection {
                 db_name: "".to_string(),
                 collection_name: self.schema.name.clone(),
                 field_name,
-                extra_params: params
+                extra_params: extra_params
                     .into_iter()
-                    .map(|(key, value)| KeyValuePair { key, value })
+                    .map(|(key, value)| KeyValuePair {
+                        key: key.to_string(),
+                        value,
+                    })
                     .collect::<Vec<KeyValuePair>>(),
                 index_name: "".to_string(),
             })
@@ -660,12 +675,20 @@ impl IndexInfo {
     where
         S: ToString,
     {
+        let mut p = HashMap::new();
+        for kv in params.into_iter() {
+            if kv.key == "index_type".to_string() {
+                p.insert(kv.key, kv.value);
+            } else if kv.key == "metric_type".to_string() {
+                p.insert(kv.key, kv.value);
+            } else {
+                let map: HashMap<String, String> = serde_json::from_str(&kv.value).unwrap();
+                p.extend(map);
+            }
+        }
         Self {
             name: name.to_string(),
-            params: params
-                .into_iter()
-                .map(|p| (p.key, p.value))
-                .collect::<HashMap<String, String>>(),
+            params: p,
         }
     }
 }
@@ -687,7 +710,16 @@ pub enum Error {
     IndexBuildFailed,
 }
 
-fn get_place_holder(vectors: Vec<Value>) -> Result<Vec<u8>> {
+fn get_place_holder_group(vectors: Vec<Value>) -> Result<Vec<u8>> {
+    let group = PlaceholderGroup {
+        placeholders: vec![get_place_holder_value(vectors)?],
+    };
+    let mut buf = BytesMut::new();
+    group.encode(&mut buf).unwrap();
+    return Ok(buf.to_vec());
+}
+
+fn get_place_holder_value(vectors: Vec<Value>) -> Result<PlaceholderValue> {
     let mut place_holder = PlaceholderValue {
         tag: "$0".to_string(),
         r#type: PlaceholderType::None as _,
@@ -695,9 +727,7 @@ fn get_place_holder(vectors: Vec<Value>) -> Result<Vec<u8>> {
     };
     // if no vectors, return an empty one
     if vectors.len() == 0 {
-        let mut buf = BytesMut::new();
-        place_holder.encode(&mut buf).unwrap();
-        return Ok(buf.to_vec());
+        return Ok(place_holder);
     };
 
     match vectors[0] {
@@ -714,11 +744,13 @@ fn get_place_holder(vectors: Vec<Value>) -> Result<Vec<u8>> {
     for v in &vectors {
         match (v, &vectors[0]) {
             (Value::FloatArray(d), Value::FloatArray(_)) => {
-                place_holder.values.push(serialize(d.as_ref()).unwrap())
+                let mut bytes = Vec::<u8>::with_capacity(d.len() * 4);
+                for f in d.iter() {
+                    bytes.extend_from_slice(&f.to_le_bytes());
+                }
+                place_holder.values.push(bytes)
             }
-            (Value::Binary(d), Value::Binary(_)) => {
-                place_holder.values.push(serialize(d.as_ref()).unwrap())
-            }
+            (Value::Binary(d), Value::Binary(_)) => place_holder.values.push(d.to_vec()),
             _ => {
                 return Err(SuperError::from(Error::IllegalType(
                     "place holder".to_string(),
@@ -727,7 +759,5 @@ fn get_place_holder(vectors: Vec<Value>) -> Result<Vec<u8>> {
             }
         };
     }
-    let mut buf = BytesMut::new();
-    place_holder.encode(&mut buf).unwrap();
-    return Ok(buf.to_vec());
+    return Ok(place_holder);
 }

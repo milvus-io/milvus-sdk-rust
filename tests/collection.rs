@@ -15,55 +15,170 @@
 // limitations under the License.
 
 use milvus::client::*;
+use milvus::collection::{Collection, MetricType};
+use milvus::data::FieldColumn;
 use milvus::error::Result;
-use milvus::schema::{self, FieldSchema};
+use milvus::schema::{CollectionSchemaBuilder, FieldSchema};
 use milvus::value::Value;
-use std::thread;
-use std::time::Duration;
+use rand::Rng;
+use std::collections::HashMap;
 
-// #[tokio::test]
-// async fn main() -> Result<()> {
-//     const URL: &str = "http://localhost:19530";
+async fn create_test_collection(collection_name: &str) -> Result<Collection> {
+    const URL: &str = "http://localhost:19530";
 
-//     let client = Client::new(URL).await?;
+    let client = Client::new(URL).await?;
+    let schema =
+        CollectionSchemaBuilder::new(collection_name, "a guide example for milvus rust SDK")
+            .add_field(FieldSchema::new_primary_int64("id", "", true))
+            .add_field(FieldSchema::new_float_vector("embed", "", 32))
+            .build()?;
+    if client.has_collection(collection_name).await? {
+        client.drop_collection(collection_name).await?;
+    }
+    client
+        .create_collection(schema.clone(), 2, ConsistencyLevel::Eventually)
+        .await
+}
 
-//     let schema =
-//         CollectionSchemaBuilder::new("hello_milvus", "a guide example for milvus rust SDK")
-//             .add_field(FieldSchema::new_primary_int64("id", "", true))
-//             .add_field(FieldSchema::new_float_vector("embed", "", 256))
-//             .build()?;
-//     let collection = client
-//         .create_collection(schema.clone(), 2, common::ConsistencyLevel::Eventually)
-//         .await?;
+async fn clean_test_collection(collection: Collection) -> Result<()> {
+    collection.drop().await?;
+    Ok(())
+}
 
-//     if let Err(err) = hello_milvus(&collection).await {
-//         println!("failed to run hello milvus: {:?}", err);
-//     }
-//     collection.drop().await?;
+fn gen_random_f32_data(number: i32) -> Vec<f32> {
+    let mut data = Vec::<f32>::new();
+    let mut rng = rand::thread_rng();
+    for _ in 0..number {
+        data.push(rng.gen());
+    }
+    data
+}
 
-//     Ok(())
-// }
+#[tokio::test]
+async fn collection_basic() -> Result<()> {
+    let collection = create_test_collection("collection_basic").await?;
 
-// async fn hello_milvus(collection: &Collection) -> Result<()> {
-//     let mut embed_data = Vec::<f32>::new();
-//     for _ in 1..=256 * 1000 {
-//         let mut rng = rand::thread_rng();
-//         let embed = rng.gen();
-//         embed_data.push(embed);
-//     }
-//     let embed_column =
-//         FieldColumn::new(collection.schema().get_field("embed").unwrap(), embed_data);
+    let embed_data = gen_random_f32_data(32 * 100);
 
-//     collection.insert(vec![embed_column], None).await?;
-//     collection.flush().await?;
-//     collection.load_blocked(1).await?;
+    let embed_column =
+        FieldColumn::new(collection.schema().get_field("embed").unwrap(), embed_data);
 
-//     let result = collection.query::<_, [&str; 0]>("id > 0", []).await?;
+    collection.insert(vec![embed_column], None).await?;
+    collection.flush().await?;
+    collection.load_blocked(1).await?;
 
-//     println!(
-//         "result num: {}",
-//         result.first().map(|c| c.len()).unwrap_or(0),
-//     );
+    let result = collection.query::<_, [&str; 0]>("id > 0", []).await?;
 
-//     Ok(())
-// }
+    println!(
+        "result num: {}",
+        result.first().map(|c| c.len()).unwrap_or(0),
+    );
+
+    clean_test_collection(collection).await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn collection_index() -> Result<()> {
+    let collection = create_test_collection("collection_index").await?;
+
+    let embed_data = gen_random_f32_data(32 * 100);
+
+    let embed_column =
+        FieldColumn::new(collection.schema().get_field("embed").unwrap(), embed_data);
+
+    collection.insert(vec![embed_column], None).await?;
+    collection.flush().await?;
+
+    let params = HashMap::from([
+        ("index_type".to_string(), "IVF_FLAT".to_string()),
+        ("metric_type".to_string(), "L2".to_string()),
+        ("nlist".to_string(), 32.to_string()),
+    ]);
+    collection
+        .create_index_blocked("embed", params.clone())
+        .await?;
+    let index_list = collection.describe_index("embed").await?;
+    assert!(index_list.len() == 1, "{}", index_list.len());
+    let index = &index_list[0];
+
+    assert!(
+        index.name == "_default_idx".to_string(),
+        "index name is {}",
+        index.name
+    );
+
+    assert!(
+        index.params == params,
+        "index params are {:?}",
+        index.params
+    );
+
+    collection.drop_index("embed").await?;
+
+    clean_test_collection(collection).await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn collection_search() -> Result<()> {
+    let collection = create_test_collection("collection_search").await?;
+
+    let mut embed_data = Vec::<f32>::new();
+    for i in 0..32 {
+        for j in 0..32 {
+            if i == j {
+                embed_data.push(1.0);
+            } else {
+                embed_data.push(0.0);
+            }
+        }
+    }
+
+    let embed_column =
+        FieldColumn::new(collection.schema().get_field("embed").unwrap(), embed_data);
+
+    collection.insert(vec![embed_column], None).await?;
+    collection.flush().await?;
+    let params = HashMap::from([
+        ("index_type".to_string(), "IVF_FLAT".to_string()),
+        ("metric_type".to_string(), "L2".to_string()),
+        ("nlist".to_string(), 32.to_string()),
+    ]);
+    collection
+        .create_index_blocked("embed", params.clone())
+        .await?;
+    collection.flush().await?;
+    collection.load_blocked(1).await?;
+
+    let mut search_vec = Vec::new();
+    for i in 0..32 {
+        if i == 15 {
+            search_vec.push(1.0);
+        } else {
+            search_vec.push(0.0);
+        }
+    }
+
+    let mut data: Vec<Value> = Vec::new();
+    data.push(search_vec.clone().into());
+
+    let result = collection
+        .search(
+            data,
+            "embed",
+            1,
+            None,
+            Vec::new(),
+            MetricType::L2,
+            vec!["id"],
+            HashMap::new(),
+            None,
+        )
+        .await?;
+
+    assert!(result[0].size == 1);
+
+    clean_test_collection(collection).await?;
+    Ok(())
+}

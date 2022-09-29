@@ -65,35 +65,32 @@ async fn has_collection() -> Result<()> {
     }
 }
 
-// #[tokio::test]
-// #[ignore]
-// async fn create_has_drop_collection() -> Result<()> {
-//     const URL: &str = "http://localhost:19530";
+#[tokio::test]
+async fn create_has_drop_collection() -> Result<()> {
+    const URL: &str = "http://localhost:19530";
+    const NAME: &str = "create_has_drop_collection";
 
-//     let client = Client::new(URL).await?;
-//     let mut schema = CollectionSchemaBuilder::new("", "");
-//     let schema = schema
-//         .add_field(FieldSchema::new_int64("i64_1", None))
-//         .add_field(FieldSchema::new_bool("bl", None))
-//         .set_primary_key("i64_1")?
-//         .enable_auto_id()?
-//         .build()?;
+    let client = Client::new(URL).await?;
+    let mut schema = CollectionSchemaBuilder::new(NAME, "hello world");
+    let schema = schema
+        .add_field(FieldSchema::new_int64("i64_field", ""))
+        .add_field(FieldSchema::new_bool("bool_field", ""))
+        .set_primary_key("i64_field")?
+        .enable_auto_id()?
+        .build()?;
 
-//     let stub = client
-//         .create_collection::<Stub>(schema, 1, ConsistencyLevel::Session)
-//         .await?;
+    if client.has_collection(NAME).await? {
+        client.drop_collection(NAME).await?;
+    }
 
-//     match stub.exists().await {
-//         Ok(i) => {
-//             if !i {
-//                 panic!("Cannot find created collection.");
-//             }
-//         }
-//         Err(e) => return Err(e),
-//     };
+    let collection = client
+        .create_collection(schema, 1, ConsistencyLevel::Session)
+        .await?;
 
-//     match client.drop_collection(Stub::NAME).await {
-//         Ok(()) => Ok(()),
-//         Err(e) => Err(e),
-//     }
-// }
+    assert!(client.has_collection(NAME).await?);
+
+    client.drop_collection(NAME).await?;
+    assert!(client.has_collection(NAME).await? == false);
+
+    Ok(())
+}
