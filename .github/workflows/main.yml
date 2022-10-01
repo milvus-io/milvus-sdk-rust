@@ -38,7 +38,7 @@ jobs:
       - name: Github Action for wget
         uses: wei/wget@v1.1.1
         with:
-          args: -O docker-compose.yml https://github.com/milvus-io/milvus/releases/download/v2.1.2/milvus-standalone-docker-compose.yml
+          args: -O docker-compose.yml https://github.com/milvus-io/milvus/releases/latest/download/milvus-standalone-docker-compose.yml
           
       - name: Setup Milvus
         run: sudo docker-compose up -d && sleep 15s
@@ -48,7 +48,7 @@ jobs:
     
       # Runs a single command using the runners shell
       - name: Run Unittest
-        run: cargo test --verbose
+        run: RUST_BACKTRACE=1 cargo test
       # - name: Upload coverage to Codecov
       #   if: github.repository == 'milvus-io/milvus-sdk-go'
       #   uses: codecov/codecov-action@v1
