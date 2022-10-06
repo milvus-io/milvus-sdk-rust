@@ -134,6 +134,9 @@ pub enum ErrorCode {
     SegmentNotFound = 47,
     ForceDeny = 48,
     RateLimit = 49,
+    /// Service availability.
+    /// NA: Not Available.
+    DataCoordNa = 100,
     /// internal error code.
     DdRequestRace = 1000,
 }
@@ -145,6 +148,7 @@ pub enum IndexState {
     InProgress = 2,
     Finished = 3,
     Failed = 4,
+    Retry = 5,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
@@ -223,6 +227,9 @@ pub enum MsgType {
     WatchDeltaChannels = 513,
     GetShardLeaders = 514,
     GetReplicas = 515,
+    UnsubDmChannel = 516,
+    GetDistribution = 517,
+    SyncDistribution = 518,
     /// DATA SERVICE
     SegmentInfo = 600,
     SystemInfo = 601,
@@ -284,14 +291,18 @@ pub enum ConsistencyLevel {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum ImportState {
+    /// the task in in pending list of rootCoord, waiting to be executed
     ImportPending = 0,
+    /// the task failed for some reason, get detail reason from GetImportStateResponse.infos
     ImportFailed = 1,
+    /// the task has been sent to datanode to execute
     ImportStarted = 2,
-    ImportDownloaded = 3,
-    ImportParsed = 4,
+    /// all data files have been parsed and data already persisted
     ImportPersisted = 5,
+    /// all indexes are successfully built and segments are able to be compacted as normal.
     ImportCompleted = 6,
-    ImportAllocSegment = 10,
+    /// the task failed and all segments it generated are cleaned up.
+    ImportFailedAndCleaned = 7,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]

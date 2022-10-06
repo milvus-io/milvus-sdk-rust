@@ -18,6 +18,9 @@ pub struct FieldSchema {
     pub index_params: ::prost::alloc::vec::Vec<super::common::KeyValuePair>,
     #[prost(bool, tag = "8")]
     pub auto_id: bool,
+    /// To keep compatible with older version, the default state is `Created`.
+    #[prost(enumeration = "FieldState", tag = "9")]
+    pub state: i32,
 }
 ///*
 /// @brief Collection schema
@@ -180,4 +183,12 @@ pub enum DataType {
     VarChar = 21,
     BinaryVector = 100,
     FloatVector = 101,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum FieldState {
+    FieldCreated = 0,
+    FieldCreating = 1,
+    FieldDropping = 2,
+    FieldDropped = 3,
 }
