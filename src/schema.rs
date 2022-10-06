@@ -15,6 +15,8 @@
 // limitations under the License.
 
 use crate::error::Result;
+use crate::proto;
+use crate::proto::schema::FieldState;
 use crate::value::Value;
 use crate::{data::FieldColumn, error};
 use prost::alloc::vec::Vec;
@@ -418,6 +420,7 @@ impl From<FieldSchema> for schema::FieldSchema {
             type_params: params,
             index_params: Vec::new(),
             auto_id: fld.auto_id,
+            state: FieldState::FieldCreated as _,
         }
     }
 }

@@ -158,8 +158,10 @@ pub struct DescribeCollectionResponse {
     /// The collection name
     #[prost(string, tag = "12")]
     pub collection_name: ::prost::alloc::string::String,
+    /// this collection is loaded in memory
     #[prost(bool, tag = "13")]
     pub loaded: bool,
+    /// in-memory partitions
     #[prost(string, repeated, tag = "14")]
     pub loaded_partitions: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
@@ -811,6 +813,11 @@ pub struct FlushResponse {
     #[prost(map = "string, message", tag = "3")]
     pub coll_seg_i_ds:
         ::std::collections::HashMap<::prost::alloc::string::String, super::schema::LongArray>,
+    #[prost(map = "string, message", tag = "4")]
+    pub flush_coll_seg_i_ds:
+        ::std::collections::HashMap<::prost::alloc::string::String, super::schema::LongArray>,
+    #[prost(map = "string, int64", tag = "5")]
+    pub coll_seal_times: ::std::collections::HashMap<::prost::alloc::string::String, i64>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct QueryRequest {
@@ -1066,6 +1073,8 @@ pub struct GetCompactionStateResponse {
     pub timeout_plan_no: i64,
     #[prost(int64, tag = "5")]
     pub completed_plan_no: i64,
+    #[prost(int64, tag = "6")]
+    pub failed_plan_no: i64,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetCompactionPlansRequest {
@@ -1154,15 +1163,25 @@ pub struct GetImportStateResponse {
     /// id of an import task
     #[prost(int64, tag = "6")]
     pub id: i64,
-    /// A flag indicating whether import data are queryable (i.e. loaded in query nodes)
-    #[prost(bool, tag = "7")]
-    pub data_queryable: bool,
-    /// A flag indicating whether import data are indexed.
-    #[prost(bool, tag = "8")]
-    pub data_indexed: bool,
+    /// collection ID of the import task.
+    #[prost(int64, tag = "7")]
+    pub collection_id: i64,
+    /// a list of segment IDs created by the import task.
+    #[prost(int64, repeated, tag = "8")]
+    pub segment_ids: ::prost::alloc::vec::Vec<i64>,
+    /// timestamp when the import task is created.
+    #[prost(int64, tag = "9")]
+    pub create_ts: i64,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ListImportTasksRequest {}
+pub struct ListImportTasksRequest {
+    /// target collection, list all tasks if the name is empty
+    #[prost(string, tag = "1")]
+    pub collection_name: ::prost::alloc::string::String,
+    /// maximum number of tasks returned, list all tasks if the value is 0
+    #[prost(int64, tag = "2")]
+    pub limit: i64,
+}
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ListImportTasksResponse {
     #[prost(message, optional, tag = "1")]

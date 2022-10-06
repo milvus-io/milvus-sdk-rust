@@ -418,7 +418,7 @@ impl Collection {
                 search_params,
                 travel_timestamp: 0,
                 guarantee_timestamp: 0,
-                consistency_level: 0,
+                consistency_level: consistency_level.unwrap_or_default() as _,
                 use_default_consistency: true,
             })
             .await?
