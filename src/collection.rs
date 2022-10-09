@@ -14,6 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::config;
 use crate::data::FieldColumn;
 use crate::error::{Error as SuperError, Result};
 use crate::proto::common::{
@@ -32,8 +33,7 @@ use crate::proto::schema::i_ds::IdField::{IntId, StrId};
 use crate::proto::schema::DataType;
 use crate::schema::CollectionSchema;
 use crate::utils::{new_msg, status_to_result};
-use crate::value::{Value};
-use crate::{config};
+use crate::value::Value;
 
 use prost::bytes::BytesMut;
 use prost::Message;
@@ -359,7 +359,6 @@ impl Collection {
         data: Vec<Value<'_>>,
         vec_field: S,
         top_k: i32,
-        partition_names: I,
         metric_type: MetricType,
         output_fields: I,
         option: &SearchOption,
@@ -405,7 +404,7 @@ impl Collection {
                 base: Some(new_msg(MsgType::Search)),
                 db_name: "".to_string(),
                 collection_name: self.schema.name.clone(),
-                partition_names: partition_names.into_iter().map(|x| x.into()).collect(),
+                partition_names: option.partitions.clone().unwrap_or_default(),
                 dsl: option.expr.clone().unwrap_or_default(),
                 nq: data.len() as _,
                 placeholder_group: get_place_holder_group(data)?,
@@ -431,39 +430,26 @@ impl Collection {
         let raw_id = raw_data.ids.unwrap().id_field.unwrap();
 
         for k in raw_data.topks {
+            let k = k as usize;
             let mut score = Vec::new();
-            for i in offset..offset + k {
-                score.push(raw_data.scores[i as usize]);
-            }
+            score.extend_from_slice(&raw_data.scores[offset..offset + k]);
             let mut result_data = fields_data
                 .iter()
                 .map(FieldColumn::copy_with_metadata)
                 .collect::<Vec<FieldColumn>>();
             for j in 0..fields_data.len() {
                 for i in offset..offset + k {
-                    result_data[j].push(fields_data[j].get(i as _).ok_or(SuperError::Unknown)?);
+                    result_data[j].push(fields_data[j].get(i).ok_or(SuperError::Unknown)?);
                 }
             }
 
             let id = match raw_id {
-                IntId(ref d) => {
-                    let mut tmp_id = Vec::<Value>::new();
-                    for i in offset..offset + k {
-                        tmp_id.push(d.data[i as usize].into());
-                    }
-                    tmp_id
-                }
-                StrId(ref d) => {
-                    let mut tmp_id = Vec::<Value>::new();
-                    for i in offset..offset + k {
-                        tmp_id.push(d.data[i as usize].clone().into());
-                    }
-                    tmp_id
-                }
+                IntId(ref d) =>  Vec::<Value>::from_iter(d.data[offset..offset + k].iter().map(|&x| x.into())),
+                StrId(ref d) => Vec::<Value>::from_iter(d.data[offset..offset + k].iter().map(|x| x.clone().into())),
             };
 
             result.push(SearchResult {
-                size: k,
+                size: k as i64,
                 score,
                 field: result_data,
                 id,
@@ -479,8 +465,7 @@ impl Collection {
         &self,
         field_name: S,
         params: HashMap<String, String>,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         let mut extra_params = HashMap::new();
         let mut params = params.clone();
         extra_params.insert(
@@ -626,9 +611,10 @@ impl Collection {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct SearchOption {
     expr: Option<String>,
+    partitions: Option<Vec<String>>,
     params: HashMap<String, String>,
     consistency_level: Option<ConsistencyLevel>,
 }
@@ -637,6 +623,7 @@ impl SearchOption {
     pub fn new() -> Self {
         Self {
             expr: None,
+            partitions: None,
             params: HashMap::new(),
             consistency_level: None,
         }
@@ -644,6 +631,15 @@ impl SearchOption {
 
     pub fn set_expr<S: Into<String>>(&mut self, expr: S) -> &mut Self {
         self.expr = Some(expr.into());
+        self
+    }
+
+    pub fn set_partitions<I>(&mut self, partitions: I) -> &mut Self
+    where
+        I: IntoIterator,
+        I::Item: Into<String>,
+    {
+        self.partitions = Some(partitions.into_iter().map(Into::into).collect());
         self
     }
 
