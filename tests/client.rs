@@ -14,12 +14,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
-
 use milvus::client::*;
 use milvus::error::Result;
 use milvus::schema::*;
-use milvus::value::Value;
 
 #[tokio::test]
 async fn create_client() -> Result<()> {
@@ -87,10 +84,10 @@ async fn create_has_drop_collection() -> Result<()> {
         .create_collection(schema, 1, ConsistencyLevel::Session)
         .await?;
 
-    assert!(client.has_collection(NAME).await?);
+    assert!(collection.exist().await?);
 
     client.drop_collection(NAME).await?;
-    assert!(client.has_collection(NAME).await? == false);
+    assert!(collection.exist().await? == false);
 
     Ok(())
 }

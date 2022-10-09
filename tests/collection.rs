@@ -15,7 +15,7 @@
 // limitations under the License.
 
 use milvus::client::*;
-use milvus::collection::{Collection, MetricType};
+use milvus::collection::{Collection, MetricType, SearchOption};
 use milvus::data::FieldColumn;
 use milvus::error::Result;
 use milvus::schema::{CollectionSchemaBuilder, FieldSchema};
@@ -168,12 +168,10 @@ async fn collection_search() -> Result<()> {
             data,
             "embed",
             1,
-            None,
             Vec::new(),
             MetricType::L2,
             vec!["id"],
-            HashMap::new(),
-            None,
+            &SearchOption::new(),
         )
         .await?;
 

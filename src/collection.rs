@@ -32,15 +32,14 @@ use crate::proto::schema::i_ds::IdField::{IntId, StrId};
 use crate::proto::schema::DataType;
 use crate::schema::CollectionSchema;
 use crate::utils::{new_msg, status_to_result};
-use crate::value::{Value, ValueVec};
-use crate::{config, proto, schema};
+use crate::value::{Value};
+use crate::{config};
 
 use prost::bytes::BytesMut;
 use prost::Message;
 use serde_json;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::marker::PhantomData;
 use std::time::Duration;
 use thiserror::Error as ThisError;
 use tokio::sync::Mutex;
@@ -68,6 +67,10 @@ impl Collection {
         }
     }
 
+    pub fn schema(&self) -> &CollectionSchema {
+        &self.schema
+    }
+
     async fn load(&self, replica_number: i32) -> Result<()> {
         status_to_result(Some(
             self.client
@@ -81,10 +84,6 @@ impl Collection {
                 .await?
                 .into_inner(),
         ))
-    }
-
-    pub fn schema(&self) -> &CollectionSchema {
-        &self.schema
     }
 
     // load_unblocked loads collection and returns when request committed
@@ -168,14 +167,14 @@ impl Collection {
         ))
     }
 
-    pub async fn exists(&self) -> Result<bool> {
+    pub async fn exist(&self) -> Result<bool> {
         let res = self
             .client
             .clone()
             .has_collection(HasCollectionRequest {
                 base: Some(new_msg(MsgType::HasCollection)),
                 db_name: "".to_string(),
-                collection_name: self.schema.name.to_string(),
+                collection_name: self.schema.name.clone(),
                 time_stamp: 0,
             })
             .await?
@@ -299,20 +298,20 @@ impl Collection {
 
     pub async fn query<Exp, P>(&self, expr: Exp, partition_names: P) -> Result<Vec<FieldColumn>>
     where
-        Exp: ToString,
+        Exp: Into<String>,
         P: IntoIterator,
-        P::Item: ToString,
+        P::Item: Into<String>,
     {
         let res = self
             .client
             .clone()
             .query(QueryRequest {
                 base: Some(new_msg(MsgType::Retrieve)),
-                db_name: "".to_string(),
+                db_name: "".to_owned(),
                 collection_name: self.schema.name.clone(),
-                expr: expr.to_string(),
+                expr: expr.into(),
                 output_fields: self.schema.fields.iter().map(|f| f.name.clone()).collect(),
-                partition_names: partition_names.into_iter().map(|x| x.to_string()).collect(),
+                partition_names: partition_names.into_iter().map(|x| x.into()).collect(),
                 travel_timestamp: 0,
                 guarantee_timestamp: 0,
                 query_params: Vec::new(),
@@ -360,20 +359,17 @@ impl Collection {
         data: Vec<Value<'_>>,
         vec_field: S,
         top_k: i32,
-        expr: Option<S>,
         partition_names: I,
         metric_type: MetricType,
         output_fields: I,
-        params: HashMap<String, String>,
-        consistency_level: Option<ConsistencyLevel>,
+        option: &SearchOption,
     ) -> Result<Vec<SearchResult<'_>>>
     where
-        S: ToString,
+        S: Into<String>,
         I: IntoIterator,
-        I::Item: ToString,
+        I::Item: Into<String>,
     {
         // check and prepare params
-
         if top_k <= 0 {
             return Err(SuperError::from(Error::IllegalValue(
                 "top_k".to_string(),
@@ -384,7 +380,7 @@ impl Collection {
         let mut search_params = Vec::new();
         search_params.push(KeyValuePair {
             key: "anns_field".to_string(),
-            value: vec_field.to_string(),
+            value: vec_field.into(),
         });
         search_params.push(KeyValuePair {
             key: "topk".to_string(),
@@ -392,7 +388,7 @@ impl Collection {
         });
         search_params.push(KeyValuePair {
             key: "params".to_string(),
-            value: serde_json::to_string(&params).unwrap(),
+            value: serde_json::to_string(&option.params).unwrap(),
         });
         search_params.push(KeyValuePair {
             key: "metric_type".to_string(),
@@ -409,16 +405,16 @@ impl Collection {
                 base: Some(new_msg(MsgType::Search)),
                 db_name: "".to_string(),
                 collection_name: self.schema.name.clone(),
-                partition_names: partition_names.into_iter().map(|x| x.to_string()).collect(),
-                dsl: expr.map_or("".to_string(), |x| x.to_string()),
+                partition_names: partition_names.into_iter().map(|x| x.into()).collect(),
+                dsl: option.expr.clone().unwrap_or_default(),
                 nq: data.len() as _,
                 placeholder_group: get_place_holder_group(data)?,
                 dsl_type: DslType::BoolExprV1 as _,
-                output_fields: output_fields.into_iter().map(|f| f.to_string()).collect(),
+                output_fields: output_fields.into_iter().map(|f| f.into()).collect(),
                 search_params,
                 travel_timestamp: 0,
                 guarantee_timestamp: 0,
-                consistency_level: consistency_level.unwrap_or_default() as _,
+                consistency_level: option.consistency_level.unwrap_or_default() as _,
                 use_default_consistency: true,
             })
             .await?
@@ -479,13 +475,11 @@ impl Collection {
         Ok(result)
     }
 
-    pub async fn create_index_unblocked<S>(
+    pub async fn create_index_unblocked<S: Into<String>>(
         &self,
         field_name: S,
         params: HashMap<String, String>,
     ) -> Result<()>
-    where
-        S: ToString,
     {
         let mut extra_params = HashMap::new();
         let mut params = params.clone();
@@ -499,7 +493,7 @@ impl Collection {
         );
         extra_params.insert("params", serde_json::to_string(&params).unwrap());
 
-        let field_name = field_name.to_string();
+        let field_name = field_name.into();
         self.schema.is_valid_vector_field(field_name.clone())?;
         let status = self
             .client
@@ -525,7 +519,7 @@ impl Collection {
 
     pub async fn get_index_state<S>(&self, field_name: S) -> Result<IndexState>
     where
-        S: ToString,
+        S: Into<String>,
     {
         let res = self
             .client
@@ -534,7 +528,7 @@ impl Collection {
                 base: Some(new_msg(MsgType::GetIndexState)),
                 db_name: "".to_string(),
                 collection_name: self.schema.name.clone(),
-                field_name: field_name.to_string(),
+                field_name: field_name.into(),
                 index_name: "".to_string(),
             })
             .await?
@@ -548,9 +542,9 @@ impl Collection {
         params: HashMap<String, String>,
     ) -> Result<()>
     where
-        S: ToString,
+        S: Into<String>,
     {
-        let field_name = field_name.to_string();
+        let field_name = field_name.into();
         self.create_index_unblocked(field_name.clone(), params)
             .await?;
         loop {
@@ -566,7 +560,7 @@ impl Collection {
 
     pub async fn describe_index<S>(&self, field_name: S) -> Result<Vec<IndexInfo>>
     where
-        S: ToString,
+        S: Into<String>,
     {
         let res = self
             .client
@@ -575,7 +569,7 @@ impl Collection {
                 base: Some(new_msg(MsgType::DescribeIndex)),
                 db_name: "".to_string(),
                 collection_name: self.schema.name.clone(),
-                field_name: field_name.to_string(),
+                field_name: field_name.into(),
                 index_name: "".to_string(),
             })
             .await?
@@ -591,7 +585,7 @@ impl Collection {
 
     pub async fn get_index_build_progress<S>(&self, field_name: S) -> Result<IndexProgress>
     where
-        S: ToString,
+        S: Into<String>,
     {
         let res = self
             .client
@@ -600,7 +594,7 @@ impl Collection {
                 base: Some(new_msg(MsgType::GetIndexBuildProgress)),
                 db_name: "".to_string(),
                 collection_name: self.schema.name.clone(),
-                field_name: field_name.to_string(),
+                field_name: field_name.into(),
                 index_name: "".to_string(),
             })
             .await?
@@ -614,7 +608,7 @@ impl Collection {
 
     pub async fn drop_index<S>(&self, field_name: S) -> Result<()>
     where
-        S: ToString,
+        S: Into<String>,
     {
         let status = self
             .client
@@ -623,7 +617,7 @@ impl Collection {
                 base: Some(new_msg(MsgType::DropIndex)),
                 db_name: "".to_string(),
                 collection_name: self.schema.name.clone(),
-                field_name: field_name.to_string(),
+                field_name: field_name.into(),
                 index_name: "".to_string(),
             })
             .await?
@@ -632,6 +626,39 @@ impl Collection {
     }
 }
 
+#[derive(Debug)]
+pub struct SearchOption {
+    expr: Option<String>,
+    params: HashMap<String, String>,
+    consistency_level: Option<ConsistencyLevel>,
+}
+
+impl SearchOption {
+    pub fn new() -> Self {
+        Self {
+            expr: None,
+            params: HashMap::new(),
+            consistency_level: None,
+        }
+    }
+
+    pub fn set_expr<S: Into<String>>(&mut self, expr: S) -> &mut Self {
+        self.expr = Some(expr.into());
+        self
+    }
+
+    pub fn add_param<S: Into<String>>(&mut self, key: S, value: S) -> &mut Self {
+        self.params.insert(key.into(), value.into());
+        self
+    }
+
+    pub fn set_consistency_level(&mut self, level: ConsistencyLevel) -> &mut Self {
+        self.consistency_level = Some(level);
+        self
+    }
+}
+
+#[derive(Debug)]
 pub enum MetricType {
     L2,
     IP,

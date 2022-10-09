@@ -15,13 +15,10 @@
 // limitations under the License.
 
 use crate::error::Result;
-use crate::proto;
 use crate::proto::schema::FieldState;
-use crate::value::Value;
-use crate::{data::FieldColumn, error};
+use crate::{error};
 use prost::alloc::vec::Vec;
 use prost::encoding::bool;
-use std::borrow::Cow;
 use thiserror::Error as ThisError;
 
 use crate::proto::{
