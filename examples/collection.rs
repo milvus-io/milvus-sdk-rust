@@ -2,11 +2,10 @@ use milvus::schema::CollectionSchemaBuilder;
 use milvus::{
     client::Client,
     collection::Collection,
-    data::{FieldColumn, FromField},
+    data::{FieldColumn},
     error::Error,
     proto::common,
-    schema::{self, FieldSchema, Schema},
-    value::Value,
+    schema::{FieldSchema},
 };
 
 use rand::prelude::*;

@@ -22,7 +22,7 @@ use crate::proto::milvus::milvus_service_client::MilvusServiceClient;
 use crate::proto::milvus::{
     CreateCollectionRequest, DropCollectionRequest, FlushRequest, HasCollectionRequest,
 };
-use crate::schema::{self, CollectionSchema};
+use crate::schema::{CollectionSchema};
 use crate::utils::{new_msg, status_to_result};
 use prost::bytes::BytesMut;
 use prost::Message;
