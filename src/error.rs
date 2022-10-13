@@ -19,7 +19,6 @@
 use crate::collection::Error as CollectionError;
 use crate::proto::common::{ErrorCode, Status};
 use crate::schema::Error as SchemaError;
-use std::error::Error as OtherError;
 use std::result;
 use thiserror::Error;
 use tonic::transport::Error as CommError;
@@ -27,9 +26,6 @@ use tonic::Status as GrpcError;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("{0:?}")]
-    Other(#[from] Box<dyn OtherError + Send + Sync>),
-
     #[error("{0:?}")]
     Communication(#[from] CommError),
 
@@ -45,17 +41,25 @@ pub enum Error {
     #[error("{0:?} {1:?}")]
     Server(ErrorCode, String),
 
-    #[error("Prost encode error: {0:?}")]
+    #[error("{0:?}")]
     ProstEncode(#[from] prost::EncodeError),
 
-    #[error("Prost decode error: {0:?}")]
+    #[error("{0:?}")]
     ProstDecode(#[from] prost::DecodeError),
-
-    #[error("Unknown")]
-    Unknown,
     
     #[error("Conversion error")]
     Conversion,
+    #[error("{0:?}")]
+    SerdeJsonErr(#[from] serde_json::Error),
+
+    #[error("parameter {0:?} with invalid value {1:?}")]
+    InvalidParameter(String, String),
+
+    #[error("{0:?}")]
+    Other(#[from] anyhow::Error),
+
+    #[error("{0}")]
+    Unexpected(String),
 }
 
 impl From<Status> for Error {

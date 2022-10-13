@@ -14,9 +14,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use milvus::collection::{Collection, MetricType, SearchOption};
+use milvus::collection::{Collection, SearchOption};
 use milvus::data::FieldColumn;
 use milvus::error::Result;
+use milvus::index::{IndexParams, IndexType, MetricType};
 use std::collections::HashMap;
 
 mod common;
@@ -67,29 +68,21 @@ async fn collection_index() -> Result<()> {
     collection.insert(vec![feature_column], None).await?;
     collection.flush().await?;
 
-    let params = HashMap::from([
-        ("index_type".to_string(), "IVF_FLAT".to_string()),
-        ("metric_type".to_string(), "L2".to_string()),
-        ("nlist".to_string(), 32.to_string()),
-    ]);
+    let index_params = IndexParams::new(
+        DEFAULT_INDEX_NAME.to_owned(),
+        IndexType::IvfFlat,
+        milvus::index::MetricType::L2,
+        HashMap::from([("nlist".to_owned(), "32".to_owned())]),
+    );
     collection
-        .create_index_blocked(DEFAULT_VEC_FIELD, params.clone())
+        .create_index_blocked(DEFAULT_VEC_FIELD, index_params.clone())
         .await?;
     let index_list = collection.describe_index(DEFAULT_VEC_FIELD).await?;
     assert!(index_list.len() == 1, "{}", index_list.len());
     let index = &index_list[0];
 
-    assert!(
-        index.name == "_default_idx".to_string(),
-        "index name is {}",
-        index.name
-    );
-
-    assert!(
-        index.params == params,
-        "index params are {:?}",
-        index.params
-    );
+    assert_eq!(index.params().name(), index_params.name());
+    assert_eq!(index.params().extra_params(), index_params.extra_params());
 
     collection.drop_index(DEFAULT_VEC_FIELD).await?;
 
@@ -109,13 +102,14 @@ async fn collection_search() -> Result<()> {
 
     collection.insert(vec![embed_column], None).await?;
     collection.flush().await?;
-    let params = HashMap::from([
-        ("index_type".to_owned(), "IVF_FLAT".to_owned()),
-        ("metric_type".to_owned(), "L2".to_owned()),
-        ("nlist".to_owned(), 32.to_string()),
-    ]);
+    let index_params = IndexParams::new(
+        "ivf_flat".to_owned(),
+        IndexType::IvfFlat,
+        MetricType::L2,
+        HashMap::from_iter([("nlist".to_owned(), 32.to_string())]),
+    );
     collection
-        .create_index_blocked(DEFAULT_VEC_FIELD, params.clone())
+        .create_index_blocked(DEFAULT_VEC_FIELD, index_params)
         .await?;
     collection.flush().await?;
     collection.load_blocked(1).await?;
@@ -132,7 +126,7 @@ async fn collection_search() -> Result<()> {
         )
         .await?;
 
-    assert!(result[0].size == 10);
+    assert_eq!(result[0].size, 10);
 
     clean_test_collection(collection).await?;
     Ok(())
