@@ -17,6 +17,7 @@
 use crate::config;
 use crate::data::FieldColumn;
 use crate::error::{Error as SuperError, Result};
+use crate::index::{IndexInfo, IndexParams, MetricType};
 use crate::proto::common::{
     ConsistencyLevel, DslType, IndexState, KeyValuePair, MsgType, PlaceholderGroup,
     PlaceholderType, PlaceholderValue,
@@ -24,10 +25,10 @@ use crate::proto::common::{
 use crate::proto::milvus::milvus_service_client::MilvusServiceClient;
 use crate::proto::milvus::{
     CreateCollectionRequest, CreateIndexRequest, CreatePartitionRequest, DescribeIndexRequest,
-    DropCollectionRequest, DropIndexRequest, FlushRequest, GetIndexBuildProgressRequest,
-    GetIndexStateRequest, HasCollectionRequest, HasPartitionRequest, InsertRequest,
-    LoadCollectionRequest, QueryRequest, ReleaseCollectionRequest, SearchRequest,
-    ShowCollectionsRequest, ShowPartitionsRequest, ShowType,
+    DropCollectionRequest, DropIndexRequest, FlushRequest, HasCollectionRequest,
+    HasPartitionRequest, InsertRequest, LoadCollectionRequest, QueryRequest,
+    ReleaseCollectionRequest, SearchRequest, ShowCollectionsRequest, ShowPartitionsRequest,
+    ShowType,
 };
 use crate::proto::schema::i_ds::IdField::{IntId, StrId};
 use crate::proto::schema::DataType;
@@ -119,7 +120,9 @@ impl Collection {
             }
         }
 
-        Err(SuperError::Unknown)
+        Err(SuperError::Unexpected(
+            "collection not exist in response".to_owned(),
+        ))
     }
 
     // load_blocked loads collection and returns when loading done
@@ -358,7 +361,7 @@ impl Collection {
         &self,
         data: Vec<Value<'_>>,
         vec_field: S,
-        top_k: i32,
+        topk: i32,
         metric_type: MetricType,
         output_fields: I,
         option: &SearchOption,
@@ -369,34 +372,35 @@ impl Collection {
         I::Item: Into<String>,
     {
         // check and prepare params
-        if top_k <= 0 {
+        if topk <= 0 {
             return Err(SuperError::from(Error::IllegalValue(
-                "top_k".to_string(),
-                "positive".to_string(),
+                "topk".to_owned(),
+                "positive".to_owned(),
             )));
         }
 
-        let mut search_params = Vec::new();
-        search_params.push(KeyValuePair {
-            key: "anns_field".to_string(),
-            value: vec_field.into(),
-        });
-        search_params.push(KeyValuePair {
-            key: "topk".to_string(),
-            value: format!("{top_k}").to_string(),
-        });
-        search_params.push(KeyValuePair {
-            key: "params".to_string(),
-            value: serde_json::to_string(&option.params).unwrap(),
-        });
-        search_params.push(KeyValuePair {
-            key: "metric_type".to_string(),
-            value: metric_type.to_string(),
-        });
-        search_params.push(KeyValuePair {
-            key: "round_demical".to_string(),
-            value: "-1".to_string(),
-        });
+        let search_params: Vec<KeyValuePair> = vec![
+            KeyValuePair {
+                key: "anns_field".to_owned(),
+                value: vec_field.into(),
+            },
+            KeyValuePair {
+                key: "topk".to_owned(),
+                value: topk.to_string(),
+            },
+            KeyValuePair {
+                key: "params".to_owned(),
+                value: serde_json::to_string(&option.params)?,
+            },
+            KeyValuePair {
+                key: "metric_type".to_owned(),
+                value: metric_type.to_string(),
+            },
+            KeyValuePair {
+                key: "round_decimal".to_owned(),
+                value: "-1".to_owned(),
+            },
+        ];
         let res = self
             .client
             .clone()
@@ -419,7 +423,9 @@ impl Collection {
             .await?
             .into_inner();
         status_to_result(res.status)?;
-        let raw_data = res.results.ok_or(SuperError::Unknown)?;
+        let raw_data = res
+            .results
+            .ok_or(SuperError::Unexpected("no result for search".to_owned()))?;
         let mut result = Vec::new();
         let mut offset = 0;
         let fields_data = raw_data
@@ -439,13 +445,19 @@ impl Collection {
                 .collect::<Vec<FieldColumn>>();
             for j in 0..fields_data.len() {
                 for i in offset..offset + k {
-                    result_data[j].push(fields_data[j].get(i).ok_or(SuperError::Unknown)?);
+                    result_data[j].push(fields_data[j].get(i).ok_or(SuperError::Unexpected(
+                        "out of range while indexing field data".to_owned(),
+                    ))?);
                 }
             }
 
             let id = match raw_id {
-                IntId(ref d) =>  Vec::<Value>::from_iter(d.data[offset..offset + k].iter().map(|&x| x.into())),
-                StrId(ref d) => Vec::<Value>::from_iter(d.data[offset..offset + k].iter().map(|x| x.clone().into())),
+                IntId(ref d) => {
+                    Vec::<Value>::from_iter(d.data[offset..offset + k].iter().map(|&x| x.into()))
+                }
+                StrId(ref d) => Vec::<Value>::from_iter(
+                    d.data[offset..offset + k].iter().map(|x| x.clone().into()),
+                ),
             };
 
             result.push(SearchResult {
@@ -461,23 +473,11 @@ impl Collection {
         Ok(result)
     }
 
-    pub async fn create_index_unblocked<S: Into<String>>(
+    pub async fn create_index_unblocked(
         &self,
-        field_name: S,
-        params: HashMap<String, String>,
+        field_name: impl Into<String>,
+        index_params: IndexParams,
     ) -> Result<()> {
-        let mut extra_params = HashMap::new();
-        let mut params = params.clone();
-        extra_params.insert(
-            "index_type",
-            params.remove("index_type").ok_or(SuperError::Unknown)?,
-        );
-        extra_params.insert(
-            "metric_type",
-            params.remove("metric_type").ok_or(SuperError::Unknown)?,
-        );
-        extra_params.insert("params", serde_json::to_string(&params).unwrap());
-
         let field_name = field_name.into();
         self.schema.is_valid_vector_field(field_name.clone())?;
         let status = self
@@ -488,56 +488,39 @@ impl Collection {
                 db_name: "".to_string(),
                 collection_name: self.schema.name.clone(),
                 field_name,
-                extra_params: extra_params
-                    .into_iter()
-                    .map(|(key, value)| KeyValuePair {
-                        key: key.to_string(),
-                        value,
-                    })
-                    .collect::<Vec<KeyValuePair>>(),
-                index_name: "".to_string(),
+                extra_params: index_params.extra_kv_params(),
+                index_name: index_params.name().clone(),
             })
             .await?
             .into_inner();
         status_to_result(Some(status))
     }
 
-    pub async fn get_index_state<S>(&self, field_name: S) -> Result<IndexState>
-    where
-        S: Into<String>,
-    {
-        let res = self
-            .client
-            .clone()
-            .get_index_state(GetIndexStateRequest {
-                base: Some(new_msg(MsgType::GetIndexState)),
-                db_name: "".to_string(),
-                collection_name: self.schema.name.clone(),
-                field_name: field_name.into(),
-                index_name: "".to_string(),
-            })
-            .await?
-            .into_inner();
-        status_to_result(res.status)?;
-        Ok(IndexState::from_i32(res.state).unwrap())
-    }
-    pub async fn create_index_blocked<S>(
+    pub async fn create_index_blocked(
         &self,
-        field_name: S,
-        params: HashMap<String, String>,
-    ) -> Result<()>
-    where
-        S: Into<String>,
-    {
+        field_name: impl Into<String>,
+        index_params: IndexParams,
+    ) -> Result<()> {
         let field_name = field_name.into();
-        self.create_index_unblocked(field_name.clone(), params)
+        self.create_index_unblocked(field_name.clone(), index_params.clone())
             .await?;
+
         loop {
-            match self.get_index_state(field_name.clone()).await? {
-                IndexState::Finished => return Ok(()),
-                IndexState::Failed => return Err(SuperError::from(Error::IndexBuildFailed)),
-                _ => (),
+            let index_infos = self.describe_index(field_name.clone()).await?;
+
+            let index_info = index_infos
+                .iter()
+                .find(|&x| x.params().name() == index_params.name());
+            if index_info.is_none() {
+                return Err(SuperError::Unexpected(
+                    "failed to describe index".to_owned(),
+                ));
             }
+            match index_info.unwrap().state() {
+                IndexState::Finished => return Ok(()),
+                IndexState::Failed => return Err(SuperError::Collection(Error::IndexBuildFailed)),
+                _ => (),
+            };
 
             tokio::time::sleep(Duration::from_millis(config::WAIT_CREATE_INDEX_DURATION_MS)).await;
         }
@@ -561,34 +544,7 @@ impl Collection {
             .into_inner();
         status_to_result(res.status)?;
 
-        Ok(res
-            .index_descriptions
-            .into_iter()
-            .map(|x| IndexInfo::new(x.index_name, x.params))
-            .collect())
-    }
-
-    pub async fn get_index_build_progress<S>(&self, field_name: S) -> Result<IndexProgress>
-    where
-        S: Into<String>,
-    {
-        let res = self
-            .client
-            .clone()
-            .get_index_build_progress(GetIndexBuildProgressRequest {
-                base: Some(new_msg(MsgType::GetIndexBuildProgress)),
-                db_name: "".to_string(),
-                collection_name: self.schema.name.clone(),
-                field_name: field_name.into(),
-                index_name: "".to_string(),
-            })
-            .await?
-            .into_inner();
-        status_to_result(res.status)?;
-        Ok(IndexProgress {
-            total_rows: res.total_rows,
-            indexed_rows: res.indexed_rows,
-        })
+        Ok(res.index_descriptions.into_iter().map(Into::into).collect())
     }
 
     pub async fn drop_index<S>(&self, field_name: S) -> Result<()>
@@ -654,66 +610,12 @@ impl SearchOption {
     }
 }
 
-#[derive(Debug)]
-pub enum MetricType {
-    L2,
-    IP,
-    HAMMING,
-    JACCARD,
-    TANIMOTO,
-    SUBSTRUCTURE,
-    SUPERSTRUCTURE,
-}
-
-impl ToString for MetricType {
-    fn to_string(&self) -> String {
-        match self {
-            MetricType::L2 => "L2",
-            MetricType::IP => "IP",
-            MetricType::HAMMING => "HAMMING",
-            MetricType::JACCARD => "JACCARD",
-            MetricType::TANIMOTO => "TANIMOTO",
-            MetricType::SUBSTRUCTURE => "SUBSTRUCTURE",
-            MetricType::SUPERSTRUCTURE => "SUPERSTRUCTURE",
-        }
-        .to_string()
-    }
-}
-
 // search result for a single vector
 pub struct SearchResult<'a> {
     pub size: i64,
     pub id: Vec<Value<'a>>,
     pub field: Vec<FieldColumn>,
     pub score: Vec<f32>,
-}
-
-pub struct IndexInfo {
-    pub name: String,
-    pub params: HashMap<String, String>,
-}
-
-impl IndexInfo {
-    pub fn new<S>(name: S, params: Vec<KeyValuePair>) -> Self
-    where
-        S: ToString,
-    {
-        let mut p = HashMap::new();
-        for kv in params.into_iter() {
-            if kv.key == "index_type".to_string() {
-                p.insert(kv.key, kv.value);
-            } else if kv.key == "metric_type".to_string() {
-                p.insert(kv.key, kv.value);
-            } else {
-                let map: HashMap<String, String> = serde_json::from_str(&kv.value).unwrap();
-                p.extend(map);
-            }
-        }
-        Self {
-            name: name.to_string(),
-            params: p,
-        }
-    }
 }
 
 pub struct IndexProgress {

@@ -341,3 +341,11 @@ pub enum ObjectPrivilege {
     PrivilegeSelectUser = 24,
     PrivilegeDescribePartition = 25,
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum StateCode {
+    Initializing = 0,
+    Healthy = 1,
+    Abnormal = 2,
+    StandBy = 3,
+}

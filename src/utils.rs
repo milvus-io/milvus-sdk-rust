@@ -29,13 +29,16 @@ pub fn new_msg(mtype: MsgType) -> MsgBase {
 }
 
 pub fn status_to_result(status: Option<Status>) -> Result<(), Error> {
-    let status = status.ok_or(Error::Unknown)?;
+    let status = status.ok_or(Error::Unexpected("no status".to_owned()))?;
 
     match ErrorCode::from_i32(status.error_code) {
         Some(i) => match i {
             ErrorCode::Success => Ok(()),
             _ => Err(Error::from(status)),
         },
-        None => Err(Error::Unknown),
+        None => Err(Error::Unexpected(format!(
+            "unknown error code {}",
+            status.error_code
+        ))),
     }
 }

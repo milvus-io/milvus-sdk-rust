@@ -310,6 +310,7 @@ pub struct ShowCollectionsRequest {
     #[prost(enumeration = "ShowType", tag = "4")]
     pub r#type: i32,
     /// When type is InMemory, will return these collection's inMemory_percentages.(Optional)
+    /// Deprecated: use GetLoadingProgress rpc instead
     #[prost(string, repeated, tag = "5")]
     pub collection_names: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
@@ -333,6 +334,7 @@ pub struct ShowCollectionsResponse {
     #[prost(uint64, repeated, tag = "5")]
     pub created_utc_timestamps: ::prost::alloc::vec::Vec<u64>,
     /// Load percentage on querynode when type is InMemory
+    /// Deprecated: use GetLoadingProgress rpc instead
     #[prost(int64, repeated, tag = "6")]
     pub in_memory_percentages: ::prost::alloc::vec::Vec<i64>,
     /// Indicate whether query service is available
@@ -473,6 +475,7 @@ pub struct ShowPartitionsRequest {
     #[prost(string, repeated, tag = "5")]
     pub partition_names: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     /// Decide return Loaded partitions or All partitions(Optional)
+    /// Deprecated: use GetLoadingProgress rpc instead
     #[prost(enumeration = "ShowType", tag = "6")]
     pub r#type: i32,
 }
@@ -497,6 +500,7 @@ pub struct ShowPartitionsResponse {
     #[prost(uint64, repeated, tag = "5")]
     pub created_utc_timestamps: ::prost::alloc::vec::Vec<u64>,
     /// Load percentage on querynode
+    /// Deprecated: use GetLoadingProgress rpc instead
     #[prost(int64, repeated, tag = "6")]
     pub in_memory_percentages: ::prost::alloc::vec::Vec<i64>,
 }
@@ -598,6 +602,16 @@ pub struct IndexDescription {
     /// The vector field name
     #[prost(string, tag = "4")]
     pub field_name: ::prost::alloc::string::String,
+    /// index build progress
+    #[prost(int64, tag = "5")]
+    pub indexed_rows: i64,
+    #[prost(int64, tag = "6")]
+    pub total_rows: i64,
+    /// index state
+    #[prost(enumeration = "super::common::IndexState", tag = "7")]
+    pub state: i32,
+    #[prost(string, tag = "8")]
+    pub index_state_fail_reason: ::prost::alloc::string::String,
 }
 ///
 /// Describe index response
@@ -1027,6 +1041,28 @@ pub struct GetMetricsResponse {
     #[prost(string, tag = "3")]
     pub component_name: ::prost::alloc::string::String,
 }
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ComponentInfo {
+    #[prost(int64, tag = "1")]
+    pub node_id: i64,
+    #[prost(string, tag = "2")]
+    pub role: ::prost::alloc::string::String,
+    #[prost(enumeration = "super::common::StateCode", tag = "3")]
+    pub state_code: i32,
+    #[prost(message, repeated, tag = "4")]
+    pub extra_info: ::prost::alloc::vec::Vec<super::common::KeyValuePair>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ComponentStates {
+    #[prost(message, optional, tag = "1")]
+    pub state: ::core::option::Option<ComponentInfo>,
+    #[prost(message, repeated, tag = "2")]
+    pub subcomponent_states: ::prost::alloc::vec::Vec<ComponentInfo>,
+    #[prost(message, optional, tag = "3")]
+    pub status: ::core::option::Option<super::common::Status>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetComponentStatesRequest {}
 ///
 /// Do load balancing operation from src_nodeID to dst_nodeID.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1469,12 +1505,32 @@ pub struct OperatePrivilegeRequest {
     pub r#type: i32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetLoadingProgressRequest {
+    /// Not useful for now
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    #[prost(string, tag = "2")]
+    pub collection_name: ::prost::alloc::string::String,
+    #[prost(string, repeated, tag = "3")]
+    pub partition_names: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetLoadingProgressResponse {
+    /// Not useful for now
+    #[prost(message, optional, tag = "1")]
+    pub status: ::core::option::Option<super::common::Status>,
+    #[prost(int64, tag = "2")]
+    pub progress: i64,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct MilvusExt {
     #[prost(string, tag = "1")]
     pub version: ::prost::alloc::string::String,
 }
-///
-/// This is for ShowCollectionsRequest type field.
+//
+// This is for ShowCollectionsRequest type field.
+
+/// Deprecated: use GetLoadingProgress rpc instead
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum ShowType {
@@ -1812,6 +1868,22 @@ pub mod milvus_service_client {
             );
             self.inner.unary(request.into_request(), path, codec).await
         }
+        pub async fn get_loading_progress(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetLoadingProgressRequest>,
+        ) -> Result<tonic::Response<super::GetLoadingProgressResponse>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/GetLoadingProgress",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
         pub async fn create_alias(
             &mut self,
             request: impl tonic::IntoRequest<super::CreateAliasRequest>,
@@ -1892,6 +1964,7 @@ pub mod milvus_service_client {
             );
             self.inner.unary(request.into_request(), path, codec).await
         }
+        #[doc = " Deprecated: use DescribeIndex instead"]
         pub async fn get_index_state(
             &mut self,
             request: impl tonic::IntoRequest<super::GetIndexStateRequest>,
@@ -1908,6 +1981,7 @@ pub mod milvus_service_client {
             );
             self.inner.unary(request.into_request(), path, codec).await
         }
+        #[doc = " Deprecated: use DescribeIndex instead"]
         pub async fn get_index_build_progress(
             &mut self,
             request: impl tonic::IntoRequest<super::GetIndexBuildProgressRequest>,
@@ -2142,6 +2216,22 @@ pub mod milvus_service_client {
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/GetMetrics",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn get_component_states(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetComponentStatesRequest>,
+        ) -> Result<tonic::Response<super::ComponentStates>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/GetComponentStates",
             );
             self.inner.unary(request.into_request(), path, codec).await
         }

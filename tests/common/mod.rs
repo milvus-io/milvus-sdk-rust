@@ -6,6 +6,7 @@ use rand::Rng;
 
 pub const DEFAULT_DIM: i64 = 128;
 pub const DEFAULT_VEC_FIELD: &str = "feature";
+pub const DEFAULT_INDEX_NAME: &str = "feature_index";
 
 pub async fn create_test_collection() -> Result<Collection> {
     const URL: &str = "http://localhost:19530";
@@ -18,7 +19,7 @@ pub async fn create_test_collection() -> Result<Collection> {
     let collection_name = format!("{}_{}", "test_collection", collection_name);
     let client = Client::new(URL).await?;
     let schema =
-        CollectionSchemaBuilder::new(&collection_name, "a guide example for milvus rust SDK")
+        CollectionSchemaBuilder::new(&collection_name, "")
             .add_field(FieldSchema::new_primary_int64("id", "", true))
             .add_field(FieldSchema::new_float_vector(DEFAULT_VEC_FIELD, "", DEFAULT_DIM))
             .build()?;
