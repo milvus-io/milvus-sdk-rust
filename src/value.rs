@@ -1,8 +1,8 @@
 use std::borrow::Cow;
 
-use crate::proto::schema::{
+use crate::{proto::schema::{
     field_data::Field, scalar_field::Data as ScalarData, vector_field::Data as VectorData, DataType,
-};
+}, schema::Error};
 
 pub enum Value<'a> {
     None,
@@ -229,4 +229,28 @@ impl From<Field> for ValueVec {
             },
         }
     }
+}
+
+macro_rules! impl_try_from_for_value_column {
+    ( $($o: ident,$t: ty ),+ ) => {$(
+        impl TryFrom<Value<'_>> for $t {
+            type Error = crate::error::Error;
+            fn try_from(value: Value<'_>) -> Result<Self, Self::Error> {
+                match value {
+                    Value::$o(v) => Ok(v),
+                    _ => Err(crate::error::Error::Conversion),
+                }
+            }
+        }
+    )*};
+}
+
+impl_try_from_for_value_column! {
+    Bool,bool,
+    Int8,i8,
+    Int16,i16,
+    Int32,i32,
+    Long,i64,
+    Float,f32,
+    Double,f64
 }
