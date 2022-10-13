@@ -1,8 +1,11 @@
 use std::borrow::Cow;
 
-use crate::{proto::schema::{
-    field_data::Field, scalar_field::Data as ScalarData, vector_field::Data as VectorData, DataType,
-}, schema::Error};
+use crate::{
+    proto::schema::{
+        field_data::Field, scalar_field::Data as ScalarData, vector_field::Data as VectorData,
+        DataType,
+    },
+};
 
 pub enum Value<'a> {
     None,
@@ -122,6 +125,30 @@ impl_from_for_value_vec! {
     Vec<u8>, Binary,
     Vec<f32>, Float,
     Vec<f64>, Double
+}
+
+macro_rules! impl_try_from_for_value_vec {
+    ( $($o: ident, $t: ty ),+ ) => {$(
+        impl TryFrom<ValueVec> for $t {
+            type Error = crate::error::Error;
+            fn try_from(value: ValueVec) -> Result<Self, Self::Error> {
+                match value {
+                    ValueVec::$o(v) => Ok(v),
+                    _ => Err(crate::error::Error::Conversion),
+                }
+            }
+        }
+    )*};
+}
+
+impl_try_from_for_value_vec! {
+    Bool, Vec<bool>,
+    Int, Vec<i32>,
+    Long, Vec<i64>,
+    String, Vec<String>,
+    Binary, Vec<u8>,
+    Float, Vec<f32>,
+    Double, Vec<f64>
 }
 
 impl From<Vec<i8>> for ValueVec {
@@ -253,4 +280,98 @@ impl_try_from_for_value_column! {
     Long,i64,
     Float,f32,
     Double,f64
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{
+        error::Error,
+        value::{Value, ValueVec},
+    };
+
+    #[test]
+    fn test_try_from_for_value_column() {
+        // bool
+        let b = Value::Bool(false);
+        let b: Result<bool, Error> = b.try_into();
+        assert!(b.is_ok());
+        assert!(!b.unwrap());
+        //i8
+        let int8 = Value::Int8(12);
+        let r: Result<i8, Error> = int8.try_into();
+        assert!(r.is_ok());
+        assert_eq!(12, r.unwrap());
+        //i16
+        let int16 = Value::Int16(1225);
+        let r: Result<i16, Error> = int16.try_into();
+        assert!(r.is_ok());
+        assert_eq!(1225, r.unwrap());
+        //i32
+        let int32 = Value::Int32(37360798);
+        let r: Result<i32, Error> = int32.try_into();
+        assert!(r.is_ok());
+        assert_eq!(37360798, r.unwrap());
+        //i64
+        let long = Value::Long(123);
+        let r: Result<i64, Error> = long.try_into();
+        assert!(r.is_ok());
+        assert_eq!(123, r.unwrap());
+
+        let float = Value::Float(22104f32);
+        let r: Result<f32, Error> = float.try_into();
+        assert!(r.is_ok());
+        assert_eq!(22104f32, r.unwrap());
+
+        let double = Value::Double(22104f64);
+        let r: Result<f64, Error> = double.try_into();
+        assert!(r.is_ok());
+        assert_eq!(22104f64, r.unwrap());
+    }
+
+    #[test]
+    fn test_try_from_for_value_vec() {
+        let b = ValueVec::Bool(vec![false, false]);
+        let b: Result<Vec<bool>, Error> = b.try_into();
+        assert!(b.is_ok());
+        assert_eq!(vec![false, false], b.unwrap());
+
+        let b = ValueVec::Int(vec![1, 2]);
+        let b: Result<Vec<i32>, Error> = b.try_into();
+        assert!(b.is_ok());
+        assert_eq!(vec![1, 2], b.unwrap());
+
+        let v: Vec<i64> = vec![4095291003, 2581116377, 3892395808];
+        let b = ValueVec::Long(v.clone());
+        let b: Result<Vec<i64>, Error> = b.try_into();
+        assert!(b.is_ok());
+        assert_eq!(v, b.unwrap());
+
+        let v: Vec<f32> = vec![11., 7., 754., 68., 34.];
+        let b = ValueVec::Float(v.clone());
+        let b: Result<Vec<f32>, Error> = b.try_into();
+        assert!(b.is_ok());
+        assert_eq!(v, b.unwrap());
+
+        let v: Vec<f64> = vec![28., 9., 92., 6099786761., 64.];
+        let b = ValueVec::Double(v.clone());
+        let b_err: Result<Vec<f32>, Error> = b.clone().try_into();
+        assert!(b_err.is_err());
+        let b: Result<Vec<f64>, Error> = b.try_into();
+        assert_eq!(v, b.unwrap());
+
+        let v = vec![28, 5, 70, 62, 57, 103, 68];
+        let b = ValueVec::Binary(v.clone());
+        let b: Result<Vec<u8>, Error> = b.try_into();
+        assert!(b.is_ok());
+        assert_eq!(v, b.unwrap());
+
+        let v: Vec<String> = vec!["Janoato", "Samoa", "opde@tuwuv.yt"]
+            .into_iter()
+            .map(|a| a.into())
+            .collect();
+        let b = ValueVec::String(v.clone());
+        let b: Result<Vec<String>, Error> = b.try_into();
+        assert!(b.is_ok());
+        assert_eq!(v, b.unwrap());
+    }
 }
