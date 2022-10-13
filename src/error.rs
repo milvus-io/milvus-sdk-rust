@@ -53,6 +53,9 @@ pub enum Error {
 
     #[error("Unknown")]
     Unknown,
+    
+    #[error("Conversion error")]
+    Conversion,
 }
 
 impl From<Status> for Error {
