@@ -7,6 +7,9 @@ on:
       - 'tests/**'
       - 'milvus-proto/**'
       - 'build.rs'
+      - '.github/**'
+      - 'docker-compose.yml'
+      
   # Triggers the workflow on push or pull request events but only for the master branch
   pull_request:
     paths:
@@ -14,6 +17,8 @@ on:
       - 'tests/**'
       - 'milvus-proto/**'
       - 'build.rs'
+      - '.github/**'
+      - 'docker-compose.yml'
 
 
 jobs:
@@ -34,11 +39,6 @@ jobs:
       - uses: actions/checkout@v3
         with:
           submodules: 'true'
-          
-      - name: Github Action for wget
-        uses: wei/wget@v1.1.1
-        with:
-          args: -O docker-compose.yml https://github.com/milvus-io/milvus/releases/latest/download/milvus-standalone-docker-compose.yml
           
       - name: Setup Milvus
         run: sudo docker-compose up -d && sleep 15s
