@@ -41,6 +41,13 @@ async fn collection_basic() -> Result<()> {
 
     collection.insert(vec![embed_column], None).await?;
     collection.flush().await?;
+    let index_params = IndexParams::new(
+        DEFAULT_INDEX_NAME.to_owned(),
+        IndexType::IvfFlat,
+        milvus::index::MetricType::L2,
+        HashMap::from([("nlist".to_owned(), "32".to_owned())]),
+    );
+    collection.create_index_blocked(DEFAULT_VEC_FIELD, index_params).await?;
     collection.load_blocked(1).await?;
 
     let result = collection.query::<_, [&str; 0]>("id > 0", []).await?;
