@@ -15,7 +15,7 @@
 // limitations under the License.
 
 use crate::error::Result;
-use crate::proto::schema::FieldState;
+use crate::proto::schema::{FieldState};
 use crate::{error};
 use prost::alloc::vec::Vec;
 use prost::encoding::bool;
@@ -453,7 +453,7 @@ impl CollectionSchema {
         self.fields.iter().find(|f| f.name == name)
     }
 
-    pub fn is_valid_vector_field(&self, field_name: String) -> Result<()> {
+    pub fn is_valid_vector_field(&self, field_name: &str) -> Result<()> {
         for f in &self.fields {
             if f.name == field_name {
                 if f.dtype == DataType::BinaryVector || f.dtype == DataType::FloatVector {

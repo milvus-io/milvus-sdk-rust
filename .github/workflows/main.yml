@@ -45,6 +45,8 @@ jobs:
       
       - name: Setup protoc
         uses: arduino/setup-protoc@v1.1.2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
     
       # Runs a single command using the runners shell
       - name: Run Unittest

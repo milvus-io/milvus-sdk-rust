@@ -24,11 +24,11 @@ use crate::proto::common::{
 };
 use crate::proto::milvus::milvus_service_client::MilvusServiceClient;
 use crate::proto::milvus::{
-    CreateCollectionRequest, CreateIndexRequest, CreatePartitionRequest, DescribeIndexRequest,
-    DropCollectionRequest, DropIndexRequest, FlushRequest, HasCollectionRequest,
-    HasPartitionRequest, InsertRequest, LoadCollectionRequest, QueryRequest,
-    ReleaseCollectionRequest, SearchRequest, ShowCollectionsRequest, ShowPartitionsRequest,
-    ShowType,
+    CreateCollectionRequest, CreateIndexRequest, CreatePartitionRequest,
+    DescribeCollectionResponse, DescribeIndexRequest, DropCollectionRequest, DropIndexRequest,
+    FlushRequest, HasCollectionRequest, HasPartitionRequest, InsertRequest, LoadCollectionRequest,
+    QueryRequest, ReleaseCollectionRequest, SearchRequest, ShowCollectionsRequest,
+    ShowPartitionsRequest, ShowType,
 };
 use crate::proto::schema::i_ds::IdField::{IntId, StrId};
 use crate::proto::schema::DataType;
@@ -46,6 +46,10 @@ use thiserror::Error as ThisError;
 use tokio::sync::Mutex;
 use tonic::transport::Channel;
 
+const STRONG_TIMESTAMP: u64 = 0;
+const BOUNDED_TIMESTAMP: u64 = 2;
+const EVENTUALLY_TIMESTAMP: u64 = 1;
+
 #[derive(Debug)]
 pub struct Partition {
     pub name: String,
@@ -55,16 +59,19 @@ pub struct Partition {
 #[derive(Debug)]
 pub struct Collection {
     client: MilvusServiceClient<Channel>,
-    partitions: Mutex<HashSet<String>>,
+    info: DescribeCollectionResponse,
     schema: CollectionSchema,
+    partitions: Mutex<HashSet<String>>,
 }
 
 impl Collection {
-    pub fn new(client: MilvusServiceClient<Channel>, schema: CollectionSchema) -> Self {
+    pub fn new(client: MilvusServiceClient<Channel>, info: DescribeCollectionResponse) -> Self {
+        let schema = info.schema.clone().unwrap();
         Self {
             client,
+            info: info,
+            schema: schema.into(),
             partitions: Mutex::new(Default::default()),
-            schema: schema,
         }
     }
 
@@ -73,13 +80,13 @@ impl Collection {
     }
 
     async fn load(&self, replica_number: i32) -> Result<()> {
-        status_to_result(Some(
+        status_to_result(&Some(
             self.client
                 .clone()
                 .load_collection(LoadCollectionRequest {
                     base: Some(new_msg(MsgType::LoadCollection)),
                     db_name: "".to_string(),
-                    collection_name: self.schema.name.clone(),
+                    collection_name: self.schema().name.clone(),
                     replica_number,
                 })
                 .await?
@@ -105,17 +112,17 @@ impl Collection {
                 db_name: "".to_string(),
                 time_stamp: 0,
                 r#type: ShowType::InMemory as i32,
-                collection_names: vec![self.schema.name.to_string()],
+                collection_names: vec![self.schema().name.to_string()],
             })
             .await?
             .into_inner();
 
-        status_to_result(response.status)?;
+        status_to_result(&response.status)?;
 
         let names = response.collection_names;
         let percent = response.in_memory_percentages;
         for i in 0..names.len() {
-            if self.schema.name == names[i] {
+            if self.schema().name == names[i] {
                 return Ok(percent[i]);
             }
         }
@@ -143,13 +150,13 @@ impl Collection {
     }
 
     pub async fn release(&self) -> Result<()> {
-        status_to_result(Some(
+        status_to_result(&Some(
             self.client
                 .clone()
                 .release_collection(ReleaseCollectionRequest {
                     base: Some(new_msg(MsgType::ReleaseCollection)),
                     db_name: "".to_string(),
-                    collection_name: self.schema.name.to_string(),
+                    collection_name: self.schema().name.to_string(),
                 })
                 .await?
                 .into_inner(),
@@ -157,13 +164,13 @@ impl Collection {
     }
 
     pub async fn drop(&self) -> Result<()> {
-        status_to_result(Some(
+        status_to_result(&Some(
             self.client
                 .clone()
                 .drop_collection(DropCollectionRequest {
                     base: Some(new_msg(MsgType::DropCollection)),
                     db_name: "".to_string(),
-                    collection_name: self.schema.name.to_string(),
+                    collection_name: self.schema().name.to_string(),
                 })
                 .await?
                 .into_inner(),
@@ -177,13 +184,13 @@ impl Collection {
             .has_collection(HasCollectionRequest {
                 base: Some(new_msg(MsgType::HasCollection)),
                 db_name: "".to_string(),
-                collection_name: self.schema.name.clone(),
+                collection_name: self.schema().name.clone(),
                 time_stamp: 0,
             })
             .await?
             .into_inner();
 
-        status_to_result(res.status)?;
+        status_to_result(&res.status)?;
 
         Ok(res.value)
     }
@@ -195,12 +202,12 @@ impl Collection {
             .flush(FlushRequest {
                 base: Some(new_msg(MsgType::Flush)),
                 db_name: "".to_string(),
-                collection_names: vec![self.schema.name.to_string()],
+                collection_names: vec![self.schema().name.to_string()],
             })
             .await?
             .into_inner();
 
-        status_to_result(res.status)?;
+        status_to_result(&res.status)?;
 
         Ok(())
     }
@@ -212,7 +219,7 @@ impl Collection {
             .show_partitions(ShowPartitionsRequest {
                 base: Some(new_msg(MsgType::ShowPartitions)),
                 db_name: "".to_string(),
-                collection_name: self.schema.name.to_string(),
+                collection_name: self.schema().name.to_string(),
                 collection_id: 0,
                 partition_names: Vec::new(),
                 r#type: 0,
@@ -227,7 +234,7 @@ impl Collection {
 
         std::mem::swap(&mut *self.partitions.lock().await, &mut partitions);
 
-        status_to_result(res.status)?;
+        status_to_result(&res.status)?;
 
         Ok(())
     }
@@ -239,13 +246,13 @@ impl Collection {
             .create_partition(CreatePartitionRequest {
                 base: Some(new_msg(MsgType::ShowPartitions)),
                 db_name: "".to_string(),
-                collection_name: self.schema.name.to_string(),
+                collection_name: self.schema().name.to_string(),
                 partition_name: name.as_ref().to_owned(),
             })
             .await?
             .into_inner();
 
-        status_to_result(Some(res))?;
+        status_to_result(&Some(res))?;
 
         Ok(())
     }
@@ -260,13 +267,13 @@ impl Collection {
                 .has_partition(HasPartitionRequest {
                     base: Some(new_msg(MsgType::HasPartition)),
                     db_name: "".to_string(),
-                    collection_name: self.schema.name.to_string(),
+                    collection_name: self.schema().name.to_string(),
                     partition_name: p.as_ref().to_string(),
                 })
                 .await?
                 .into_inner();
 
-            status_to_result(res.status)?;
+            status_to_result(&res.status)?;
 
             Ok(res.value)
         }
@@ -277,7 +284,7 @@ impl Collection {
         shards_num: Option<i32>,
         consistency_level: Option<ConsistencyLevel>,
     ) -> Result<()> {
-        let schema: crate::proto::schema::CollectionSchema = self.schema.clone().into();
+        let schema: crate::proto::schema::CollectionSchema = self.schema().clone().into();
 
         let mut buf = BytesMut::new();
         schema.encode(&mut buf)?;
@@ -288,15 +295,16 @@ impl Collection {
             .create_collection(CreateCollectionRequest {
                 base: Some(new_msg(MsgType::CreateCollection)),
                 db_name: "".to_string(),
-                collection_name: self.schema.name.to_string(),
+                collection_name: self.schema().name.to_string(),
                 schema: buf.to_vec(),
                 shards_num: shards_num.unwrap_or(1),
                 consistency_level: consistency_level.unwrap_or(ConsistencyLevel::Session) as i32,
+                properties: vec![],
             })
             .await?
             .into_inner();
 
-        status_to_result(Some(status))
+        status_to_result(&Some(status))
     }
 
     pub async fn query<Exp, P>(&self, expr: Exp, partition_names: P) -> Result<Vec<FieldColumn>>
@@ -305,26 +313,31 @@ impl Collection {
         P: IntoIterator,
         P::Item: Into<String>,
     {
+        let consistency_level = self.info.consistency_level();
+
         let res = self
             .client
             .clone()
             .query(QueryRequest {
                 base: Some(new_msg(MsgType::Retrieve)),
                 db_name: "".to_owned(),
-                collection_name: self.schema.name.clone(),
+                collection_name: self.schema().name.clone(),
                 expr: expr.into(),
-                output_fields: self.schema.fields.iter().map(|f| f.name.clone()).collect(),
+                output_fields: self
+                    .schema()
+                    .fields
+                    .iter()
+                    .map(|f| f.name.clone())
+                    .collect(),
                 partition_names: partition_names.into_iter().map(|x| x.into()).collect(),
                 travel_timestamp: 0,
-                guarantee_timestamp: 0,
+                guarantee_timestamp: self.get_gts_from_consistency(consistency_level),
                 query_params: Vec::new(),
-                consistency_level: 0,
-                use_default_consistency: true,
             })
             .await?
             .into_inner();
 
-        status_to_result(res.status)?;
+        status_to_result(&res.status)?;
 
         Ok(res
             .fields_data
@@ -347,7 +360,7 @@ impl Collection {
             .insert(InsertRequest {
                 base: Some(new_msg(MsgType::Insert)),
                 db_name: "".to_string(),
-                collection_name: self.schema.name.to_string(),
+                collection_name: self.schema().name.to_string(),
                 partition_name,
                 num_rows: row_num as u32,
                 fields_data: fields_data.into_iter().map(|f| f.into()).collect(),
@@ -401,13 +414,19 @@ impl Collection {
                 value: "-1".to_owned(),
             },
         ];
+
+        let mut consistency_level = self.info.consistency_level();
+        if let Some(level) = option.consistency_level {
+            consistency_level = level;
+        }
+
         let res = self
             .client
             .clone()
             .search(SearchRequest {
                 base: Some(new_msg(MsgType::Search)),
                 db_name: "".to_string(),
-                collection_name: self.schema.name.clone(),
+                collection_name: self.schema().name.clone(),
                 partition_names: option.partitions.clone().unwrap_or_default(),
                 dsl: option.expr.clone().unwrap_or_default(),
                 nq: data.len() as _,
@@ -416,13 +435,11 @@ impl Collection {
                 output_fields: output_fields.into_iter().map(|f| f.into()).collect(),
                 search_params,
                 travel_timestamp: 0,
-                guarantee_timestamp: 0,
-                consistency_level: option.consistency_level.unwrap_or_default() as _,
-                use_default_consistency: true,
+                guarantee_timestamp: self.get_gts_from_consistency(consistency_level),
             })
             .await?
             .into_inner();
-        status_to_result(res.status)?;
+        status_to_result(&res.status)?;
         let raw_data = res
             .results
             .ok_or(SuperError::Unexpected("no result for search".to_owned()))?;
@@ -479,21 +496,21 @@ impl Collection {
         index_params: IndexParams,
     ) -> Result<()> {
         let field_name = field_name.into();
-        self.schema.is_valid_vector_field(field_name.clone())?;
+        self.schema().is_valid_vector_field(&field_name)?;
         let status = self
             .client
             .clone()
             .create_index(CreateIndexRequest {
                 base: Some(new_msg(MsgType::CreateIndex)),
                 db_name: "".to_string(),
-                collection_name: self.schema.name.clone(),
+                collection_name: self.schema().name.clone(),
                 field_name,
                 extra_params: index_params.extra_kv_params(),
                 index_name: index_params.name().clone(),
             })
             .await?
             .into_inner();
-        status_to_result(Some(status))
+        status_to_result(&Some(status))
     }
 
     pub async fn create_index_blocked(
@@ -536,13 +553,13 @@ impl Collection {
             .describe_index(DescribeIndexRequest {
                 base: Some(new_msg(MsgType::DescribeIndex)),
                 db_name: "".to_string(),
-                collection_name: self.schema.name.clone(),
+                collection_name: self.schema().name.clone(),
                 field_name: field_name.into(),
                 index_name: "".to_string(),
             })
             .await?
             .into_inner();
-        status_to_result(res.status)?;
+        status_to_result(&res.status)?;
 
         Ok(res.index_descriptions.into_iter().map(Into::into).collect())
     }
@@ -557,13 +574,25 @@ impl Collection {
             .drop_index(DropIndexRequest {
                 base: Some(new_msg(MsgType::DropIndex)),
                 db_name: "".to_string(),
-                collection_name: self.schema.name.clone(),
+                collection_name: self.schema().name.clone(),
                 field_name: field_name.into(),
                 index_name: "".to_string(),
             })
             .await?
             .into_inner();
-        status_to_result(Some(status))
+        status_to_result(&Some(status))
+    }
+
+    fn get_gts_from_consistency(&self, consistency_level: ConsistencyLevel) -> u64 {
+        match consistency_level {
+            ConsistencyLevel::Strong => STRONG_TIMESTAMP,
+            ConsistencyLevel::Bounded => BOUNDED_TIMESTAMP,
+            ConsistencyLevel::Eventually => EVENTUALLY_TIMESTAMP,
+
+            // These two levels not work for now
+            ConsistencyLevel::Session => 2,
+            ConsistencyLevel::Customized => 0,
+        }
     }
 }
 

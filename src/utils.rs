@@ -25,11 +25,14 @@ pub fn new_msg(mtype: MsgType) -> MsgBase {
         timestamp: 0,
         source_id: 0,
         msg_id: 0,
+        target_id: 0,
     }
 }
 
-pub fn status_to_result(status: Option<Status>) -> Result<(), Error> {
-    let status = status.ok_or(Error::Unexpected("no status".to_owned()))?;
+pub fn status_to_result(status: &Option<Status>) -> Result<(), Error> {
+    let status = status
+        .clone()
+        .ok_or(Error::Unexpected("no status".to_owned()))?;
 
     match ErrorCode::from_i32(status.error_code) {
         Some(i) => match i {

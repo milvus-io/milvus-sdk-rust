@@ -20,9 +20,10 @@ pub use crate::proto::common::ConsistencyLevel;
 use crate::proto::common::MsgType;
 use crate::proto::milvus::milvus_service_client::MilvusServiceClient;
 use crate::proto::milvus::{
-    CreateCollectionRequest, DropCollectionRequest, FlushRequest, HasCollectionRequest,
+    CreateCollectionRequest, DescribeCollectionRequest, DropCollectionRequest, FlushRequest,
+    HasCollectionRequest,
 };
-use crate::schema::{CollectionSchema};
+use crate::schema::CollectionSchema;
 use crate::utils::{new_msg, status_to_result};
 use prost::bytes::BytesMut;
 use prost::Message;
@@ -69,30 +70,33 @@ impl Client {
                 schema: buf.to_vec(),
                 shards_num,
                 consistency_level: consistency_level as i32,
+                properties: vec![],
             })
             .await?
             .into_inner();
 
-        status_to_result(Some(status))?;
+        status_to_result(&Some(status))?;
 
-        Ok(Collection::new(self.client.clone(), schema.into()))
+        Ok(self.get_collection(&schema.name).await?)
     }
 
-    pub async fn drop_collection<S>(&self, name: S) -> Result<()>
-    where
-        S: Into<String>,
-    {
-        status_to_result(Some(
-            self.client
-                .clone()
-                .drop_collection(DropCollectionRequest {
-                    base: Some(new_msg(MsgType::DropCollection)),
-                    db_name: "".to_string(),
-                    collection_name: name.into(),
-                })
-                .await?
-                .into_inner(),
-        ))
+    pub async fn get_collection(&self, collection_name: &str) -> Result<Collection> {
+        let resp = self
+            .client
+            .clone()
+            .describe_collection(DescribeCollectionRequest {
+                base: Some(new_msg(MsgType::DescribeCollection)),
+                db_name: "".to_owned(),
+                collection_name: collection_name.to_owned(),
+                collection_id: 0,
+                time_stamp: 0,
+            })
+            .await?
+            .into_inner();
+
+        status_to_result(&resp.status)?;
+
+        Ok(Collection::new(self.client.clone(), resp))
     }
 
     pub async fn has_collection<S>(&self, name: S) -> Result<bool>
@@ -112,9 +116,26 @@ impl Client {
             .await?
             .into_inner();
 
-        status_to_result(res.status)?;
+        status_to_result(&res.status)?;
 
         Ok(res.value)
+    }
+
+    pub async fn drop_collection<S>(&self, name: S) -> Result<()>
+    where
+        S: Into<String>,
+    {
+        status_to_result(&Some(
+            self.client
+                .clone()
+                .drop_collection(DropCollectionRequest {
+                    base: Some(new_msg(MsgType::DropCollection)),
+                    db_name: "".to_string(),
+                    collection_name: name.into(),
+                })
+                .await?
+                .into_inner(),
+        ))
     }
 
     // pub async fn get_collection<E: schema::Schema>(&self,name: &str) -> Result<Collection<E>> {
@@ -137,7 +158,7 @@ impl Client {
             .await?
             .into_inner();
 
-        status_to_result(res.status)?;
+        status_to_result(&res.status)?;
 
         Ok(res
             .coll_seg_i_ds
