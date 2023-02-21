@@ -15,6 +15,7 @@
 // limitations under the License.
 
 use crate::collection::Collection;
+use crate::config::RPC_TIMEOUT;
 use crate::error::{Error, Result};
 pub use crate::proto::common::ConsistencyLevel;
 use crate::proto::common::MsgType;
@@ -29,6 +30,7 @@ use prost::bytes::BytesMut;
 use prost::Message;
 use std::collections::HashMap;
 use std::convert::TryInto;
+use std::time::Duration;
 use tonic::codegen::StdError;
 use tonic::transport::Channel;
 
@@ -41,7 +43,23 @@ impl Client {
     where
         D: TryInto<tonic::transport::Endpoint>,
         D::Error: Into<StdError>,
+        D::Error: std::fmt::Debug,
     {
+        Client::with_timeout(dst, RPC_TIMEOUT).await
+    }
+
+    pub async fn with_timeout<D>(dst: D, timeout: Duration) -> Result<Self>
+    where
+        D: TryInto<tonic::transport::Endpoint>,
+        D::Error: Into<StdError>,
+        D::Error: std::fmt::Debug,
+    {
+        let mut dst: tonic::transport::Endpoint = dst.try_into().map_err(|err| {
+            Error::InvalidParameter("url".to_owned(), format!("to parse {:?}", err))
+        })?;
+
+        dst = dst.timeout(timeout);
+
         match MilvusServiceClient::connect(dst).await {
             Ok(c) => Ok(Self { client: c }),
             Err(e) => Err(Error::Communication(e)),

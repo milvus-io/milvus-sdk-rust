@@ -14,5 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::time;
+
 pub const WAIT_LOAD_DURATION_MS: u64 = 500;
 pub const WAIT_CREATE_INDEX_DURATION_MS: u64 = 100;
+pub const RPC_TIMEOUT: time::Duration = time::Duration::new(10, 0);
