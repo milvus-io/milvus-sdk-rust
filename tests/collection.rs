@@ -49,9 +49,9 @@ async fn collection_basic() -> Result<()> {
         HashMap::from([("nlist".to_owned(), "32".to_owned())]),
     );
     collection
-        .create_index_blocked(DEFAULT_VEC_FIELD, index_params)
+        .create_index(DEFAULT_VEC_FIELD, index_params)
         .await?;
-    collection.load_blocked(1).await?;
+    collection.load(1).await?;
 
     let result = collection.query::<_, [&str; 0]>("id > 0", []).await?;
 
@@ -85,7 +85,7 @@ async fn collection_index() -> Result<()> {
         HashMap::from([("nlist".to_owned(), "32".to_owned())]),
     );
     collection
-        .create_index_blocked(DEFAULT_VEC_FIELD, index_params.clone())
+        .create_index(DEFAULT_VEC_FIELD, index_params.clone())
         .await?;
     let index_list = collection.describe_index(DEFAULT_VEC_FIELD).await?;
     assert!(index_list.len() == 1, "{}", index_list.len());
@@ -119,10 +119,10 @@ async fn collection_search() -> Result<()> {
         HashMap::from_iter([("nlist".to_owned(), 32.to_string())]),
     );
     collection
-        .create_index_blocked(DEFAULT_VEC_FIELD, index_params)
+        .create_index(DEFAULT_VEC_FIELD, index_params)
         .await?;
     collection.flush().await?;
-    collection.load_blocked(1).await?;
+    collection.load(1).await?;
 
     let query_vec = gen_random_f32_vector(DEFAULT_DIM);
     let result = collection
@@ -161,10 +161,10 @@ async fn session_consistency() -> Result<()> {
         HashMap::from_iter([("nlist".to_owned(), 32.to_string())]),
     );
     collection
-        .create_index_blocked(DEFAULT_VEC_FIELD, index_params)
+        .create_index(DEFAULT_VEC_FIELD, index_params)
         .await?;
     collection.flush().await?;
-    collection.load_blocked(1).await?;
+    collection.load(1).await?;
 
     let query_vec = gen_random_f32_vector(DEFAULT_DIM);
     let mut options = SearchOption::default();

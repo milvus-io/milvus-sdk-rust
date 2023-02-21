@@ -84,30 +84,6 @@ impl Collection {
         &self.schema
     }
 
-    async fn load(&self, replica_number: i32) -> Result<()> {
-        status_to_result(&Some(
-            self.client
-                .clone()
-                .load_collection(LoadCollectionRequest {
-                    base: Some(new_msg(MsgType::LoadCollection)),
-                    db_name: "".to_string(),
-                    collection_name: self.schema().name.clone(),
-                    replica_number,
-                })
-                .await?
-                .into_inner(),
-        ))
-    }
-
-    // load_unblocked loads collection and returns when request committed
-    pub async fn load_unblocked(&self, replica_number: i32) -> Result<()> {
-        dbg!("start load_unblocked");
-        // TODO wrap the error
-        // let rt = Builder::new_current_thread().enable_all().build().unwrap();
-        // rt.block_on(self.load(replica_number))
-        self.load(replica_number).await
-    }
-
     pub async fn get_load_percent(&self) -> Result<i64> {
         let response = self
             .client
@@ -138,8 +114,19 @@ impl Collection {
     }
 
     // load_blocked loads collection and returns when loading done
-    pub async fn load_blocked(&self, replica_number: i32) -> Result<()> {
-        self.load(replica_number).await?;
+    pub async fn load(&self, replica_number: i32) -> Result<()> {
+        status_to_result(&Some(
+            self.client
+                .clone()
+                .load_collection(LoadCollectionRequest {
+                    base: Some(new_msg(MsgType::LoadCollection)),
+                    db_name: "".to_string(),
+                    collection_name: self.schema().name.clone(),
+                    replica_number,
+                })
+                .await?
+                .into_inner(),
+        ))?;
 
         loop {
             if self.get_load_percent().await? >= 100 {
@@ -508,7 +495,7 @@ impl Collection {
         Ok(result)
     }
 
-    pub async fn create_index_unblocked(
+    async fn create_index_impl(
         &self,
         field_name: impl Into<String>,
         index_params: IndexParams,
@@ -531,13 +518,13 @@ impl Collection {
         status_to_result(&Some(status))
     }
 
-    pub async fn create_index_blocked(
+    pub async fn create_index(
         &self,
         field_name: impl Into<String>,
         index_params: IndexParams,
     ) -> Result<()> {
         let field_name = field_name.into();
-        self.create_index_unblocked(field_name.clone(), index_params.clone())
+        self.create_index_impl(field_name.clone(), index_params.clone())
             .await?;
 
         loop {

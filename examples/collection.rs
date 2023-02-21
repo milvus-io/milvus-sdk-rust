@@ -45,7 +45,7 @@ async fn hello_milvus(collection: &Collection) -> Result<(), Error> {
 
     collection.insert(vec![embed_column], None).await?;
     collection.flush().await?;
-    collection.load_blocked(1).await?;
+    collection.load(1).await?;
 
     let result = collection.query::<_, [&str; 0]>("id > 0", []).await?;
 
