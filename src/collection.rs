@@ -33,6 +33,7 @@ use crate::proto::milvus::{
 use crate::proto::schema::i_ds::IdField::{IntId, StrId};
 use crate::proto::schema::DataType;
 use crate::schema::CollectionSchema;
+use crate::types::*;
 use crate::utils::{new_msg, status_to_result};
 use crate::value::Value;
 
@@ -56,12 +57,15 @@ pub struct Partition {
     pub percentage: i64,
 }
 
+type ConcurrentHashMap<K, V> = tokio::sync::RwLock<std::collections::HashMap<K, V>>;
+
 #[derive(Debug)]
 pub struct Collection {
     client: MilvusServiceClient<Channel>,
     info: DescribeCollectionResponse,
     schema: CollectionSchema,
     partitions: Mutex<HashSet<String>>,
+    session_timestamps: ConcurrentHashMap<String, Timestamp>,
 }
 
 impl Collection {
@@ -72,6 +76,7 @@ impl Collection {
             info: info,
             schema: schema.into(),
             partitions: Mutex::new(Default::default()),
+            session_timestamps: ConcurrentHashMap::new(HashMap::new()),
         }
     }
 
@@ -331,7 +336,7 @@ impl Collection {
                     .collect(),
                 partition_names: partition_names.into_iter().map(|x| x.into()).collect(),
                 travel_timestamp: 0,
-                guarantee_timestamp: self.get_gts_from_consistency(consistency_level),
+                guarantee_timestamp: self.get_gts_from_consistency(consistency_level).await,
                 query_params: Vec::new(),
             })
             .await?
@@ -354,7 +359,7 @@ impl Collection {
         let partition_name = partition_name.unwrap_or("_default").to_owned();
         let row_num = fields_data.first().map(|c| c.len()).unwrap_or(0);
 
-        Ok(self
+        let result = self
             .client
             .clone()
             .insert(InsertRequest {
@@ -367,7 +372,20 @@ impl Collection {
                 hash_keys: Vec::new(),
             })
             .await?
-            .into_inner())
+            .into_inner();
+
+        self.session_timestamps
+            .write()
+            .await
+            .entry(self.info.collection_name.clone())
+            .and_modify(|ts| {
+                if *ts < result.timestamp {
+                    *ts = result.timestamp;
+                }
+            })
+            .or_insert(result.timestamp);
+
+        Ok(result)
     }
 
     pub async fn search<S, I>(
@@ -435,7 +453,7 @@ impl Collection {
                 output_fields: output_fields.into_iter().map(|f| f.into()).collect(),
                 search_params,
                 travel_timestamp: 0,
-                guarantee_timestamp: self.get_gts_from_consistency(consistency_level),
+                guarantee_timestamp: self.get_gts_from_consistency(consistency_level).await,
             })
             .await?
             .into_inner();
@@ -583,14 +601,19 @@ impl Collection {
         status_to_result(&Some(status))
     }
 
-    fn get_gts_from_consistency(&self, consistency_level: ConsistencyLevel) -> u64 {
+    async fn get_gts_from_consistency(&self, consistency_level: ConsistencyLevel) -> u64 {
         match consistency_level {
             ConsistencyLevel::Strong => STRONG_TIMESTAMP,
             ConsistencyLevel::Bounded => BOUNDED_TIMESTAMP,
             ConsistencyLevel::Eventually => EVENTUALLY_TIMESTAMP,
+            ConsistencyLevel::Session => *self
+                .session_timestamps
+                .read()
+                .await
+                .get(&self.info.collection_name)
+                .unwrap_or(&EVENTUALLY_TIMESTAMP),
 
-            // These two levels not work for now
-            ConsistencyLevel::Session => 2,
+            // This level not works for now
             ConsistencyLevel::Customized => 0,
         }
     }

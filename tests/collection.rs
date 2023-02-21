@@ -14,6 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use milvus::client::ConsistencyLevel;
 use milvus::collection::{Collection, SearchOption};
 use milvus::data::FieldColumn;
 use milvus::error::Result;
@@ -47,7 +48,9 @@ async fn collection_basic() -> Result<()> {
         milvus::index::MetricType::L2,
         HashMap::from([("nlist".to_owned(), "32".to_owned())]),
     );
-    collection.create_index_blocked(DEFAULT_VEC_FIELD, index_params).await?;
+    collection
+        .create_index_blocked(DEFAULT_VEC_FIELD, index_params)
+        .await?;
     collection.load_blocked(1).await?;
 
     let result = collection.query::<_, [&str; 0]>("id > 0", []).await?;
@@ -130,6 +133,50 @@ async fn collection_search() -> Result<()> {
             MetricType::L2,
             vec!["id"],
             &SearchOption::default(),
+        )
+        .await?;
+
+    assert_eq!(result[0].size, 10);
+
+    clean_test_collection(collection).await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn session_consistency() -> Result<()> {
+    let collection = create_test_collection().await?;
+
+    let embed_data = gen_random_f32_vector(DEFAULT_DIM * 2000);
+    let embed_column = FieldColumn::new(
+        collection.schema().get_field(DEFAULT_VEC_FIELD).unwrap(),
+        embed_data,
+    );
+
+    collection.insert(vec![embed_column], None).await?;
+    collection.flush().await?;
+    let index_params = IndexParams::new(
+        "ivf_flat".to_owned(),
+        IndexType::IvfFlat,
+        MetricType::L2,
+        HashMap::from_iter([("nlist".to_owned(), 32.to_string())]),
+    );
+    collection
+        .create_index_blocked(DEFAULT_VEC_FIELD, index_params)
+        .await?;
+    collection.flush().await?;
+    collection.load_blocked(1).await?;
+
+    let query_vec = gen_random_f32_vector(DEFAULT_DIM);
+    let mut options = SearchOption::default();
+    options.set_consistency_level(ConsistencyLevel::Session);
+    let result = collection
+        .search(
+            vec![query_vec.into()],
+            DEFAULT_VEC_FIELD,
+            10,
+            MetricType::L2,
+            vec!["id"],
+            &options,
         )
         .await?;
 
