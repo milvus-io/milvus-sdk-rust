@@ -25,3 +25,4 @@ mod config;
 pub mod proto;
 mod utils;
 pub mod index;
+pub mod types;

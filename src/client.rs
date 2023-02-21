@@ -25,6 +25,7 @@ use crate::proto::milvus::{
     HasCollectionRequest,
 };
 use crate::schema::CollectionSchema;
+use crate::types::*;
 use crate::utils::{new_msg, status_to_result};
 use prost::bytes::BytesMut;
 use prost::Message;
@@ -45,7 +46,7 @@ impl Client {
         D::Error: Into<StdError>,
         D::Error: std::fmt::Debug,
     {
-        Client::with_timeout(dst, RPC_TIMEOUT).await
+        Self::with_timeout(dst, RPC_TIMEOUT).await
     }
 
     pub async fn with_timeout<D>(dst: D, timeout: Duration) -> Result<Self>
@@ -60,10 +61,12 @@ impl Client {
 
         dst = dst.timeout(timeout);
 
-        match MilvusServiceClient::connect(dst).await {
-            Ok(c) => Ok(Self { client: c }),
-            Err(e) => Err(Error::Communication(e)),
-        }
+        let client = MilvusServiceClient::connect(dst)
+            .await
+            .map_err(Error::Communication)?;
+        Ok(Self {
+            client: client,
+        })
     }
 
     pub async fn create_collection(
