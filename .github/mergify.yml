@@ -1,4 +1,28 @@
 pull_request_rules:
+  - name: Add needs-dco label when DCO check failed
+    conditions:
+      - base=main
+      - -status-success=DCO
+    actions:
+      label:
+        remove:
+          - dco-passed
+        add:
+          - needs-dco
+      comment:
+        message: |
+          @{{author}} Thanks for your contribution. Please submit with DCO, see the contributing guide https://github.com/milvus-io/milvus/blob/master/CONTRIBUTING.md#developer-certificate-of-origin-dco.
+  - name: Add dco-passed label when DCO check passed
+    conditions:
+      - base=main
+      - status-success=DCO
+    actions:
+      label:
+        remove:
+          - needs-dco
+        add:
+          - dco-passed
+
   - name: Test passed for code changed
     conditions:
       - base=main
