@@ -35,6 +35,7 @@ use std::time::Duration;
 use tonic::codegen::StdError;
 use tonic::transport::Channel;
 
+#[derive(Clone)]
 pub struct Client {
     client: MilvusServiceClient<Channel>,
 }
