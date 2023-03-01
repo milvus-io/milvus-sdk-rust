@@ -55,6 +55,8 @@ pull_request_rules:
     conditions:
       - base=main
       - "check-failure=Unittest AMD64 Ubuntu 18.04"
+      - files~=^(?!\.github\/mergify\.yml).*$
+      - files~=\.(?!md|png)
     actions:
       label:
         remove:
@@ -64,6 +66,7 @@ pull_request_rules:
     conditions:
       - base=main
       - -body~=\#[0-9]{1,6}(\s+|$)
+      - -body~=https://github.com/milvus-io/milvus-sdk-rust/issues/[0-9]{1,6}(\s+|$)
       - -label=kind/improvement
       - -title~=\[automated\]
     actions:
@@ -80,7 +83,9 @@ pull_request_rules:
       - or:
         - and:
           - base=main
-          - body~=\#[0-9]{1,6}(\s+|$)
+          - or:
+            - body~=\#[0-9]{1,6}(\s+|$)
+            - body~=https://github.com/milvus-io/milvus-sdk-rust/issues/[0-9]{1,6}(\s+|$)
         - and:
           - base=main
           - label=kind/improvement
