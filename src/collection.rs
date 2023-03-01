@@ -14,7 +14,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::config;
 use crate::data::FieldColumn;
 use crate::error::{Error as SuperError, Result};
 use crate::index::{IndexInfo, IndexParams, MetricType};
@@ -36,6 +35,7 @@ use crate::schema::CollectionSchema;
 use crate::types::*;
 use crate::utils::{new_msg, status_to_result};
 use crate::value::Value;
+use crate::{config, proto::milvus::DeleteRequest};
 
 use prost::bytes::BytesMut;
 use prost::Message;
@@ -153,6 +153,25 @@ impl Collection {
                 .await?
                 .into_inner(),
         ))
+    }
+
+    pub async fn delete<S: AsRef<str>>(&self, expr: S, partition_name: Option<&str>) -> Result<()> {
+        status_to_result(
+            &self
+                .client
+                .clone()
+                .delete(DeleteRequest {
+                    base: Some(new_msg(MsgType::Delete)),
+                    db_name: "".to_string(),
+                    collection_name: self.schema.name.to_string(),
+                    partition_name: partition_name.unwrap_or_default().to_owned(),
+                    expr: expr.as_ref().to_owned(),
+                    hash_keys: vec![],
+                })
+                .await?
+                .into_inner()
+                .status,
+        )
     }
 
     pub async fn drop(&self) -> Result<()> {
