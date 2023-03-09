@@ -17,12 +17,13 @@
 use crate::collection::Collection;
 use crate::config::RPC_TIMEOUT;
 use crate::error::{Error, Result};
+use crate::options::CreateCollectionOptions;
 pub use crate::proto::common::ConsistencyLevel;
 use crate::proto::common::MsgType;
 use crate::proto::milvus::milvus_service_client::MilvusServiceClient;
 use crate::proto::milvus::{
     CreateCollectionRequest, DescribeCollectionRequest, DropCollectionRequest, FlushRequest,
-    HasCollectionRequest,
+    HasCollectionRequest, ShowCollectionsRequest,
 };
 use crate::schema::CollectionSchema;
 use crate::types::*;
@@ -65,34 +66,30 @@ impl Client {
         let client = MilvusServiceClient::connect(dst)
             .await
             .map_err(Error::Communication)?;
-        Ok(Self {
-            client: client,
-        })
+        Ok(Self { client: client })
     }
 
     pub async fn create_collection(
         &self,
         schema: CollectionSchema,
-        shards_num: i32,
-        consistency_level: ConsistencyLevel,
+        options: Option<CreateCollectionOptions>,
     ) -> Result<Collection> {
+        let options = options.unwrap_or_default();
         let schema: crate::proto::schema::CollectionSchema = schema.into();
         let mut buf = BytesMut::new();
 
-        //TODO unwrap instead of panic
-        schema.encode(&mut buf).unwrap();
+        schema.encode(&mut buf)?;
 
         let status = self
             .client
             .clone()
             .create_collection(CreateCollectionRequest {
                 base: Some(new_msg(MsgType::CreateCollection)),
-                db_name: "".to_string(),
                 collection_name: schema.name.to_string(),
                 schema: buf.to_vec(),
-                shards_num,
-                consistency_level: consistency_level as i32,
-                properties: vec![],
+                shards_num: options.shard_num,
+                consistency_level: options.consistency_level as i32,
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -152,17 +149,28 @@ impl Client {
                 .clone()
                 .drop_collection(DropCollectionRequest {
                     base: Some(new_msg(MsgType::DropCollection)),
-                    db_name: "".to_string(),
                     collection_name: name.into(),
+                    ..Default::default()
                 })
                 .await?
                 .into_inner(),
         ))
     }
 
-    // pub async fn get_collection<E: schema::Schema>(&self,name: &str) -> Result<Collection<E>> {
-    //     Ok(Collection::new(self.client.clone(), E::NAME))
-    // }
+    pub async fn list_collections(&self) -> Result<Vec<String>> {
+        let response = self
+            .client
+            .clone()
+            .show_collections(ShowCollectionsRequest {
+                base: Some(new_msg(MsgType::ShowCollections)),
+                ..Default::default()
+            })
+            .await?
+            .into_inner();
+
+        status_to_result(&response.status)?;
+        Ok(response.collection_names)
+    }
 
     pub async fn flush_collections<C>(&self, collections: C) -> Result<HashMap<String, Vec<i64>>>
     where

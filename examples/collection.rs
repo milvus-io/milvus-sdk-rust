@@ -1,11 +1,9 @@
+use milvus::client::ConsistencyLevel;
+use milvus::options::CreateCollectionOptions;
 use milvus::schema::CollectionSchemaBuilder;
 use milvus::{
-    client::Client,
-    collection::Collection,
-    data::{FieldColumn},
-    error::Error,
-    proto::common,
-    schema::{FieldSchema},
+    client::Client, collection::Collection, data::FieldColumn, error::Error, proto::common,
+    schema::FieldSchema,
 };
 
 use rand::prelude::*;
@@ -21,9 +19,7 @@ async fn main() -> Result<(), Error> {
             .add_field(FieldSchema::new_primary_int64("id", "", true))
             .add_field(FieldSchema::new_float_vector("embed", "", 256))
             .build()?;
-    let collection = client
-        .create_collection(schema.clone(), 2, common::ConsistencyLevel::Eventually)
-        .await?;
+    let collection = client.create_collection(schema.clone(), None).await?;
 
     if let Err(err) = hello_milvus(&collection).await {
         println!("failed to run hello milvus: {:?}", err);

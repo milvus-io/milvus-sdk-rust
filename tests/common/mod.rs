@@ -1,6 +1,7 @@
 use milvus::client::*;
-use milvus::collection::{Collection};
+use milvus::collection::Collection;
 use milvus::error::Result;
+use milvus::options::CreateCollectionOptions;
 use milvus::schema::{CollectionSchemaBuilder, FieldSchema};
 use rand::Rng;
 
@@ -18,16 +19,24 @@ pub async fn create_test_collection() -> Result<Collection> {
         .collect::<String>();
     let collection_name = format!("{}_{}", "test_collection", collection_name);
     let client = Client::new(URL).await?;
-    let schema =
-        CollectionSchemaBuilder::new(&collection_name, "")
-            .add_field(FieldSchema::new_primary_int64("id", "", true))
-            .add_field(FieldSchema::new_float_vector(DEFAULT_VEC_FIELD, "", DEFAULT_DIM))
-            .build()?;
+    let schema = CollectionSchemaBuilder::new(&collection_name, "")
+        .add_field(FieldSchema::new_primary_int64("id", "", true))
+        .add_field(FieldSchema::new_float_vector(
+            DEFAULT_VEC_FIELD,
+            "",
+            DEFAULT_DIM,
+        ))
+        .build()?;
     if client.has_collection(&collection_name).await? {
         client.drop_collection(&collection_name).await?;
     }
     client
-        .create_collection(schema.clone(), 2, ConsistencyLevel::Eventually)
+        .create_collection(
+            schema.clone(),
+            Some(CreateCollectionOptions::with_consistency_level(
+                ConsistencyLevel::Eventually,
+            )),
+        )
         .await
 }
 

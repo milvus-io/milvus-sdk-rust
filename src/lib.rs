@@ -20,6 +20,7 @@ pub mod data;
 pub mod error;
 pub mod schema;
 pub mod value;
+pub mod options;
 
 mod config;
 pub mod proto;
