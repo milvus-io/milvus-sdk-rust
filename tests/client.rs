@@ -16,6 +16,7 @@
 
 use milvus::client::*;
 use milvus::error::Result;
+use milvus::options::CreateCollectionOptions;
 use milvus::schema::*;
 
 #[tokio::test]
@@ -81,7 +82,12 @@ async fn create_has_drop_collection() -> Result<()> {
     }
 
     let collection = client
-        .create_collection(schema, 1, ConsistencyLevel::Session)
+        .create_collection(
+            schema,
+            Some(CreateCollectionOptions::with_consistency_level(
+                ConsistencyLevel::Session,
+            )),
+        )
         .await?;
 
     assert!(collection.exist().await?);
