@@ -14,6 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::client::AuthInterceptor;
 use crate::data::FieldColumn;
 use crate::error::{Error as SuperError, Result};
 use crate::index::{IndexInfo, IndexParams, MetricType};
@@ -40,6 +41,7 @@ use crate::{config, proto::milvus::DeleteRequest};
 use prost::bytes::BytesMut;
 use prost::Message;
 use serde_json;
+use tonic::codegen::InterceptedService;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::time::Duration;
@@ -61,7 +63,7 @@ type ConcurrentHashMap<K, V> = tokio::sync::RwLock<std::collections::HashMap<K, 
 
 #[derive(Debug)]
 pub struct Collection {
-    client: MilvusServiceClient<Channel>,
+    client: MilvusServiceClient<InterceptedService<Channel, AuthInterceptor>>,
     info: DescribeCollectionResponse,
     schema: CollectionSchema,
     partitions: Mutex<HashSet<String>>,
@@ -69,7 +71,7 @@ pub struct Collection {
 }
 
 impl Collection {
-    pub fn new(client: MilvusServiceClient<Channel>, info: DescribeCollectionResponse) -> Self {
+    pub fn new(client: MilvusServiceClient<InterceptedService<Channel, AuthInterceptor>>, info: DescribeCollectionResponse) -> Self {
         let schema = info.schema.clone().unwrap();
         Self {
             client,
