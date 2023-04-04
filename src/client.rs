@@ -26,19 +26,75 @@ use crate::proto::milvus::{
     HasCollectionRequest, ShowCollectionsRequest,
 };
 use crate::schema::CollectionSchema;
-use crate::types::*;
 use crate::utils::{new_msg, status_to_result};
+use base64::Engine;
+use base64::engine::general_purpose;
 use prost::bytes::BytesMut;
 use prost::Message;
+use tonic::{Request};
+use tonic::service::Interceptor;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::time::Duration;
-use tonic::codegen::StdError;
+use tonic::codegen::{StdError, InterceptedService};
 use tonic::transport::Channel;
 
 #[derive(Clone)]
+pub struct AuthInterceptor {
+    token: Option<String>,
+}
+
+impl Interceptor for AuthInterceptor {
+    fn call(&mut self, mut req: Request<()>) -> std::result::Result<tonic::Request<()>, tonic::Status> {
+        if let Some(ref token) = self.token {
+            let header_value = format!("{}", token);
+            req.metadata_mut()
+                .insert("authorization", header_value.parse().unwrap());
+        }
+
+        Ok(req)
+    }
+}
+
+#[derive(Clone)]
+pub struct ClientBuilder<D> {
+    dst: D,
+    username: Option<String>,
+    password: Option<String>,
+}
+
+impl<D> ClientBuilder<D>
+where
+    D: TryInto<tonic::transport::Endpoint> + Clone,
+    D::Error: Into<StdError>,
+    D::Error: std::fmt::Debug,
+{
+    pub fn new(dst: D) -> Self {
+        Self {
+            dst,
+            username: None,
+            password: None,
+        }
+    }
+
+    pub fn username(mut self, username: &str) -> Self {
+        self.username = Some(username.to_owned());
+        self
+    }
+
+    pub fn password(mut self, password: &str) -> Self {
+        self.password = Some(password.to_owned());
+        self
+    }
+
+    pub async fn build(self) -> Result<Client> {
+        Client::with_timeout(self.dst, RPC_TIMEOUT, self.username, self.password).await
+    }
+}
+
+#[derive(Clone)]
 pub struct Client {
-    client: MilvusServiceClient<Channel>,
+    client: MilvusServiceClient<InterceptedService<Channel, AuthInterceptor>>,
 }
 
 impl Client {
@@ -48,10 +104,15 @@ impl Client {
         D::Error: Into<StdError>,
         D::Error: std::fmt::Debug,
     {
-        Self::with_timeout(dst, RPC_TIMEOUT).await
+        Self::with_timeout(dst, RPC_TIMEOUT, None, None).await
     }
 
-    pub async fn with_timeout<D>(dst: D, timeout: Duration) -> Result<Self>
+    pub async fn with_timeout<D>(
+        dst: D,
+        timeout: Duration,
+        username: Option<String>,
+        password: Option<String>,
+    ) -> Result<Self>
     where
         D: TryInto<tonic::transport::Endpoint>,
         D::Error: Into<StdError>,
@@ -63,10 +124,22 @@ impl Client {
 
         dst = dst.timeout(timeout);
 
-        let client = MilvusServiceClient::connect(dst)
-            .await
-            .map_err(Error::Communication)?;
-        Ok(Self { client: client })
+        let token = match (username, password) {
+            (Some(username), Some(password)) => {
+                let auth_token = format!("{}:{}", username, password);
+                let auth_token = general_purpose::STANDARD.encode(auth_token);
+                Some(auth_token)
+            }
+            _ => None,
+        };
+
+        let auth_interceptor = AuthInterceptor { token };
+
+        let conn = tonic::transport::Endpoint::new(dst)?.connect().await?;
+
+        let client = MilvusServiceClient::with_interceptor(conn, auth_interceptor);
+
+        Ok(Self { client })
     }
 
     pub async fn create_collection(

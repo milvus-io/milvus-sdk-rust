@@ -69,6 +69,8 @@ async fn create_has_drop_collection() -> Result<()> {
     const NAME: &str = "create_has_drop_collection";
 
     let client = Client::new(URL).await?;
+    // let client = ClientBuilder::new(URL).username("username").password("password").build().await?;
+
     let mut schema = CollectionSchemaBuilder::new(NAME, "hello world");
     let schema = schema
         .add_field(FieldSchema::new_int64("i64_field", ""))
