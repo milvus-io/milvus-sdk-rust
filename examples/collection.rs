@@ -1,12 +1,13 @@
-use milvus::client::ConsistencyLevel;
-use milvus::options::CreateCollectionOptions;
+use milvus::index::{IndexParams, IndexType};
 use milvus::schema::CollectionSchemaBuilder;
 use milvus::{
-    client::Client, collection::Collection, data::FieldColumn, error::Error, proto::common,
-    schema::FieldSchema,
+    client::Client, collection::Collection, data::FieldColumn, error::Error, schema::FieldSchema,
 };
+use std::collections::HashMap;
 
 use rand::prelude::*;
+
+const DEFAULT_VEC_FIELD: &str = "embed";
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -17,7 +18,7 @@ async fn main() -> Result<(), Error> {
     let schema =
         CollectionSchemaBuilder::new("hello_milvus", "a guide example for milvus rust SDK")
             .add_field(FieldSchema::new_primary_int64("id", "", true))
-            .add_field(FieldSchema::new_float_vector("embed", "", 256))
+            .add_field(FieldSchema::new_float_vector(DEFAULT_VEC_FIELD, "", 256))
             .build()?;
     let collection = client.create_collection(schema.clone(), None).await?;
 
@@ -36,11 +37,22 @@ async fn hello_milvus(collection: &Collection) -> Result<(), Error> {
         let embed = rng.gen();
         embed_data.push(embed);
     }
-    let embed_column =
-        FieldColumn::new(collection.schema().get_field("embed").unwrap(), embed_data);
+    let embed_column = FieldColumn::new(
+        collection.schema().get_field(DEFAULT_VEC_FIELD).unwrap(),
+        embed_data,
+    );
 
     collection.insert(vec![embed_column], None).await?;
     collection.flush().await?;
+    let index_params = IndexParams::new(
+        "feature_index".to_owned(),
+        IndexType::IvfFlat,
+        milvus::index::MetricType::L2,
+        HashMap::from([("nlist".to_owned(), "32".to_owned())]),
+    );
+    collection
+        .create_index(DEFAULT_VEC_FIELD, index_params)
+        .await?;
     collection.load(1).await?;
 
     let result = collection.query::<_, [&str; 0]>("id > 0", []).await?;
