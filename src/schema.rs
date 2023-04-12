@@ -14,9 +14,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::error;
 use crate::error::Result;
-use crate::proto::schema::{FieldState};
-use crate::{error};
+use crate::proto::schema::FieldState;
 use prost::alloc::vec::Vec;
 use prost::encoding::bool;
 use thiserror::Error as ThisError;
@@ -350,7 +350,7 @@ impl FieldSchema {
         Self {
             name: name.to_owned(),
             description: description.to_owned(),
-            dtype: DataType::String,
+            dtype: DataType::VarChar,
             max_length,
             is_primary: false,
             auto_id: false,
