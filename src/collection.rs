@@ -14,9 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::client::AuthInterceptor;
-use crate::data::FieldColumn;
-use crate::error::{Error as SuperError, Result};
+use crate::{error::{Error as SuperError, Result}, proto::milvus::{DropAliasRequest, AlterAliasRequest}};
 use crate::index::{IndexInfo, IndexParams, MetricType};
 use crate::proto::common::{
     ConsistencyLevel, DslType, IndexState, KeyValuePair, MsgType, PlaceholderGroup,
@@ -36,17 +34,19 @@ use crate::schema::CollectionSchema;
 use crate::types::*;
 use crate::utils::{new_msg, status_to_result};
 use crate::value::Value;
+use crate::{client::AuthInterceptor, proto::milvus::CalcDistanceRequest};
 use crate::{config, proto::milvus::DeleteRequest};
+use crate::{data::FieldColumn, proto::milvus::CreateAliasRequest};
 
 use prost::bytes::BytesMut;
 use prost::Message;
 use serde_json;
-use tonic::codegen::InterceptedService;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::time::Duration;
 use thiserror::Error as ThisError;
 use tokio::sync::Mutex;
+use tonic::codegen::InterceptedService;
 use tonic::transport::Channel;
 
 const STRONG_TIMESTAMP: u64 = 0;
@@ -71,7 +71,10 @@ pub struct Collection {
 }
 
 impl Collection {
-    pub fn new(client: MilvusServiceClient<InterceptedService<Channel, AuthInterceptor>>, info: DescribeCollectionResponse) -> Self {
+    pub fn new(
+        client: MilvusServiceClient<InterceptedService<Channel, AuthInterceptor>>,
+        info: DescribeCollectionResponse,
+    ) -> Self {
         let schema = info.schema.clone().unwrap();
         Self {
             client,
@@ -137,6 +140,53 @@ impl Collection {
 
             tokio::time::sleep(Duration::from_millis(config::WAIT_LOAD_DURATION_MS)).await;
         }
+    }
+
+    /// Create a collection alias
+    pub async fn create_alias<S: ToString>(&self, alias: S) -> Result<()> {
+        status_to_result(&Some(
+            self.client
+                .clone()
+                .create_alias(CreateAliasRequest {
+                    base: Some(new_msg(MsgType::CreateAlias)),
+                    db_name: "".to_string(),
+                    collection_name: self.schema().name.to_string(),
+                    alias: alias.to_string(),
+                })
+                .await?
+                .into_inner(),
+        ))
+    }
+
+    /// Drop a collection alias
+    pub async fn drop_alias<S: ToString>(&self, alias: S) -> Result<()> {
+        status_to_result(&Some(
+            self.client
+                .clone()
+                .drop_alias(DropAliasRequest {
+                    base: Some(new_msg(MsgType::DropAlias)),
+                    db_name: "".to_string(),
+                    alias: alias.to_string(),
+                })
+                .await?
+                .into_inner(),
+        ))
+    }
+
+    /// Alter a collection alias
+    pub async fn alter_alias<S: ToString>(&self, alias: S) -> Result<()> {
+        status_to_result(&Some(
+            self.client
+                .clone()
+                .alter_alias(AlterAliasRequest {
+                    base: Some(new_msg(MsgType::AlterAlias)),
+                    db_name: "".to_string(),
+                    collection_name: self.schema().name.to_string(),
+                    alias: alias.to_string(),
+                })
+                .await?
+                .into_inner(),
+        ))
     }
 
     pub async fn is_loaded(&self) -> Result<bool> {
