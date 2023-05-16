@@ -8,10 +8,10 @@ use rand::Rng;
 pub const DEFAULT_DIM: i64 = 128;
 pub const DEFAULT_VEC_FIELD: &str = "feature";
 pub const DEFAULT_INDEX_NAME: &str = "feature_index";
+pub const URL: &str = "http://localhost:19530";
+
 
 pub async fn create_test_collection() -> Result<Collection> {
-    const URL: &str = "http://localhost:19530";
-
     let collection_name = rand::thread_rng()
         .sample_iter(&rand::distributions::Alphanumeric)
         .take(7)
