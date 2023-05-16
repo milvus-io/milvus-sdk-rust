@@ -19,9 +19,11 @@ use milvus::error::Result;
 use milvus::options::CreateCollectionOptions;
 use milvus::schema::*;
 
+mod common;
+use common::*;
+
 #[tokio::test]
 async fn create_client() -> Result<()> {
-    const URL: &str = "http://localhost:19530";
     match Client::new(URL).await {
         Ok(_) => return Result::<()>::Ok(()),
         Err(e) => panic!("Error is {}.", e),
@@ -48,7 +50,6 @@ async fn create_client_wrong_fmt() -> Result<()> {
 
 #[tokio::test]
 async fn has_collection() -> Result<()> {
-    const URL: &str = "http://localhost:19530";
     const NAME: &str = "qwerty";
     let client = Client::new(URL).await?;
     match client.has_collection(NAME).await {
@@ -65,7 +66,6 @@ async fn has_collection() -> Result<()> {
 
 #[tokio::test]
 async fn create_has_drop_collection() -> Result<()> {
-    const URL: &str = "http://localhost:19530";
     const NAME: &str = "create_has_drop_collection";
 
     let client = Client::new(URL).await?;
