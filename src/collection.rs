@@ -14,7 +14,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{error::{Error as SuperError, Result}, proto::milvus::{DropAliasRequest, AlterAliasRequest}};
 use crate::index::{IndexInfo, IndexParams, MetricType};
 use crate::proto::common::{
     ConsistencyLevel, DslType, IndexState, KeyValuePair, MsgType, PlaceholderGroup,
@@ -37,6 +36,10 @@ use crate::value::Value;
 use crate::{client::AuthInterceptor, proto::milvus::CalcDistanceRequest};
 use crate::{config, proto::milvus::DeleteRequest};
 use crate::{data::FieldColumn, proto::milvus::CreateAliasRequest};
+use crate::{
+    error::{Error as SuperError, Result},
+    proto::milvus::{AlterAliasRequest, DropAliasRequest},
+};
 
 use prost::bytes::BytesMut;
 use prost::Message;
@@ -677,22 +680,20 @@ impl Collection {
     }
 }
 
+pub type ParamValue = serde_json::Value;
+pub use serde_json::json as ParamValue;
+
 #[derive(Debug, Default)]
 pub struct SearchOption {
     expr: Option<String>,
     partitions: Option<Vec<String>>,
-    params: HashMap<String, String>,
+    params: serde_json::Value,
     consistency_level: Option<ConsistencyLevel>,
 }
 
 impl SearchOption {
     pub fn new() -> Self {
-        Self {
-            expr: None,
-            partitions: None,
-            params: HashMap::new(),
-            consistency_level: None,
-        }
+        Self::default()
     }
 
     pub fn set_expr<S: Into<String>>(&mut self, expr: S) -> &mut Self {
@@ -709,8 +710,14 @@ impl SearchOption {
         self
     }
 
-    pub fn add_param<S: Into<String>>(&mut self, key: S, value: S) -> &mut Self {
-        self.params.insert(key.into(), value.into());
+    pub fn add_param<S: Into<String>>(&mut self, key: S, value: ParamValue) -> &mut Self {
+        if self.params.is_null() {
+            self.params = ParamValue!({});
+        }
+        self.params
+            .as_object_mut()
+            .unwrap()
+            .insert(key.into(), value);
         self
     }
 

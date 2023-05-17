@@ -15,7 +15,7 @@
 // limitations under the License.
 
 use milvus::client::ConsistencyLevel;
-use milvus::collection::{Collection, SearchOption};
+use milvus::collection::{Collection, ParamValue, SearchOption};
 use milvus::data::FieldColumn;
 use milvus::error::Result;
 use milvus::index::{IndexParams, IndexType, MetricType};
@@ -124,6 +124,8 @@ async fn collection_search() -> Result<()> {
     collection.flush().await?;
     collection.load(1).await?;
 
+    let mut option = SearchOption::default();
+    option.add_param("nprobe", ParamValue!(16));
     let query_vec = gen_random_f32_vector(DEFAULT_DIM);
     let result = collection
         .search(
@@ -132,7 +134,7 @@ async fn collection_search() -> Result<()> {
             10,
             MetricType::L2,
             vec!["id"],
-            &SearchOption::default(),
+            &option,
         )
         .await?;
 
