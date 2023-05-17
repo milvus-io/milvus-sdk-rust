@@ -1,0 +1,8 @@
+filters:
+  ".*":
+    reviewers:
+      - congqixia
+      - yah01
+    approvers:
+      - congqixia
+      - yah01
