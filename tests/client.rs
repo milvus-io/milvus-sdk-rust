@@ -25,7 +25,7 @@ use common::*;
 #[tokio::test]
 async fn create_client() -> Result<()> {
     match Client::new(URL).await {
-        Ok(_) => return Result::<()>::Ok(()),
+        Ok(_) => Result::<()>::Ok(()),
         Err(e) => panic!("Error is {}.", e),
     }
 }
@@ -35,7 +35,7 @@ async fn create_client_wrong_url() -> Result<()> {
     const URL: &str = "http://localhost:9999";
     match Client::new(URL).await {
         Ok(_) => panic!("Should fail due to wrong url."),
-        Err(_) => return Result::<()>::Ok(()),
+        Err(_) => Result::<()>::Ok(()),
     }
 }
 
@@ -44,7 +44,7 @@ async fn create_client_wrong_fmt() -> Result<()> {
     const URL: &str = "9999";
     match Client::new(URL).await {
         Ok(_) => panic!("Should fail due to wrong format url."),
-        Err(_) => return Result::<()>::Ok(()),
+        Err(_) => Result::<()>::Ok(()),
     }
 }
 
@@ -95,7 +95,7 @@ async fn create_has_drop_collection() -> Result<()> {
     assert!(collection.exist().await?);
 
     client.drop_collection(NAME).await?;
-    assert!(collection.exist().await? == false);
+    assert!(!(collection.exist().await?));
 
     Ok(())
 }
