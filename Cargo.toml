@@ -1,7 +1,9 @@
 [package]
 name = "milvus-sdk-rust"
+description = "The official Milvus Rust SDK"
 version = "0.1.0"
 edition = "2021"
+license-file = "LICENSE"
 
 [lib]
 name = "milvus"

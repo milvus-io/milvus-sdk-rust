@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use rand::prelude::*;
 
 const DEFAULT_VEC_FIELD: &str = "embed";
+const DIM: i64 = 256;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -17,8 +18,16 @@ async fn main() -> Result<(), Error> {
 
     let schema =
         CollectionSchemaBuilder::new("hello_milvus", "a guide example for milvus rust SDK")
-            .add_field(FieldSchema::new_primary_int64("id", "", true))
-            .add_field(FieldSchema::new_float_vector(DEFAULT_VEC_FIELD, "", 256))
+            .add_field(FieldSchema::new_primary_int64(
+                "id",
+                "primary key field",
+                true,
+            ))
+            .add_field(FieldSchema::new_float_vector(
+                DEFAULT_VEC_FIELD,
+                "feature field",
+                DIM,
+            ))
             .build()?;
     let collection = client.create_collection(schema.clone(), None).await?;
 
@@ -32,7 +41,7 @@ async fn main() -> Result<(), Error> {
 
 async fn hello_milvus(collection: &Collection) -> Result<(), Error> {
     let mut embed_data = Vec::<f32>::new();
-    for _ in 1..=256 * 1000 {
+    for _ in 1..=DIM * 1000 {
         let mut rng = rand::thread_rng();
         let embed = rng.gen();
         embed_data.push(embed);
