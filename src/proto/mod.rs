@@ -14,9 +14,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use self::common::{MsgBase, MsgType};
+
 #[path = "milvus.proto.common.rs"]
 pub mod common;
 #[path = "milvus.proto.milvus.rs"]
 pub mod milvus;
 #[path = "milvus.proto.schema.rs"]
 pub mod schema;
+
+impl MsgBase {
+    pub fn new(msg_type: MsgType) -> Self {
+        Self {
+            msg_type: msg_type.into(),
+            ..Default::default()
+        }
+    }
+}

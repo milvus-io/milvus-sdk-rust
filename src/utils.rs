@@ -16,18 +16,8 @@
 
 use crate::{
     error::Error,
-    proto::common::{ErrorCode, MsgBase, MsgType, Status},
+    proto::common::{ErrorCode, Status},
 };
-
-pub fn new_msg(mtype: MsgType) -> MsgBase {
-    MsgBase {
-        msg_type: mtype as i32,
-        timestamp: 0,
-        source_id: 0,
-        msg_id: 0,
-        target_id: 0,
-    }
-}
 
 pub fn status_to_result(status: &Option<Status>) -> Result<(), Error> {
     let status = status
