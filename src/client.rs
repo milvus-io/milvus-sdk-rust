@@ -19,25 +19,25 @@ use crate::config::RPC_TIMEOUT;
 use crate::error::{Error, Result};
 use crate::options::CreateCollectionOptions;
 pub use crate::proto::common::ConsistencyLevel;
-use crate::proto::common::MsgType;
+use crate::proto::common::{MsgBase, MsgType};
 use crate::proto::milvus::milvus_service_client::MilvusServiceClient;
 use crate::proto::milvus::{
     CreateCollectionRequest, DescribeCollectionRequest, DropCollectionRequest, FlushRequest,
     HasCollectionRequest, ShowCollectionsRequest,
 };
 use crate::schema::CollectionSchema;
-use crate::utils::{new_msg, status_to_result};
-use base64::Engine;
+use crate::utils::status_to_result;
 use base64::engine::general_purpose;
+use base64::Engine;
 use prost::bytes::BytesMut;
 use prost::Message;
-use tonic::{Request};
-use tonic::service::Interceptor;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::time::Duration;
-use tonic::codegen::{StdError, InterceptedService};
+use tonic::codegen::{InterceptedService, StdError};
+use tonic::service::Interceptor;
 use tonic::transport::Channel;
+use tonic::Request;
 
 #[derive(Clone)]
 pub struct AuthInterceptor {
@@ -45,7 +45,10 @@ pub struct AuthInterceptor {
 }
 
 impl Interceptor for AuthInterceptor {
-    fn call(&mut self, mut req: Request<()>) -> std::result::Result<tonic::Request<()>, tonic::Status> {
+    fn call(
+        &mut self,
+        mut req: Request<()>,
+    ) -> std::result::Result<tonic::Request<()>, tonic::Status> {
         if let Some(ref token) = self.token {
             let header_value = format!("{}", token);
             req.metadata_mut()
@@ -157,7 +160,7 @@ impl Client {
             .client
             .clone()
             .create_collection(CreateCollectionRequest {
-                base: Some(new_msg(MsgType::CreateCollection)),
+                base: Some(MsgBase::new(MsgType::CreateCollection)),
                 collection_name: schema.name.to_string(),
                 schema: buf.to_vec(),
                 shards_num: options.shard_num,
@@ -177,7 +180,7 @@ impl Client {
             .client
             .clone()
             .describe_collection(DescribeCollectionRequest {
-                base: Some(new_msg(MsgType::DescribeCollection)),
+                base: Some(MsgBase::new(MsgType::DescribeCollection)),
                 db_name: "".to_owned(),
                 collection_name: collection_name.to_owned(),
                 collection_id: 0,
@@ -200,7 +203,7 @@ impl Client {
             .client
             .clone()
             .has_collection(HasCollectionRequest {
-                base: Some(new_msg(MsgType::HasCollection)),
+                base: Some(MsgBase::new(MsgType::HasCollection)),
                 db_name: "".to_string(),
                 collection_name: name.clone(),
                 time_stamp: 0,
@@ -221,7 +224,7 @@ impl Client {
             self.client
                 .clone()
                 .drop_collection(DropCollectionRequest {
-                    base: Some(new_msg(MsgType::DropCollection)),
+                    base: Some(MsgBase::new(MsgType::DropCollection)),
                     collection_name: name.into(),
                     ..Default::default()
                 })
@@ -235,7 +238,7 @@ impl Client {
             .client
             .clone()
             .show_collections(ShowCollectionsRequest {
-                base: Some(new_msg(MsgType::ShowCollections)),
+                base: Some(MsgBase::new(MsgType::ShowCollections)),
                 ..Default::default()
             })
             .await?
@@ -254,7 +257,7 @@ impl Client {
             .client
             .clone()
             .flush(FlushRequest {
-                base: Some(new_msg(MsgType::Flush)),
+                base: Some(MsgBase::new(MsgType::Flush)),
                 db_name: "".to_string(),
                 collection_names: collections.into_iter().map(|x| x.to_string()).collect(),
             })

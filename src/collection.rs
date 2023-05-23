@@ -14,9 +14,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::client::AuthInterceptor;
 use crate::index::{IndexInfo, IndexParams, MetricType};
 use crate::proto::common::{
-    ConsistencyLevel, DslType, IndexState, KeyValuePair, MsgType, PlaceholderGroup,
+    ConsistencyLevel, DslType, IndexState, KeyValuePair, MsgBase, MsgType, PlaceholderGroup,
     PlaceholderType, PlaceholderValue,
 };
 use crate::proto::milvus::milvus_service_client::MilvusServiceClient;
@@ -31,9 +32,8 @@ use crate::proto::schema::i_ds::IdField::{IntId, StrId};
 use crate::proto::schema::DataType;
 use crate::schema::CollectionSchema;
 use crate::types::*;
-use crate::utils::{new_msg, status_to_result};
+use crate::utils::status_to_result;
 use crate::value::Value;
-use crate::{client::AuthInterceptor, proto::milvus::CalcDistanceRequest};
 use crate::{config, proto::milvus::DeleteRequest};
 use crate::{data::FieldColumn, proto::milvus::CreateAliasRequest};
 use crate::{
@@ -97,7 +97,7 @@ impl Collection {
             .client
             .clone()
             .show_collections(ShowCollectionsRequest {
-                base: Some(new_msg(MsgType::ShowCollections)),
+                base: Some(MsgBase::new(MsgType::ShowCollections)),
                 db_name: "".to_string(),
                 time_stamp: 0,
                 r#type: ShowType::InMemory as i32,
@@ -127,7 +127,7 @@ impl Collection {
             self.client
                 .clone()
                 .load_collection(LoadCollectionRequest {
-                    base: Some(new_msg(MsgType::LoadCollection)),
+                    base: Some(MsgBase::new(MsgType::LoadCollection)),
                     db_name: "".to_string(),
                     collection_name: self.schema().name.clone(),
                     replica_number,
@@ -151,7 +151,7 @@ impl Collection {
             self.client
                 .clone()
                 .create_alias(CreateAliasRequest {
-                    base: Some(new_msg(MsgType::CreateAlias)),
+                    base: Some(MsgBase::new(MsgType::CreateAlias)),
                     db_name: "".to_string(),
                     collection_name: self.schema().name.to_string(),
                     alias: alias.to_string(),
@@ -167,7 +167,7 @@ impl Collection {
             self.client
                 .clone()
                 .drop_alias(DropAliasRequest {
-                    base: Some(new_msg(MsgType::DropAlias)),
+                    base: Some(MsgBase::new(MsgType::DropAlias)),
                     db_name: "".to_string(),
                     alias: alias.to_string(),
                 })
@@ -182,7 +182,7 @@ impl Collection {
             self.client
                 .clone()
                 .alter_alias(AlterAliasRequest {
-                    base: Some(new_msg(MsgType::AlterAlias)),
+                    base: Some(MsgBase::new(MsgType::AlterAlias)),
                     db_name: "".to_string(),
                     collection_name: self.schema().name.to_string(),
                     alias: alias.to_string(),
@@ -201,7 +201,7 @@ impl Collection {
             self.client
                 .clone()
                 .release_collection(ReleaseCollectionRequest {
-                    base: Some(new_msg(MsgType::ReleaseCollection)),
+                    base: Some(MsgBase::new(MsgType::ReleaseCollection)),
                     db_name: "".to_string(),
                     collection_name: self.schema().name.to_string(),
                 })
@@ -216,7 +216,7 @@ impl Collection {
                 .client
                 .clone()
                 .delete(DeleteRequest {
-                    base: Some(new_msg(MsgType::Delete)),
+                    base: Some(MsgBase::new(MsgType::Delete)),
                     db_name: "".to_string(),
                     collection_name: self.schema.name.to_string(),
                     partition_name: partition_name.unwrap_or_default().to_owned(),
@@ -234,7 +234,7 @@ impl Collection {
             self.client
                 .clone()
                 .drop_collection(DropCollectionRequest {
-                    base: Some(new_msg(MsgType::DropCollection)),
+                    base: Some(MsgBase::new(MsgType::DropCollection)),
                     db_name: "".to_string(),
                     collection_name: self.schema().name.to_string(),
                 })
@@ -248,7 +248,7 @@ impl Collection {
             .client
             .clone()
             .has_collection(HasCollectionRequest {
-                base: Some(new_msg(MsgType::HasCollection)),
+                base: Some(MsgBase::new(MsgType::HasCollection)),
                 db_name: "".to_string(),
                 collection_name: self.schema().name.clone(),
                 time_stamp: 0,
@@ -266,7 +266,7 @@ impl Collection {
             .client
             .clone()
             .flush(FlushRequest {
-                base: Some(new_msg(MsgType::Flush)),
+                base: Some(MsgBase::new(MsgType::Flush)),
                 db_name: "".to_string(),
                 collection_names: vec![self.schema().name.to_string()],
             })
@@ -283,7 +283,7 @@ impl Collection {
             .client
             .clone()
             .show_partitions(ShowPartitionsRequest {
-                base: Some(new_msg(MsgType::ShowPartitions)),
+                base: Some(MsgBase::new(MsgType::ShowPartitions)),
                 db_name: "".to_string(),
                 collection_name: self.schema().name.to_string(),
                 collection_id: 0,
@@ -310,7 +310,7 @@ impl Collection {
             .client
             .clone()
             .create_partition(CreatePartitionRequest {
-                base: Some(new_msg(MsgType::ShowPartitions)),
+                base: Some(MsgBase::new(MsgType::ShowPartitions)),
                 db_name: "".to_string(),
                 collection_name: self.schema().name.to_string(),
                 partition_name: name.as_ref().to_owned(),
@@ -331,7 +331,7 @@ impl Collection {
                 .client
                 .clone()
                 .has_partition(HasPartitionRequest {
-                    base: Some(new_msg(MsgType::HasPartition)),
+                    base: Some(MsgBase::new(MsgType::HasPartition)),
                     db_name: "".to_string(),
                     collection_name: self.schema().name.to_string(),
                     partition_name: p.as_ref().to_string(),
@@ -359,7 +359,7 @@ impl Collection {
             .client
             .clone()
             .create_collection(CreateCollectionRequest {
-                base: Some(new_msg(MsgType::CreateCollection)),
+                base: Some(MsgBase::new(MsgType::CreateCollection)),
                 db_name: "".to_string(),
                 collection_name: self.schema().name.to_string(),
                 schema: buf.to_vec(),
@@ -385,7 +385,7 @@ impl Collection {
             .client
             .clone()
             .query(QueryRequest {
-                base: Some(new_msg(MsgType::Retrieve)),
+                base: Some(MsgBase::new(MsgType::Retrieve)),
                 db_name: "".to_owned(),
                 collection_name: self.schema().name.clone(),
                 expr: expr.into(),
@@ -424,7 +424,7 @@ impl Collection {
             .client
             .clone()
             .insert(InsertRequest {
-                base: Some(new_msg(MsgType::Insert)),
+                base: Some(MsgBase::new(MsgType::Insert)),
                 db_name: "".to_string(),
                 collection_name: self.schema().name.to_string(),
                 partition_name,
@@ -503,7 +503,7 @@ impl Collection {
             .client
             .clone()
             .search(SearchRequest {
-                base: Some(new_msg(MsgType::Search)),
+                base: Some(MsgBase::new(MsgType::Search)),
                 db_name: "".to_string(),
                 collection_name: self.schema().name.clone(),
                 partition_names: option.partitions.clone().unwrap_or_default(),
@@ -580,7 +580,7 @@ impl Collection {
             .client
             .clone()
             .create_index(CreateIndexRequest {
-                base: Some(new_msg(MsgType::CreateIndex)),
+                base: Some(MsgBase::new(MsgType::CreateIndex)),
                 db_name: "".to_string(),
                 collection_name: self.schema().name.clone(),
                 field_name,
@@ -630,7 +630,7 @@ impl Collection {
             .client
             .clone()
             .describe_index(DescribeIndexRequest {
-                base: Some(new_msg(MsgType::DescribeIndex)),
+                base: Some(MsgBase::new(MsgType::DescribeIndex)),
                 db_name: "".to_string(),
                 collection_name: self.schema().name.clone(),
                 field_name: field_name.into(),
@@ -651,7 +651,7 @@ impl Collection {
             .client
             .clone()
             .drop_index(DropIndexRequest {
-                base: Some(new_msg(MsgType::DropIndex)),
+                base: Some(MsgBase::new(MsgType::DropIndex)),
                 db_name: "".to_string(),
                 collection_name: self.schema().name.clone(),
                 field_name: field_name.into(),
