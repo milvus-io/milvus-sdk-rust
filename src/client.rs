@@ -172,7 +172,7 @@ impl Client {
 
         status_to_result(&Some(status))?;
 
-        Ok(self.get_collection(&schema.name).await?)
+        self.get_collection(&schema.name).await
     }
 
     pub async fn get_collection(&self, collection_name: &str) -> Result<Collection> {

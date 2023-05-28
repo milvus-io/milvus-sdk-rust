@@ -14,12 +14,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::client::AuthInterceptor;
-use crate::index::{IndexInfo, IndexParams, MetricType};
-use crate::proto::common::{
+use crate::proto::{common::{
     ConsistencyLevel, DslType, IndexState, KeyValuePair, MsgBase, MsgType, PlaceholderGroup,
     PlaceholderType, PlaceholderValue,
-};
+}, milvus::DropPartitionRequest};
 use crate::proto::milvus::milvus_service_client::MilvusServiceClient;
 use crate::proto::milvus::{
     CreateCollectionRequest, CreateIndexRequest, CreatePartitionRequest,
@@ -34,11 +32,19 @@ use crate::schema::CollectionSchema;
 use crate::types::*;
 use crate::utils::status_to_result;
 use crate::value::Value;
+use crate::{
+    client::AuthInterceptor,
+    proto::milvus::{GetLoadingProgressRequest, LoadPartitionsRequest},
+};
 use crate::{config, proto::milvus::DeleteRequest};
 use crate::{data::FieldColumn, proto::milvus::CreateAliasRequest};
 use crate::{
     error::{Error as SuperError, Result},
     proto::milvus::{AlterAliasRequest, DropAliasRequest},
+};
+use crate::{
+    index::{IndexInfo, IndexParams, MetricType},
+    proto::milvus::ReleasePartitionsRequest,
 };
 
 use prost::bytes::BytesMut;
@@ -81,7 +87,7 @@ impl Collection {
         let schema = info.schema.clone().unwrap();
         Self {
             client,
-            info: info,
+            info,
             schema: schema.into(),
             partitions: Mutex::new(Default::default()),
             session_timestamps: ConcurrentHashMap::new(HashMap::new()),
@@ -344,6 +350,94 @@ impl Collection {
             Ok(res.value)
         }
     }
+
+    /// Load collection paritions into memory
+    pub async fn load_partitions<S: ToString, I: IntoIterator<Item = S>>(
+        &self,
+        partition_names: I,
+        replica_number: i32,
+    ) -> Result<()> {
+        let names: Vec<String> = partition_names.into_iter().map(|x| x.to_string()).collect();
+        status_to_result(&Some(
+            self.client
+                .clone()
+                .load_partitions(LoadPartitionsRequest {
+                    base: Some(MsgBase::new(MsgType::LoadPartitions)),
+                    db_name: "".to_string(),
+                    collection_name: self.schema().name.clone(),
+                    replica_number,
+                    partition_names: names.clone(),
+                })
+                .await?
+                .into_inner(),
+        ))?;
+
+        loop {
+            if self.get_loading_progress(&names).await? >= 100 {
+                return Ok(());
+            }
+
+            tokio::time::sleep(Duration::from_millis(config::WAIT_LOAD_DURATION_MS)).await;
+        }
+    }
+
+    /// Get the collection or partitions loading progress
+    pub async fn get_loading_progress<S: ToString, I: IntoIterator<Item = S>>(
+        &self,
+        partition_names: I,
+    ) -> Result<i64> {
+        let res = self
+            .client
+            .clone()
+            .get_loading_progress(GetLoadingProgressRequest {
+                base: None,
+                collection_name: self.schema().name.to_string(),
+                partition_names: partition_names.into_iter().map(|x| x.to_string()).collect(),
+            })
+            .await?
+            .into_inner();
+
+        Ok(res.progress)
+    }
+
+    /// Release partitions
+    pub async fn release_partitions<S: ToString, I: IntoIterator<Item = S>>(
+        &self,
+        partition_names: I,
+    ) -> Result<()> {
+        status_to_result(&Some(
+            self.client
+                .clone()
+                .release_partitions(ReleasePartitionsRequest {
+                    base: Some(MsgBase::new(MsgType::ReleasePartitions)),
+                    db_name: "".to_string(),
+                    collection_name: self.schema().name.to_string(),
+                    partition_names: partition_names.into_iter().map(|x| x.to_string()).collect(),
+                })
+                .await?
+                .into_inner(),
+        ))
+    }
+
+    /// Drop partitions
+    pub async fn drop_partition<S: ToString>(
+        &self,
+        partition_name: S,
+    ) -> Result<()> {
+        status_to_result(&Some(
+            self.client
+                .clone()
+                .drop_partition(DropPartitionRequest {
+                    base: Some(MsgBase::new(MsgType::ReleasePartitions)),
+                    db_name: "".to_string(),
+                    collection_name: self.schema().name.to_string(),
+                    partition_name: partition_name.to_string(),
+                })
+                .await?
+                .into_inner(),
+        ))
+    }
+
 
     pub async fn create(
         &self,

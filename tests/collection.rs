@@ -187,3 +187,37 @@ async fn session_consistency() -> Result<()> {
     clean_test_collection(collection).await?;
     Ok(())
 }
+
+#[tokio::test]
+async fn test_partition() -> Result<()> {
+    let collection = create_test_collection().await?;
+    let part_name = "novel";
+    let embed_data = gen_random_f32_vector(DEFAULT_DIM * 2000);
+    let embed_column = FieldColumn::new(
+        collection.schema().get_field(DEFAULT_VEC_FIELD).unwrap(),
+        embed_data,
+    );
+    collection.create_partition(part_name).await?;
+    collection
+        .insert(vec![embed_column], Some(part_name))
+        .await?;
+    collection.flush().await?;
+    let index_params = IndexParams::new(
+        "ivf_flat".to_owned(),
+        IndexType::IvfFlat,
+        MetricType::L2,
+        HashMap::from_iter([("nlist".to_owned(), 32.to_string())]),
+    );
+    collection
+        .create_index(DEFAULT_VEC_FIELD, index_params)
+        .await?;
+    collection.flush().await?;
+
+    collection.load_partitions(vec![part_name], 1).await?;
+    let has = collection.has_partition(part_name).await?;
+    assert!(has);
+    collection.release_partitions(vec![part_name]).await?;
+    collection.drop_partition(part_name).await?;
+    collection.drop().await?;
+    Ok(())
+}
