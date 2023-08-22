@@ -16,8 +16,8 @@
 
 use crate::proto::{common::{
     ConsistencyLevel, DslType, IndexState, KeyValuePair, MsgBase, MsgType, PlaceholderGroup,
-    PlaceholderType, PlaceholderValue,
-}, milvus::DropPartitionRequest};
+    PlaceholderType, PlaceholderValue, CompactionState,
+}, milvus::{DropPartitionRequest, ManualCompactionRequest, GetCompactionStateRequest, DescribeCollectionRequest}};
 use crate::proto::milvus::milvus_service_client::MilvusServiceClient;
 use crate::proto::milvus::{
     CreateCollectionRequest, CreateIndexRequest, CreatePartitionRequest,
@@ -214,6 +214,57 @@ impl Collection {
                 .await?
                 .into_inner(),
         ))
+    }
+
+    /// Describe collection
+    pub async fn describe(&self) -> Result<Collection> {
+        let resp = self
+            .client
+            .clone()
+            .describe_collection(DescribeCollectionRequest {
+                base: Some(MsgBase::new(MsgType::DescribeCollection)),
+                db_name: "".to_owned(),
+                collection_name: self.schema().name.to_string(),
+                collection_id: 0,
+                time_stamp: 0,
+            })
+            .await?
+            .into_inner();
+
+        status_to_result(&resp.status)?;
+
+        Ok(Collection::new(self.client.clone(), resp))
+    }
+
+    /// Compact Data
+    pub async fn compact(&self) -> Result<i64> {
+        let coll = self.describe().await?;
+
+        let resp = self
+            .client
+            .clone()
+            .manual_compaction(ManualCompactionRequest {
+                collection_id: coll.info.collection_id,
+                timetravel: 0,
+            })
+            .await?
+            .into_inner();
+
+        status_to_result(&resp.status)?;
+
+        Ok(resp.compaction_id)
+    }
+
+    /// Check compaction status
+    pub async fn get_compaction_state(&self, compaction_id: i64) -> Result<CompactionState> {
+        let resp = self
+            .client
+            .clone()
+            .get_compaction_state(GetCompactionStateRequest { compaction_id })
+            .await?
+            .into_inner();
+        status_to_result(&resp.status)?;
+        Ok(resp.state())
     }
 
     pub async fn delete<S: AsRef<str>>(&self, expr: S, partition_name: Option<&str>) -> Result<()> {

@@ -221,3 +221,26 @@ async fn test_partition() -> Result<()> {
     collection.drop().await?;
     Ok(())
 }
+
+#[tokio::test]
+async fn test_compact_data() -> Result<()> {
+    let collection = create_test_collection().await?;
+
+    let embed_data = gen_random_f32_vector(DEFAULT_DIM * 2000);
+    let embed_column = FieldColumn::new(
+        collection.schema().get_field(DEFAULT_VEC_FIELD).unwrap(),
+        embed_data,
+    );
+
+    collection.insert(vec![embed_column], None).await?;
+    collection.flush().await?;
+
+    let compaction_id = collection.compact().await?;
+
+    let state = collection.get_compaction_state(compaction_id).await?;
+    dbg!(state);
+
+    collection.drop().await?;
+
+    Ok(())
+}
