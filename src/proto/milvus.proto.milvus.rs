@@ -801,12 +801,10 @@ pub struct SearchRequest {
     /// must
     #[prost(message, repeated, tag = "9")]
     pub search_params: ::prost::alloc::vec::Vec<super::common::KeyValuePair>,
-    #[prost(uint64, tag = "10")]
-    pub travel_timestamp: u64,
     /// guarantee_timestamp
-    #[prost(uint64, tag = "11")]
+    #[prost(uint64, tag = "10")]
     pub guarantee_timestamp: u64,
-    #[prost(int64, tag = "12")]
+    #[prost(int64, tag = "11")]
     pub nq: i64,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -877,13 +875,11 @@ pub struct QueryRequest {
     pub output_fields: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(string, repeated, tag = "6")]
     pub partition_names: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
-    #[prost(uint64, tag = "7")]
-    pub travel_timestamp: u64,
     /// guarantee_timestamp
-    #[prost(uint64, tag = "8")]
+    #[prost(uint64, tag = "7")]
     pub guarantee_timestamp: u64,
     /// optional
-    #[prost(message, repeated, tag = "9")]
+    #[prost(message, repeated, tag = "8")]
     pub query_params: ::prost::alloc::vec::Vec<super::common::KeyValuePair>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]

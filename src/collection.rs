@@ -541,7 +541,6 @@ impl Collection {
                     .map(|f| f.name.clone())
                     .collect(),
                 partition_names: partition_names.into_iter().map(|x| x.into()).collect(),
-                travel_timestamp: 0,
                 guarantee_timestamp: self.get_gts_from_consistency(consistency_level).await,
                 query_params: Vec::new(),
             })
@@ -658,7 +657,6 @@ impl Collection {
                 dsl_type: DslType::BoolExprV1 as _,
                 output_fields: output_fields.into_iter().map(|f| f.into()).collect(),
                 search_params,
-                travel_timestamp: 0,
                 guarantee_timestamp: self.get_gts_from_consistency(consistency_level).await,
             })
             .await?
