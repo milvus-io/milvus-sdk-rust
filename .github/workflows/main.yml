@@ -52,7 +52,7 @@ jobs:
       - name: Run Unittest
         run: RUST_BACKTRACE=1 cargo test
       # - name: Upload coverage to Codecov
-      #   if: github.repository == 'milvus-io/milvus-sdk-go'
+      #   if: github.repository == 'milvus-io/milvus-sdk-rust'
       #   uses: codecov/codecov-action@v1
       #   with:
       #     token: ${{ secrets.CODECOV_TOKEN }} 
