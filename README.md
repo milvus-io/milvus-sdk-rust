@@ -34,3 +34,27 @@ async fn main() -> Result<(), Error> {
     Ok(())
 }
 ```
+
+## Development
+
+Pre-requisites:
+- cargo
+- protocol-compiler
+- docker (for testing)
+
+### How to test
+Many tests require the Milvus server, the project provide a docker-compose file to setup a Milvus cluster:
+```
+docker-compose -f ./docker-compose.yml up -d
+```
+You may need to wait for seconds until the system ready
+
+Run all tests:
+```
+cargo test
+```
+
+Enable the full backtrace for debugging:
+```
+RUST_BACKTRACE=1 cargo test
+```
