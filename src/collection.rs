@@ -615,7 +615,7 @@ impl Collection {
                 "positive".to_owned(),
             )));
         }
-        
+
 
         let search_params: Vec<KeyValuePair> = vec![
             KeyValuePair {
@@ -628,6 +628,7 @@ impl Collection {
             },
             KeyValuePair {
                 key: "params".to_owned(),
+                
                 value: serde_json::to_string(&option.params)?,
             },
             KeyValuePair {
