@@ -272,4 +272,93 @@ impl Client {
             .map(|(k, v)| (k, v.data))
             .collect())
     }
+
+    // alias related:
+
+    /// Creates an alias for a collection.
+    ///
+    /// # Arguments
+    ///
+    /// * `collection_name` - The name of the collection.
+    /// * `alias` - The alias to be created.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` indicating success or failure.
+    pub async fn create_alias<S>(&self, collection_name: S, alias: S) -> Result<()>
+    where
+        S: Into<String>,
+    {
+        let collection_name = collection_name.into();
+        let alias = alias.into();
+        status_to_result(&Some(
+            self.client
+                .clone()
+                .create_alias(crate::proto::milvus::CreateAliasRequest {
+                    base: Some(MsgBase::new(MsgType::CreateAlias)),
+                    db_name: "".to_string(), // reserved
+                    collection_name,
+                    alias,
+                })
+                .await?
+                .into_inner(),
+        ))
+    }
+
+    /// Drops an alias.
+    ///
+    /// # Arguments
+    ///
+    /// * `alias` - The alias to be dropped.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` indicating success or failure.
+    pub async fn drop_alias<S>(&self, alias: S) -> Result<()>
+    where
+        S: Into<String>,
+    {
+        let alias = alias.into();
+        status_to_result(&Some(
+            self.client
+                .clone()
+                .drop_alias(crate::proto::milvus::DropAliasRequest {
+                    base: Some(MsgBase::new(MsgType::DropAlias)),
+                    db_name: "".to_string(), // reserved
+                    alias,
+                })
+                .await?
+                .into_inner(),
+        ))
+    }
+
+    /// Alter the alias of a collection.
+    ///
+    /// # Arguments
+    ///
+    /// * `collection_name` - The name of the collection.
+    /// * `alias` - The new alias for the collection.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` indicating success or failure.
+    pub async fn alter_alias<S>(&self, collection_name: S, alias: S) -> Result<()>
+    where
+        S: Into<String>,
+    {
+        let collection_name = collection_name.into();
+        let alias = alias.into();
+        status_to_result(&Some(
+            self.client
+                .clone()
+                .alter_alias(crate::proto::milvus::AlterAliasRequest {
+                    base: Some(MsgBase::new(MsgType::AlterAlias)),
+                    db_name: "".to_string(), // reserved
+                    collection_name,
+                    alias,
+                })
+                .await?
+                .into_inner(),
+        ))
+    }
 }

@@ -99,3 +99,50 @@ async fn create_has_drop_collection() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn create_alter_drop_alias() -> Result<()> {
+    const NAME: &str = "create_alter_drop_alias";
+    const ALIAS: &str = "alias";
+    const NEW_ALIAS: &str = "new_alias";
+
+    let client = Client::new(URL).await?;
+
+    let mut schema = CollectionSchemaBuilder::new(NAME, "hello world");
+    let schema = schema
+        .add_field(FieldSchema::new_int64("i64_field", ""))
+        .add_field(FieldSchema::new_bool("bool_field", ""))
+        .set_primary_key("i64_field")?
+        .enable_auto_id()?
+        .build()?;
+
+    if client.has_collection(NAME).await? {
+        client.drop_collection(NAME).await?;
+    }
+
+    let collection = client
+        .create_collection(
+            schema,
+            Some(CreateCollectionOptions::with_consistency_level(
+                ConsistencyLevel::Session,
+            )),
+        )
+        .await?;
+
+    assert!(collection.exist().await?);
+
+    client.create_alias(NAME, ALIAS).await?;
+    assert!(client.has_collection(ALIAS).await?);
+
+    client.alter_alias(ALIAS, NEW_ALIAS).await?;
+    assert!(!client.has_collection(ALIAS).await?);
+    assert!(client.has_collection(NEW_ALIAS).await?);
+
+    client.drop_alias(NEW_ALIAS).await?;
+    assert!(!client.has_collection(NEW_ALIAS).await?);
+
+    client.drop_collection(NAME).await?;
+    assert!(!(collection.exist().await?));
+
+    Ok(())
+}
