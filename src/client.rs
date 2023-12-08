@@ -14,7 +14,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::collection::Collection;
 use crate::config::RPC_TIMEOUT;
 use crate::error::{Error, Result};
 use crate::options::CreateCollectionOptions;
@@ -27,6 +26,7 @@ use crate::proto::milvus::{
 };
 use crate::schema::CollectionSchema;
 use crate::utils::status_to_result;
+use crate::{collection::Collection, proto::common::ErrorCode};
 use base64::engine::general_purpose;
 use base64::Engine;
 use prost::bytes::BytesMut;
