@@ -430,6 +430,10 @@ pub struct CollectionSchema {
 }
 
 impl CollectionSchema {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     #[inline]
     pub fn auto_id(&self) -> bool {
         self.fields.iter().any(|x| x.auto_id)

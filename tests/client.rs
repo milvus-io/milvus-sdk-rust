@@ -99,3 +99,32 @@ async fn create_has_drop_collection() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn create_alter_drop_alias() -> Result<()> {
+    let alias0 = gen_random_name();
+    let alias1 = gen_random_name();
+
+    let client = Client::new(URL).await?;
+
+    let collection_0 = create_test_collection().await?;
+    let collection_1 = create_test_collection().await?;
+
+    client
+        .create_alias(collection_0.schema().name(), &alias0)
+        .await?;
+    assert!(client.has_collection(alias0).await?);
+
+    client
+        .create_alias(collection_1.schema().name(), &alias1)
+        .await?;
+
+    client
+        .alter_alias(collection_0.schema().name(), &alias1)
+        .await?;
+
+    client.drop_collection(collection_1.schema().name()).await?;
+    assert!(client.has_collection(alias1).await?);
+
+    Ok(())
+}
