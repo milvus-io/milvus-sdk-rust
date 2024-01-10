@@ -1,31 +1,31 @@
 mod common;
 use common::*;
-use milvus::{collection::Collection, error::Result};
+use milvus::{error::Result, client::Client};
 
-async fn clean_test_collection(collection: Collection) -> Result<()> {
-    collection.drop().await?;
+async fn clean_test_collection(client: Client, collection_name: &str) -> Result<()> {
+    client.drop_collection(collection_name).await?;
     Ok(())
 }
 
 #[tokio::test]
 async fn test_create_alias() -> Result<()> {
     let alias = "test_create_alias";
-    let collection = create_test_collection().await?;
-    collection.create_alias(alias).await?;
-    collection.drop_alias(alias).await?;
-    clean_test_collection(collection).await?;
+    let (client,schema) = create_test_collection().await?;
+    client.create_alias(schema.name(),alias).await?;
+    client.drop_alias(alias).await?;
+    clean_test_collection(client,schema.name()).await?;
     Ok(())
 }
 
 #[tokio::test]
 async fn test_alter_alias() -> Result<()> {
     let alias = "test_alter_alias";
-    let collection1 = create_test_collection().await?;
-    collection1.create_alias(alias).await?;
-    let collection2 = create_test_collection().await?;
-    collection2.alter_alias(alias).await?;
-    collection2.drop_alias(alias).await?;
-    clean_test_collection(collection1).await?;
-    clean_test_collection(collection2).await?;
+    let (client1,schema1) = create_test_collection().await?;
+    client1.create_alias(schema1.name(),alias).await?;
+    let (client2,schema2) = create_test_collection().await?;
+    client2.alter_alias(schema2.name(),alias).await?;
+    client2.drop_alias(alias).await?;
+    clean_test_collection(client1, schema1.name()).await?;
+    clean_test_collection(client2, schema2.name()).await?;
     Ok(())
 }

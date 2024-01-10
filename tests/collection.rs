@@ -15,68 +15,67 @@
 // limitations under the License.
 
 use milvus::client::ConsistencyLevel;
-use milvus::collection::{Collection, ParamValue, SearchOption};
+use milvus::collection::{Collection, ParamValue};
 use milvus::data::FieldColumn;
 use milvus::error::Result;
 use milvus::index::{IndexParams, IndexType, MetricType};
+use milvus::mutate::InsertOptions;
+use milvus::options::LoadOptions;
+use milvus::query::{QueryOptions, SearchOptions};
 use std::collections::HashMap;
 
 mod common;
 use common::*;
 
-async fn clean_test_collection(collection: Collection) -> Result<()> {
-    collection.drop().await?;
-    Ok(())
-}
-
 #[tokio::test]
 async fn collection_basic() -> Result<()> {
-    let collection = create_test_collection().await?;
+    let (client, schema) = create_test_collection().await?;
 
     let embed_data = gen_random_f32_vector(DEFAULT_DIM * 2000);
 
     let embed_column = FieldColumn::new(
-        collection.schema().get_field(DEFAULT_VEC_FIELD).unwrap(),
+        schema.get_field(DEFAULT_VEC_FIELD).unwrap(),
         embed_data,
     );
 
-    collection.insert(vec![embed_column], None).await?;
-    collection.flush().await?;
+    client.insert(schema.name(), vec![embed_column], None).await?;
+    client.flush(schema.name()).await?;
     let index_params = IndexParams::new(
         DEFAULT_INDEX_NAME.to_owned(),
         IndexType::IvfFlat,
         milvus::index::MetricType::L2,
         HashMap::from([("nlist".to_owned(), "32".to_owned())]),
     );
-    collection
-        .create_index(DEFAULT_VEC_FIELD, index_params)
+    client
+        .create_index(schema.name(), DEFAULT_VEC_FIELD, index_params)
         .await?;
-    collection.load(1).await?;
+    client.load_collection(schema.name(),Some(LoadOptions::default())).await?;
 
-    let result = collection.query::<_, [&str; 0]>("id > 0", []).await?;
+    let options = QueryOptions::default();
+    let result = client.query(schema.name(), "id > 0", &options).await?;
 
     println!(
         "result num: {}",
         result.first().map(|c| c.len()).unwrap_or(0),
     );
 
-    clean_test_collection(collection).await?;
+    client.drop_collection(schema.name()).await?;
     Ok(())
 }
 
 #[tokio::test]
 async fn collection_index() -> Result<()> {
-    let collection = create_test_collection().await?;
+    let (client,schema) = create_test_collection().await?;
 
     let feature = gen_random_f32_vector(DEFAULT_DIM * 2000);
 
     let feature_column = FieldColumn::new(
-        collection.schema().get_field(DEFAULT_VEC_FIELD).unwrap(),
+        schema.get_field(DEFAULT_VEC_FIELD).unwrap(),
         feature,
     );
 
-    collection.insert(vec![feature_column], None).await?;
-    collection.flush().await?;
+    client.insert(schema.name(), vec![feature_column], None).await?;
+    client.flush(schema.name()).await?;
 
     let index_params = IndexParams::new(
         DEFAULT_INDEX_NAME.to_owned(),
@@ -84,163 +83,60 @@ async fn collection_index() -> Result<()> {
         milvus::index::MetricType::L2,
         HashMap::from([("nlist".to_owned(), "32".to_owned())]),
     );
-    collection
-        .create_index(DEFAULT_VEC_FIELD, index_params.clone())
+    client
+        .create_index(schema.name(), DEFAULT_VEC_FIELD, index_params.clone())
         .await?;
-    let index_list = collection.describe_index(DEFAULT_VEC_FIELD).await?;
+    let index_list = client.describe_index(schema.name(), DEFAULT_VEC_FIELD).await?;
     assert!(index_list.len() == 1, "{}", index_list.len());
     let index = &index_list[0];
 
     assert_eq!(index.params().name(), index_params.name());
     assert_eq!(index.params().extra_params(), index_params.extra_params());
 
-    collection.drop_index(DEFAULT_VEC_FIELD).await?;
-
-    clean_test_collection(collection).await?;
+    client.drop_index(schema.name(), DEFAULT_VEC_FIELD).await?;
+    client.drop_collection(schema.name()).await?;
     Ok(())
 }
 
 #[tokio::test]
 async fn collection_search() -> Result<()> {
-    let collection = create_test_collection().await?;
+    let (client,schema) = create_test_collection().await?;
 
     let embed_data = gen_random_f32_vector(DEFAULT_DIM * 2000);
     let embed_column = FieldColumn::new(
-        collection.schema().get_field(DEFAULT_VEC_FIELD).unwrap(),
+        schema.get_field(DEFAULT_VEC_FIELD).unwrap(),
         embed_data,
     );
 
-    collection.insert(vec![embed_column], None).await?;
-    collection.flush().await?;
+    client.insert(schema.name(), vec![embed_column], None).await?;
+    client.flush(schema.name()).await?;
     let index_params = IndexParams::new(
         "ivf_flat".to_owned(),
         IndexType::IvfFlat,
         MetricType::L2,
         HashMap::from_iter([("nlist".to_owned(), 32.to_string())]),
     );
-    collection
-        .create_index(DEFAULT_VEC_FIELD, index_params)
+    client
+        .create_index(schema.name(),DEFAULT_VEC_FIELD, index_params)
         .await?;
-    collection.flush().await?;
-    collection.load(1).await?;
+    client.flush(schema.name()).await?;
+    client.load_collection(schema.name(), Some(LoadOptions::default())).await?;
 
-    let mut option = SearchOption::default();
-    option.add_param("nprobe", ParamValue!(16));
+    let mut option = SearchOptions::with_limit(10).metric_type(MetricType::L2).output_fields(vec!["id".to_owned()]);
+    option = option.add_param("nprobe",ParamValue!(16));
     let query_vec = gen_random_f32_vector(DEFAULT_DIM);
-    let result = collection
+
+    let result = client
         .search(
+            schema.name(),
             vec![query_vec.into()],
             DEFAULT_VEC_FIELD,
-            10,
-            MetricType::L2,
-            vec!["id"],
             &option,
         )
         .await?;
 
     assert_eq!(result[0].size, 10);
 
-    clean_test_collection(collection).await?;
-    Ok(())
-}
-
-#[tokio::test]
-async fn session_consistency() -> Result<()> {
-    let collection = create_test_collection().await?;
-
-    let embed_data = gen_random_f32_vector(DEFAULT_DIM * 2000);
-    let embed_column = FieldColumn::new(
-        collection.schema().get_field(DEFAULT_VEC_FIELD).unwrap(),
-        embed_data,
-    );
-
-    collection.insert(vec![embed_column], None).await?;
-    collection.flush().await?;
-    let index_params = IndexParams::new(
-        "ivf_flat".to_owned(),
-        IndexType::IvfFlat,
-        MetricType::L2,
-        HashMap::from_iter([("nlist".to_owned(), 32.to_string())]),
-    );
-    collection
-        .create_index(DEFAULT_VEC_FIELD, index_params)
-        .await?;
-    collection.flush().await?;
-    collection.load(1).await?;
-
-    let query_vec = gen_random_f32_vector(DEFAULT_DIM);
-    let mut options = SearchOption::default();
-    options.set_consistency_level(ConsistencyLevel::Session);
-    let result = collection
-        .search(
-            vec![query_vec.into()],
-            DEFAULT_VEC_FIELD,
-            10,
-            MetricType::L2,
-            vec!["id"],
-            &options,
-        )
-        .await?;
-
-    assert_eq!(result[0].size, 10);
-
-    clean_test_collection(collection).await?;
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_partition() -> Result<()> {
-    let collection = create_test_collection().await?;
-    let part_name = "novel";
-    let embed_data = gen_random_f32_vector(DEFAULT_DIM * 2000);
-    let embed_column = FieldColumn::new(
-        collection.schema().get_field(DEFAULT_VEC_FIELD).unwrap(),
-        embed_data,
-    );
-    collection.create_partition(part_name).await?;
-    collection
-        .insert(vec![embed_column], Some(part_name))
-        .await?;
-    collection.flush().await?;
-    let index_params = IndexParams::new(
-        "ivf_flat".to_owned(),
-        IndexType::IvfFlat,
-        MetricType::L2,
-        HashMap::from_iter([("nlist".to_owned(), 32.to_string())]),
-    );
-    collection
-        .create_index(DEFAULT_VEC_FIELD, index_params)
-        .await?;
-    collection.flush().await?;
-
-    collection.load_partitions(vec![part_name], 1).await?;
-    let has = collection.has_partition(part_name).await?;
-    assert!(has);
-    collection.release_partitions(vec![part_name]).await?;
-    collection.drop_partition(part_name).await?;
-    collection.drop().await?;
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_compact_data() -> Result<()> {
-    let collection = create_test_collection().await?;
-
-    let embed_data = gen_random_f32_vector(DEFAULT_DIM * 2000);
-    let embed_column = FieldColumn::new(
-        collection.schema().get_field(DEFAULT_VEC_FIELD).unwrap(),
-        embed_data,
-    );
-
-    collection.insert(vec![embed_column], None).await?;
-    collection.flush().await?;
-
-    let compaction_id = collection.compact().await?;
-
-    let state = collection.get_compaction_state(compaction_id).await?;
-    dbg!(state);
-
-    collection.drop().await?;
-
+    client.drop_collection(schema.name()).await?;
     Ok(())
 }

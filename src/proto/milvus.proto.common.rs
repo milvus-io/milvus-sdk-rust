@@ -1,10 +1,17 @@
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Status {
+    #[deprecated]
     #[prost(enumeration = "ErrorCode", tag = "1")]
     pub error_code: i32,
     #[prost(string, tag = "2")]
     pub reason: ::prost::alloc::string::String,
+    #[prost(int32, tag = "3")]
+    pub code: i32,
+    #[prost(bool, tag = "4")]
+    pub retriable: bool,
+    #[prost(string, tag = "5")]
+    pub detail: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -66,6 +73,21 @@ pub struct MsgBase {
     pub source_id: i64,
     #[prost(int64, tag = "5")]
     pub target_id: i64,
+    #[prost(map = "string, string", tag = "6")]
+    pub properties: ::std::collections::HashMap<
+        ::prost::alloc::string::String,
+        ::prost::alloc::string::String,
+    >,
+    #[prost(message, optional, tag = "7")]
+    pub replicate_info: ::core::option::Option<ReplicateInfo>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ReplicateInfo {
+    #[prost(bool, tag = "1")]
+    pub is_replicate: bool,
+    #[prost(uint64, tag = "2")]
+    pub msg_timestamp: u64,
 }
 /// Don't Modify This. @czs
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -95,6 +117,57 @@ pub struct PrivilegeExt {
     #[prost(int32, tag = "4")]
     pub object_name_indexs: i32,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SegmentStats {
+    #[prost(int64, tag = "1")]
+    pub segment_id: i64,
+    #[prost(int64, tag = "2")]
+    pub num_rows: i64,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ClientInfo {
+    /// sdk_type can be `python`, `golang`, `nodejs` and etc. It's not proper to make `sdk_type` an
+    /// enumerate type, since we cannot always update the enum value everytime when newly sdk is supported.
+    #[prost(string, tag = "1")]
+    pub sdk_type: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub sdk_version: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub local_time: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub user: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub host: ::prost::alloc::string::String,
+    /// reserved for newly-added feature if necessary.
+    #[prost(map = "string, string", tag = "6")]
+    pub reserved: ::std::collections::HashMap<
+        ::prost::alloc::string::String,
+        ::prost::alloc::string::String,
+    >,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ServerInfo {
+    #[prost(string, tag = "1")]
+    pub build_tags: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub build_time: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub git_commit: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub go_version: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub deploy_mode: ::prost::alloc::string::String,
+    /// reserved for newly-added feature if necessary.
+    #[prost(map = "string, string", tag = "6")]
+    pub reserved: ::std::collections::HashMap<
+        ::prost::alloc::string::String,
+        ::prost::alloc::string::String,
+    >,
+}
+/// Deprecated
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum ErrorCode {
@@ -148,6 +221,14 @@ pub enum ErrorCode {
     ForceDeny = 48,
     RateLimit = 49,
     NodeIdNotMatch = 50,
+    UpsertAutoIdTrue = 51,
+    InsufficientMemoryToLoad = 52,
+    MemoryQuotaExhausted = 53,
+    DiskQuotaExhausted = 54,
+    TimeTickLongDelay = 55,
+    NotReadyServe = 56,
+    /// Coord is switching from standby mode to active mode
+    NotReadyCoordActivating = 57,
     /// Service availability.
     /// NA: Not Available.
     DataCoordNa = 100,
@@ -211,6 +292,13 @@ impl ErrorCode {
             ErrorCode::ForceDeny => "ForceDeny",
             ErrorCode::RateLimit => "RateLimit",
             ErrorCode::NodeIdNotMatch => "NodeIDNotMatch",
+            ErrorCode::UpsertAutoIdTrue => "UpsertAutoIDTrue",
+            ErrorCode::InsufficientMemoryToLoad => "InsufficientMemoryToLoad",
+            ErrorCode::MemoryQuotaExhausted => "MemoryQuotaExhausted",
+            ErrorCode::DiskQuotaExhausted => "DiskQuotaExhausted",
+            ErrorCode::TimeTickLongDelay => "TimeTickLongDelay",
+            ErrorCode::NotReadyServe => "NotReadyServe",
+            ErrorCode::NotReadyCoordActivating => "NotReadyCoordActivating",
             ErrorCode::DataCoordNa => "DataCoordNA",
             ErrorCode::DdRequestRace => "DDRequestRace",
         }
@@ -268,6 +356,13 @@ impl ErrorCode {
             "ForceDeny" => Some(Self::ForceDeny),
             "RateLimit" => Some(Self::RateLimit),
             "NodeIDNotMatch" => Some(Self::NodeIdNotMatch),
+            "UpsertAutoIDTrue" => Some(Self::UpsertAutoIdTrue),
+            "InsufficientMemoryToLoad" => Some(Self::InsufficientMemoryToLoad),
+            "MemoryQuotaExhausted" => Some(Self::MemoryQuotaExhausted),
+            "DiskQuotaExhausted" => Some(Self::DiskQuotaExhausted),
+            "TimeTickLongDelay" => Some(Self::TimeTickLongDelay),
+            "NotReadyServe" => Some(Self::NotReadyServe),
+            "NotReadyCoordActivating" => Some(Self::NotReadyCoordActivating),
             "DataCoordNA" => Some(Self::DataCoordNa),
             "DDRequestRace" => Some(Self::DdRequestRace),
             _ => None,
@@ -362,6 +457,10 @@ pub enum PlaceholderType {
     None = 0,
     BinaryVector = 100,
     FloatVector = 101,
+    Float16Vector = 102,
+    BFloat16Vector = 103,
+    Int64 = 5,
+    VarChar = 21,
 }
 impl PlaceholderType {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -373,6 +472,10 @@ impl PlaceholderType {
             PlaceholderType::None => "None",
             PlaceholderType::BinaryVector => "BinaryVector",
             PlaceholderType::FloatVector => "FloatVector",
+            PlaceholderType::Float16Vector => "Float16Vector",
+            PlaceholderType::BFloat16Vector => "BFloat16Vector",
+            PlaceholderType::Int64 => "Int64",
+            PlaceholderType::VarChar => "VarChar",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -381,6 +484,10 @@ impl PlaceholderType {
             "None" => Some(Self::None),
             "BinaryVector" => Some(Self::BinaryVector),
             "FloatVector" => Some(Self::FloatVector),
+            "Float16Vector" => Some(Self::Float16Vector),
+            "BFloat16Vector" => Some(Self::BFloat16Vector),
+            "Int64" => Some(Self::Int64),
+            "VarChar" => Some(Self::VarChar),
             _ => None,
         }
     }
@@ -402,6 +509,9 @@ pub enum MsgType {
     DropAlias = 109,
     AlterAlias = 110,
     AlterCollection = 111,
+    RenameCollection = 112,
+    DescribeAlias = 113,
+    ListAliases = 114,
     /// DEFINITION REQUESTS: PARTITION
     CreatePartition = 200,
     DropPartition = 201,
@@ -418,15 +528,19 @@ pub enum MsgType {
     HandoffSegments = 254,
     LoadBalanceSegments = 255,
     DescribeSegments = 256,
+    FederListIndexedSegment = 257,
+    FederDescribeSegmentIndexData = 258,
     /// DEFINITION REQUESTS: INDEX
     CreateIndex = 300,
     DescribeIndex = 301,
     DropIndex = 302,
+    GetIndexStatistics = 303,
     /// MANIPULATION REQUESTS
     Insert = 400,
     Delete = 401,
     Flush = 402,
     ResendSegmentStats = 403,
+    Upsert = 404,
     /// QUERY
     Search = 500,
     SearchResult = 501,
@@ -463,6 +577,9 @@ pub enum MsgType {
     SegmentStatistics = 1206,
     SegmentFlushDone = 1207,
     DataNodeTt = 1208,
+    Connect = 1209,
+    ListClientInfos = 1210,
+    AllocTimestamp = 1211,
     /// Credential
     CreateCredential = 1500,
     GetCredential = 1501,
@@ -480,6 +597,17 @@ pub enum MsgType {
     SelectGrant = 1607,
     RefreshPolicyInfoCache = 1608,
     ListPolicy = 1609,
+    /// Resource group
+    CreateResourceGroup = 1700,
+    DropResourceGroup = 1701,
+    ListResourceGroups = 1702,
+    DescribeResourceGroup = 1703,
+    TransferNode = 1704,
+    TransferReplica = 1705,
+    /// Database group
+    CreateDatabase = 1801,
+    DropDatabase = 1802,
+    ListDatabases = 1803,
 }
 impl MsgType {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -501,6 +629,9 @@ impl MsgType {
             MsgType::DropAlias => "DropAlias",
             MsgType::AlterAlias => "AlterAlias",
             MsgType::AlterCollection => "AlterCollection",
+            MsgType::RenameCollection => "RenameCollection",
+            MsgType::DescribeAlias => "DescribeAlias",
+            MsgType::ListAliases => "ListAliases",
             MsgType::CreatePartition => "CreatePartition",
             MsgType::DropPartition => "DropPartition",
             MsgType::HasPartition => "HasPartition",
@@ -515,13 +646,17 @@ impl MsgType {
             MsgType::HandoffSegments => "HandoffSegments",
             MsgType::LoadBalanceSegments => "LoadBalanceSegments",
             MsgType::DescribeSegments => "DescribeSegments",
+            MsgType::FederListIndexedSegment => "FederListIndexedSegment",
+            MsgType::FederDescribeSegmentIndexData => "FederDescribeSegmentIndexData",
             MsgType::CreateIndex => "CreateIndex",
             MsgType::DescribeIndex => "DescribeIndex",
             MsgType::DropIndex => "DropIndex",
+            MsgType::GetIndexStatistics => "GetIndexStatistics",
             MsgType::Insert => "Insert",
             MsgType::Delete => "Delete",
             MsgType::Flush => "Flush",
             MsgType::ResendSegmentStats => "ResendSegmentStats",
+            MsgType::Upsert => "Upsert",
             MsgType::Search => "Search",
             MsgType::SearchResult => "SearchResult",
             MsgType::GetIndexState => "GetIndexState",
@@ -554,6 +689,9 @@ impl MsgType {
             MsgType::SegmentStatistics => "SegmentStatistics",
             MsgType::SegmentFlushDone => "SegmentFlushDone",
             MsgType::DataNodeTt => "DataNodeTt",
+            MsgType::Connect => "Connect",
+            MsgType::ListClientInfos => "ListClientInfos",
+            MsgType::AllocTimestamp => "AllocTimestamp",
             MsgType::CreateCredential => "CreateCredential",
             MsgType::GetCredential => "GetCredential",
             MsgType::DeleteCredential => "DeleteCredential",
@@ -569,6 +707,15 @@ impl MsgType {
             MsgType::SelectGrant => "SelectGrant",
             MsgType::RefreshPolicyInfoCache => "RefreshPolicyInfoCache",
             MsgType::ListPolicy => "ListPolicy",
+            MsgType::CreateResourceGroup => "CreateResourceGroup",
+            MsgType::DropResourceGroup => "DropResourceGroup",
+            MsgType::ListResourceGroups => "ListResourceGroups",
+            MsgType::DescribeResourceGroup => "DescribeResourceGroup",
+            MsgType::TransferNode => "TransferNode",
+            MsgType::TransferReplica => "TransferReplica",
+            MsgType::CreateDatabase => "CreateDatabase",
+            MsgType::DropDatabase => "DropDatabase",
+            MsgType::ListDatabases => "ListDatabases",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -587,6 +734,9 @@ impl MsgType {
             "DropAlias" => Some(Self::DropAlias),
             "AlterAlias" => Some(Self::AlterAlias),
             "AlterCollection" => Some(Self::AlterCollection),
+            "RenameCollection" => Some(Self::RenameCollection),
+            "DescribeAlias" => Some(Self::DescribeAlias),
+            "ListAliases" => Some(Self::ListAliases),
             "CreatePartition" => Some(Self::CreatePartition),
             "DropPartition" => Some(Self::DropPartition),
             "HasPartition" => Some(Self::HasPartition),
@@ -601,13 +751,17 @@ impl MsgType {
             "HandoffSegments" => Some(Self::HandoffSegments),
             "LoadBalanceSegments" => Some(Self::LoadBalanceSegments),
             "DescribeSegments" => Some(Self::DescribeSegments),
+            "FederListIndexedSegment" => Some(Self::FederListIndexedSegment),
+            "FederDescribeSegmentIndexData" => Some(Self::FederDescribeSegmentIndexData),
             "CreateIndex" => Some(Self::CreateIndex),
             "DescribeIndex" => Some(Self::DescribeIndex),
             "DropIndex" => Some(Self::DropIndex),
+            "GetIndexStatistics" => Some(Self::GetIndexStatistics),
             "Insert" => Some(Self::Insert),
             "Delete" => Some(Self::Delete),
             "Flush" => Some(Self::Flush),
             "ResendSegmentStats" => Some(Self::ResendSegmentStats),
+            "Upsert" => Some(Self::Upsert),
             "Search" => Some(Self::Search),
             "SearchResult" => Some(Self::SearchResult),
             "GetIndexState" => Some(Self::GetIndexState),
@@ -640,6 +794,9 @@ impl MsgType {
             "SegmentStatistics" => Some(Self::SegmentStatistics),
             "SegmentFlushDone" => Some(Self::SegmentFlushDone),
             "DataNodeTt" => Some(Self::DataNodeTt),
+            "Connect" => Some(Self::Connect),
+            "ListClientInfos" => Some(Self::ListClientInfos),
+            "AllocTimestamp" => Some(Self::AllocTimestamp),
             "CreateCredential" => Some(Self::CreateCredential),
             "GetCredential" => Some(Self::GetCredential),
             "DeleteCredential" => Some(Self::DeleteCredential),
@@ -655,6 +812,15 @@ impl MsgType {
             "SelectGrant" => Some(Self::SelectGrant),
             "RefreshPolicyInfoCache" => Some(Self::RefreshPolicyInfoCache),
             "ListPolicy" => Some(Self::ListPolicy),
+            "CreateResourceGroup" => Some(Self::CreateResourceGroup),
+            "DropResourceGroup" => Some(Self::DropResourceGroup),
+            "ListResourceGroups" => Some(Self::ListResourceGroups),
+            "DescribeResourceGroup" => Some(Self::DescribeResourceGroup),
+            "TransferNode" => Some(Self::TransferNode),
+            "TransferReplica" => Some(Self::TransferReplica),
+            "CreateDatabase" => Some(Self::CreateDatabase),
+            "DropDatabase" => Some(Self::DropDatabase),
+            "ListDatabases" => Some(Self::ListDatabases),
             _ => None,
         }
     }
@@ -760,8 +926,10 @@ pub enum ImportState {
     ImportFailed = 1,
     /// the task has been sent to datanode to execute
     ImportStarted = 2,
-    /// all data files have been parsed and data already persisted
+    /// all data files have been parsed and all meta data already persisted, ready to be flushed.
     ImportPersisted = 5,
+    /// all segments are successfully flushed.
+    ImportFlushed = 8,
     /// all indexes are successfully built and segments are able to be compacted as normal.
     ImportCompleted = 6,
     /// the task failed and all segments it generated are cleaned up.
@@ -778,6 +946,7 @@ impl ImportState {
             ImportState::ImportFailed => "ImportFailed",
             ImportState::ImportStarted => "ImportStarted",
             ImportState::ImportPersisted => "ImportPersisted",
+            ImportState::ImportFlushed => "ImportFlushed",
             ImportState::ImportCompleted => "ImportCompleted",
             ImportState::ImportFailedAndCleaned => "ImportFailedAndCleaned",
         }
@@ -789,6 +958,7 @@ impl ImportState {
             "ImportFailed" => Some(Self::ImportFailed),
             "ImportStarted" => Some(Self::ImportStarted),
             "ImportPersisted" => Some(Self::ImportPersisted),
+            "ImportFlushed" => Some(Self::ImportFlushed),
             "ImportCompleted" => Some(Self::ImportCompleted),
             "ImportFailedAndCleaned" => Some(Self::ImportFailedAndCleaned),
             _ => None,
@@ -852,6 +1022,25 @@ pub enum ObjectPrivilege {
     PrivilegeSelectOwnership = 22,
     PrivilegeManageOwnership = 23,
     PrivilegeSelectUser = 24,
+    PrivilegeUpsert = 25,
+    PrivilegeCreateResourceGroup = 26,
+    PrivilegeDropResourceGroup = 27,
+    PrivilegeDescribeResourceGroup = 28,
+    PrivilegeListResourceGroups = 29,
+    PrivilegeTransferNode = 30,
+    PrivilegeTransferReplica = 31,
+    PrivilegeGetLoadingProgress = 32,
+    PrivilegeGetLoadState = 33,
+    PrivilegeRenameCollection = 34,
+    PrivilegeCreateDatabase = 35,
+    PrivilegeDropDatabase = 36,
+    PrivilegeListDatabases = 37,
+    PrivilegeFlushAll = 38,
+    PrivilegeCreatePartition = 39,
+    PrivilegeDropPartition = 40,
+    PrivilegeShowPartitions = 41,
+    PrivilegeHasPartition = 42,
+    PrivilegeGetFlushState = 43,
 }
 impl ObjectPrivilege {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -885,6 +1074,29 @@ impl ObjectPrivilege {
             ObjectPrivilege::PrivilegeSelectOwnership => "PrivilegeSelectOwnership",
             ObjectPrivilege::PrivilegeManageOwnership => "PrivilegeManageOwnership",
             ObjectPrivilege::PrivilegeSelectUser => "PrivilegeSelectUser",
+            ObjectPrivilege::PrivilegeUpsert => "PrivilegeUpsert",
+            ObjectPrivilege::PrivilegeCreateResourceGroup => {
+                "PrivilegeCreateResourceGroup"
+            }
+            ObjectPrivilege::PrivilegeDropResourceGroup => "PrivilegeDropResourceGroup",
+            ObjectPrivilege::PrivilegeDescribeResourceGroup => {
+                "PrivilegeDescribeResourceGroup"
+            }
+            ObjectPrivilege::PrivilegeListResourceGroups => "PrivilegeListResourceGroups",
+            ObjectPrivilege::PrivilegeTransferNode => "PrivilegeTransferNode",
+            ObjectPrivilege::PrivilegeTransferReplica => "PrivilegeTransferReplica",
+            ObjectPrivilege::PrivilegeGetLoadingProgress => "PrivilegeGetLoadingProgress",
+            ObjectPrivilege::PrivilegeGetLoadState => "PrivilegeGetLoadState",
+            ObjectPrivilege::PrivilegeRenameCollection => "PrivilegeRenameCollection",
+            ObjectPrivilege::PrivilegeCreateDatabase => "PrivilegeCreateDatabase",
+            ObjectPrivilege::PrivilegeDropDatabase => "PrivilegeDropDatabase",
+            ObjectPrivilege::PrivilegeListDatabases => "PrivilegeListDatabases",
+            ObjectPrivilege::PrivilegeFlushAll => "PrivilegeFlushAll",
+            ObjectPrivilege::PrivilegeCreatePartition => "PrivilegeCreatePartition",
+            ObjectPrivilege::PrivilegeDropPartition => "PrivilegeDropPartition",
+            ObjectPrivilege::PrivilegeShowPartitions => "PrivilegeShowPartitions",
+            ObjectPrivilege::PrivilegeHasPartition => "PrivilegeHasPartition",
+            ObjectPrivilege::PrivilegeGetFlushState => "PrivilegeGetFlushState",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -915,6 +1127,27 @@ impl ObjectPrivilege {
             "PrivilegeSelectOwnership" => Some(Self::PrivilegeSelectOwnership),
             "PrivilegeManageOwnership" => Some(Self::PrivilegeManageOwnership),
             "PrivilegeSelectUser" => Some(Self::PrivilegeSelectUser),
+            "PrivilegeUpsert" => Some(Self::PrivilegeUpsert),
+            "PrivilegeCreateResourceGroup" => Some(Self::PrivilegeCreateResourceGroup),
+            "PrivilegeDropResourceGroup" => Some(Self::PrivilegeDropResourceGroup),
+            "PrivilegeDescribeResourceGroup" => {
+                Some(Self::PrivilegeDescribeResourceGroup)
+            }
+            "PrivilegeListResourceGroups" => Some(Self::PrivilegeListResourceGroups),
+            "PrivilegeTransferNode" => Some(Self::PrivilegeTransferNode),
+            "PrivilegeTransferReplica" => Some(Self::PrivilegeTransferReplica),
+            "PrivilegeGetLoadingProgress" => Some(Self::PrivilegeGetLoadingProgress),
+            "PrivilegeGetLoadState" => Some(Self::PrivilegeGetLoadState),
+            "PrivilegeRenameCollection" => Some(Self::PrivilegeRenameCollection),
+            "PrivilegeCreateDatabase" => Some(Self::PrivilegeCreateDatabase),
+            "PrivilegeDropDatabase" => Some(Self::PrivilegeDropDatabase),
+            "PrivilegeListDatabases" => Some(Self::PrivilegeListDatabases),
+            "PrivilegeFlushAll" => Some(Self::PrivilegeFlushAll),
+            "PrivilegeCreatePartition" => Some(Self::PrivilegeCreatePartition),
+            "PrivilegeDropPartition" => Some(Self::PrivilegeDropPartition),
+            "PrivilegeShowPartitions" => Some(Self::PrivilegeShowPartitions),
+            "PrivilegeHasPartition" => Some(Self::PrivilegeHasPartition),
+            "PrivilegeGetFlushState" => Some(Self::PrivilegeGetFlushState),
             _ => None,
         }
     }
@@ -926,6 +1159,7 @@ pub enum StateCode {
     Healthy = 1,
     Abnormal = 2,
     StandBy = 3,
+    Stopping = 4,
 }
 impl StateCode {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -938,6 +1172,7 @@ impl StateCode {
             StateCode::Healthy => "Healthy",
             StateCode::Abnormal => "Abnormal",
             StateCode::StandBy => "StandBy",
+            StateCode::Stopping => "Stopping",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -947,6 +1182,39 @@ impl StateCode {
             "Healthy" => Some(Self::Healthy),
             "Abnormal" => Some(Self::Abnormal),
             "StandBy" => Some(Self::StandBy),
+            "Stopping" => Some(Self::Stopping),
+            _ => None,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum LoadState {
+    NotExist = 0,
+    NotLoad = 1,
+    Loading = 2,
+    Loaded = 3,
+}
+impl LoadState {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            LoadState::NotExist => "LoadStateNotExist",
+            LoadState::NotLoad => "LoadStateNotLoad",
+            LoadState::Loading => "LoadStateLoading",
+            LoadState::Loaded => "LoadStateLoaded",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "LoadStateNotExist" => Some(Self::NotExist),
+            "LoadStateNotLoad" => Some(Self::NotLoad),
+            "LoadStateLoading" => Some(Self::Loading),
+            "LoadStateLoaded" => Some(Self::Loaded),
             _ => None,
         }
     }

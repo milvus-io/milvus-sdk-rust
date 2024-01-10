@@ -92,10 +92,10 @@ async fn create_has_drop_collection() -> Result<()> {
         )
         .await?;
 
-    assert!(collection.exist().await?);
+    assert!(client.has_collection(NAME).await?);
 
     client.drop_collection(NAME).await?;
-    assert!(!(collection.exist().await?));
+    assert!(!client.has_collection(NAME).await?);
 
     Ok(())
 }
@@ -107,23 +107,23 @@ async fn create_alter_drop_alias() -> Result<()> {
 
     let client = Client::new(URL).await?;
 
-    let collection_0 = create_test_collection().await?;
-    let collection_1 = create_test_collection().await?;
+    let (_,schema1) = create_test_collection().await?;
+    let (_,schema2) = create_test_collection().await?;
 
     client
-        .create_alias(collection_0.schema().name(), &alias0)
+        .create_alias(schema1.name(), &alias0)
         .await?;
     assert!(client.has_collection(alias0).await?);
 
     client
-        .create_alias(collection_1.schema().name(), &alias1)
+        .create_alias(schema2.name(), &alias1)
         .await?;
 
     client
-        .alter_alias(collection_0.schema().name(), &alias1)
+        .alter_alias(schema1.name(), &alias1)
         .await?;
 
-    client.drop_collection(collection_1.schema().name()).await?;
+    client.drop_collection(schema2.name()).await?;
     assert!(client.has_collection(alias1).await?);
 
     Ok(())

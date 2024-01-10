@@ -46,6 +46,7 @@ pub struct FieldColumn {
     pub value: ValueVec,
     pub dim: i64,
     pub max_length: i32,
+    pub is_dynamic: bool,
 }
 
 impl From<schema::FieldData> for FieldColumn {
@@ -54,7 +55,7 @@ impl From<schema::FieldData> for FieldColumn {
             .field
             .as_ref()
             .map(get_dim_max_length)
-            .unwrap_or((None, None));
+            .unwrap_or((Some(1), None));
 
         let value: ValueVec = fd.field.map(Into::into).unwrap_or(ValueVec::None);
         let dtype = DataType::from_i32(fd.r#type).unwrap_or(DataType::None);
@@ -62,22 +63,10 @@ impl From<schema::FieldData> for FieldColumn {
         FieldColumn {
             name: fd.field_name,
             dtype,
-            dim: dim.unwrap_or_else(|| match dtype {
-                DataType::None => 0,
-                DataType::Bool
-                | DataType::Int8
-                | DataType::Int16
-                | DataType::Int32
-                | DataType::Int64
-                | DataType::Float
-                | DataType::Double
-                | DataType::String
-                | DataType::VarChar => 1,
-                DataType::BinaryVector => 256,
-                DataType::FloatVector => 128,
-            }),
+            dim: dim.unwrap(),
             max_length: max_length.unwrap_or(0),
             value,
+            is_dynamic: fd.is_dynamic,
         }
     }
 }
@@ -90,6 +79,7 @@ impl FieldColumn {
             value: v.into(),
             dim: schm.dim,
             max_length: schm.max_length,
+            is_dynamic:  false,
         }
     }
 
@@ -118,6 +108,8 @@ impl FieldColumn {
                 Value::Binary(Cow::Borrowed(&v[idx * dim..idx * dim + dim]))
             }
             ValueVec::String(v) => Value::String(Cow::Borrowed(v.get(idx)?.as_ref())),
+            ValueVec::Json(v) => Value::Json(Cow::Borrowed(v.get(idx)?.as_ref())),
+            ValueVec::Array(v) => Value::Array(Cow::Borrowed(v.get(idx)?)),
         })
     }
 
@@ -157,8 +149,11 @@ impl FieldColumn {
                 ValueVec::Float(_) => ValueVec::Float(Vec::new()),
                 ValueVec::Double(_) => ValueVec::Double(Vec::new()),
                 ValueVec::String(_) => ValueVec::String(Vec::new()),
+                ValueVec::Json(_) => ValueVec::Json(Vec::new()),
                 ValueVec::Binary(_) => ValueVec::Binary(Vec::new()),
+                ValueVec::Array(_) => ValueVec::Array(Vec::new()),
             },
+            is_dynamic: self.is_dynamic,
         }
     }
 }
@@ -196,11 +191,21 @@ impl From<FieldColumn> for schema::FieldData {
                 ValueVec::String(v) => Field::Scalars(ScalarField {
                     data: Some(ScalarData::StringData(schema::StringArray { data: v })),
                 }),
+                ValueVec::Json(v) => Field::Scalars(ScalarField { 
+                    data: Some(ScalarData::JsonData(schema::JsonArray { data: v })),
+                 }),
+                 ValueVec::Array(v) => Field::Scalars(ScalarField {
+                    data: Some(ScalarData::ArrayData(schema::ArrayArray { 
+                        data: v,
+                        element_type: this.dtype as _,
+                     })),
+                }),
                 ValueVec::Binary(v) => Field::Vectors(VectorField {
                     data: Some(VectorData::BinaryVector(v)),
                     dim: this.dim,
                 }),
             }),
+            is_dynamic: false,
         }
     }
 }

@@ -11,7 +11,7 @@ name = "milvus"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tonic = {version = "0.8.2", features = ["tls", "tls-roots"]}
+tonic = { version = "0.8.2", features = ["tls", "tls-roots"] }
 prost = "0.11.0"
 tokio = { version = "1.17.0", features = ["full"] }
 thiserror = "1.0"
@@ -21,9 +21,12 @@ anyhow = "1.0"
 strum = "0.24"
 strum_macros = "0.24"
 base64 = "0.21.0"
+dashmap = "5.5.3"
 
 [build-dependencies]
-tonic-build = "0.8.2"
+tonic-build = { version = "0.8.2", default-features = false, features = [
+    "prost",
+] }
 
 [dev-dependencies]
 rand = "0.8.5"

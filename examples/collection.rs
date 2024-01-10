@@ -1,5 +1,7 @@
 use milvus::index::{IndexParams, IndexType};
-use milvus::schema::CollectionSchemaBuilder;
+use milvus::options::LoadOptions;
+use milvus::query::QueryOptions;
+use milvus::schema::{CollectionSchemaBuilder, CollectionSchema};
 use milvus::{
     client::Client, collection::Collection, data::FieldColumn, error::Error, schema::FieldSchema,
 };
@@ -29,17 +31,17 @@ async fn main() -> Result<(), Error> {
                 DIM,
             ))
             .build()?;
-    let collection = client.create_collection(schema.clone(), None).await?;
+    client.create_collection(schema.clone(), None).await?;
 
-    if let Err(err) = hello_milvus(&collection).await {
+    if let Err(err) = hello_milvus(&client, &schema).await {
         println!("failed to run hello milvus: {:?}", err);
     }
-    collection.drop().await?;
+    client.drop_collection(schema.name()).await?;
 
     Ok(())
 }
 
-async fn hello_milvus(collection: &Collection) -> Result<(), Error> {
+async fn hello_milvus(client: &Client, collection: &CollectionSchema) -> Result<(), Error> {
     let mut embed_data = Vec::<f32>::new();
     for _ in 1..=DIM * 1000 {
         let mut rng = rand::thread_rng();
@@ -47,24 +49,25 @@ async fn hello_milvus(collection: &Collection) -> Result<(), Error> {
         embed_data.push(embed);
     }
     let embed_column = FieldColumn::new(
-        collection.schema().get_field(DEFAULT_VEC_FIELD).unwrap(),
+        collection.get_field(DEFAULT_VEC_FIELD).unwrap(),
         embed_data,
     );
 
-    collection.insert(vec![embed_column], None).await?;
-    collection.flush().await?;
+    client.insert(collection.name(), vec![embed_column], None).await?;
+    client.flush(collection.name()).await?;
     let index_params = IndexParams::new(
         "feature_index".to_owned(),
         IndexType::IvfFlat,
         milvus::index::MetricType::L2,
         HashMap::from([("nlist".to_owned(), "32".to_owned())]),
     );
-    collection
-        .create_index(DEFAULT_VEC_FIELD, index_params)
+    client
+        .create_index(collection.name(), DEFAULT_VEC_FIELD, index_params)
         .await?;
-    collection.load(1).await?;
+    client.load_collection(collection.name(), Some(LoadOptions::default())).await?;
 
-    let result = collection.query::<_, [&str; 0]>("id > 0", []).await?;
+    let options = QueryOptions::default();
+    let result = client.query(collection.name(), "id > 0", &options).await?;
 
     println!(
         "result num: {}",
