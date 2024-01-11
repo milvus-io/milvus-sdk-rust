@@ -79,7 +79,7 @@ impl FieldColumn {
             value: v.into(),
             dim: schm.dim,
             max_length: schm.max_length,
-            is_dynamic:  false,
+            is_dynamic: false,
         }
     }
 
@@ -191,14 +191,14 @@ impl From<FieldColumn> for schema::FieldData {
                 ValueVec::String(v) => Field::Scalars(ScalarField {
                     data: Some(ScalarData::StringData(schema::StringArray { data: v })),
                 }),
-                ValueVec::Json(v) => Field::Scalars(ScalarField { 
+                ValueVec::Json(v) => Field::Scalars(ScalarField {
                     data: Some(ScalarData::JsonData(schema::JsonArray { data: v })),
-                 }),
-                 ValueVec::Array(v) => Field::Scalars(ScalarField {
-                    data: Some(ScalarData::ArrayData(schema::ArrayArray { 
+                }),
+                ValueVec::Array(v) => Field::Scalars(ScalarField {
+                    data: Some(ScalarData::ArrayData(schema::ArrayArray {
                         data: v,
                         element_type: this.dtype as _,
-                     })),
+                    })),
                 }),
                 ValueVec::Binary(v) => Field::Vectors(VectorField {
                     data: Some(VectorData::BinaryVector(v)),

@@ -46,7 +46,7 @@ pub enum Error {
 
     #[error("{0:?}")]
     ProstDecode(#[from] prost::DecodeError),
-    
+
     #[error("Conversion error")]
     Conversion,
     #[error("{0:?}")]

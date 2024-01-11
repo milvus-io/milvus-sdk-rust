@@ -33,12 +33,11 @@ async fn collection_basic() -> Result<()> {
 
     let embed_data = gen_random_f32_vector(DEFAULT_DIM * 2000);
 
-    let embed_column = FieldColumn::new(
-        schema.get_field(DEFAULT_VEC_FIELD).unwrap(),
-        embed_data,
-    );
+    let embed_column = FieldColumn::new(schema.get_field(DEFAULT_VEC_FIELD).unwrap(), embed_data);
 
-    client.insert(schema.name(), vec![embed_column], None).await?;
+    client
+        .insert(schema.name(), vec![embed_column], None)
+        .await?;
     client.flush(schema.name()).await?;
     let index_params = IndexParams::new(
         DEFAULT_INDEX_NAME.to_owned(),
@@ -49,7 +48,9 @@ async fn collection_basic() -> Result<()> {
     client
         .create_index(schema.name(), DEFAULT_VEC_FIELD, index_params)
         .await?;
-    client.load_collection(schema.name(),Some(LoadOptions::default())).await?;
+    client
+        .load_collection(schema.name(), Some(LoadOptions::default()))
+        .await?;
 
     let options = QueryOptions::default();
     let result = client.query(schema.name(), "id > 0", &options).await?;
@@ -65,16 +66,15 @@ async fn collection_basic() -> Result<()> {
 
 #[tokio::test]
 async fn collection_index() -> Result<()> {
-    let (client,schema) = create_test_collection().await?;
+    let (client, schema) = create_test_collection().await?;
 
     let feature = gen_random_f32_vector(DEFAULT_DIM * 2000);
 
-    let feature_column = FieldColumn::new(
-        schema.get_field(DEFAULT_VEC_FIELD).unwrap(),
-        feature,
-    );
+    let feature_column = FieldColumn::new(schema.get_field(DEFAULT_VEC_FIELD).unwrap(), feature);
 
-    client.insert(schema.name(), vec![feature_column], None).await?;
+    client
+        .insert(schema.name(), vec![feature_column], None)
+        .await?;
     client.flush(schema.name()).await?;
 
     let index_params = IndexParams::new(
@@ -86,7 +86,9 @@ async fn collection_index() -> Result<()> {
     client
         .create_index(schema.name(), DEFAULT_VEC_FIELD, index_params.clone())
         .await?;
-    let index_list = client.describe_index(schema.name(), DEFAULT_VEC_FIELD).await?;
+    let index_list = client
+        .describe_index(schema.name(), DEFAULT_VEC_FIELD)
+        .await?;
     assert!(index_list.len() == 1, "{}", index_list.len());
     let index = &index_list[0];
 
@@ -100,15 +102,14 @@ async fn collection_index() -> Result<()> {
 
 #[tokio::test]
 async fn collection_search() -> Result<()> {
-    let (client,schema) = create_test_collection().await?;
+    let (client, schema) = create_test_collection().await?;
 
     let embed_data = gen_random_f32_vector(DEFAULT_DIM * 2000);
-    let embed_column = FieldColumn::new(
-        schema.get_field(DEFAULT_VEC_FIELD).unwrap(),
-        embed_data,
-    );
+    let embed_column = FieldColumn::new(schema.get_field(DEFAULT_VEC_FIELD).unwrap(), embed_data);
 
-    client.insert(schema.name(), vec![embed_column], None).await?;
+    client
+        .insert(schema.name(), vec![embed_column], None)
+        .await?;
     client.flush(schema.name()).await?;
     let index_params = IndexParams::new(
         "ivf_flat".to_owned(),
@@ -117,13 +118,17 @@ async fn collection_search() -> Result<()> {
         HashMap::from_iter([("nlist".to_owned(), 32.to_string())]),
     );
     client
-        .create_index(schema.name(),DEFAULT_VEC_FIELD, index_params)
+        .create_index(schema.name(), DEFAULT_VEC_FIELD, index_params)
         .await?;
     client.flush(schema.name()).await?;
-    client.load_collection(schema.name(), Some(LoadOptions::default())).await?;
+    client
+        .load_collection(schema.name(), Some(LoadOptions::default()))
+        .await?;
 
-    let mut option = SearchOptions::with_limit(10).metric_type(MetricType::L2).output_fields(vec!["id".to_owned()]);
-    option = option.add_param("nprobe",ParamValue!(16));
+    let mut option = SearchOptions::with_limit(10)
+        .metric_type(MetricType::L2)
+        .output_fields(vec!["id".to_owned()]);
+    option = option.add_param("nprobe", ParamValue!(16));
     let query_vec = gen_random_f32_vector(DEFAULT_DIM);
 
     let result = client

@@ -1,5 +1,21 @@
-use crate::{client::Client, data::FieldColumn, proto::{milvus::InsertRequest, common::{MsgBase, MsgType}, self}, error::Error, utils::status_to_result, schema::FieldData};
+use prost::bytes::{BufMut, BytesMut};
+
 use crate::error::Result;
+use crate::{
+    client::Client,
+    collection,
+    data::FieldColumn,
+    error::Error,
+    proto::{
+        self,
+        common::{MsgBase, MsgType},
+        milvus::InsertRequest,
+        schema::{scalar_field::Data, DataType},
+    },
+    schema::FieldData,
+    utils::status_to_result,
+    value::ValueVec,
+};
 
 #[derive(Debug, Clone)]
 pub struct InsertOptions {
@@ -31,44 +47,34 @@ impl InsertOptions {
 
 #[derive(Debug, Clone)]
 pub struct DeleteOptions {
-    pub(crate) ids: proto::schema::FieldData,
+    pub(crate) ids: ValueVec,
     pub(crate) filter: String,
-    pub(crate) partition_names: Vec<String>,
+    pub(crate) partition_name: String,
 }
 
 impl DeleteOptions {
     fn new() -> Self {
         Self {
-            ids: FieldData::default(),
+            ids: ValueVec::None,
             filter: String::new(),
-            partition_names: Vec::new(),
+            partition_name: String::new(),
         }
     }
 
-    pub fn with_ids(ids: FieldColumn) -> Self {
-        Self::new().ids(ids.into())
-    }
-
-    pub fn with_partition_names(partition_names: Vec<String>) -> Self {
-        Self::new().partition_names(partition_names)
+    pub fn with_ids(ids: ValueVec) -> Self {
+        let mut opt = Self::new();
+        opt.ids = ids;
+        opt
     }
 
     pub fn with_filter(filter: String) -> Self {
-        Self::new().filter(filter)
+        let mut opt = Self::new();
+        opt.filter = filter;
+        opt
     }
 
-    pub fn ids(mut self, ids: proto::schema::FieldData) -> Self {
-        self.ids = ids;
-        self
-    }
-
-    pub fn partition_names(mut self, partition_names: Vec<String>) -> Self {
-        self.partition_names = partition_names;
-        self
-    }
-
-    pub fn filter(mut self, filter: String) -> Self {
-        self.filter = filter;
+    pub fn partition_name(mut self, partition_name: String) -> Self {
+        self.partition_name = partition_name;
         self
     }
 }
@@ -81,8 +87,8 @@ impl Client {
         options: Option<InsertOptions>,
     ) -> Result<crate::proto::milvus::MutationResult>
     where
-    S: Into<String>,
-     {
+        S: Into<String>,
+    {
         let options = options.unwrap_or_default();
         let row_num = fields_data.first().map(|c| c.len()).unwrap_or(0);
         let collection_name = collection_name.into();
@@ -102,8 +108,85 @@ impl Client {
             .await?
             .into_inner();
 
-        self.collection_cache.update_timestamp(&collection_name, result.timestamp);
+        self.collection_cache
+            .update_timestamp(&collection_name, result.timestamp);
 
         Ok(result)
+    }
+
+    pub async fn delete(
+        &self,
+        collection_name: impl Into<String>,
+        options: &DeleteOptions,
+    ) -> Result<crate::proto::milvus::MutationResult> {
+        let collection_name = collection_name.into();
+
+        let expr = self.compose_expr(&collection_name, options).await?;
+
+        let result = self
+            .client
+            .clone()
+            .delete(proto::milvus::DeleteRequest {
+                base: Some(MsgBase::new(MsgType::Delete)),
+                db_name: "".to_string(),
+                collection_name: collection_name.clone(),
+                expr: expr,
+                partition_name: options.partition_name.clone(),
+                hash_keys: Vec::new(),
+            })
+            .await?
+            .into_inner();
+
+        self.collection_cache
+            .update_timestamp(&collection_name, result.timestamp);
+
+        Ok(result)
+    }
+
+    async fn compose_expr(&self, collection_name: &str, options: &DeleteOptions) -> Result<String> {
+        let mut expr = String::new();
+        match options.filter.len() {
+            0 => {
+                let collection = self.collection_cache.get(collection_name).await?;
+                let pk = collection.fields.iter().find(|f| f.is_primary_key).unwrap();
+
+                let mut expr = String::new();
+                expr.push_str(&pk.name);
+                expr.push_str(" in [");
+                match (pk.dtype, options.ids.clone()) {
+                    (DataType::Int64, ValueVec::Long(values)) => {
+                        for (i, v) in values.iter().enumerate() {
+                            if i > 0 {
+                                expr.push_str(",");
+                            }
+                            expr.push_str(format!("{}", v).as_str());
+                        }
+                        expr
+                    }
+
+                    (DataType::VarChar, ValueVec::String(values)) => {
+                        for (i, v) in values.iter().enumerate() {
+                            if i > 0 {
+                                expr.push_str(",");
+                            }
+                            expr.push_str(v.as_str());
+                        }
+                        expr
+                    }
+
+                    _ => {
+                        return Err(Error::InvalidParameter(
+                            "pk type".to_owned(),
+                            pk.dtype.as_str_name().to_owned(),
+                        ));
+                    }
+                }
+            }
+
+            _ => options.filter.clone(),
+        };
+        expr.push(')');
+
+        Ok(expr)
     }
 }

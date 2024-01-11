@@ -1,7 +1,7 @@
 use milvus::client::*;
 use milvus::error::Result;
 use milvus::options::CreateCollectionOptions;
-use milvus::schema::{CollectionSchemaBuilder, FieldSchema, CollectionSchema};
+use milvus::schema::{CollectionSchema, CollectionSchemaBuilder, FieldSchema};
 use rand::Rng;
 
 pub const DEFAULT_DIM: i64 = 128;
@@ -36,11 +36,14 @@ pub async fn create_test_collection() -> Result<(Client, CollectionSchema)> {
 }
 
 pub fn gen_random_name() -> String {
-    rand::thread_rng()
-        .sample_iter(&rand::distributions::Alphanumeric)
-        .take(7)
-        .map(char::from)
-        .collect::<String>()
+    format!(
+        "r{}",
+        rand::thread_rng()
+            .sample_iter(&rand::distributions::Alphanumeric)
+            .take(7)
+            .map(char::from)
+            .collect::<String>(),
+    )
 }
 
 pub fn gen_random_f32_vector(n: i64) -> Vec<f32> {
