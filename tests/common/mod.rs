@@ -1,8 +1,7 @@
 use milvus::client::*;
-use milvus::collection::Collection;
 use milvus::error::Result;
 use milvus::options::CreateCollectionOptions;
-use milvus::schema::{CollectionSchemaBuilder, FieldSchema};
+use milvus::schema::{CollectionSchemaBuilder, FieldSchema, CollectionSchema};
 use rand::Rng;
 
 pub const DEFAULT_DIM: i64 = 128;
@@ -10,7 +9,7 @@ pub const DEFAULT_VEC_FIELD: &str = "feature";
 pub const DEFAULT_INDEX_NAME: &str = "feature_index";
 pub const URL: &str = "http://localhost:19530";
 
-pub async fn create_test_collection() -> Result<Collection> {
+pub async fn create_test_collection() -> Result<(Client, CollectionSchema)> {
     let collection_name = gen_random_name();
     let collection_name = format!("{}_{}", "test_collection", collection_name);
     let client = Client::new(URL).await?;
@@ -32,7 +31,8 @@ pub async fn create_test_collection() -> Result<Collection> {
                 ConsistencyLevel::Eventually,
             )),
         )
-        .await
+        .await?;
+    Ok((client, schema))
 }
 
 pub fn gen_random_name() -> String {

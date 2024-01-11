@@ -14,53 +14,118 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::proto::{common::{
-    ConsistencyLevel, DslType, IndexState, KeyValuePair, MsgBase, MsgType, PlaceholderGroup,
-    PlaceholderType, PlaceholderValue, CompactionState,
-}, milvus::{DropPartitionRequest, ManualCompactionRequest, GetCompactionStateRequest, DescribeCollectionRequest}};
-use crate::proto::milvus::milvus_service_client::MilvusServiceClient;
+use crate::{proto::{common::{
+    ConsistencyLevel, IndexState, MsgBase, MsgType,
+}, milvus::{DescribeCollectionRequest, milvus_service_client::MilvusServiceClient}, self}, client::{Client, AuthInterceptor}, options::{CreateCollectionOptions, LoadOptions, GetLoadStateOptions}};
 use crate::proto::milvus::{
-    CreateCollectionRequest, CreateIndexRequest, CreatePartitionRequest,
-    DescribeCollectionResponse, DescribeIndexRequest, DropCollectionRequest, DropIndexRequest,
-    FlushRequest, HasCollectionRequest, HasPartitionRequest, InsertRequest, LoadCollectionRequest,
-    QueryRequest, ReleaseCollectionRequest, SearchRequest, ShowCollectionsRequest,
-    ShowPartitionsRequest, ShowType,
+    CreateCollectionRequest, CreateIndexRequest, DescribeIndexRequest, DropCollectionRequest, DropIndexRequest,
+    FlushRequest, HasCollectionRequest, LoadCollectionRequest,
+    ReleaseCollectionRequest, ShowCollectionsRequest,
 };
-use crate::proto::schema::i_ds::IdField::{IntId, StrId};
 use crate::proto::schema::DataType;
 use crate::schema::CollectionSchema;
 use crate::types::*;
 use crate::utils::status_to_result;
 use crate::value::Value;
-use crate::{
-    client::AuthInterceptor,
-    proto::milvus::{GetLoadingProgressRequest, LoadPartitionsRequest},
-};
-use crate::{config, proto::milvus::DeleteRequest};
-use crate::{data::FieldColumn, proto::milvus::CreateAliasRequest};
-use crate::{
-    error::{Error as SuperError, Result},
-    proto::milvus::{AlterAliasRequest, DropAliasRequest},
-};
-use crate::{
-    index::{IndexInfo, IndexParams, MetricType},
-    proto::milvus::ReleasePartitionsRequest,
-};
-
+use crate::config;
+use crate::data::FieldColumn;
+use crate::error::{Error as SuperError, Result};
+use crate::index::{IndexInfo, IndexParams};
 use prost::bytes::BytesMut;
 use prost::Message;
 use serde_json;
+use tonic::{service::interceptor::InterceptedService, transport::Channel};
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::time::Duration;
 use thiserror::Error as ThisError;
-use tokio::sync::Mutex;
-use tonic::codegen::InterceptedService;
-use tonic::transport::Channel;
 
-const STRONG_TIMESTAMP: u64 = 0;
-const BOUNDED_TIMESTAMP: u64 = 2;
-const EVENTUALLY_TIMESTAMP: u64 = 1;
+#[derive(Debug,Clone)]
+pub struct Collection {
+    pub id: i64,
+    pub name: String,
+    pub auto_id: bool,
+    pub num_shards: usize,
+    // pub num_partitions: usize,
+    pub consistency_level: ConsistencyLevel,
+    pub description: String,
+    pub fields: Vec<Field>,
+    // pub enable_dynamic_field: bool,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct CollectionCache{
+    collections: dashmap::DashMap<String, Collection>,
+    timestamps: dashmap::DashMap<String, Timestamp>,
+    client: MilvusServiceClient<InterceptedService<Channel, AuthInterceptor>>,
+}
+
+impl CollectionCache {
+    pub fn new(client: MilvusServiceClient<InterceptedService<Channel, AuthInterceptor>>) -> Self {
+        Self {
+            collections: dashmap::DashMap::new(),
+            timestamps: dashmap::DashMap::new(),
+            client: client,
+        }
+    }
+
+    pub async fn get<'a>(&self, name: &str) -> Result<Collection> {
+        if !self.local_exist(name) {
+            let resp = self
+            .client
+            .clone()
+            .describe_collection(DescribeCollectionRequest {
+                base: Some(MsgBase::new(MsgType::DescribeCollection)),
+                db_name: "".to_owned(),
+                collection_name: name.into(),
+                collection_id: 0,
+                time_stamp: 0,
+            })
+            .await?
+            .into_inner();
+
+            status_to_result(&resp.status)?;
+            self.collections.insert(name.to_owned(), Collection::from(resp));
+        }
+
+      self.collections.get(name).map(|v| v.value().clone()).ok_or(SuperError::Collection(Error::CollectionNotFound(name.to_owned())))
+    }
+
+    pub fn update_timestamp(&self, name: &str, timestamp: Timestamp) {
+        self.timestamps.entry(name.to_owned()).and_modify(|t|  {
+            if *t < timestamp {
+            *t = timestamp;
+    }
+}).or_insert(timestamp);
+    }
+
+    pub fn get_timestamp(&self, name: &str) -> Option<Timestamp> {
+        self.timestamps.get(name).map(|v| v.value().clone())
+    }
+
+    fn local_exist(&self, name: &str) -> bool {
+        self.collections.contains_key(name)
+    }
+}
+
+impl From<proto::milvus::DescribeCollectionResponse> for Collection {
+    fn from(value: proto::milvus::DescribeCollectionResponse) -> Self {
+        let schema = value.schema.unwrap();
+        Self {
+            id: value.collection_id,
+            name: value.collection_name,
+            auto_id: schema.auto_id,
+            num_shards: value.shards_num as usize,
+            // num_partitions: value.partitions_num as usize,
+            consistency_level: ConsistencyLevel::from_i32(value.consistency_level).unwrap(),
+            description: schema.description,
+            fields: schema.fields
+                .into_iter()
+                .map(|f| Field::from(f))
+                .collect(),
+            // enable_dynamic_field: value.enable_dynamic_field,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct Partition {
@@ -70,161 +135,108 @@ pub struct Partition {
 
 type ConcurrentHashMap<K, V> = tokio::sync::RwLock<std::collections::HashMap<K, V>>;
 
-#[derive(Debug)]
-pub struct Collection {
-    client: MilvusServiceClient<InterceptedService<Channel, AuthInterceptor>>,
-    info: DescribeCollectionResponse,
-    schema: CollectionSchema,
-    partitions: Mutex<HashSet<String>>,
-    session_timestamps: ConcurrentHashMap<String, Timestamp>,
-}
+impl Client {
 
-impl Collection {
-    pub fn new(
-        client: MilvusServiceClient<InterceptedService<Channel, AuthInterceptor>>,
-        info: DescribeCollectionResponse,
-    ) -> Self {
-        let schema = info.schema.clone().unwrap();
-        Self {
-            client,
-            info,
-            schema: schema.into(),
-            partitions: Mutex::new(Default::default()),
-            session_timestamps: ConcurrentHashMap::new(HashMap::new()),
-        }
+    /// Creates a new collection with the specified schema and options.
+    ///
+    /// # Arguments
+    ///
+    /// * `schema` - The schema of the collection.
+    /// * `options` - Optional parameters for creating the collection.
+    pub async fn create_collection(
+        &self,
+        schema: CollectionSchema,
+        options: Option<CreateCollectionOptions>,
+    ) -> Result<()> {
+        let options = options.unwrap_or_default();
+        let schema: crate::proto::schema::CollectionSchema = schema.into();
+        let mut buf = BytesMut::new();
+
+        schema.encode(&mut buf)?;
+
+        let status = self
+            .client
+            .clone()
+            .create_collection(CreateCollectionRequest {
+                base: Some(MsgBase::new(MsgType::CreateCollection)),
+                collection_name: schema.name.to_string(),
+                schema: buf.to_vec(),
+                shards_num: options.shard_num,
+                consistency_level: options.consistency_level as i32,
+                ..Default::default()
+            })
+            .await?
+            .into_inner();
+
+        status_to_result(&Some(status))
     }
 
-    pub fn schema(&self) -> &CollectionSchema {
-        &self.schema
+    /// Drops a collection with the given name.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the collection to drop.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` indicating success or failure.
+    pub async fn drop_collection<S>(&self, name: S) -> Result<()>
+    where
+        S: Into<String>,
+    {
+        status_to_result(&Some(
+            self.client
+                .clone()
+                .drop_collection(DropCollectionRequest {
+                    base: Some(MsgBase::new(MsgType::DropCollection)),
+                    collection_name: name.into(),
+                    ..Default::default()
+                })
+                .await?
+                .into_inner(),
+        ))
     }
 
-    pub async fn get_load_percent(&self) -> Result<i64> {
+    /// Retrieves a list of collections.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing a vector of collection names if successful, or an error if the operation fails.
+    pub async fn list_collections(&self) -> Result<Vec<String>> {
         let response = self
             .client
             .clone()
             .show_collections(ShowCollectionsRequest {
                 base: Some(MsgBase::new(MsgType::ShowCollections)),
-                db_name: "".to_string(),
-                time_stamp: 0,
-                r#type: ShowType::InMemory as i32,
-                collection_names: vec![self.schema().name.to_string()],
+                ..Default::default()
             })
             .await?
             .into_inner();
 
         status_to_result(&response.status)?;
-
-        let names = response.collection_names;
-        let percent = response.in_memory_percentages;
-        for i in 0..names.len() {
-            if self.schema().name == names[i] {
-                return Ok(percent[i]);
-            }
-        }
-
-        Err(SuperError::Unexpected(
-            "collection not exist in response".to_owned(),
-        ))
+        Ok(response.collection_names)
     }
-
-    // load_blocked loads collection and returns when loading done
-    pub async fn load(&self, replica_number: i32) -> Result<()> {
-        status_to_result(&Some(
-            self.client
-                .clone()
-                .load_collection(LoadCollectionRequest {
-                    base: Some(MsgBase::new(MsgType::LoadCollection)),
-                    db_name: "".to_string(),
-                    collection_name: self.schema().name.clone(),
-                    replica_number,
-                })
-                .await?
-                .into_inner(),
-        ))?;
-
-        loop {
-            if self.get_load_percent().await? >= 100 {
-                return Ok(());
-            }
-
-            tokio::time::sleep(Duration::from_millis(config::WAIT_LOAD_DURATION_MS)).await;
-        }
-    }
-
-    /// Create a collection alias
-    pub async fn create_alias<S: ToString>(&self, alias: S) -> Result<()> {
-        status_to_result(&Some(
-            self.client
-                .clone()
-                .create_alias(CreateAliasRequest {
-                    base: Some(MsgBase::new(MsgType::CreateAlias)),
-                    db_name: "".to_string(),
-                    collection_name: self.schema().name.to_string(),
-                    alias: alias.to_string(),
-                })
-                .await?
-                .into_inner(),
-        ))
-    }
-
-    /// Drop a collection alias
-    pub async fn drop_alias<S: ToString>(&self, alias: S) -> Result<()> {
-        status_to_result(&Some(
-            self.client
-                .clone()
-                .drop_alias(DropAliasRequest {
-                    base: Some(MsgBase::new(MsgType::DropAlias)),
-                    db_name: "".to_string(),
-                    alias: alias.to_string(),
-                })
-                .await?
-                .into_inner(),
-        ))
-    }
-
-    /// Alter a collection alias
-    pub async fn alter_alias<S: ToString>(&self, alias: S) -> Result<()> {
-        status_to_result(&Some(
-            self.client
-                .clone()
-                .alter_alias(AlterAliasRequest {
-                    base: Some(MsgBase::new(MsgType::AlterAlias)),
-                    db_name: "".to_string(),
-                    collection_name: self.schema().name.to_string(),
-                    alias: alias.to_string(),
-                })
-                .await?
-                .into_inner(),
-        ))
-    }
-
-    pub async fn is_loaded(&self) -> Result<bool> {
-        Ok(self.get_load_percent().await? >= 100)
-    }
-
-    pub async fn release(&self) -> Result<()> {
-        status_to_result(&Some(
-            self.client
-                .clone()
-                .release_collection(ReleaseCollectionRequest {
-                    base: Some(MsgBase::new(MsgType::ReleaseCollection)),
-                    db_name: "".to_string(),
-                    collection_name: self.schema().name.to_string(),
-                })
-                .await?
-                .into_inner(),
-        ))
-    }
-
-    /// Describe collection
-    pub async fn describe(&self) -> Result<Collection> {
+    
+    /// Retrieves information about a collection.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the collection.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` containing the `Collection` information if successful, or an error if the collection does not exist or cannot be accessed.
+    pub async fn describe_collection<S>(&self, name: S) -> Result<Collection>
+    where
+    S: Into<String>,
+    {
         let resp = self
             .client
             .clone()
             .describe_collection(DescribeCollectionRequest {
                 base: Some(MsgBase::new(MsgType::DescribeCollection)),
                 db_name: "".to_owned(),
-                collection_name: self.schema().name.to_string(),
+                collection_name: name.into(),
                 collection_id: 0,
                 time_stamp: 0,
             })
@@ -233,81 +245,30 @@ impl Collection {
 
         status_to_result(&resp.status)?;
 
-        Ok(Collection::new(self.client.clone(), resp))
+        Ok(resp.into())
     }
 
-    /// Compact Data
-    pub async fn compact(&self) -> Result<i64> {
-        let coll = self.describe().await?;
-
-        let resp = self
-            .client
-            .clone()
-            .manual_compaction(ManualCompactionRequest {
-                collection_id: coll.info.collection_id,
-                timetravel: 0,
-            })
-            .await?
-            .into_inner();
-
-        status_to_result(&resp.status)?;
-
-        Ok(resp.compaction_id)
-    }
-
-    /// Check compaction status
-    pub async fn get_compaction_state(&self, compaction_id: i64) -> Result<CompactionState> {
-        let resp = self
-            .client
-            .clone()
-            .get_compaction_state(GetCompactionStateRequest { compaction_id })
-            .await?
-            .into_inner();
-        status_to_result(&resp.status)?;
-        Ok(resp.state())
-    }
-
-    pub async fn delete<S: AsRef<str>>(&self, expr: S, partition_name: Option<&str>) -> Result<()> {
-        status_to_result(
-            &self
-                .client
-                .clone()
-                .delete(DeleteRequest {
-                    base: Some(MsgBase::new(MsgType::Delete)),
-                    db_name: "".to_string(),
-                    collection_name: self.schema.name.to_string(),
-                    partition_name: partition_name.unwrap_or_default().to_owned(),
-                    expr: expr.as_ref().to_owned(),
-                    hash_keys: vec![],
-                })
-                .await?
-                .into_inner()
-                .status,
-        )
-    }
-
-    pub async fn drop(&self) -> Result<()> {
-        status_to_result(&Some(
-            self.client
-                .clone()
-                .drop_collection(DropCollectionRequest {
-                    base: Some(MsgBase::new(MsgType::DropCollection)),
-                    db_name: "".to_string(),
-                    collection_name: self.schema().name.to_string(),
-                })
-                .await?
-                .into_inner(),
-        ))
-    }
-
-    pub async fn exist(&self) -> Result<bool> {
+    /// Checks if a collection with the given name exists.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the collection.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` indicating whether the collection exists or not.
+    pub async fn has_collection<S>(&self, name: S) -> Result<bool>
+    where
+        S: Into<String>,
+    {
+        let name = name.into();
         let res = self
             .client
             .clone()
             .has_collection(HasCollectionRequest {
                 base: Some(MsgBase::new(MsgType::HasCollection)),
                 db_name: "".to_string(),
-                collection_name: self.schema().name.clone(),
+                collection_name: name.clone(),
                 time_stamp: 0,
             })
             .await?
@@ -318,416 +279,198 @@ impl Collection {
         Ok(res.value)
     }
 
-    pub async fn flush(&self) -> Result<()> {
+    // todo(yah01): implement this after the refactor done
+    // pub async fn rename_collection<S>(&self, name: S, new_name: S) -> Result<()>
+    // where
+    //     S: Into<String>,
+    // {
+    //     let name = name.into();
+    //     let new_name = new_name.into();
+    //     let res = self
+    //         .client
+    //         .clone()
+    //         .rename_collection(proto::milvus::RenameCollectionRequest {
+    //             base: Some(MsgBase::new(MsgType::RenameCollection)),
+    //             collection_name: name.clone(),
+    //             new_collection_name: new_name.clone(),
+    //         })
+    //         .await?
+    //         .into_inner();
+
+    //     status_to_result(&Some(res))?;
+
+    //     Ok(())
+    // }
+
+
+    
+    /// Retrieves the statistics of a collection.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the collection.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing a `HashMap` with string keys and string values representing the collection statistics.
+    pub async fn get_collection_stats(&self, name: &str) -> Result<HashMap<String,String>> {
         let res = self
             .client
             .clone()
-            .flush(FlushRequest {
-                base: Some(MsgBase::new(MsgType::Flush)),
-                db_name: "".to_string(),
-                collection_names: vec![self.schema().name.to_string()],
+            .get_collection_statistics(proto::milvus::GetCollectionStatisticsRequest {
+                base: Some(MsgBase::new(MsgType::GetCollectionStatistics)),
+                db_name: "".into(),
+                collection_name: name.to_owned(),
             })
             .await?
             .into_inner();
 
         status_to_result(&res.status)?;
 
-        Ok(())
+        Ok(res.stats.into_iter().map(|s| (s.key, s.value)).collect())
     }
 
-    pub async fn load_partition_list(&self) -> Result<()> {
-        let res = self
-            .client
-            .clone()
-            .show_partitions(ShowPartitionsRequest {
-                base: Some(MsgBase::new(MsgType::ShowPartitions)),
-                db_name: "".to_string(),
-                collection_name: self.schema().name.to_string(),
-                collection_id: 0,
-                partition_names: Vec::new(),
-                r#type: 0,
-            })
-            .await?
-            .into_inner();
-
-        let mut partitions = HashSet::new();
-        for name in res.partition_names {
-            partitions.insert(name);
-        }
-
-        std::mem::swap(&mut *self.partitions.lock().await, &mut partitions);
-
-        status_to_result(&res.status)?;
-
-        Ok(())
-    }
-
-    pub async fn create_partition<S: AsRef<str>>(&self, name: S) -> Result<()> {
-        let res = self
-            .client
-            .clone()
-            .create_partition(CreatePartitionRequest {
-                base: Some(MsgBase::new(MsgType::ShowPartitions)),
-                db_name: "".to_string(),
-                collection_name: self.schema().name.to_string(),
-                partition_name: name.as_ref().to_owned(),
-            })
-            .await?
-            .into_inner();
-
-        status_to_result(&Some(res))?;
-
-        Ok(())
-    }
-
-    pub async fn has_partition<P: AsRef<str>>(&self, p: P) -> Result<bool> {
-        if self.partitions.lock().await.contains(p.as_ref()) {
-            return Ok(true);
-        } else {
-            let res = self
-                .client
-                .clone()
-                .has_partition(HasPartitionRequest {
-                    base: Some(MsgBase::new(MsgType::HasPartition)),
-                    db_name: "".to_string(),
-                    collection_name: self.schema().name.to_string(),
-                    partition_name: p.as_ref().to_string(),
-                })
-                .await?
-                .into_inner();
-
-            status_to_result(&res.status)?;
-
-            Ok(res.value)
-        }
-    }
-
-    /// Load collection paritions into memory
-    pub async fn load_partitions<S: ToString, I: IntoIterator<Item = S>>(
-        &self,
-        partition_names: I,
-        replica_number: i32,
-    ) -> Result<()> {
-        let names: Vec<String> = partition_names.into_iter().map(|x| x.to_string()).collect();
+    /// Loads a collection with the given name and options.
+    ///
+    /// # Arguments
+    ///
+    /// * `collection_name` - The name of the collection to load.
+    /// * `options` - Optional load options.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` indicating success or failure.
+    pub async fn load_collection<S>(&self, collection_name: S, options: Option<LoadOptions>) -> Result<()>
+    where
+    S: Into<String>,
+        {
+            let options = options.unwrap_or_default();
+            let collection_name = collection_name.into();
         status_to_result(&Some(
             self.client
                 .clone()
-                .load_partitions(LoadPartitionsRequest {
-                    base: Some(MsgBase::new(MsgType::LoadPartitions)),
+                .load_collection(LoadCollectionRequest {
+                    base: Some(MsgBase::new(MsgType::LoadCollection)),
                     db_name: "".to_string(),
-                    collection_name: self.schema().name.clone(),
-                    replica_number,
-                    partition_names: names.clone(),
+                    collection_name: collection_name.clone(),
+                    replica_number: options.replica_number,
+                    resource_groups: vec![],
+                    refresh: false,
                 })
                 .await?
                 .into_inner(),
         ))?;
 
         loop {
-            if self.get_loading_progress(&names).await? >= 100 {
-                return Ok(());
+            match self.get_load_state(&collection_name, None).await? {
+                proto::common::LoadState::NotExist => return Err(SuperError::Unexpected("collection not found".to_owned())),
+                proto::common::LoadState::Loading => (),
+                proto::common::LoadState::Loaded => return Ok(()),
+                proto::common::LoadState::NotLoad => return Err(SuperError::Unexpected("collection not loaded".to_owned())),
             }
 
             tokio::time::sleep(Duration::from_millis(config::WAIT_LOAD_DURATION_MS)).await;
         }
     }
 
-    /// Get the collection or partitions loading progress
-    pub async fn get_loading_progress<S: ToString, I: IntoIterator<Item = S>>(
-        &self,
-        partition_names: I,
-    ) -> Result<i64> {
-        let res = self
-            .client
-            .clone()
-            .get_loading_progress(GetLoadingProgressRequest {
-                base: None,
-                collection_name: self.schema().name.to_string(),
-                partition_names: partition_names.into_iter().map(|x| x.to_string()).collect(),
-            })
-            .await?
-            .into_inner();
-
-        Ok(res.progress)
-    }
-
-    /// Release partitions
-    pub async fn release_partitions<S: ToString, I: IntoIterator<Item = S>>(
-        &self,
-        partition_names: I,
-    ) -> Result<()> {
-        status_to_result(&Some(
-            self.client
-                .clone()
-                .release_partitions(ReleasePartitionsRequest {
-                    base: Some(MsgBase::new(MsgType::ReleasePartitions)),
-                    db_name: "".to_string(),
-                    collection_name: self.schema().name.to_string(),
-                    partition_names: partition_names.into_iter().map(|x| x.to_string()).collect(),
-                })
-                .await?
-                .into_inner(),
-        ))
-    }
-
-    /// Drop partitions
-    pub async fn drop_partition<S: ToString>(
-        &self,
-        partition_name: S,
-    ) -> Result<()> {
-        status_to_result(&Some(
-            self.client
-                .clone()
-                .drop_partition(DropPartitionRequest {
-                    base: Some(MsgBase::new(MsgType::ReleasePartitions)),
-                    db_name: "".to_string(),
-                    collection_name: self.schema().name.to_string(),
-                    partition_name: partition_name.to_string(),
-                })
-                .await?
-                .into_inner(),
-        ))
-    }
-
-
-    pub async fn create(
-        &self,
-        shards_num: Option<i32>,
-        consistency_level: Option<ConsistencyLevel>,
-    ) -> Result<()> {
-        let schema: crate::proto::schema::CollectionSchema = self.schema().clone().into();
-
-        let mut buf = BytesMut::new();
-        schema.encode(&mut buf)?;
-
-        let status = self
-            .client
-            .clone()
-            .create_collection(CreateCollectionRequest {
-                base: Some(MsgBase::new(MsgType::CreateCollection)),
-                db_name: "".to_string(),
-                collection_name: self.schema().name.to_string(),
-                schema: buf.to_vec(),
-                shards_num: shards_num.unwrap_or(1),
-                consistency_level: consistency_level.unwrap_or(ConsistencyLevel::Session) as i32,
-                properties: vec![],
-            })
-            .await?
-            .into_inner();
-
-        status_to_result(&Some(status))
-    }
-
-    pub async fn query<Exp, P>(&self, expr: Exp, partition_names: P) -> Result<Vec<FieldColumn>>
+    /// Retrieves the load state of a collection.
+    ///
+    /// # Arguments
+    ///
+    /// * `collection_name` - The name of the collection.
+    /// * `options` - Optional parameters for retrieving the load state.
+    ///
+    /// # Returns
+    ///
+    /// The load state of the collection.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the load state retrieval fails.
+    pub async fn get_load_state<S>(&self, collection_name: S, options: Option<GetLoadStateOptions>) -> Result<crate::proto::common::LoadState>
     where
-        Exp: Into<String>,
-        P: IntoIterator,
-        P::Item: Into<String>,
+    S: Into<String>,
     {
-        let consistency_level = self.info.consistency_level();
-
+        let options = options.unwrap_or_default();
         let res = self
             .client
             .clone()
-            .query(QueryRequest {
-                base: Some(MsgBase::new(MsgType::Retrieve)),
-                db_name: "".to_owned(),
-                collection_name: self.schema().name.clone(),
-                expr: expr.into(),
-                output_fields: self
-                    .schema()
-                    .fields
-                    .iter()
-                    .map(|f| f.name.clone())
-                    .collect(),
-                partition_names: partition_names.into_iter().map(|x| x.into()).collect(),
-                travel_timestamp: 0,
-                guarantee_timestamp: self.get_gts_from_consistency(consistency_level).await,
-                query_params: Vec::new(),
+            .get_load_state(proto::milvus::GetLoadStateRequest {
+                base: Some(MsgBase::new(MsgType::Undefined)),
+                db_name: "".into(),
+                collection_name: collection_name.into(),
+                partition_names: options.partition_names,
             })
             .await?
             .into_inner();
 
         status_to_result(&res.status)?;
 
-        Ok(res
-            .fields_data
-            .into_iter()
-            .map(|f| FieldColumn::from(f))
-            .collect())
+        Ok(res.state())
     }
 
-    pub async fn insert(
-        &self,
-        fields_data: Vec<FieldColumn>,
-        partition_name: Option<&str>,
-    ) -> Result<crate::proto::milvus::MutationResult> {
-        let partition_name = partition_name.unwrap_or("_default").to_owned();
-        let row_num = fields_data.first().map(|c| c.len()).unwrap_or(0);
-
-        let result = self
-            .client
-            .clone()
-            .insert(InsertRequest {
-                base: Some(MsgBase::new(MsgType::Insert)),
-                db_name: "".to_string(),
-                collection_name: self.schema().name.to_string(),
-                partition_name,
-                num_rows: row_num as u32,
-                fields_data: fields_data.into_iter().map(|f| f.into()).collect(),
-                hash_keys: Vec::new(),
-            })
-            .await?
-            .into_inner();
-
-        self.session_timestamps
-            .write()
-            .await
-            .entry(self.info.collection_name.clone())
-            .and_modify(|ts| {
-                if *ts < result.timestamp {
-                    *ts = result.timestamp;
-                }
-            })
-            .or_insert(result.timestamp);
-
-        Ok(result)
-    }
-
-    pub async fn search<S, I>(
-        &self,
-        data: Vec<Value<'_>>,
-        vec_field: S,
-        topk: i32,
-        metric_type: MetricType,
-        output_fields: I,
-        option: &SearchOption,
-    ) -> Result<Vec<SearchResult<'_>>>
+    /// Releases a collection with the given name.
+    ///
+    /// # Arguments
+    ///
+    /// * `collection_name` - The name of the collection to release.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` indicating success or failure.
+    pub async fn release_collection<S>(&self, collection_name: S) -> Result<()>
     where
         S: Into<String>,
-        I: IntoIterator,
-        I::Item: Into<String>,
     {
-        // check and prepare params
-        if topk <= 0 {
-            return Err(SuperError::from(Error::IllegalValue(
-                "topk".to_owned(),
-                "positive".to_owned(),
-            )));
-        }
+        status_to_result(&Some(
+            self.client
+                .clone()
+                .release_collection(ReleaseCollectionRequest {
+                    base: Some(MsgBase::new(MsgType::ReleaseCollection)),
+                    db_name: "".to_string(),
+                    collection_name: collection_name.into(),
+                })
+                .await?
+                .into_inner(),
+        ))
+    }
 
-        let search_params: Vec<KeyValuePair> = vec![
-            KeyValuePair {
-                key: "anns_field".to_owned(),
-                value: vec_field.into(),
-            },
-            KeyValuePair {
-                key: "topk".to_owned(),
-                value: topk.to_string(),
-            },
-            KeyValuePair {
-                key: "params".to_owned(),
-                value: serde_json::to_string(&option.params)?,
-            },
-            KeyValuePair {
-                key: "metric_type".to_owned(),
-                value: metric_type.to_string(),
-            },
-            KeyValuePair {
-                key: "round_decimal".to_owned(),
-                value: "-1".to_owned(),
-            },
-        ];
-
-        let mut consistency_level = self.info.consistency_level();
-        if let Some(level) = option.consistency_level {
-            consistency_level = level;
-        }
-
+    pub async fn flush<S>(&self, collection_name: S) -> Result<()>
+    where
+    S: Into<String>,
+     {
         let res = self
             .client
             .clone()
-            .search(SearchRequest {
-                base: Some(MsgBase::new(MsgType::Search)),
+            .flush(FlushRequest {
+                base: Some(MsgBase::new(MsgType::Flush)),
                 db_name: "".to_string(),
-                collection_name: self.schema().name.clone(),
-                partition_names: option.partitions.clone().unwrap_or_default(),
-                dsl: option.expr.clone().unwrap_or_default(),
-                nq: data.len() as _,
-                placeholder_group: get_place_holder_group(data)?,
-                dsl_type: DslType::BoolExprV1 as _,
-                output_fields: output_fields.into_iter().map(|f| f.into()).collect(),
-                search_params,
-                travel_timestamp: 0,
-                guarantee_timestamp: self.get_gts_from_consistency(consistency_level).await,
+                collection_names: vec![collection_name.into()],
             })
             .await?
             .into_inner();
+
         status_to_result(&res.status)?;
-        let raw_data = res
-            .results
-            .ok_or(SuperError::Unexpected("no result for search".to_owned()))?;
-        let mut result = Vec::new();
-        let mut offset = 0;
-        let fields_data = raw_data
-            .fields_data
-            .into_iter()
-            .map(Into::into)
-            .collect::<Vec<FieldColumn>>();
-        let raw_id = raw_data.ids.unwrap().id_field.unwrap();
 
-        for k in raw_data.topks {
-            let k = k as usize;
-            let mut score = Vec::new();
-            score.extend_from_slice(&raw_data.scores[offset..offset + k]);
-            let mut result_data = fields_data
-                .iter()
-                .map(FieldColumn::copy_with_metadata)
-                .collect::<Vec<FieldColumn>>();
-            for j in 0..fields_data.len() {
-                for i in offset..offset + k {
-                    result_data[j].push(fields_data[j].get(i).ok_or(SuperError::Unexpected(
-                        "out of range while indexing field data".to_owned(),
-                    ))?);
-                }
-            }
-
-            let id = match raw_id {
-                IntId(ref d) => {
-                    Vec::<Value>::from_iter(d.data[offset..offset + k].iter().map(|&x| x.into()))
-                }
-                StrId(ref d) => Vec::<Value>::from_iter(
-                    d.data[offset..offset + k].iter().map(|x| x.clone().into()),
-                ),
-            };
-
-            result.push(SearchResult {
-                size: k as i64,
-                score,
-                field: result_data,
-                id,
-            });
-
-            offset += k;
-        }
-
-        Ok(result)
+        Ok(())
     }
 
-    async fn create_index_impl(
+    async fn create_index_impl<S>(
         &self,
+        collection_name: S,
         field_name: impl Into<String>,
         index_params: IndexParams,
-    ) -> Result<()> {
+    ) -> Result<()> 
+    where 
+    S: Into<String>,{
         let field_name = field_name.into();
-        self.schema().is_valid_vector_field(&field_name)?;
         let status = self
             .client
             .clone()
             .create_index(CreateIndexRequest {
                 base: Some(MsgBase::new(MsgType::CreateIndex)),
                 db_name: "".to_string(),
-                collection_name: self.schema().name.clone(),
+                collection_name: collection_name.into(),
                 field_name,
                 extra_params: index_params.extra_kv_params(),
                 index_name: index_params.name().clone(),
@@ -737,17 +480,21 @@ impl Collection {
         status_to_result(&Some(status))
     }
 
-    pub async fn create_index(
+    pub async fn create_index<S>(
         &self,
+        collection_name: S,
         field_name: impl Into<String>,
         index_params: IndexParams,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        S: Into<String>, {
+            let collection_name = collection_name.into();
         let field_name = field_name.into();
-        self.create_index_impl(field_name.clone(), index_params.clone())
+        self.create_index_impl(collection_name.clone(), field_name.clone(), index_params.clone())
             .await?;
 
         loop {
-            let index_infos = self.describe_index(field_name.clone()).await?;
+            let index_infos = self.describe_index(collection_name.clone(), field_name.clone()).await?;
 
             let index_info = index_infos
                 .iter()
@@ -767,7 +514,7 @@ impl Collection {
         }
     }
 
-    pub async fn describe_index<S>(&self, field_name: S) -> Result<Vec<IndexInfo>>
+    pub async fn describe_index<S>(&self,collection_name:S, field_name: S) -> Result<Vec<IndexInfo>>
     where
         S: Into<String>,
     {
@@ -777,9 +524,10 @@ impl Collection {
             .describe_index(DescribeIndexRequest {
                 base: Some(MsgBase::new(MsgType::DescribeIndex)),
                 db_name: "".to_string(),
-                collection_name: self.schema().name.clone(),
+                collection_name:  collection_name.into(),
                 field_name: field_name.into(),
                 index_name: "".to_string(),
+                timestamp: 0,
             })
             .await?
             .into_inner();
@@ -788,7 +536,7 @@ impl Collection {
         Ok(res.index_descriptions.into_iter().map(Into::into).collect())
     }
 
-    pub async fn drop_index<S>(&self, field_name: S) -> Result<()>
+    pub async fn drop_index<S>(&self, collection_name: S,field_name: S) -> Result<()>
     where
         S: Into<String>,
     {
@@ -798,7 +546,7 @@ impl Collection {
             .drop_index(DropIndexRequest {
                 base: Some(MsgBase::new(MsgType::DropIndex)),
                 db_name: "".to_string(),
-                collection_name: self.schema().name.clone(),
+                collection_name: collection_name.into(),
                 field_name: field_name.into(),
                 index_name: "".to_string(),
             })
@@ -806,71 +554,10 @@ impl Collection {
             .into_inner();
         status_to_result(&Some(status))
     }
-
-    async fn get_gts_from_consistency(&self, consistency_level: ConsistencyLevel) -> u64 {
-        match consistency_level {
-            ConsistencyLevel::Strong => STRONG_TIMESTAMP,
-            ConsistencyLevel::Bounded => BOUNDED_TIMESTAMP,
-            ConsistencyLevel::Eventually => EVENTUALLY_TIMESTAMP,
-            ConsistencyLevel::Session => *self
-                .session_timestamps
-                .read()
-                .await
-                .get(&self.info.collection_name)
-                .unwrap_or(&EVENTUALLY_TIMESTAMP),
-
-            // This level not works for now
-            ConsistencyLevel::Customized => 0,
-        }
-    }
 }
 
 pub type ParamValue = serde_json::Value;
 pub use serde_json::json as ParamValue;
-
-#[derive(Debug, Default)]
-pub struct SearchOption {
-    expr: Option<String>,
-    partitions: Option<Vec<String>>,
-    params: serde_json::Value,
-    consistency_level: Option<ConsistencyLevel>,
-}
-
-impl SearchOption {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn set_expr<S: Into<String>>(&mut self, expr: S) -> &mut Self {
-        self.expr = Some(expr.into());
-        self
-    }
-
-    pub fn set_partitions<I>(&mut self, partitions: I) -> &mut Self
-    where
-        I: IntoIterator,
-        I::Item: Into<String>,
-    {
-        self.partitions = Some(partitions.into_iter().map(Into::into).collect());
-        self
-    }
-
-    pub fn add_param<S: Into<String>>(&mut self, key: S, value: ParamValue) -> &mut Self {
-        if self.params.is_null() {
-            self.params = ParamValue!({});
-        }
-        self.params
-            .as_object_mut()
-            .unwrap()
-            .insert(key.into(), value);
-        self
-    }
-
-    pub fn set_consistency_level(&mut self, level: ConsistencyLevel) -> &mut Self {
-        self.consistency_level = Some(level);
-        self
-    }
-}
 
 // search result for a single vector
 pub struct SearchResult<'a> {
@@ -887,6 +574,9 @@ pub struct IndexProgress {
 
 #[derive(Debug, ThisError)]
 pub enum Error {
+    #[error("collection {0} not found")]
+    CollectionNotFound(String),
+
     #[error("type mismatched in {0:?}, available types: {1:?}")]
     IllegalType(String, Vec<DataType>),
 
@@ -895,56 +585,4 @@ pub enum Error {
 
     #[error("index build failed")]
     IndexBuildFailed,
-}
-
-fn get_place_holder_group(vectors: Vec<Value>) -> Result<Vec<u8>> {
-    let group = PlaceholderGroup {
-        placeholders: vec![get_place_holder_value(vectors)?],
-    };
-    let mut buf = BytesMut::new();
-    group.encode(&mut buf).unwrap();
-    return Ok(buf.to_vec());
-}
-
-fn get_place_holder_value(vectors: Vec<Value>) -> Result<PlaceholderValue> {
-    let mut place_holder = PlaceholderValue {
-        tag: "$0".to_string(),
-        r#type: PlaceholderType::None as _,
-        values: Vec::new(),
-    };
-    // if no vectors, return an empty one
-    if vectors.len() == 0 {
-        return Ok(place_holder);
-    };
-
-    match vectors[0] {
-        Value::FloatArray(_) => place_holder.r#type = PlaceholderType::FloatVector as _,
-        Value::Binary(_) => place_holder.r#type = PlaceholderType::BinaryVector as _,
-        _ => {
-            return Err(SuperError::from(Error::IllegalType(
-                "place holder".to_string(),
-                vec![DataType::BinaryVector, DataType::FloatVector],
-            )))
-        }
-    };
-
-    for v in &vectors {
-        match (v, &vectors[0]) {
-            (Value::FloatArray(d), Value::FloatArray(_)) => {
-                let mut bytes = Vec::<u8>::with_capacity(d.len() * 4);
-                for f in d.iter() {
-                    bytes.extend_from_slice(&f.to_le_bytes());
-                }
-                place_holder.values.push(bytes)
-            }
-            (Value::Binary(d), Value::Binary(_)) => place_holder.values.push(d.to_vec()),
-            _ => {
-                return Err(SuperError::from(Error::IllegalType(
-                    "place holder".to_string(),
-                    vec![DataType::BinaryVector, DataType::FloatVector],
-                )))
-            }
-        };
-    }
-    return Ok(place_holder);
 }

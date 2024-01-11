@@ -16,11 +16,14 @@
 
 pub mod client;
 pub mod collection;
+pub mod partition;
 pub mod data;
 pub mod error;
 pub mod schema;
 pub mod value;
 pub mod options;
+pub mod mutate;
+pub mod query;
 
 mod config;
 pub mod proto;

@@ -14,23 +14,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::collection::CollectionCache;
 use crate::config::RPC_TIMEOUT;
 use crate::error::{Error, Result};
-use crate::options::CreateCollectionOptions;
 pub use crate::proto::common::ConsistencyLevel;
 use crate::proto::common::{MsgBase, MsgType};
 use crate::proto::milvus::milvus_service_client::MilvusServiceClient;
-use crate::proto::milvus::{
-    CreateCollectionRequest, DescribeCollectionRequest, DropCollectionRequest, FlushRequest,
-    HasCollectionRequest, ShowCollectionsRequest,
-};
-use crate::schema::CollectionSchema;
+use crate::proto::milvus::FlushRequest;
 use crate::utils::status_to_result;
-use crate::{collection::Collection, proto::common::ErrorCode};
 use base64::engine::general_purpose;
 use base64::Engine;
-use prost::bytes::BytesMut;
-use prost::Message;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::time::Duration;
@@ -95,9 +88,10 @@ where
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Client {
-    client: MilvusServiceClient<InterceptedService<Channel, AuthInterceptor>>,
+    pub(crate) client: MilvusServiceClient<InterceptedService<Channel, AuthInterceptor>>,
+    pub(crate) collection_cache: CollectionCache,
 }
 
 impl Client {
@@ -142,110 +136,10 @@ impl Client {
 
         let client = MilvusServiceClient::with_interceptor(conn, auth_interceptor);
 
-        Ok(Self { client })
-    }
-
-    pub async fn create_collection(
-        &self,
-        schema: CollectionSchema,
-        options: Option<CreateCollectionOptions>,
-    ) -> Result<Collection> {
-        let options = options.unwrap_or_default();
-        let schema: crate::proto::schema::CollectionSchema = schema.into();
-        let mut buf = BytesMut::new();
-
-        schema.encode(&mut buf)?;
-
-        let status = self
-            .client
-            .clone()
-            .create_collection(CreateCollectionRequest {
-                base: Some(MsgBase::new(MsgType::CreateCollection)),
-                collection_name: schema.name.to_string(),
-                schema: buf.to_vec(),
-                shards_num: options.shard_num,
-                consistency_level: options.consistency_level as i32,
-                ..Default::default()
-            })
-            .await?
-            .into_inner();
-
-        status_to_result(&Some(status))?;
-
-        self.get_collection(&schema.name).await
-    }
-
-    pub async fn get_collection(&self, collection_name: &str) -> Result<Collection> {
-        let resp = self
-            .client
-            .clone()
-            .describe_collection(DescribeCollectionRequest {
-                base: Some(MsgBase::new(MsgType::DescribeCollection)),
-                db_name: "".to_owned(),
-                collection_name: collection_name.to_owned(),
-                collection_id: 0,
-                time_stamp: 0,
-            })
-            .await?
-            .into_inner();
-
-        status_to_result(&resp.status)?;
-
-        Ok(Collection::new(self.client.clone(), resp))
-    }
-
-    pub async fn has_collection<S>(&self, name: S) -> Result<bool>
-    where
-        S: Into<String>,
-    {
-        let name = name.into();
-        let res = self
-            .client
-            .clone()
-            .has_collection(HasCollectionRequest {
-                base: Some(MsgBase::new(MsgType::HasCollection)),
-                db_name: "".to_string(),
-                collection_name: name.clone(),
-                time_stamp: 0,
-            })
-            .await?
-            .into_inner();
-
-        status_to_result(&res.status)?;
-
-        Ok(res.value)
-    }
-
-    pub async fn drop_collection<S>(&self, name: S) -> Result<()>
-    where
-        S: Into<String>,
-    {
-        status_to_result(&Some(
-            self.client
-                .clone()
-                .drop_collection(DropCollectionRequest {
-                    base: Some(MsgBase::new(MsgType::DropCollection)),
-                    collection_name: name.into(),
-                    ..Default::default()
-                })
-                .await?
-                .into_inner(),
-        ))
-    }
-
-    pub async fn list_collections(&self) -> Result<Vec<String>> {
-        let response = self
-            .client
-            .clone()
-            .show_collections(ShowCollectionsRequest {
-                base: Some(MsgBase::new(MsgType::ShowCollections)),
-                ..Default::default()
-            })
-            .await?
-            .into_inner();
-
-        status_to_result(&response.status)?;
-        Ok(response.collection_names)
+        Ok(Self { 
+            client: client.clone(),
+        collection_cache: CollectionCache::new(client),
+        })
     }
 
     pub async fn flush_collections<C>(&self, collections: C) -> Result<HashMap<String, Vec<i64>>>
@@ -285,10 +179,7 @@ impl Client {
     /// # Returns
     ///
     /// Returns a `Result` indicating success or failure.
-    pub async fn create_alias<S>(&self, collection_name: S, alias: S) -> Result<()>
-    where
-        S: Into<String>,
-    {
+    pub async fn create_alias(&self, collection_name: impl Into<String>, alias: impl Into<String>) -> Result<()>{
         let collection_name = collection_name.into();
         let alias = alias.into();
         status_to_result(&Some(
@@ -342,9 +233,7 @@ impl Client {
     /// # Returns
     ///
     /// Returns a `Result` indicating success or failure.
-    pub async fn alter_alias<S>(&self, collection_name: S, alias: S) -> Result<()>
-    where
-        S: Into<String>,
+    pub async fn alter_alias(&self, collection_name: impl Into<String>, alias: impl Into<String>) -> Result<()>
     {
         let collection_name = collection_name.into();
         let alias = alias.into();

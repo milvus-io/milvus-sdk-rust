@@ -22,6 +22,10 @@ pub mod common;
 pub mod milvus;
 #[path = "milvus.proto.schema.rs"]
 pub mod schema;
+#[path = "milvus.proto.msg.rs"]
+pub mod msg;
+#[path = "milvus.proto.feder.rs"]
+pub mod feder;
 
 impl MsgBase {
     pub fn new(msg_type: MsgType) -> Self {
