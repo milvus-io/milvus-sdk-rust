@@ -1,7 +1,7 @@
 use milvus::index::{IndexParams, IndexType};
 use milvus::options::LoadOptions;
 use milvus::query::QueryOptions;
-use milvus::schema::{CollectionSchemaBuilder, CollectionSchema};
+use milvus::schema::{CollectionSchema, CollectionSchemaBuilder};
 use milvus::{
     client::Client, collection::Collection, data::FieldColumn, error::Error, schema::FieldSchema,
 };
@@ -48,12 +48,12 @@ async fn hello_milvus(client: &Client, collection: &CollectionSchema) -> Result<
         let embed = rng.gen();
         embed_data.push(embed);
     }
-    let embed_column = FieldColumn::new(
-        collection.get_field(DEFAULT_VEC_FIELD).unwrap(),
-        embed_data,
-    );
+    let embed_column =
+        FieldColumn::new(collection.get_field(DEFAULT_VEC_FIELD).unwrap(), embed_data);
 
-    client.insert(collection.name(), vec![embed_column], None).await?;
+    client
+        .insert(collection.name(), vec![embed_column], None)
+        .await?;
     client.flush(collection.name()).await?;
     let index_params = IndexParams::new(
         "feature_index".to_owned(),
@@ -64,7 +64,9 @@ async fn hello_milvus(client: &Client, collection: &CollectionSchema) -> Result<
     client
         .create_index(collection.name(), DEFAULT_VEC_FIELD, index_params)
         .await?;
-    client.load_collection(collection.name(), Some(LoadOptions::default())).await?;
+    client
+        .load_collection(collection.name(), Some(LoadOptions::default()))
+        .await?;
 
     let options = QueryOptions::default();
     let result = client.query(collection.name(), "id > 0", &options).await?;

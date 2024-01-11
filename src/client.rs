@@ -136,9 +136,9 @@ impl Client {
 
         let client = MilvusServiceClient::with_interceptor(conn, auth_interceptor);
 
-        Ok(Self { 
+        Ok(Self {
             client: client.clone(),
-        collection_cache: CollectionCache::new(client),
+            collection_cache: CollectionCache::new(client),
         })
     }
 
@@ -179,7 +179,11 @@ impl Client {
     /// # Returns
     ///
     /// Returns a `Result` indicating success or failure.
-    pub async fn create_alias(&self, collection_name: impl Into<String>, alias: impl Into<String>) -> Result<()>{
+    pub async fn create_alias(
+        &self,
+        collection_name: impl Into<String>,
+        alias: impl Into<String>,
+    ) -> Result<()> {
         let collection_name = collection_name.into();
         let alias = alias.into();
         status_to_result(&Some(
@@ -233,8 +237,11 @@ impl Client {
     /// # Returns
     ///
     /// Returns a `Result` indicating success or failure.
-    pub async fn alter_alias(&self, collection_name: impl Into<String>, alias: impl Into<String>) -> Result<()>
-    {
+    pub async fn alter_alias(
+        &self,
+        collection_name: impl Into<String>,
+        alias: impl Into<String>,
+    ) -> Result<()> {
         let collection_name = collection_name.into();
         let alias = alias.into();
         status_to_result(&Some(

@@ -1,20 +1,22 @@
 use std::borrow::Borrow;
 use std::collections::HashMap;
 
-use prost::Message;
 use prost::bytes::BytesMut;
+use prost::Message;
 
 use crate::client::{Client, ConsistencyLevel};
-use crate::collection::{SearchResult, ParamValue};
+use crate::collection::{ParamValue, SearchResult};
 use crate::data::FieldColumn;
+use crate::error::Error as SuperError;
 use crate::index::MetricType;
-use crate::proto::common::{MsgBase, MsgType, KeyValuePair, PlaceholderGroup, PlaceholderValue, PlaceholderType, DslType};
+use crate::proto::common::{
+    DslType, KeyValuePair, MsgBase, MsgType, PlaceholderGroup, PlaceholderType, PlaceholderValue,
+};
 use crate::proto::milvus::SearchRequest;
 use crate::proto::schema::DataType;
 use crate::utils::status_to_result;
 use crate::value::Value;
 use crate::{error::*, proto};
-use crate::error::Error as SuperError;
 
 const STRONG_TIMESTAMP: u64 = 0;
 const BOUNDED_TIMESTAMP: u64 = 2;
@@ -64,7 +66,7 @@ pub struct SearchOptions {
     pub(crate) limit: usize,
     pub(crate) output_fields: Vec<String>,
     pub(crate) partitions: Vec<String>,
-    pub(crate) params:      serde_json::Value,
+    pub(crate) params: serde_json::Value,
     pub(crate) metric_type: MetricType,
 }
 
@@ -152,174 +154,192 @@ impl SearchOptions {
 }
 
 impl Client {
-pub(crate) async fn get_gts_from_consistency(&self,collection_name:&str, consistency_level: ConsistencyLevel) -> u64 {
-    match consistency_level {
-        ConsistencyLevel::Strong => STRONG_TIMESTAMP,
-        ConsistencyLevel::Bounded => BOUNDED_TIMESTAMP,
-        ConsistencyLevel::Eventually => EVENTUALLY_TIMESTAMP,
-        ConsistencyLevel::Session => self.collection_cache.get_timestamp(collection_name).unwrap_or(EVENTUALLY_TIMESTAMP),
+    pub(crate) async fn get_gts_from_consistency(
+        &self,
+        collection_name: &str,
+        consistency_level: ConsistencyLevel,
+    ) -> u64 {
+        match consistency_level {
+            ConsistencyLevel::Strong => STRONG_TIMESTAMP,
+            ConsistencyLevel::Bounded => BOUNDED_TIMESTAMP,
+            ConsistencyLevel::Eventually => EVENTUALLY_TIMESTAMP,
+            ConsistencyLevel::Session => self
+                .collection_cache
+                .get_timestamp(collection_name)
+                .unwrap_or(EVENTUALLY_TIMESTAMP),
 
-        // This level not works for now
-        ConsistencyLevel::Customized => 0,
-    }
-}
-
-pub async fn query<S,Exp>(&self,collection_name:S  , expr: Exp, options: &QueryOptions) -> Result<Vec<FieldColumn>>
-where
-    S: AsRef<str>,
-    Exp: AsRef<str>,
-{
-    let collection_name = collection_name.as_ref();
-    let collection = self
-        .collection_cache
-        .get(collection_name).await?;
-
-    let consistency_level = collection.consistency_level;
-    let mut output_fields = options.output_fields.clone();
-    if output_fields.is_empty() {
-       output_fields = collection.fields.iter().map(|f| f.name.clone()).collect();
+            // This level not works for now
+            ConsistencyLevel::Customized => 0,
+        }
     }
 
-    let res = self
-        .client
-        .clone()
-        .query(proto::milvus::QueryRequest {
-            base: Some(MsgBase::new(MsgType::Retrieve)),
-            db_name: "".to_owned(),
-            collection_name: collection_name.to_owned(),
-            expr: expr.as_ref().to_owned(),
-            output_fields: output_fields,
-            partition_names: options.partition_names.clone(),
-            travel_timestamp: 0,
-            guarantee_timestamp: self.get_gts_from_consistency(collection_name, consistency_level).await,
-            query_params: Vec::new(),
-            not_return_all_meta: false,
-            consistency_level: ConsistencyLevel::default() as _,
-            use_default_consistency: false,
-        })
-        .await?
-        .into_inner();
+    pub async fn query<S, Exp>(
+        &self,
+        collection_name: S,
+        expr: Exp,
+        options: &QueryOptions,
+    ) -> Result<Vec<FieldColumn>>
+    where
+        S: AsRef<str>,
+        Exp: AsRef<str>,
+    {
+        let collection_name = collection_name.as_ref();
+        let collection = self.collection_cache.get(collection_name).await?;
 
-    status_to_result(&res.status)?;
-
-    Ok(res
-        .fields_data
-        .into_iter()
-        .map(|f| FieldColumn::from(f))
-        .collect())
-}
-
-pub async fn search<S>(
-    &self,
-    collection_name:S,
-    data: Vec<Value<'_>>,
-    vec_field: S,
-    option: &SearchOptions,
-) -> Result<Vec<SearchResult<'_>>>
-where
-    S: Into<String>,
-{
-    // check and prepare params
-    let search_params: Vec<KeyValuePair> = vec![
-        KeyValuePair {
-            key: "anns_field".to_owned(),
-            value: vec_field.into(),
-        },
-        KeyValuePair {
-            key: "topk".to_owned(),
-            value: option.limit.to_string(),
-        },
-        KeyValuePair {
-            key: "params".to_owned(),
-            value: serde_json::to_string(&option.params)?,
-        },
-        KeyValuePair {
-            key: "metric_type".to_owned(),
-            value: option.metric_type.to_string(),
-        },
-        KeyValuePair {
-            key: "round_decimal".to_owned(),
-            value: "-1".to_owned(),
-        },
-    ];
-
-    let collection_name = collection_name.into();
-    let collection = self.collection_cache.get(&collection_name).await?;
-
-    let res = self
-        .client
-        .clone()
-        .search(SearchRequest {
-            base: Some(MsgBase::new(MsgType::Search)),
-            db_name: "".to_string(),
-            collection_name: collection_name.clone(),
-            partition_names: option.partitions.clone(),
-            dsl: option.expr.clone(),
-            nq: data.len() as _,
-            placeholder_group: get_place_holder_group(data)?,
-            dsl_type: DslType::BoolExprV1 as _,
-            output_fields: option.output_fields.clone().into_iter().map(|f| f.into()).collect(),
-            search_params,
-            travel_timestamp: 0,
-            guarantee_timestamp: self.get_gts_from_consistency(&collection_name, collection.consistency_level).await,
-            not_return_all_meta: false,
-            consistency_level: ConsistencyLevel::default() as _,
-            use_default_consistency: false,
-            search_by_primary_keys: false,
-        })
-        .await?
-        .into_inner();
-    status_to_result(&res.status)?;
-    let raw_data = res
-        .results
-        .ok_or(SuperError::Unexpected("no result for search".to_owned()))?;
-    let mut result = Vec::new();
-    let mut offset = 0;
-    let fields_data = raw_data
-        .fields_data
-        .into_iter()
-        .map(Into::into)
-        .collect::<Vec<FieldColumn>>();
-    let raw_id = raw_data.ids.unwrap().id_field.unwrap();
-
-    for k in raw_data.topks {
-        let k = k as usize;
-        let mut score = Vec::new();
-        score.extend_from_slice(&raw_data.scores[offset..offset + k]);
-        let mut result_data = fields_data
-            .iter()
-            .map(FieldColumn::copy_with_metadata)
-            .collect::<Vec<FieldColumn>>();
-        for j in 0..fields_data.len() {
-            for i in offset..offset + k {
-                result_data[j].push(fields_data[j].get(i).ok_or(SuperError::Unexpected(
-                    "out of range while indexing field data".to_owned(),
-                ))?);
-            }
+        let consistency_level = collection.consistency_level;
+        let mut output_fields = options.output_fields.clone();
+        if output_fields.is_empty() {
+            output_fields = collection.fields.iter().map(|f| f.name.clone()).collect();
         }
 
-        let id = match raw_id {
-            proto::schema::i_ds::IdField::IntId(ref d) => {
-                Vec::<Value>::from_iter(d.data[offset..offset + k].iter().map(|&x| x.into()))
-            }
-            proto::schema::i_ds::IdField::StrId(ref d) => Vec::<Value>::from_iter(
-                d.data[offset..offset + k].iter().map(|x| x.clone().into()),
-            ),
-        };
+        let res = self
+            .client
+            .clone()
+            .query(proto::milvus::QueryRequest {
+                base: Some(MsgBase::new(MsgType::Retrieve)),
+                db_name: "".to_owned(),
+                collection_name: collection_name.to_owned(),
+                expr: expr.as_ref().to_owned(),
+                output_fields: output_fields,
+                partition_names: options.partition_names.clone(),
+                travel_timestamp: 0,
+                guarantee_timestamp: self
+                    .get_gts_from_consistency(collection_name, consistency_level)
+                    .await,
+                query_params: Vec::new(),
+                not_return_all_meta: false,
+                consistency_level: ConsistencyLevel::default() as _,
+                use_default_consistency: false,
+            })
+            .await?
+            .into_inner();
 
-        result.push(SearchResult {
-            size: k as i64,
-            score,
-            field: result_data,
-            id,
-        });
+        status_to_result(&res.status)?;
 
-        offset += k;
+        Ok(res
+            .fields_data
+            .into_iter()
+            .map(|f| FieldColumn::from(f))
+            .collect())
     }
 
-    Ok(result)
-}
+    pub async fn search<S>(
+        &self,
+        collection_name: S,
+        data: Vec<Value<'_>>,
+        vec_field: S,
+        option: &SearchOptions,
+    ) -> Result<Vec<SearchResult<'_>>>
+    where
+        S: Into<String>,
+    {
+        // check and prepare params
+        let search_params: Vec<KeyValuePair> = vec![
+            KeyValuePair {
+                key: "anns_field".to_owned(),
+                value: vec_field.into(),
+            },
+            KeyValuePair {
+                key: "topk".to_owned(),
+                value: option.limit.to_string(),
+            },
+            KeyValuePair {
+                key: "params".to_owned(),
+                value: serde_json::to_string(&option.params)?,
+            },
+            KeyValuePair {
+                key: "metric_type".to_owned(),
+                value: option.metric_type.to_string(),
+            },
+            KeyValuePair {
+                key: "round_decimal".to_owned(),
+                value: "-1".to_owned(),
+            },
+        ];
 
+        let collection_name = collection_name.into();
+        let collection = self.collection_cache.get(&collection_name).await?;
+
+        let res = self
+            .client
+            .clone()
+            .search(SearchRequest {
+                base: Some(MsgBase::new(MsgType::Search)),
+                db_name: "".to_string(),
+                collection_name: collection_name.clone(),
+                partition_names: option.partitions.clone(),
+                dsl: option.expr.clone(),
+                nq: data.len() as _,
+                placeholder_group: get_place_holder_group(data)?,
+                dsl_type: DslType::BoolExprV1 as _,
+                output_fields: option
+                    .output_fields
+                    .clone()
+                    .into_iter()
+                    .map(|f| f.into())
+                    .collect(),
+                search_params,
+                travel_timestamp: 0,
+                guarantee_timestamp: self
+                    .get_gts_from_consistency(&collection_name, collection.consistency_level)
+                    .await,
+                not_return_all_meta: false,
+                consistency_level: ConsistencyLevel::default() as _,
+                use_default_consistency: false,
+                search_by_primary_keys: false,
+            })
+            .await?
+            .into_inner();
+        status_to_result(&res.status)?;
+        let raw_data = res
+            .results
+            .ok_or(SuperError::Unexpected("no result for search".to_owned()))?;
+        let mut result = Vec::new();
+        let mut offset = 0;
+        let fields_data = raw_data
+            .fields_data
+            .into_iter()
+            .map(Into::into)
+            .collect::<Vec<FieldColumn>>();
+        let raw_id = raw_data.ids.unwrap().id_field.unwrap();
+
+        for k in raw_data.topks {
+            let k = k as usize;
+            let mut score = Vec::new();
+            score.extend_from_slice(&raw_data.scores[offset..offset + k]);
+            let mut result_data = fields_data
+                .iter()
+                .map(FieldColumn::copy_with_metadata)
+                .collect::<Vec<FieldColumn>>();
+            for j in 0..fields_data.len() {
+                for i in offset..offset + k {
+                    result_data[j].push(fields_data[j].get(i).ok_or(SuperError::Unexpected(
+                        "out of range while indexing field data".to_owned(),
+                    ))?);
+                }
+            }
+
+            let id = match raw_id {
+                proto::schema::i_ds::IdField::IntId(ref d) => {
+                    Vec::<Value>::from_iter(d.data[offset..offset + k].iter().map(|&x| x.into()))
+                }
+                proto::schema::i_ds::IdField::StrId(ref d) => Vec::<Value>::from_iter(
+                    d.data[offset..offset + k].iter().map(|x| x.clone().into()),
+                ),
+            };
+
+            result.push(SearchResult {
+                size: k as i64,
+                score,
+                field: result_data,
+                id,
+            });
+
+            offset += k;
+        }
+
+        Ok(result)
+    }
 }
 
 fn get_place_holder_group(vectors: Vec<Value>) -> Result<Vec<u8>> {

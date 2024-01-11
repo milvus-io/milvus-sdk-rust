@@ -1,10 +1,11 @@
 use std::borrow::Cow;
 
-use crate::{
-    proto::{schema::{
+use crate::proto::{
+    self,
+    schema::{
         field_data::Field, scalar_field::Data as ScalarData, vector_field::Data as VectorData,
         DataType,
-    }, self},
+    },
 };
 
 pub enum Value<'a> {

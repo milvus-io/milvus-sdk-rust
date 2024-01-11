@@ -1,12 +1,23 @@
 use std::collections::HashMap;
 
-use crate::{client::Client, proto::{common::{MsgBase, MsgType}, self}, utils::status_to_result};
 use crate::error::*;
+use crate::{
+    client::Client,
+    proto::{
+        self,
+        common::{MsgBase, MsgType},
+    },
+    utils::status_to_result,
+};
 
 impl Client {
-    pub async fn create_partition(&self, collection_name: String, partition_name: String) -> Result<()> {
-        status_to_result(
-            &Some(self.client
+    pub async fn create_partition(
+        &self,
+        collection_name: String,
+        partition_name: String,
+    ) -> Result<()> {
+        status_to_result(&Some(
+            self.client
                 .clone()
                 .create_partition(crate::proto::milvus::CreatePartitionRequest {
                     base: Some(MsgBase::new(MsgType::CreatePartition)),
@@ -19,9 +30,13 @@ impl Client {
         ))
     }
 
-    pub async fn drop_partition(&self, collection_name: String, partition_name: String) -> Result<()> {
-        status_to_result(
-            &Some(self.client
+    pub async fn drop_partition(
+        &self,
+        collection_name: String,
+        partition_name: String,
+    ) -> Result<()> {
+        status_to_result(&Some(
+            self.client
                 .clone()
                 .drop_partition(crate::proto::milvus::DropPartitionRequest {
                     base: Some(MsgBase::new(MsgType::DropPartition)),
@@ -42,9 +57,9 @@ impl Client {
                 base: Some(MsgBase::new(MsgType::ShowPartitions)),
                 db_name: "".to_string(), // reserved
                 collection_name,
-                collection_id: 0, // reserved
+                collection_id: 0,        // reserved
                 partition_names: vec![], // reserved
-                r#type: 0, // reserved
+                r#type: 0,               // reserved
             })
             .await?
             .into_inner();
@@ -52,7 +67,11 @@ impl Client {
         Ok(res.partition_names)
     }
 
-    pub async fn has_partition(&self, collection_name: String, partition_name: String) -> Result<bool> {
+    pub async fn has_partition(
+        &self,
+        collection_name: String,
+        partition_name: String,
+    ) -> Result<bool> {
         let res = self
             .client
             .clone()
@@ -68,7 +87,11 @@ impl Client {
         Ok(res.value)
     }
 
-    pub async fn get_partition_stats(&self, collection_name: String, partition_name: String) -> Result<HashMap<String,String>> {
+    pub async fn get_partition_stats(
+        &self,
+        collection_name: String,
+        partition_name: String,
+    ) -> Result<HashMap<String, String>> {
         let res = self
             .client
             .clone()

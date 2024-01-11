@@ -14,12 +14,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{proto::{common::{
-    ConsistencyLevel, IndexState, MsgBase, MsgType,
-}, milvus::{DescribeCollectionRequest, milvus_service_client::MilvusServiceClient}, self}, client::{Client, AuthInterceptor}, options::{CreateCollectionOptions, LoadOptions, GetLoadStateOptions}};
+use crate::config;
+use crate::data::FieldColumn;
+use crate::error::{Error as SuperError, Result};
+use crate::index::{IndexInfo, IndexParams};
 use crate::proto::milvus::{
-    CreateCollectionRequest, CreateIndexRequest, DescribeIndexRequest, DropCollectionRequest, DropIndexRequest,
-    FlushRequest, HasCollectionRequest, LoadCollectionRequest,
+    CreateCollectionRequest, CreateIndexRequest, DescribeIndexRequest, DropCollectionRequest,
+    DropIndexRequest, FlushRequest, HasCollectionRequest, LoadCollectionRequest,
     ReleaseCollectionRequest, ShowCollectionsRequest,
 };
 use crate::proto::schema::DataType;
@@ -27,19 +28,24 @@ use crate::schema::CollectionSchema;
 use crate::types::*;
 use crate::utils::status_to_result;
 use crate::value::Value;
-use crate::config;
-use crate::data::FieldColumn;
-use crate::error::{Error as SuperError, Result};
-use crate::index::{IndexInfo, IndexParams};
+use crate::{
+    client::{AuthInterceptor, Client},
+    options::{CreateCollectionOptions, GetLoadStateOptions, LoadOptions},
+    proto::{
+        self,
+        common::{ConsistencyLevel, IndexState, MsgBase, MsgType},
+        milvus::{milvus_service_client::MilvusServiceClient, DescribeCollectionRequest},
+    },
+};
 use prost::bytes::BytesMut;
 use prost::Message;
 use serde_json;
-use tonic::{service::interceptor::InterceptedService, transport::Channel};
 use std::collections::HashMap;
 use std::time::Duration;
 use thiserror::Error as ThisError;
+use tonic::{service::interceptor::InterceptedService, transport::Channel};
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct Collection {
     pub id: i64,
     pub name: String,
@@ -53,7 +59,7 @@ pub struct Collection {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct CollectionCache{
+pub(crate) struct CollectionCache {
     collections: dashmap::DashMap<String, Collection>,
     timestamps: dashmap::DashMap<String, Timestamp>,
     client: MilvusServiceClient<InterceptedService<Channel, AuthInterceptor>>,
@@ -71,31 +77,40 @@ impl CollectionCache {
     pub async fn get<'a>(&self, name: &str) -> Result<Collection> {
         if !self.local_exist(name) {
             let resp = self
-            .client
-            .clone()
-            .describe_collection(DescribeCollectionRequest {
-                base: Some(MsgBase::new(MsgType::DescribeCollection)),
-                db_name: "".to_owned(),
-                collection_name: name.into(),
-                collection_id: 0,
-                time_stamp: 0,
-            })
-            .await?
-            .into_inner();
+                .client
+                .clone()
+                .describe_collection(DescribeCollectionRequest {
+                    base: Some(MsgBase::new(MsgType::DescribeCollection)),
+                    db_name: "".to_owned(),
+                    collection_name: name.into(),
+                    collection_id: 0,
+                    time_stamp: 0,
+                })
+                .await?
+                .into_inner();
 
             status_to_result(&resp.status)?;
-            self.collections.insert(name.to_owned(), Collection::from(resp));
+            self.collections
+                .insert(name.to_owned(), Collection::from(resp));
         }
 
-      self.collections.get(name).map(|v| v.value().clone()).ok_or(SuperError::Collection(Error::CollectionNotFound(name.to_owned())))
+        self.collections
+            .get(name)
+            .map(|v| v.value().clone())
+            .ok_or(SuperError::Collection(Error::CollectionNotFound(
+                name.to_owned(),
+            )))
     }
 
     pub fn update_timestamp(&self, name: &str, timestamp: Timestamp) {
-        self.timestamps.entry(name.to_owned()).and_modify(|t|  {
-            if *t < timestamp {
-            *t = timestamp;
-    }
-}).or_insert(timestamp);
+        self.timestamps
+            .entry(name.to_owned())
+            .and_modify(|t| {
+                if *t < timestamp {
+                    *t = timestamp;
+                }
+            })
+            .or_insert(timestamp);
     }
 
     pub fn get_timestamp(&self, name: &str) -> Option<Timestamp> {
@@ -118,10 +133,7 @@ impl From<proto::milvus::DescribeCollectionResponse> for Collection {
             // num_partitions: value.partitions_num as usize,
             consistency_level: ConsistencyLevel::from_i32(value.consistency_level).unwrap(),
             description: schema.description,
-            fields: schema.fields
-                .into_iter()
-                .map(|f| Field::from(f))
-                .collect(),
+            fields: schema.fields.into_iter().map(|f| Field::from(f)).collect(),
             // enable_dynamic_field: value.enable_dynamic_field,
         }
     }
@@ -136,7 +148,6 @@ pub struct Partition {
 type ConcurrentHashMap<K, V> = tokio::sync::RwLock<std::collections::HashMap<K, V>>;
 
 impl Client {
-
     /// Creates a new collection with the specified schema and options.
     ///
     /// # Arguments
@@ -216,7 +227,7 @@ impl Client {
         status_to_result(&response.status)?;
         Ok(response.collection_names)
     }
-    
+
     /// Retrieves information about a collection.
     ///
     /// # Arguments
@@ -228,7 +239,7 @@ impl Client {
     /// Returns a `Result` containing the `Collection` information if successful, or an error if the collection does not exist or cannot be accessed.
     pub async fn describe_collection<S>(&self, name: S) -> Result<Collection>
     where
-    S: Into<String>,
+        S: Into<String>,
     {
         let resp = self
             .client
@@ -302,8 +313,6 @@ impl Client {
     //     Ok(())
     // }
 
-
-    
     /// Retrieves the statistics of a collection.
     ///
     /// # Arguments
@@ -313,7 +322,7 @@ impl Client {
     /// # Returns
     ///
     /// A `Result` containing a `HashMap` with string keys and string values representing the collection statistics.
-    pub async fn get_collection_stats(&self, name: &str) -> Result<HashMap<String,String>> {
+    pub async fn get_collection_stats(&self, name: &str) -> Result<HashMap<String, String>> {
         let res = self
             .client
             .clone()
@@ -340,12 +349,16 @@ impl Client {
     /// # Returns
     ///
     /// Returns a `Result` indicating success or failure.
-    pub async fn load_collection<S>(&self, collection_name: S, options: Option<LoadOptions>) -> Result<()>
+    pub async fn load_collection<S>(
+        &self,
+        collection_name: S,
+        options: Option<LoadOptions>,
+    ) -> Result<()>
     where
-    S: Into<String>,
-        {
-            let options = options.unwrap_or_default();
-            let collection_name = collection_name.into();
+        S: Into<String>,
+    {
+        let options = options.unwrap_or_default();
+        let collection_name = collection_name.into();
         status_to_result(&Some(
             self.client
                 .clone()
@@ -363,10 +376,14 @@ impl Client {
 
         loop {
             match self.get_load_state(&collection_name, None).await? {
-                proto::common::LoadState::NotExist => return Err(SuperError::Unexpected("collection not found".to_owned())),
+                proto::common::LoadState::NotExist => {
+                    return Err(SuperError::Unexpected("collection not found".to_owned()))
+                }
                 proto::common::LoadState::Loading => (),
                 proto::common::LoadState::Loaded => return Ok(()),
-                proto::common::LoadState::NotLoad => return Err(SuperError::Unexpected("collection not loaded".to_owned())),
+                proto::common::LoadState::NotLoad => {
+                    return Err(SuperError::Unexpected("collection not loaded".to_owned()))
+                }
             }
 
             tokio::time::sleep(Duration::from_millis(config::WAIT_LOAD_DURATION_MS)).await;
@@ -387,9 +404,13 @@ impl Client {
     /// # Errors
     ///
     /// Returns an error if the load state retrieval fails.
-    pub async fn get_load_state<S>(&self, collection_name: S, options: Option<GetLoadStateOptions>) -> Result<crate::proto::common::LoadState>
+    pub async fn get_load_state<S>(
+        &self,
+        collection_name: S,
+        options: Option<GetLoadStateOptions>,
+    ) -> Result<crate::proto::common::LoadState>
     where
-    S: Into<String>,
+        S: Into<String>,
     {
         let options = options.unwrap_or_default();
         let res = self
@@ -437,8 +458,8 @@ impl Client {
 
     pub async fn flush<S>(&self, collection_name: S) -> Result<()>
     where
-    S: Into<String>,
-     {
+        S: Into<String>,
+    {
         let res = self
             .client
             .clone()
@@ -460,9 +481,10 @@ impl Client {
         collection_name: S,
         field_name: impl Into<String>,
         index_params: IndexParams,
-    ) -> Result<()> 
-    where 
-    S: Into<String>,{
+    ) -> Result<()>
+    where
+        S: Into<String>,
+    {
         let field_name = field_name.into();
         let status = self
             .client
@@ -487,14 +509,21 @@ impl Client {
         index_params: IndexParams,
     ) -> Result<()>
     where
-        S: Into<String>, {
-            let collection_name = collection_name.into();
+        S: Into<String>,
+    {
+        let collection_name = collection_name.into();
         let field_name = field_name.into();
-        self.create_index_impl(collection_name.clone(), field_name.clone(), index_params.clone())
-            .await?;
+        self.create_index_impl(
+            collection_name.clone(),
+            field_name.clone(),
+            index_params.clone(),
+        )
+        .await?;
 
         loop {
-            let index_infos = self.describe_index(collection_name.clone(), field_name.clone()).await?;
+            let index_infos = self
+                .describe_index(collection_name.clone(), field_name.clone())
+                .await?;
 
             let index_info = index_infos
                 .iter()
@@ -514,7 +543,11 @@ impl Client {
         }
     }
 
-    pub async fn describe_index<S>(&self,collection_name:S, field_name: S) -> Result<Vec<IndexInfo>>
+    pub async fn describe_index<S>(
+        &self,
+        collection_name: S,
+        field_name: S,
+    ) -> Result<Vec<IndexInfo>>
     where
         S: Into<String>,
     {
@@ -524,7 +557,7 @@ impl Client {
             .describe_index(DescribeIndexRequest {
                 base: Some(MsgBase::new(MsgType::DescribeIndex)),
                 db_name: "".to_string(),
-                collection_name:  collection_name.into(),
+                collection_name: collection_name.into(),
                 field_name: field_name.into(),
                 index_name: "".to_string(),
                 timestamp: 0,
@@ -536,7 +569,7 @@ impl Client {
         Ok(res.index_descriptions.into_iter().map(Into::into).collect())
     }
 
-    pub async fn drop_index<S>(&self, collection_name: S,field_name: S) -> Result<()>
+    pub async fn drop_index<S>(&self, collection_name: S, field_name: S) -> Result<()>
     where
         S: Into<String>,
     {

@@ -1,4 +1,4 @@
-use crate::proto::{schema::DataType, self};
+use crate::proto::{self, schema::DataType};
 
 pub(crate) type Timestamp = u64;
 
