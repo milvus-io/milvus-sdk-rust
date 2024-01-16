@@ -9,7 +9,7 @@ use crate::{
     proto::{
         self,
         common::{MsgBase, MsgType},
-        milvus::InsertRequest,
+        milvus::{InsertRequest, UpsertRequest},
         schema::{scalar_field::Data, DataType},
     },
     schema::FieldData,
@@ -188,5 +188,39 @@ impl Client {
         expr.push(')');
 
         Ok(expr)
+    }
+
+    pub async fn upsert<S>(
+        &self,
+        collection_name: S,
+        fields_data: Vec<FieldColumn>,
+        options: Option<InsertOptions>,
+    ) -> Result<crate::proto::milvus::MutationResult>
+    where
+        S: Into<String>,
+    {
+        let options = options.unwrap_or_default();
+        let row_num = fields_data.first().map(|c| c.len()).unwrap_or(0);
+        let collection_name = collection_name.into();
+
+        let result = self
+            .client
+            .clone()
+            .upsert(UpsertRequest {
+                base: Some(MsgBase::new(MsgType::Upsert)),
+                db_name: "".to_string(),
+                collection_name: collection_name.clone(),
+                partition_name: options.partition_name,
+                num_rows: row_num as u32,
+                fields_data: fields_data.into_iter().map(|f| f.into()).collect(),
+                hash_keys: Vec::new(),
+            })
+            .await?
+            .into_inner();
+
+        self.collection_cache
+            .update_timestamp(&collection_name, result.timestamp);
+
+        Ok(result)
     }
 }
