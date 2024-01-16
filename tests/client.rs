@@ -107,8 +107,8 @@ async fn create_alter_drop_alias() -> Result<()> {
 
     let client = Client::new(URL).await?;
 
-    let (_, schema1) = create_test_collection().await?;
-    let (_, schema2) = create_test_collection().await?;
+    let (_, schema1) = create_test_collection(true).await?;
+    let (_, schema2) = create_test_collection(true).await?;
 
     client.create_alias(schema1.name(), &alias0).await?;
     assert!(client.has_collection(alias0).await?);
