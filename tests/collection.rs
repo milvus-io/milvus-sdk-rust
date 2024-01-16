@@ -28,6 +28,14 @@ mod common;
 use common::*;
 
 #[tokio::test]
+async fn manual_compaction_empty_collection() -> Result<()> {
+    let (client, schema) = create_test_collection().await?;
+    let resp = client.manual_compaction(schema.name()).await?;
+    assert_eq!(0, resp.plan_count);
+    Ok(())
+}
+
+#[tokio::test]
 async fn collection_basic() -> Result<()> {
     let (client, schema) = create_test_collection().await?;
 
