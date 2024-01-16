@@ -116,6 +116,14 @@ impl SearchOptions {
         Self::default().metric_type(metric_type)
     }
 
+    pub fn radius(self, radius: f32) -> Self {
+        self.add_param("radius", ParamValue!(radius))
+    }
+
+    pub fn range_filter(self, filter: f32) -> Self {
+        self.add_param("range_filter", ParamValue!(filter))
+    }
+
     pub fn expr(mut self, expr: String) -> Self {
         self.expr = expr;
         self
