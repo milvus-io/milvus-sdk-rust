@@ -20,7 +20,8 @@ use crate::error::{Error as SuperError, Result};
 use crate::index::{IndexInfo, IndexParams};
 use crate::proto::milvus::{
     CreateCollectionRequest, CreateIndexRequest, DescribeIndexRequest, DropCollectionRequest,
-    DropIndexRequest, FlushRequest, HasCollectionRequest, LoadCollectionRequest,
+    DropIndexRequest, FlushRequest, GetCompactionStateRequest, GetCompactionStateResponse,
+    HasCollectionRequest, LoadCollectionRequest, ManualCompactionRequest, ManualCompactionResponse,
     ReleaseCollectionRequest, ShowCollectionsRequest,
 };
 use crate::proto::schema::DataType;
@@ -143,6 +144,42 @@ impl From<proto::milvus::DescribeCollectionResponse> for Collection {
 pub struct Partition {
     pub name: String,
     pub percentage: i64,
+}
+
+#[derive(Debug)]
+pub struct CompactionInfo {
+    pub id: i64,
+    pub plan_count: i32,
+}
+
+impl From<ManualCompactionResponse> for CompactionInfo {
+    fn from(value: proto::milvus::ManualCompactionResponse) -> Self {
+        Self {
+            id: value.compaction_id,
+            plan_count: value.compaction_plan_count,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct CompactionState {
+    pub state: crate::proto::common::CompactionState,
+    pub executing_plan_num: i64,
+    pub timeout_plan_num: i64,
+    pub completed_plan_num: i64,
+    pub failed_plan_num: i64,
+}
+
+impl From<GetCompactionStateResponse> for CompactionState {
+    fn from(value: GetCompactionStateResponse) -> Self {
+        Self {
+            state: crate::proto::common::CompactionState::from_i32(value.state).unwrap(),
+            executing_plan_num: value.executing_plan_no,
+            timeout_plan_num: value.timeout_plan_no,
+            completed_plan_num: value.completed_plan_no,
+            failed_plan_num: value.failed_plan_no,
+        }
+    }
 }
 
 type ConcurrentHashMap<K, V> = tokio::sync::RwLock<std::collections::HashMap<K, V>>;
@@ -586,6 +623,36 @@ impl Client {
             .await?
             .into_inner();
         status_to_result(&Some(status))
+    }
+
+    pub async fn manual_compaction<S>(&self, collection_name: S) -> Result<CompactionInfo>
+    where
+        S: Into<String>,
+    {
+        let collection = self.collection_cache.get(&collection_name.into()).await?;
+
+        let resp = self
+            .client
+            .clone()
+            .manual_compaction(ManualCompactionRequest {
+                collection_id: collection.id,
+                timetravel: 0,
+            })
+            .await?
+            .into_inner();
+        status_to_result(&resp.status)?;
+        Ok(resp.into())
+    }
+
+    pub async fn get_compaction_state(&self, compaction_id: i64) -> Result<CompactionState> {
+        let resp = self
+            .client
+            .clone()
+            .get_compaction_state(GetCompactionStateRequest { compaction_id })
+            .await?
+            .into_inner();
+        status_to_result(&resp.status)?;
+        Ok(resp.into())
     }
 }
 

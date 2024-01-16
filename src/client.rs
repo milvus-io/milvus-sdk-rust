@@ -98,8 +98,7 @@ impl Client {
     pub async fn new<D>(dst: D) -> Result<Self>
     where
         D: TryInto<tonic::transport::Endpoint>,
-        D::Error: Into<StdError>,
-        D::Error: std::fmt::Debug,
+        D::Error: Into<StdError> + std::fmt::Debug,
     {
         Self::with_timeout(dst, RPC_TIMEOUT, None, None).await
     }
