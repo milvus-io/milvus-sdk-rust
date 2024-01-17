@@ -189,3 +189,57 @@ async fn collection_search() -> Result<()> {
     client.drop_collection(schema.name()).await?;
     Ok(())
 }
+
+#[tokio::test]
+async fn collection_range_search() -> Result<()> {
+    let (client, schema) = create_test_collection(true).await?;
+
+    let embed_data = gen_random_f32_vector(DEFAULT_DIM * 2000);
+    let embed_column = FieldColumn::new(schema.get_field(DEFAULT_VEC_FIELD).unwrap(), embed_data);
+
+    client
+        .insert(schema.name(), vec![embed_column], None)
+        .await?;
+    client.flush(schema.name()).await?;
+    let index_params = IndexParams::new(
+        "ivf_flat".to_owned(),
+        IndexType::IvfFlat,
+        MetricType::L2,
+        HashMap::from_iter([("nlist".to_owned(), 32.to_string())]),
+    );
+    client
+        .create_index(schema.name(), DEFAULT_VEC_FIELD, index_params)
+        .await?;
+    client.flush(schema.name()).await?;
+    client
+        .load_collection(schema.name(), Some(LoadOptions::default()))
+        .await?;
+
+    let radius_limit: f32 = 20.0;
+    let range_filter_limit: f32 = 10.0;
+
+    let mut option = SearchOptions::with_limit(5)
+        .metric_type(MetricType::L2)
+        .output_fields(vec!["id".to_owned()]);
+    option = option.add_param("nprobe", ParamValue!(16));
+    option = option.radius(radius_limit).range_filter(range_filter_limit);
+    let query_vec = gen_random_f32_vector(DEFAULT_DIM);
+
+    let result = client
+        .search(
+            schema.name(),
+            vec![query_vec.into()],
+            DEFAULT_VEC_FIELD,
+            &option,
+        )
+        .await?;
+
+    for record in &result {
+        for value in &record.score {
+            assert!(*value >= range_filter_limit && *value <= radius_limit);
+        }
+    }
+
+    client.drop_collection(schema.name()).await?;
+    Ok(())
+}
