@@ -27,7 +27,7 @@ use crate::proto::milvus::{
 use crate::proto::schema::DataType;
 use crate::schema::CollectionSchema;
 use crate::types::*;
-use crate::utils::status_to_result;
+use crate::utils::{status_to_result, filter_index_info};
 use crate::value::Value;
 use crate::{
     client::{AuthInterceptor, Client},
@@ -588,6 +588,7 @@ impl Client {
     where
         S: Into<String>,
     {
+        let field_name:String = field_name.into();
         let res = self
             .client
             .clone()
@@ -595,15 +596,14 @@ impl Client {
                 base: Some(MsgBase::new(MsgType::DescribeIndex)),
                 db_name: "".to_string(),
                 collection_name: collection_name.into(),
-                field_name: field_name.into(),
+                field_name: field_name.clone(),
                 index_name: "".to_string(),
                 timestamp: 0,
             })
             .await?
             .into_inner();
         status_to_result(&res.status)?;
-
-        Ok(res.index_descriptions.into_iter().map(Into::into).collect())
+        Ok(filter_index_info(res.index_descriptions.into_iter().map(Into::into).collect(), field_name))
     }
 
     pub async fn drop_index<S>(&self, collection_name: S, field_name: S) -> Result<()>

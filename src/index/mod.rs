@@ -30,16 +30,16 @@ pub enum IndexType {
     RHNSWFlat,
     #[strum(serialize = "RHNSW_PQ")]
     RHNSWPQ,
-    #[strum(serialize = "RHNSW_SQ")]
-    RHNSWSQ,
     #[strum(serialize = "IVF_HNSW")]
     IvfHNSW,
     #[strum(serialize = "ANNOY")]
     ANNOY,
-    #[strum(serialize = "NGT_PANNG")]
-    NGTPANNG,
-    #[strum(serialize = "NGT_ONNG")]
-    NGTONNG,
+    #[strum(serialize = "INVERTED")]
+    INVERTED,
+    #[strum(serialize = "STL_SORT")]
+    StlSort,
+    #[strum(serialize = "Trie")]
+    Trie,
 }
 
 #[derive(Debug, Clone, Copy, EnumString, Display)]
@@ -51,6 +51,7 @@ pub enum MetricType {
     TANIMOTO,
     SUBSTRUCTURE,
     SUPERSTRUCTURE,
+    SCALAR,
 }
 
 #[derive(Debug, Clone)]
