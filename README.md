@@ -45,7 +45,7 @@ Pre-requisites:
 ### How to test
 Many tests require the Milvus server, the project provide a docker-compose file to setup a Milvus cluster:
 ```
-docker-compose -f ./docker-compose.yml up -d
+docker compose -f ./docker-compose.yml up -d
 ```
 You may need to wait for seconds until the system ready
 

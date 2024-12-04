@@ -23,10 +23,9 @@ use milvus::mutate::InsertOptions;
 use milvus::options::LoadOptions;
 use milvus::query::{QueryOptions, SearchOptions};
 use std::collections::HashMap;
-
 mod common;
 use common::*;
-
+use half::prelude::*;
 use milvus::value::ValueVec;
 
 #[tokio::test]
@@ -42,8 +41,8 @@ async fn collection_upsert() -> Result<()> {
     let (client, schema) = create_test_collection(false).await?;
     let pk_data = gen_random_int64_vector(2000);
     let vec_data = gen_random_f32_vector(DEFAULT_DIM * 2000);
-    let pk_col = FieldColumn::new(schema.get_field("id").unwrap(), pk_data);
-    let vec_col = FieldColumn::new(schema.get_field(DEFAULT_VEC_FIELD).unwrap(), vec_data);
+    let pk_col = FieldColumn::new(schema.get_field("id").unwrap(), pk_data)?;
+    let vec_col = FieldColumn::new(schema.get_field(DEFAULT_VEC_FIELD).unwrap(), vec_data)?;
     client
         .upsert(schema.name(), vec![pk_col, vec_col], None)
         .await?;
@@ -77,7 +76,7 @@ async fn collection_basic() -> Result<()> {
 
     let embed_data = gen_random_f32_vector(DEFAULT_DIM * 2000);
 
-    let embed_column = FieldColumn::new(schema.get_field(DEFAULT_VEC_FIELD).unwrap(), embed_data);
+    let embed_column = FieldColumn::new(schema.get_field(DEFAULT_VEC_FIELD).unwrap(), embed_data)?;
 
     client
         .insert(schema.name(), vec![embed_column], None)
@@ -109,12 +108,112 @@ async fn collection_basic() -> Result<()> {
 }
 
 #[tokio::test]
+async fn collection_fp16_bf16_vec() -> Result<()> {
+    let (client, schema) = create_test_fp16_bf16_collection(true).await?;
+    let embed_data = gen_random_f32_vector(DEFAULT_DIM * 2000);
+
+    let fp16_vector_column = FieldColumn::new(
+        schema.get_field(FP16_VEC_FIELD).unwrap(),
+        embed_data.clone(),
+    )?;
+    let bf16_vector_column =
+        FieldColumn::new(schema.get_field(BF16_VEC_FIELD).unwrap(), embed_data)?;
+
+    client
+        .insert(
+            schema.name(),
+            vec![fp16_vector_column, bf16_vector_column],
+            None,
+        )
+        .await?;
+    for (index_name, field_name) in [
+        (FP16_VEC_INDEX_NAME, FP16_VEC_FIELD),
+        (BF16_VEC_INDEX_NAME, BF16_VEC_FIELD),
+    ] {
+        let index_params = IndexParams::new(
+            index_name.to_owned(),
+            IndexType::IvfFlat,
+            milvus::index::MetricType::L2,
+            HashMap::from([("nlist".to_owned(), "32".to_owned())]),
+        );
+        client
+            .create_index(schema.name(), field_name, index_params)
+            .await?;
+    }
+    client
+        .load_collection(schema.name(), Some(LoadOptions::default()))
+        .await?;
+
+    let options = QueryOptions::default();
+    let result = client.query(schema.name(), "id > 0", &options).await?;
+
+    println!(
+        "result num: {}",
+        result.first().map(|c| c.len()).unwrap_or(0),
+    );
+    // create index
+    let create_index_futs = [
+        (FP16_VEC_FIELD, FP16_VEC_INDEX_NAME),
+        (BF16_VEC_FIELD, BF16_VEC_INDEX_NAME),
+    ]
+    .map(|(field_name, index_name)| {
+        client.create_index(
+            schema.name(),
+            field_name,
+            IndexParams::new(
+                index_name.to_owned(),
+                IndexType::IvfFlat,
+                milvus::index::MetricType::L2,
+                HashMap::from([("nlist".to_owned(), "32".to_owned())]),
+            ),
+        )
+    });
+    futures::future::join_all(create_index_futs).await;
+    client.flush(schema.name()).await?;
+    client
+        .load_collection(schema.name(), Some(LoadOptions::default()))
+        .await?;
+
+    // search
+    let mut option = SearchOptions::with_limit(10)
+        .metric_type(MetricType::L2)
+        .output_fields(vec!["id".to_owned(), FP16_VEC_FIELD.to_owned()]);
+    option = option.add_param("nprobe", ParamValue!(16));
+    let query_vec = gen_random_f32_vector(DEFAULT_DIM);
+
+    let result = client
+        .search(
+            schema.name(),
+            vec![Vec::<f16>::from_f32_slice(query_vec.as_slice()).into()],
+            FP16_VEC_FIELD,
+            &option,
+        )
+        .await?;
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].size, 10);
+    assert_eq!(result[0].field.len(), 2);
+
+    let result = client
+        .search(
+            schema.name(),
+            vec![Vec::<bf16>::from_f32_slice(query_vec.as_slice()).into()],
+            BF16_VEC_FIELD,
+            &option,
+        )
+        .await?;
+    assert_eq!(result[0].size, 10);
+
+    client.drop_collection(schema.name()).await?;
+    Ok(())
+}
+
+#[tokio::test]
 async fn collection_index() -> Result<()> {
     let (client, schema) = create_test_collection(true).await?;
 
     let feature = gen_random_f32_vector(DEFAULT_DIM * 2000);
 
-    let feature_column = FieldColumn::new(schema.get_field(DEFAULT_VEC_FIELD).unwrap(), feature);
+    let feature_column = FieldColumn::new(schema.get_field(DEFAULT_VEC_FIELD).unwrap(), feature)?;
 
     client
         .insert(schema.name(), vec![feature_column], None)
@@ -149,7 +248,7 @@ async fn collection_search() -> Result<()> {
     let (client, schema) = create_test_collection(true).await?;
 
     let embed_data = gen_random_f32_vector(DEFAULT_DIM * 2000);
-    let embed_column = FieldColumn::new(schema.get_field(DEFAULT_VEC_FIELD).unwrap(), embed_data);
+    let embed_column = FieldColumn::new(schema.get_field(DEFAULT_VEC_FIELD).unwrap(), embed_data)?;
 
     client
         .insert(schema.name(), vec![embed_column], None)
@@ -164,7 +263,6 @@ async fn collection_search() -> Result<()> {
     client
         .create_index(schema.name(), DEFAULT_VEC_FIELD, index_params)
         .await?;
-    client.flush(schema.name()).await?;
     client
         .load_collection(schema.name(), Some(LoadOptions::default()))
         .await?;
@@ -195,7 +293,7 @@ async fn collection_range_search() -> Result<()> {
     let (client, schema) = create_test_collection(true).await?;
 
     let embed_data = gen_random_f32_vector(DEFAULT_DIM * 2000);
-    let embed_column = FieldColumn::new(schema.get_field(DEFAULT_VEC_FIELD).unwrap(), embed_data);
+    let embed_column = FieldColumn::new(schema.get_field(DEFAULT_VEC_FIELD).unwrap(), embed_data)?;
 
     client
         .insert(schema.name(), vec![embed_column], None)
@@ -210,7 +308,6 @@ async fn collection_range_search() -> Result<()> {
     client
         .create_index(schema.name(), DEFAULT_VEC_FIELD, index_params)
         .await?;
-    client.flush(schema.name()).await?;
     client
         .load_collection(schema.name(), Some(LoadOptions::default()))
         .await?;

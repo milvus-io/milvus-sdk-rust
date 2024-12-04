@@ -1,19 +1,15 @@
-use prost::bytes::{BufMut, BytesMut};
 
 use crate::error::Result;
 use crate::{
     client::Client,
-    collection,
     data::FieldColumn,
     error::Error,
     proto::{
         self,
         common::{MsgBase, MsgType},
         milvus::{InsertRequest, UpsertRequest},
-        schema::{scalar_field::Data, DataType},
+        schema::DataType,
     },
-    schema::FieldData,
-    utils::status_to_result,
     value::ValueVec,
 };
 

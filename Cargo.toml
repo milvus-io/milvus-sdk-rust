@@ -22,6 +22,8 @@ strum = "0.24"
 strum_macros = "0.24"
 base64 = "0.21.0"
 dashmap = "5.5.3"
+# fp16/bf16 support
+half = "2.4.1"
 
 [build-dependencies]
 tonic-build = { version = "0.8.2", default-features = false, features = [
@@ -30,3 +32,4 @@ tonic-build = { version = "0.8.2", default-features = false, features = [
 
 [dev-dependencies]
 rand = "0.8.5"
+futures = "0.3"

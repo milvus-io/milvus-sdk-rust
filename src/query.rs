@@ -1,8 +1,7 @@
-use std::borrow::Borrow;
-use std::collections::HashMap;
-
+use half::{bf16, f16};
 use prost::bytes::BytesMut;
 use prost::Message;
+use std::collections::HashMap;
 
 use crate::client::{Client, ConsistencyLevel};
 use crate::collection::{ParamValue, SearchResult};
@@ -372,6 +371,8 @@ fn get_place_holder_value(vectors: Vec<Value>) -> Result<PlaceholderValue> {
 
     match vectors[0] {
         Value::FloatArray(_) => place_holder.r#type = PlaceholderType::FloatVector as _,
+        Value::Float16Array(_) => place_holder.r#type = PlaceholderType::Float16Vector as _,
+        Value::BFloat16Array(_) => place_holder.r#type = PlaceholderType::BFloat16Vector as _,
         Value::Binary(_) => place_holder.r#type = PlaceholderType::BinaryVector as _,
         _ => {
             return Err(SuperError::from(crate::collection::Error::IllegalType(
@@ -381,14 +382,26 @@ fn get_place_holder_value(vectors: Vec<Value>) -> Result<PlaceholderValue> {
         }
     };
 
+    macro_rules! place_holder_push_bytes {
+        ($d:expr, $t:ty) => {
+            let mut bytes = Vec::<u8>::with_capacity($d.len() * size_of::<$t>());
+            for f in $d.iter() {
+                // milvus-proto assumes that float16 and bfloat16 are stored as little-endian bytes
+                bytes.extend_from_slice(&f.to_le_bytes());
+            }
+            place_holder.values.push(bytes)
+        };
+    }
     for v in &vectors {
         match (v, &vectors[0]) {
             (Value::FloatArray(d), Value::FloatArray(_)) => {
-                let mut bytes = Vec::<u8>::with_capacity(d.len() * 4);
-                for f in d.iter() {
-                    bytes.extend_from_slice(&f.to_le_bytes());
-                }
-                place_holder.values.push(bytes)
+                place_holder_push_bytes!(d, f32);
+            }
+            (Value::Float16Array(d), Value::Float16Array(_)) => {
+                place_holder_push_bytes!(d, f16);
+            }
+            (Value::BFloat16Array(d), Value::BFloat16Array(_)) => {
+                place_holder_push_bytes!(d, bf16);
             }
             (Value::Binary(d), Value::Binary(_)) => place_holder.values.push(d.to_vec()),
             _ => {
