@@ -28,6 +28,16 @@ use crate::proto::{
 
 pub use crate::proto::schema::FieldData;
 
+pub fn is_dense_vector_type(dtype: DataType) -> bool {
+    matches!(
+        dtype,
+        DataType::BinaryVector
+            | DataType::FloatVector
+            | DataType::Float16Vector
+            | DataType::BFloat16Vector
+    )
+}
+
 pub trait Schema {
     // fn name(&self) -> &str;
     // fn description(&self) -> &str;
@@ -153,7 +163,7 @@ pub struct FieldSchema {
     pub is_primary: bool,
     pub auto_id: bool,
     pub chunk_size: usize,
-    pub dim: i64,        // only for BinaryVector and FloatVector
+    pub dim: i64, // only for BinaryVector, FloatVector, Float16Vector and BFloat16Vector
     pub max_length: i32, // only for VarChar
 }
 
@@ -392,12 +402,49 @@ impl FieldSchema {
             max_length: 0,
         }
     }
+
+    pub fn new_float16_vector(name: &str, description: &str, dim: i64) -> Self {
+        if dim <= 0 {
+            panic!("dim should be positive");
+        }
+
+        Self {
+            name: name.to_owned(),
+            description: description.to_owned(),
+            dtype: DataType::Float16Vector,
+            chunk_size: dim as usize,
+            dim,
+            is_primary: false,
+            auto_id: false,
+            max_length: 0,
+        }
+    }
+
+    pub fn new_bfloat16_vector(name: &str, description: &str, dim: i64) -> Self {
+        if dim <= 0 {
+            panic!("dim should be positive");
+        }
+
+        Self {
+            name: name.to_owned(),
+            description: description.to_owned(),
+            dtype: DataType::BFloat16Vector,
+            chunk_size: dim as usize,
+            dim,
+            is_primary: false,
+            auto_id: false,
+            max_length: 0,
+        }
+    }
 }
 
 impl From<FieldSchema> for schema::FieldSchema {
     fn from(fld: FieldSchema) -> schema::FieldSchema {
         let params = match fld.dtype {
-            DataType::BinaryVector | DataType::FloatVector => vec![KeyValuePair {
+            DataType::BinaryVector
+            | DataType::FloatVector
+            | DataType::Float16Vector
+            | DataType::BFloat16Vector => vec![KeyValuePair {
                 key: "dim".to_string(),
                 value: fld.dim.to_string(),
             }],
@@ -465,16 +512,12 @@ impl CollectionSchema {
     pub fn is_valid_vector_field(&self, field_name: &str) -> Result<()> {
         for f in &self.fields {
             if f.name == field_name {
-                if f.dtype == DataType::BinaryVector || f.dtype == DataType::FloatVector {
-                    return Ok(());
-                } else {
-                    return Err(error::Error::from(Error::NotVectorField(
-                        field_name.to_owned(),
-                    )));
-                }
+                return is_dense_vector_type(f.dtype)
+                    .then_some(())
+                    .ok_or(Error::NotVectorField(field_name.to_owned()).into());
             }
         }
-        return Err(error::Error::from(Error::NoSuchKey(field_name.to_owned())));
+        Err(error::Error::from(Error::NoSuchKey(field_name.to_owned())))
     }
 }
 

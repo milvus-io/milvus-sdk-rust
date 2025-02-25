@@ -660,6 +660,7 @@ pub type ParamValue = serde_json::Value;
 pub use serde_json::json as ParamValue;
 
 // search result for a single vector
+#[derive(Debug)]
 pub struct SearchResult<'a> {
     pub size: i64,
     pub id: Vec<Value<'a>>,

@@ -4,7 +4,6 @@ use crate::error::*;
 use crate::{
     client::Client,
     proto::{
-        self,
         common::{MsgBase, MsgType},
     },
     utils::status_to_result,

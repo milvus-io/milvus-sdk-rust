@@ -9,7 +9,8 @@ use std::collections::HashMap;
 
 use rand::prelude::*;
 
-const DEFAULT_VEC_FIELD: &str = "embed";
+const FP32_VEC_FIELD: &str = "float32_vector_field";
+
 const DIM: i64 = 256;
 
 #[tokio::main]
@@ -26,8 +27,8 @@ async fn main() -> Result<(), Error> {
                 true,
             ))
             .add_field(FieldSchema::new_float_vector(
-                DEFAULT_VEC_FIELD,
-                "feature field",
+                FP32_VEC_FIELD,
+                "fp32 feature field",
                 DIM,
             ))
             .build()?;
@@ -48,8 +49,7 @@ async fn hello_milvus(client: &Client, collection: &CollectionSchema) -> Result<
         let embed = rng.gen();
         embed_data.push(embed);
     }
-    let embed_column =
-        FieldColumn::new(collection.get_field(DEFAULT_VEC_FIELD).unwrap(), embed_data);
+    let embed_column = FieldColumn::new(collection.get_field(FP32_VEC_FIELD).unwrap(), embed_data)?;
 
     client
         .insert(collection.name(), vec![embed_column], None)
@@ -62,7 +62,7 @@ async fn hello_milvus(client: &Client, collection: &CollectionSchema) -> Result<
         HashMap::from([("nlist".to_owned(), "32".to_owned())]),
     );
     client
-        .create_index(collection.name(), DEFAULT_VEC_FIELD, index_params)
+        .create_index(collection.name(), FP32_VEC_FIELD, index_params)
         .await?;
     client
         .load_collection(collection.name(), Some(LoadOptions::default()))

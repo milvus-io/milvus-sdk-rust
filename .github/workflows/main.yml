@@ -1,6 +1,8 @@
 name: Unittest
 
 on:
+  workflow_dispatch:
+
   push:
     paths:
       - 'src/**'
@@ -9,8 +11,7 @@ on:
       - 'build.rs'
       - '.github/**'
       - 'docker-compose.yml'
-      
-  # Triggers the workflow on push or pull request events but only for the master branch
+
   pull_request:
     paths:
       - 'src/**'
@@ -20,34 +21,28 @@ on:
       - '.github/**'
       - 'docker-compose.yml'
 
-
 jobs:
-  # This workflow contains a single job called "build"
-  build:
-    name: Unittest AMD64 Ubuntu ${{ matrix.ubuntu }}
+  # This workflow contains a single job called "build_and_test"
+  build_and_test:
+    name: Unittest AMD64 Ubuntu
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        ubuntu: [18.04]
-    env:
-      UBUNTU: ${{ matrix.ubuntu }}
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: 'true'
-          
+
+      # do not put docker volume in the source code directory
       - name: Setup Milvus
-        run: sudo docker-compose up -d && sleep 15s
-      
+        run: DOCKER_VOLUME_DIRECTORY=../ docker compose up -d && sleep 15s
+
       - name: Setup protoc
         uses: arduino/setup-protoc@v1.1.2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-    
+
       # Runs a single command using the runners shell
       - name: Run Unittest
         run: RUST_BACKTRACE=1 cargo test
