@@ -15,8 +15,7 @@
 // limitations under the License.
 
 use crate::{
-    error::Error,
-    proto::common::{ErrorCode, Status},
+    error::Error, index::IndexInfo, proto::common::{ErrorCode, Status}
 };
 
 pub fn status_to_result(status: &Option<Status>) -> Result<(), Error> {
@@ -34,4 +33,14 @@ pub fn status_to_result(status: &Option<Status>) -> Result<(), Error> {
             status.error_code
         ))),
     }
+}
+
+pub fn filter_index_info(infos: Vec<IndexInfo>, field_name: String) -> Vec<IndexInfo>{
+    let mut result:Vec<IndexInfo> = Vec::new();
+    for info in infos{
+        if field_name == "" || info.field_name() == field_name{
+            result.push(info)
+        }
+    };
+    result
 }
