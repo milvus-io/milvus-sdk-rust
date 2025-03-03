@@ -17,6 +17,7 @@
 use milvus::client::*;
 use milvus::error::Result;
 use milvus::options::CreateCollectionOptions;
+use milvus::proto::schema::DataType;
 use milvus::schema::*;
 
 mod common;
@@ -73,8 +74,25 @@ async fn create_has_drop_collection() -> Result<()> {
 
     let mut schema = CollectionSchemaBuilder::new(NAME, "hello world");
     let schema = schema
-        .add_field(FieldSchema::new_int64("i64_field", ""))
-        .add_field(FieldSchema::new_bool("bool_field", ""))
+        .add_field(
+            FieldSchemaBuilder::new()
+                .with_name("i64_field")
+                .with_dtype(DataType::Int64)
+                .build(),
+        )
+        .add_field(
+            FieldSchemaBuilder::new()
+                .with_name("bool_field")
+                .with_dtype(DataType::Bool)
+                .build(),
+        )
+        .add_field(
+            FieldSchemaBuilder::new()
+                .with_name("vec_field")
+                .with_dtype(DataType::FloatVector)
+                .with_dim(128)
+                .build(),
+        )
         .set_primary_key("i64_field")?
         .enable_auto_id()?
         .build()?;
@@ -107,8 +125,8 @@ async fn create_alter_drop_alias() -> Result<()> {
 
     let client = Client::new(URL).await?;
 
-    let (_, schema1) = create_test_collection(true).await?;
-    let (_, schema2) = create_test_collection(true).await?;
+    let (_, schema1) = create_test_collection(true, None).await?;
+    let (_, schema2) = create_test_collection(true, None).await?;
 
     client.create_alias(schema1.name(), &alias0).await?;
     assert!(client.has_collection(alias0).await?);

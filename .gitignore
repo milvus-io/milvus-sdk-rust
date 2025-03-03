@@ -17,3 +17,7 @@ Cargo.lock
 /target
 #Cargo.lock
 /.idea/
+
+/volumes
+
+/.vscode/

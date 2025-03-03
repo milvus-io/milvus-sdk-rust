@@ -1,9 +1,10 @@
 use milvus::index::{IndexParams, IndexType};
 use milvus::options::LoadOptions;
+use milvus::proto::schema::DataType;
 use milvus::query::QueryOptions;
-use milvus::schema::{CollectionSchema, CollectionSchemaBuilder};
+use milvus::schema::{CollectionSchema, CollectionSchemaBuilder, FieldSchemaBuilder};
 use milvus::{
-    client::Client, collection::Collection, data::FieldColumn, error::Error, schema::FieldSchema,
+    client::Client, data::FieldColumn, error::Error,
 };
 use std::collections::HashMap;
 
@@ -20,16 +21,18 @@ async fn main() -> Result<(), Error> {
 
     let schema =
         CollectionSchemaBuilder::new("hello_milvus", "a guide example for milvus rust SDK")
-            .add_field(FieldSchema::new_primary_int64(
-                "id",
-                "primary key field",
-                true,
-            ))
-            .add_field(FieldSchema::new_float_vector(
-                DEFAULT_VEC_FIELD,
-                "feature field",
-                DIM,
-            ))
+            .add_field(FieldSchemaBuilder::new()
+                .with_name("id").with_dtype(DataType::Int64)
+                .with_description("primary key field")
+                .with_primary(true)
+                .build()
+            )
+            .add_field(FieldSchemaBuilder::new()
+                .with_name(DEFAULT_VEC_FIELD)
+                .with_dtype(DataType::FloatVector)
+                .with_dim(DIM)
+                .build()
+            )
             .build()?;
     client.create_collection(schema.clone(), None).await?;
 

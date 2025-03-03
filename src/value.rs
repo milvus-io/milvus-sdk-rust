@@ -8,6 +8,7 @@ use crate::proto::{
     },
 };
 
+#[derive(Debug)]
 pub enum Value<'a> {
     None,
     Bool(bool),
@@ -22,6 +23,8 @@ pub enum Value<'a> {
     String(Cow<'a, str>),
     Json(Cow<'a, [u8]>),
     Array(Cow<'a, proto::schema::ScalarField>),
+    Bytes(Cow<'a, [u8]>),
+    Geometry(Cow<'a, [u8]>),
 }
 
 macro_rules! impl_from_for_field_data_column {
@@ -60,6 +63,8 @@ impl Value<'_> {
             Value::FloatArray(_) => DataType::FloatVector,
             Value::Binary(_) => DataType::BinaryVector,
             Value::Array(_) => DataType::Array,
+            Value::Bytes(_) => DataType::Int8Vector,
+            Value::Geometry(_) => DataType::Geometry,
         }
     }
 }
@@ -112,6 +117,8 @@ pub enum ValueVec {
     String(Vec<String>),
     Json(Vec<Vec<u8>>),
     Array(Vec<proto::schema::ScalarField>),
+    Bytes(Vec<Vec<u8>>),
+    Geometry(Vec<Vec<u8>>),
 }
 
 macro_rules! impl_from_for_value_vec {
@@ -189,6 +196,10 @@ impl ValueVec {
             DataType::FloatVector => Self::Float(Vec::new()),
             DataType::Float16Vector => Self::Binary(Vec::new()),
             DataType::BFloat16Vector => Self::Binary(Vec::new()),
+            DataType::SparseFloatVector => Self::Bytes(Vec::new()),
+            DataType::Int8Vector => Self::Binary(Vec::new()),
+            DataType::Geometry => Self::Geometry(Vec::new()),
+            DataType::Text => Self::String(Vec::new()),
         }
     }
 
@@ -227,6 +238,8 @@ impl ValueVec {
             ValueVec::String(v) => v.len(),
             ValueVec::Json(v) => v.len(),
             ValueVec::Array(v) => v.len(),
+            ValueVec::Bytes(v) => v.len(),
+            ValueVec::Geometry(v) => v.len(),
         }
     }
 
@@ -242,6 +255,8 @@ impl ValueVec {
             ValueVec::String(v) => v.clear(),
             ValueVec::Json(v) => v.clear(),
             ValueVec::Array(v) => v.clear(),
+            ValueVec::Bytes(v) => v.clear(),
+            ValueVec::Geometry(v) => v.clear(),
         }
     }
 }
@@ -259,7 +274,8 @@ impl From<Field> for ValueVec {
                     ScalarData::StringData(v) => Self::String(v.data),
                     ScalarData::JsonData(v) => Self::Json(v.data),
                     ScalarData::ArrayData(v) => Self::Array(v.data),
-                    ScalarData::BytesData(_) => unimplemented!(), // Self::Bytes(v.data),
+                    ScalarData::BytesData(v) => Self::Bytes(v.data),
+                    ScalarData::GeometryData(v) => Self::Geometry(v.data),
                 },
                 None => Self::None,
             },
@@ -270,6 +286,8 @@ impl From<Field> for ValueVec {
                     VectorData::BinaryVector(v) => Self::Binary(v),
                     VectorData::Bfloat16Vector(v) => Self::Binary(v),
                     VectorData::Float16Vector(v) => Self::Binary(v),
+                    VectorData::Int8Vector(v) => Self::Binary(v),
+                    VectorData::SparseFloatVector(v) => Self::Bytes(v.contents),
                 },
                 None => Self::None,
             },

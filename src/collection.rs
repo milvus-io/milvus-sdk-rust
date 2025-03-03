@@ -18,6 +18,7 @@ use crate::config;
 use crate::data::FieldColumn;
 use crate::error::{Error as SuperError, Result};
 use crate::index::{IndexInfo, IndexParams};
+use crate::proto::common::KeyValuePair;
 use crate::proto::milvus::{
     CreateCollectionRequest, CreateIndexRequest, DescribeIndexRequest, DropCollectionRequest,
     DropIndexRequest, FlushRequest, GetCompactionStateRequest, GetCompactionStateResponse,
@@ -211,6 +212,11 @@ impl Client {
                 schema: buf.to_vec(),
                 shards_num: options.shard_num,
                 consistency_level: options.consistency_level as i32,
+                properties: options
+                    .properties
+                    .into_iter()
+                    .map(|(k, v)| KeyValuePair { key: k, value: v })
+                    .collect(),
                 ..Default::default()
             })
             .await?
@@ -406,6 +412,8 @@ impl Client {
                     replica_number: options.replica_number,
                     resource_groups: vec![],
                     refresh: false,
+                    load_fields: vec![],
+                    skip_load_dynamic_field: false,
                 })
                 .await?
                 .into_inner(),
@@ -637,6 +645,9 @@ impl Client {
             .manual_compaction(ManualCompactionRequest {
                 collection_id: collection.id,
                 timetravel: 0,
+                major_compaction: false,
+                collection_name: "".to_string(),
+                db_name: "".to_string(),
             })
             .await?
             .into_inner();
@@ -660,6 +671,7 @@ pub type ParamValue = serde_json::Value;
 pub use serde_json::json as ParamValue;
 
 // search result for a single vector
+#[derive(Debug)]
 pub struct SearchResult<'a> {
     pub size: i64,
     pub id: Vec<Value<'a>>,

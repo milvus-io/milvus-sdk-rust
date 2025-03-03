@@ -142,6 +142,24 @@ pub struct AlterCollectionRequest {
     pub collection_id: i64,
     #[prost(message, repeated, tag = "5")]
     pub properties: ::prost::alloc::vec::Vec<super::common::KeyValuePair>,
+    #[prost(string, repeated, tag = "6")]
+    pub delete_keys: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AlterCollectionFieldRequest {
+    /// Not useful for now
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    #[prost(string, tag = "2")]
+    pub db_name: ::prost::alloc::string::String,
+    /// The unique collection name in milvus.(Required)
+    #[prost(string, tag = "3")]
+    pub collection_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub field_name: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "5")]
+    pub properties: ::prost::alloc::vec::Vec<super::common::KeyValuePair>,
 }
 /// *
 /// Check collection exist in milvus or not.
@@ -243,6 +261,12 @@ pub struct DescribeCollectionResponse {
     pub db_name: ::prost::alloc::string::String,
     #[prost(int64, tag = "15")]
     pub num_partitions: i64,
+    #[prost(int64, tag = "16")]
+    pub db_id: i64,
+    #[prost(uint64, tag = "17")]
+    pub request_time: u64,
+    #[prost(uint64, tag = "18")]
+    pub update_timestamp: u64,
 }
 /// *
 /// Load collection data into query nodes, then you can do vector search on this collection.
@@ -266,6 +290,12 @@ pub struct LoadCollectionRequest {
     /// Whether to enable refresh mode.
     #[prost(bool, tag = "6")]
     pub refresh: bool,
+    /// Field Partial Load fields list
+    #[prost(string, repeated, tag = "7")]
+    pub load_fields: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// Field Partial load skip load dynamic fields
+    #[prost(bool, tag = "8")]
+    pub skip_load_dynamic_field: bool,
 }
 /// *
 /// Release collection data from query nodes, then you can't do vector search on this collection.
@@ -469,6 +499,12 @@ pub struct LoadPartitionsRequest {
     /// Whether to enable refresh mode.
     #[prost(bool, tag = "7")]
     pub refresh: bool,
+    /// Field Partial Load fields list
+    #[prost(string, repeated, tag = "8")]
+    pub load_fields: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// Field Partial load skip load dynamic fields
+    #[prost(bool, tag = "9")]
+    pub skip_load_dynamic_field: bool,
 }
 ///
 /// Release specific partitions data of one collection from query nodes.
@@ -645,6 +681,8 @@ pub struct AlterIndexRequest {
     pub index_name: ::prost::alloc::string::String,
     #[prost(message, repeated, tag = "5")]
     pub extra_params: ::prost::alloc::vec::Vec<super::common::KeyValuePair>,
+    #[prost(string, repeated, tag = "6")]
+    pub delete_keys: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 ///
 /// Get created index information.
@@ -802,6 +840,23 @@ pub struct InsertRequest {
     pub hash_keys: ::prost::alloc::vec::Vec<u32>,
     #[prost(uint32, tag = "7")]
     pub num_rows: u32,
+    #[prost(uint64, tag = "8")]
+    pub schema_timestamp: u64,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AddCollectionFieldRequest {
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    #[prost(string, tag = "2")]
+    pub db_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub collection_name: ::prost::alloc::string::String,
+    #[prost(int64, tag = "4")]
+    pub collection_id: i64,
+    /// The serialized `schema.FieldSchema`
+    #[prost(bytes = "vec", tag = "5")]
+    pub schema: ::prost::alloc::vec::Vec<u8>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -820,6 +875,8 @@ pub struct UpsertRequest {
     pub hash_keys: ::prost::alloc::vec::Vec<u32>,
     #[prost(uint32, tag = "7")]
     pub num_rows: u32,
+    #[prost(uint64, tag = "8")]
+    pub schema_timestamp: u64,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -861,6 +918,38 @@ pub struct DeleteRequest {
     pub expr: ::prost::alloc::string::String,
     #[prost(uint32, repeated, tag = "6")]
     pub hash_keys: ::prost::alloc::vec::Vec<u32>,
+    #[prost(enumeration = "super::common::ConsistencyLevel", tag = "7")]
+    pub consistency_level: i32,
+    #[prost(map = "string, message", tag = "8")]
+    pub expr_template_values: ::std::collections::HashMap<
+        ::prost::alloc::string::String,
+        super::schema::TemplateValue,
+    >,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SubSearchRequest {
+    /// must
+    #[prost(string, tag = "1")]
+    pub dsl: ::prost::alloc::string::String,
+    /// serialized `PlaceholderGroup`
+    ///
+    /// must
+    #[prost(bytes = "vec", tag = "2")]
+    pub placeholder_group: ::prost::alloc::vec::Vec<u8>,
+    /// must
+    #[prost(enumeration = "super::common::DslType", tag = "3")]
+    pub dsl_type: i32,
+    /// must
+    #[prost(message, repeated, tag = "4")]
+    pub search_params: ::prost::alloc::vec::Vec<super::common::KeyValuePair>,
+    #[prost(int64, tag = "5")]
+    pub nq: i64,
+    #[prost(map = "string, message", tag = "6")]
+    pub expr_template_values: ::std::collections::HashMap<
+        ::prost::alloc::string::String,
+        super::schema::TemplateValue,
+    >,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -907,6 +996,13 @@ pub struct SearchRequest {
     pub use_default_consistency: bool,
     #[prost(bool, tag = "16")]
     pub search_by_primary_keys: bool,
+    #[prost(message, repeated, tag = "17")]
+    pub sub_reqs: ::prost::alloc::vec::Vec<SubSearchRequest>,
+    #[prost(map = "string, message", tag = "18")]
+    pub expr_template_values: ::std::collections::HashMap<
+        ::prost::alloc::string::String,
+        super::schema::TemplateValue,
+    >,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -927,10 +1023,13 @@ pub struct SearchResults {
     pub results: ::core::option::Option<super::schema::SearchResultData>,
     #[prost(string, tag = "3")]
     pub collection_name: ::prost::alloc::string::String,
+    /// for session-like operation like iterator
+    #[prost(uint64, tag = "4")]
+    pub session_ts: u64,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SearchRequestV2 {
+pub struct HybridSearchRequest {
     /// must
     #[prost(message, optional, tag = "1")]
     pub base: ::core::option::Option<super::common::MsgBase>,
@@ -997,6 +1096,11 @@ pub struct FlushResponse {
     /// hybrid ts for geting flush tate
     #[prost(map = "string, uint64", tag = "6")]
     pub coll_flush_ts: ::std::collections::HashMap<::prost::alloc::string::String, u64>,
+    #[prost(map = "string, message", tag = "7")]
+    pub channel_cps: ::std::collections::HashMap<
+        ::prost::alloc::string::String,
+        super::msg::MsgPosition,
+    >,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1027,6 +1131,11 @@ pub struct QueryRequest {
     pub consistency_level: i32,
     #[prost(bool, tag = "12")]
     pub use_default_consistency: bool,
+    #[prost(map = "string, message", tag = "13")]
+    pub expr_template_values: ::std::collections::HashMap<
+        ::prost::alloc::string::String,
+        super::schema::TemplateValue,
+    >,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1039,6 +1148,30 @@ pub struct QueryResults {
     pub collection_name: ::prost::alloc::string::String,
     #[prost(string, repeated, tag = "4")]
     pub output_fields: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// for session-like operation like iterator
+    #[prost(uint64, tag = "5")]
+    pub session_ts: u64,
+    #[prost(string, tag = "6")]
+    pub primary_field_name: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct QueryCursor {
+    #[prost(uint64, tag = "1")]
+    pub session_ts: u64,
+    #[prost(oneof = "query_cursor::CursorPk", tags = "2, 3")]
+    pub cursor_pk: ::core::option::Option<query_cursor::CursorPk>,
+}
+/// Nested message and enum types in `QueryCursor`.
+pub mod query_cursor {
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum CursorPk {
+        #[prost(string, tag = "2")]
+        StrPk(::prost::alloc::string::String),
+        #[prost(int64, tag = "3")]
+        IntPk(i64),
+    }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1136,6 +1269,10 @@ pub struct PersistentSegmentInfo {
     pub num_rows: i64,
     #[prost(enumeration = "super::common::SegmentState", tag = "5")]
     pub state: i32,
+    #[prost(enumeration = "super::common::SegmentLevel", tag = "6")]
+    pub level: i32,
+    #[prost(bool, tag = "7")]
+    pub is_sorted: bool,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1182,6 +1319,10 @@ pub struct QuerySegmentInfo {
     pub state: i32,
     #[prost(int64, repeated, tag = "10")]
     pub node_ids: ::prost::alloc::vec::Vec<i64>,
+    #[prost(enumeration = "super::common::SegmentLevel", tag = "11")]
+    pub level: i32,
+    #[prost(bool, tag = "12")]
+    pub is_sorted: bool,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1297,6 +1438,12 @@ pub struct ManualCompactionRequest {
     pub collection_id: i64,
     #[prost(uint64, tag = "2")]
     pub timetravel: u64,
+    #[prost(bool, tag = "3")]
+    pub major_compaction: bool,
+    #[prost(string, tag = "4")]
+    pub collection_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub db_name: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1413,8 +1560,12 @@ pub struct ImportRequest {
     /// import options, bucket, etc.
     #[prost(message, repeated, tag = "6")]
     pub options: ::prost::alloc::vec::Vec<super::common::KeyValuePair>,
+    /// target database
     #[prost(string, tag = "7")]
     pub db_name: ::prost::alloc::string::String,
+    /// serialized `schema.ClusteringInfo`
+    #[prost(bytes = "vec", tag = "8")]
+    pub clustering_info: ::prost::alloc::vec::Vec<u8>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1645,6 +1796,60 @@ pub struct DropRoleRequest {
     /// role name
     #[prost(string, tag = "2")]
     pub role_name: ::prost::alloc::string::String,
+    /// force to drop the role even if there is permission binding
+    #[prost(bool, tag = "3")]
+    pub force_drop: bool,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CreatePrivilegeGroupRequest {
+    /// Not useful for now
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    /// group name
+    #[prost(string, tag = "2")]
+    pub group_name: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DropPrivilegeGroupRequest {
+    /// Not useful for now
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    /// group name
+    #[prost(string, tag = "2")]
+    pub group_name: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListPrivilegeGroupsRequest {
+    /// Not useful for now
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListPrivilegeGroupsResponse {
+    #[prost(message, optional, tag = "1")]
+    pub status: ::core::option::Option<super::common::Status>,
+    #[prost(message, repeated, tag = "2")]
+    pub privilege_groups: ::prost::alloc::vec::Vec<PrivilegeGroupInfo>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct OperatePrivilegeGroupRequest {
+    /// Not useful for now
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    /// group name
+    #[prost(string, tag = "2")]
+    pub group_name: ::prost::alloc::string::String,
+    /// privileges
+    #[prost(message, repeated, tag = "3")]
+    pub privileges: ::prost::alloc::vec::Vec<PrivilegeEntity>,
+    /// operation type
+    #[prost(enumeration = "OperatePrivilegeGroupType", tag = "4")]
+    pub r#type: i32,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1661,6 +1866,14 @@ pub struct OperateUserRoleRequest {
     /// operation type
     #[prost(enumeration = "OperateUserRoleType", tag = "4")]
     pub r#type: i32,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PrivilegeGroupInfo {
+    #[prost(string, tag = "1")]
+    pub group_name: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "2")]
+    pub privileges: ::prost::alloc::vec::Vec<PrivilegeEntity>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1801,6 +2014,81 @@ pub struct OperatePrivilegeRequest {
     /// operation type
     #[prost(enumeration = "OperatePrivilegeType", tag = "3")]
     pub r#type: i32,
+    /// version
+    #[prost(string, tag = "4")]
+    pub version: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct OperatePrivilegeV2Request {
+    /// Not useful for now
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    /// role
+    #[prost(message, optional, tag = "2")]
+    pub role: ::core::option::Option<RoleEntity>,
+    /// privilege
+    #[prost(message, optional, tag = "3")]
+    pub grantor: ::core::option::Option<GrantorEntity>,
+    /// operation type
+    #[prost(enumeration = "OperatePrivilegeType", tag = "4")]
+    pub r#type: i32,
+    /// db name
+    #[prost(string, tag = "5")]
+    pub db_name: ::prost::alloc::string::String,
+    /// collection name
+    #[prost(string, tag = "6")]
+    pub collection_name: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct UserInfo {
+    #[prost(string, tag = "1")]
+    pub user: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub password: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "3")]
+    pub roles: ::prost::alloc::vec::Vec<RoleEntity>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RbacMeta {
+    /// user
+    #[prost(message, repeated, tag = "1")]
+    pub users: ::prost::alloc::vec::Vec<UserInfo>,
+    /// role
+    #[prost(message, repeated, tag = "2")]
+    pub roles: ::prost::alloc::vec::Vec<RoleEntity>,
+    /// (role, object, previledge)
+    #[prost(message, repeated, tag = "3")]
+    pub grants: ::prost::alloc::vec::Vec<GrantEntity>,
+    /// privilege group info
+    #[prost(message, repeated, tag = "4")]
+    pub privilege_groups: ::prost::alloc::vec::Vec<PrivilegeGroupInfo>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BackupRbacMetaRequest {
+    /// Not useful for now
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BackupRbacMetaResponse {
+    #[prost(message, optional, tag = "1")]
+    pub status: ::core::option::Option<super::common::Status>,
+    #[prost(message, optional, tag = "2")]
+    pub rbac_meta: ::core::option::Option<RbacMeta>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RestoreRbacMetaRequest {
+    /// Not useful for now
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    #[prost(message, optional, tag = "2")]
+    pub rbac_meta: ::core::option::Option<RbacMeta>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1885,6 +2173,19 @@ pub struct CreateResourceGroupRequest {
     pub base: ::core::option::Option<super::common::MsgBase>,
     #[prost(string, tag = "2")]
     pub resource_group: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "3")]
+    pub config: ::core::option::Option<super::rg::ResourceGroupConfig>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct UpdateResourceGroupsRequest {
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    #[prost(map = "string, message", tag = "2")]
+    pub resource_groups: ::std::collections::HashMap<
+        ::prost::alloc::string::String,
+        super::rg::ResourceGroupConfig,
+    >,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1981,6 +2282,12 @@ pub struct ResourceGroup {
         ::prost::alloc::string::String,
         i32,
     >,
+    /// resource group configuration.
+    #[prost(message, optional, tag = "7")]
+    pub config: ::core::option::Option<super::rg::ResourceGroupConfig>,
+    /// query node belong to this resource group now.
+    #[prost(message, repeated, tag = "8")]
+    pub nodes: ::prost::alloc::vec::Vec<super::common::NodeInfo>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -2063,6 +2370,8 @@ pub struct CreateDatabaseRequest {
     pub base: ::core::option::Option<super::common::MsgBase>,
     #[prost(string, tag = "2")]
     pub db_name: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "3")]
+    pub properties: ::prost::alloc::vec::Vec<super::common::KeyValuePair>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -2087,6 +2396,44 @@ pub struct ListDatabasesResponse {
     pub db_names: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(uint64, repeated, tag = "3")]
     pub created_timestamp: ::prost::alloc::vec::Vec<u64>,
+    #[prost(int64, repeated, tag = "4")]
+    pub db_ids: ::prost::alloc::vec::Vec<i64>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AlterDatabaseRequest {
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    #[prost(string, tag = "2")]
+    pub db_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub db_id: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "4")]
+    pub properties: ::prost::alloc::vec::Vec<super::common::KeyValuePair>,
+    #[prost(string, repeated, tag = "5")]
+    pub delete_keys: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DescribeDatabaseRequest {
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    #[prost(string, tag = "2")]
+    pub db_name: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DescribeDatabaseResponse {
+    #[prost(message, optional, tag = "1")]
+    pub status: ::core::option::Option<super::common::Status>,
+    #[prost(string, tag = "2")]
+    pub db_name: ::prost::alloc::string::String,
+    #[prost(int64, tag = "3")]
+    pub db_id: i64,
+    #[prost(uint64, tag = "4")]
+    pub created_timestamp: u64,
+    #[prost(message, repeated, tag = "5")]
+    pub properties: ::prost::alloc::vec::Vec<super::common::KeyValuePair>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -2113,6 +2460,54 @@ pub struct ReplicateMessageResponse {
     pub status: ::core::option::Option<super::common::Status>,
     #[prost(string, tag = "2")]
     pub position: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ImportAuthPlaceholder {
+    #[prost(string, tag = "1")]
+    pub db_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub collection_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub partition_name: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetImportProgressAuthPlaceholder {
+    #[prost(string, tag = "1")]
+    pub db_name: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListImportsAuthPlaceholder {
+    #[prost(string, tag = "3")]
+    pub db_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "1")]
+    pub collection_name: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RunAnalyzerRequset {
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    #[prost(string, tag = "2")]
+    pub analyzer_params: ::prost::alloc::string::String,
+    #[prost(bytes = "vec", repeated, tag = "3")]
+    pub placeholder: ::prost::alloc::vec::Vec<::prost::alloc::vec::Vec<u8>>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AnalyzerResult {
+    #[prost(string, repeated, tag = "1")]
+    pub tokens: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RunAnalyzerResponse {
+    #[prost(message, optional, tag = "1")]
+    pub status: ::core::option::Option<super::common::Status>,
+    #[prost(message, repeated, tag = "2")]
+    pub results: ::prost::alloc::vec::Vec<AnalyzerResult>,
 }
 /// Deprecated: use GetLoadingProgress rpc instead
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -2145,6 +2540,34 @@ impl ShowType {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
+pub enum OperatePrivilegeGroupType {
+    AddPrivilegesToGroup = 0,
+    RemovePrivilegesFromGroup = 1,
+}
+impl OperatePrivilegeGroupType {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            OperatePrivilegeGroupType::AddPrivilegesToGroup => "AddPrivilegesToGroup",
+            OperatePrivilegeGroupType::RemovePrivilegesFromGroup => {
+                "RemovePrivilegesFromGroup"
+            }
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "AddPrivilegesToGroup" => Some(Self::AddPrivilegesToGroup),
+            "RemovePrivilegesFromGroup" => Some(Self::RemovePrivilegesFromGroup),
+            _ => None,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
 pub enum OperateUserRoleType {
     AddUserToRole = 0,
     RemoveUserFromRole = 1,
@@ -2165,6 +2588,35 @@ impl OperateUserRoleType {
         match value {
             "AddUserToRole" => Some(Self::AddUserToRole),
             "RemoveUserFromRole" => Some(Self::RemoveUserFromRole),
+            _ => None,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum PrivilegeLevel {
+    Cluster = 0,
+    Database = 1,
+    Collection = 2,
+}
+impl PrivilegeLevel {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            PrivilegeLevel::Cluster => "Cluster",
+            PrivilegeLevel::Database => "Database",
+            PrivilegeLevel::Collection => "Collection",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "Cluster" => Some(Self::Cluster),
+            "Database" => Some(Self::Database),
+            "Collection" => Some(Self::Collection),
             _ => None,
         }
     }
@@ -2459,6 +2911,25 @@ pub mod milvus_service_client {
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/AlterCollection",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn alter_collection_field(
+            &mut self,
+            request: impl tonic::IntoRequest<super::AlterCollectionFieldRequest>,
+        ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/AlterCollectionField",
             );
             self.inner.unary(request.into_request(), path, codec).await
         }
@@ -2945,9 +3416,9 @@ pub mod milvus_service_client {
             );
             self.inner.unary(request.into_request(), path, codec).await
         }
-        pub async fn search_v2(
+        pub async fn hybrid_search(
             &mut self,
-            request: impl tonic::IntoRequest<super::SearchRequestV2>,
+            request: impl tonic::IntoRequest<super::HybridSearchRequest>,
         ) -> Result<tonic::Response<super::SearchResults>, tonic::Status> {
             self.inner
                 .ready()
@@ -2960,7 +3431,7 @@ pub mod milvus_service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/milvus.proto.milvus.MilvusService/SearchV2",
+                "/milvus.proto.milvus.MilvusService/HybridSearch",
             );
             self.inner.unary(request.into_request(), path, codec).await
         }
@@ -3037,6 +3508,25 @@ pub mod milvus_service_client {
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/FlushAll",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn add_collection_field(
+            &mut self,
+            request: impl tonic::IntoRequest<super::AddCollectionFieldRequest>,
+        ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/AddCollectionField",
             );
             self.inner.unary(request.into_request(), path, codec).await
         }
@@ -3542,6 +4032,25 @@ pub mod milvus_service_client {
             );
             self.inner.unary(request.into_request(), path, codec).await
         }
+        pub async fn operate_privilege_v2(
+            &mut self,
+            request: impl tonic::IntoRequest<super::OperatePrivilegeV2Request>,
+        ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/OperatePrivilegeV2",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
         pub async fn select_grant(
             &mut self,
             request: impl tonic::IntoRequest<super::SelectGrantRequest>,
@@ -3634,6 +4143,25 @@ pub mod milvus_service_client {
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/DropResourceGroup",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn update_resource_groups(
+            &mut self,
+            request: impl tonic::IntoRequest<super::UpdateResourceGroupsRequest>,
+        ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/UpdateResourceGroups",
             );
             self.inner.unary(request.into_request(), path, codec).await
         }
@@ -3878,6 +4406,44 @@ pub mod milvus_service_client {
             );
             self.inner.unary(request.into_request(), path, codec).await
         }
+        pub async fn alter_database(
+            &mut self,
+            request: impl tonic::IntoRequest<super::AlterDatabaseRequest>,
+        ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/AlterDatabase",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn describe_database(
+            &mut self,
+            request: impl tonic::IntoRequest<super::DescribeDatabaseRequest>,
+        ) -> Result<tonic::Response<super::DescribeDatabaseResponse>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/DescribeDatabase",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
         pub async fn replicate_message(
             &mut self,
             request: impl tonic::IntoRequest<super::ReplicateMessageRequest>,
@@ -3894,6 +4460,139 @@ pub mod milvus_service_client {
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/ReplicateMessage",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn backup_rbac(
+            &mut self,
+            request: impl tonic::IntoRequest<super::BackupRbacMetaRequest>,
+        ) -> Result<tonic::Response<super::BackupRbacMetaResponse>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/BackupRBAC",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn restore_rbac(
+            &mut self,
+            request: impl tonic::IntoRequest<super::RestoreRbacMetaRequest>,
+        ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/RestoreRBAC",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn create_privilege_group(
+            &mut self,
+            request: impl tonic::IntoRequest<super::CreatePrivilegeGroupRequest>,
+        ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/CreatePrivilegeGroup",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn drop_privilege_group(
+            &mut self,
+            request: impl tonic::IntoRequest<super::DropPrivilegeGroupRequest>,
+        ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/DropPrivilegeGroup",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn list_privilege_groups(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ListPrivilegeGroupsRequest>,
+        ) -> Result<tonic::Response<super::ListPrivilegeGroupsResponse>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/ListPrivilegeGroups",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn operate_privilege_group(
+            &mut self,
+            request: impl tonic::IntoRequest<super::OperatePrivilegeGroupRequest>,
+        ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/OperatePrivilegeGroup",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn run_analyzer(
+            &mut self,
+            request: impl tonic::IntoRequest<super::RunAnalyzerRequset>,
+        ) -> Result<tonic::Response<super::RunAnalyzerResponse>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/RunAnalyzer",
             );
             self.inner.unary(request.into_request(), path, codec).await
         }

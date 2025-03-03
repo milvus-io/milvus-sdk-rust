@@ -2,7 +2,7 @@ use strum_macros::{Display, EnumString};
 
 use crate::proto::{
     common::{IndexState, KeyValuePair},
-    milvus::IndexDescription,
+    milvus::IndexDescription, schema,
 };
 use std::{collections::HashMap, str::FromStr};
 
@@ -40,6 +40,8 @@ pub enum IndexType {
     NGTPANNG,
     #[strum(serialize = "NGT_ONNG")]
     NGTONNG,
+    #[strum(serialize = "SPARSE_INVERTED_INDEX")]
+    SparseInvertedIndex,
 }
 
 #[derive(Debug, Clone, Copy, EnumString, Display)]
@@ -51,6 +53,9 @@ pub enum MetricType {
     TANIMOTO,
     SUBSTRUCTURE,
     SUPERSTRUCTURE,
+    COSINE,
+    // Only for sparse vector with BM25
+    BM25,
 }
 
 #[derive(Debug, Clone)]
@@ -161,6 +166,33 @@ impl From<IndexDescription> for IndexInfo {
             id: description.index_id,
             params: params,
             state: description.state(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, EnumString, Display)]
+pub enum FunctionType {
+    Unknown,
+    BM25,
+    TextEmbedding,
+}
+
+impl From<schema::FunctionType> for FunctionType {
+    fn from(value: schema::FunctionType) -> Self {
+        match value {
+            schema::FunctionType::Unknown => Self::Unknown,
+            schema::FunctionType::Bm25 => Self::BM25,
+            schema::FunctionType::TextEmbedding => Self::TextEmbedding,
+        }
+    }
+}
+
+impl Into<schema::FunctionType> for FunctionType  {
+    fn into(self) -> schema::FunctionType {
+        match self {
+            FunctionType::Unknown => schema::FunctionType::Unknown,
+            FunctionType::BM25 => schema::FunctionType::Bm25,
+            FunctionType::TextEmbedding => schema::FunctionType::TextEmbedding,
         }
     }
 }

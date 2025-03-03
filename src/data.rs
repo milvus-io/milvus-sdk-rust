@@ -110,6 +110,8 @@ impl FieldColumn {
             ValueVec::String(v) => Value::String(Cow::Borrowed(v.get(idx)?.as_ref())),
             ValueVec::Json(v) => Value::Json(Cow::Borrowed(v.get(idx)?.as_ref())),
             ValueVec::Array(v) => Value::Array(Cow::Borrowed(v.get(idx)?)),
+            ValueVec::Bytes(v) => Value::Bytes(Cow::Borrowed(v.get(idx)?.as_ref())),
+            ValueVec::Geometry(v) => Value::Geometry(Cow::Borrowed(v.get(idx)?.as_ref())),
         })
     }
 
@@ -152,6 +154,8 @@ impl FieldColumn {
                 ValueVec::Json(_) => ValueVec::Json(Vec::new()),
                 ValueVec::Binary(_) => ValueVec::Binary(Vec::new()),
                 ValueVec::Array(_) => ValueVec::Array(Vec::new()),
+                ValueVec::Bytes(_) => ValueVec::Bytes(Vec::new()),
+                ValueVec::Geometry(_) => ValueVec::Geometry(Vec::new()),
             },
             is_dynamic: self.is_dynamic,
         }
@@ -204,8 +208,15 @@ impl From<FieldColumn> for schema::FieldData {
                     data: Some(VectorData::BinaryVector(v)),
                     dim: this.dim,
                 }),
+                ValueVec::Bytes(v) => Field::Scalars(ScalarField {
+                    data: Some(ScalarData::BytesData(schema::BytesArray { data: v })),
+                }),
+                ValueVec::Geometry(v) => Field::Scalars(ScalarField {
+                    data: Some(ScalarData::GeometryData(schema::GeometryArray { data: v })),
+                }),
             }),
             is_dynamic: false,
+            valid_data: vec![],
         }
     }
 }
