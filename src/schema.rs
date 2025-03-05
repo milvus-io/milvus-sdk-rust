@@ -14,9 +14,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::error;
 use crate::error::Result;
 use crate::proto::schema::FieldState;
+use crate::{error, index::FunctionType};
 use prost::alloc::vec::Vec;
 use prost::encoding::bool;
 use thiserror::Error as ThisError;
@@ -153,8 +153,10 @@ pub struct FieldSchema {
     pub is_primary: bool,
     pub auto_id: bool,
     pub chunk_size: usize,
-    pub dim: i64,        // only for BinaryVector and FloatVector
-    pub max_length: i32, // only for VarChar
+    pub dim: i64,                      // only for BinaryVector and FloatVector
+    pub max_length: i32,               // only for VarChar
+    pub enable_analyzer: Option<bool>, // for BM25 tokenizer
+    pub enable_match: Option<bool>,    // for BM25 match
 }
 
 impl FieldSchema {
@@ -168,6 +170,8 @@ impl FieldSchema {
             chunk_size: 0,
             dim: 0,
             max_length: 0,
+            enable_analyzer: None,
+            enable_match: None,
         }
     }
 }
@@ -202,6 +206,8 @@ impl From<schema::FieldSchema> for FieldSchema {
                     _ => dim,
                 }) as _,
             dim,
+            enable_analyzer: None,
+            enable_match: None,
         }
     }
 }
@@ -217,6 +223,8 @@ impl FieldSchema {
             chunk_size: 1,
             dim: 1,
             max_length: 0,
+            enable_analyzer: None,
+            enable_match: None,
         }
     }
 
@@ -230,6 +238,8 @@ impl FieldSchema {
             chunk_size: 1,
             dim: 1,
             max_length: 0,
+            enable_analyzer: None,
+            enable_match: None,
         }
     }
 
@@ -243,6 +253,8 @@ impl FieldSchema {
             chunk_size: 1,
             dim: 1,
             max_length: 0,
+            enable_analyzer: None,
+            enable_match: None,
         }
     }
 
@@ -256,6 +268,8 @@ impl FieldSchema {
             chunk_size: 1,
             dim: 1,
             max_length: 0,
+            enable_analyzer: None,
+            enable_match: None,
         }
     }
 
@@ -269,6 +283,8 @@ impl FieldSchema {
             chunk_size: 1,
             dim: 1,
             max_length: 0,
+            enable_analyzer: None,
+            enable_match: None,
         }
     }
 
@@ -282,6 +298,8 @@ impl FieldSchema {
             chunk_size: 1,
             dim: 1,
             max_length: 0,
+            enable_analyzer: None,
+            enable_match: None,
         }
     }
 
@@ -300,6 +318,8 @@ impl FieldSchema {
             max_length,
             chunk_size: 1,
             dim: 1,
+            enable_analyzer: None,
+            enable_match: None,
         }
     }
 
@@ -313,6 +333,8 @@ impl FieldSchema {
             chunk_size: 1,
             dim: 1,
             max_length: 0,
+            enable_analyzer: None,
+            enable_match: None,
         }
     }
 
@@ -326,6 +348,8 @@ impl FieldSchema {
             chunk_size: 1,
             dim: 1,
             max_length: 0,
+            enable_analyzer: None,
+            enable_match: None,
         }
     }
 
@@ -339,6 +363,8 @@ impl FieldSchema {
             chunk_size: 1,
             dim: 1,
             max_length: 0,
+            enable_analyzer: None,
+            enable_match: None,
         }
     }
 
@@ -356,6 +382,8 @@ impl FieldSchema {
             auto_id: false,
             chunk_size: 1,
             dim: 1,
+            enable_analyzer: None,
+            enable_match: None,
         }
     }
 
@@ -373,6 +401,8 @@ impl FieldSchema {
             is_primary: false,
             auto_id: false,
             max_length: 0,
+            enable_analyzer: None,
+            enable_match: None,
         }
     }
 
@@ -390,13 +420,30 @@ impl FieldSchema {
             is_primary: false,
             auto_id: false,
             max_length: 0,
+            enable_analyzer: None,
+            enable_match: None,
+        }
+    }
+
+    pub fn new_sparse_float_vector(name: &str, description: &str) -> Self {
+        Self {
+            name: name.to_owned(),
+            description: description.to_owned(),
+            dtype: DataType::SparseFloatVector,
+            chunk_size: 0,
+            dim: 0,
+            is_primary: false,
+            auto_id: false,
+            max_length: 0,
+            enable_analyzer: None,
+            enable_match: None,
         }
     }
 }
 
 impl From<FieldSchema> for schema::FieldSchema {
     fn from(fld: FieldSchema) -> schema::FieldSchema {
-        let params = match fld.dtype {
+        let mut params = match fld.dtype {
             DataType::BinaryVector | DataType::FloatVector => vec![KeyValuePair {
                 key: "dim".to_string(),
                 value: fld.dim.to_string(),
@@ -407,6 +454,20 @@ impl From<FieldSchema> for schema::FieldSchema {
             }],
             _ => Vec::new(),
         };
+
+        if let Some(enable_analyzer) = fld.enable_analyzer {
+            params.push(KeyValuePair {
+                key: "enable_analyzer".to_string(),
+                value: enable_analyzer.to_string(),
+            });
+        }
+
+        if let Some(enable_match) = fld.enable_match {
+            params.push(KeyValuePair {
+                key: "enable_match".to_string(),
+                value: enable_match.to_string(),
+            });
+        }
 
         schema::FieldSchema {
             field_id: 0,
@@ -422,6 +483,187 @@ impl From<FieldSchema> for schema::FieldSchema {
             default_value: None,
             is_dynamic: false,
             is_partition_key: false,
+            is_clustering_key: false,
+            nullable: false,
+            is_function_output: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FieldSchemaBuilder {
+    name: String,
+    description: String,
+    dtype: DataType,
+    chunk_size: usize,
+    dim: i64,
+    is_primary: bool,
+    auto_id: bool,
+    max_length: i32,
+    enable_analyzer: Option<bool>,
+    enable_match: Option<bool>,
+}
+
+impl FieldSchemaBuilder {
+    pub fn new() -> Self {
+        Self {
+            name: String::new(),
+            description: String::new(),
+            dtype: DataType::None,
+            is_primary: false,
+            auto_id: false,
+            chunk_size: 1,
+            dim: 1,
+            max_length: 0,
+            enable_analyzer: None,
+            enable_match: None,
+        }
+    }
+
+    pub fn with_name(mut self, name: &str) -> Self {
+        self.name = name.to_owned();
+        self
+    }
+
+    pub fn with_description(mut self, description: &str) -> Self {
+        self.description = description.to_owned();
+        self
+    }
+
+    pub fn with_dtype(mut self, dtype: DataType) -> Self {
+        self.dtype = dtype;
+        self
+    }
+
+    pub fn with_chunk_size(mut self, chunk_size: usize) -> Self {
+        self.chunk_size = chunk_size;
+        self
+    }
+
+    pub fn with_dim(mut self, dim: i64) -> Self {
+        self.dim = dim;
+        self
+    }
+
+    pub fn with_primary(mut self, is_primary: bool) -> Self {
+        self.is_primary = is_primary;
+        self
+    }
+
+    pub fn with_auto_id(mut self, auto_id: bool) -> Self {
+        self.auto_id = auto_id;
+        self
+    }
+
+    pub fn with_max_length(mut self, max_length: i32) -> Self {
+        self.max_length = max_length;
+        self
+    }
+
+    pub fn enable_analyzer(mut self, enable_analyzer: bool) -> Self {
+        self.enable_analyzer = Some(enable_analyzer);
+        self
+    }
+
+    pub fn with_enable_match(mut self, enable_match: bool) -> Self {
+        self.enable_match = Some(enable_match);
+        self
+    }
+
+    pub fn build(self) -> FieldSchema {
+        FieldSchema {
+            name: self.name,
+            description: self.description,
+            dtype: self.dtype,
+            is_primary: self.is_primary,
+            auto_id: self.auto_id,
+            chunk_size: self.chunk_size,
+            dim: self.dim,
+            max_length: self.max_length,
+            enable_analyzer: self.enable_analyzer,
+            enable_match: self.enable_match,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FunctionSchema {
+    pub name: String,
+    pub typ: FunctionType,
+    pub input_field_names: Vec<String>,
+    pub output_field_names: Vec<String>,
+}
+
+impl From<FunctionSchema> for schema::FunctionSchema {
+    fn from(value: FunctionSchema) -> Self {
+        Self {
+            name: value.name,
+            id: 0,
+            description: "".into(),
+            r#type: Into::<schema::FunctionType>::into(value.typ) as i32,
+            input_field_names: value.input_field_names,
+            input_field_ids: Vec::new(),
+            output_field_names: value.output_field_names,
+            output_field_ids: Vec::new(),
+            params: Vec::new(),
+        }
+    }
+}
+
+impl From<schema::FunctionSchema> for FunctionSchema {
+    fn from(value: schema::FunctionSchema) -> Self {
+        Self {
+            name: value.name,
+            typ: schema::FunctionType::from_i32(value.r#type).unwrap().into(),
+            input_field_names: value.input_field_names,
+            output_field_names: value.output_field_names,
+        }
+    }
+}
+
+pub struct FunctionSchemaBuilder {
+    pub name: String,
+    pub typ: FunctionType,
+    pub input_field_names: Vec<String>,
+    pub output_field_names: Vec<String>,
+}
+
+impl FunctionSchemaBuilder {
+    pub fn new() -> Self {
+        Self {
+            name: String::new(),
+            typ: FunctionType::Unknown,
+            input_field_names: Vec::new(),
+            output_field_names: Vec::new(),
+        }
+    }
+
+    pub fn with_name(mut self, name: &str) -> Self {
+        self.name = name.to_owned();
+        self
+    }
+
+    pub fn with_typ(mut self, typ: FunctionType) -> Self {
+        self.typ = typ;
+        self
+    }
+
+    pub fn with_input_field_names(mut self, input_field_names: Vec<String>) -> Self {
+        self.input_field_names = input_field_names;
+        self
+    }
+
+    pub fn with_output_field_names(mut self, output_field_names: Vec<String>) -> Self {
+        self.output_field_names = output_field_names;
+        self
+    }
+
+    pub fn build(self) -> FunctionSchema {
+        FunctionSchema {
+            name: self.name,
+            typ: self.typ,
+            input_field_names: self.input_field_names,
+            output_field_names: self.output_field_names,
         }
     }
 }
@@ -432,6 +674,7 @@ pub struct CollectionSchema {
     pub(crate) description: String,
     pub(crate) fields: Vec<FieldSchema>,
     pub(crate) enable_dynamic_field: bool,
+    pub(crate) functions: Vec<FunctionSchema>,
 }
 
 impl CollectionSchema {
@@ -486,6 +729,9 @@ impl From<CollectionSchema> for schema::CollectionSchema {
             description: col.description,
             fields: col.fields.into_iter().map(Into::into).collect(),
             enable_dynamic_field: col.enable_dynamic_field,
+            properties: Vec::new(),
+            db_name: "".to_string(),
+            functions: col.functions.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -497,6 +743,7 @@ impl From<schema::CollectionSchema> for CollectionSchema {
             name: v.name,
             description: v.description,
             enable_dynamic_field: v.enable_dynamic_field,
+            functions: v.functions.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -507,6 +754,7 @@ pub struct CollectionSchemaBuilder {
     description: String,
     inner: Vec<FieldSchema>,
     enable_dynamic_field: bool,
+    functions: Vec<FunctionSchema>,
 }
 
 impl CollectionSchemaBuilder {
@@ -516,6 +764,7 @@ impl CollectionSchemaBuilder {
             description: description.to_owned(),
             inner: Vec::new(),
             enable_dynamic_field: false,
+            functions: Vec::new(),
         }
     }
 
@@ -576,6 +825,11 @@ impl CollectionSchemaBuilder {
         self
     }
 
+    pub fn add_function(&mut self, schema: FunctionSchema) -> &mut Self {
+        self.functions.push(schema);
+        self
+    }
+
     pub fn build(&mut self) -> Result<CollectionSchema> {
         let mut has_primary = false;
 
@@ -596,7 +850,8 @@ impl CollectionSchemaBuilder {
             fields: this.inner.into(),
             name: this.name,
             description: this.description,
-            enable_dynamic_field: self.enable_dynamic_field,
+            enable_dynamic_field: this.enable_dynamic_field,
+            functions: this.functions.into(),
         })
     }
 }

@@ -1,9 +1,12 @@
+use std::collections::HashMap;
+
 use crate::proto::common::ConsistencyLevel;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct CreateCollectionOptions {
     pub(crate) shard_num: i32,
     pub(crate) consistency_level: ConsistencyLevel,
+    pub(crate) properties: HashMap<String, String>,
 }
 
 impl Default for CreateCollectionOptions {
@@ -11,6 +14,7 @@ impl Default for CreateCollectionOptions {
         Self {
             shard_num: 0,
             consistency_level: ConsistencyLevel::Bounded,
+            properties: HashMap::new(),
         }
     }
 }
@@ -35,6 +39,16 @@ impl CreateCollectionOptions {
 
     pub fn consistency_level(mut self, consistency_level: ConsistencyLevel) -> Self {
         self.consistency_level = consistency_level;
+        self
+    }
+
+    pub fn properties(mut self, properties: HashMap<String, String>) -> Self {
+        self.properties = properties;
+        self
+    }
+
+    pub fn add_property(mut self, key: &str, value: &str) -> Self {
+        self.properties.insert(key.to_owned(), value.to_owned());
         self
     }
 }

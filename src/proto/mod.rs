@@ -26,6 +26,8 @@ pub mod milvus;
 pub mod msg;
 #[path = "milvus.proto.schema.rs"]
 pub mod schema;
+#[path = "milvus.proto.rg.rs"]
+pub mod rg;
 
 impl MsgBase {
     pub fn new(msg_type: MsgType) -> Self {
