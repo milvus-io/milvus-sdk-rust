@@ -1,4 +1,3 @@
-use std::borrow::Borrow;
 use std::collections::HashMap;
 
 use prost::bytes::BytesMut;
@@ -22,19 +21,10 @@ const STRONG_TIMESTAMP: u64 = 0;
 const BOUNDED_TIMESTAMP: u64 = 2;
 const EVENTUALLY_TIMESTAMP: u64 = 1;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct QueryOptions {
     output_fields: Vec<String>,
     partition_names: Vec<String>,
-}
-
-impl Default for QueryOptions {
-    fn default() -> Self {
-        Self {
-            output_fields: Vec::new(),
-            partition_names: Vec::new(),
-        }
-    }
 }
 
 impl QueryOptions {
@@ -205,10 +195,10 @@ impl Client {
             .clone()
             .query(proto::milvus::QueryRequest {
                 base: Some(MsgBase::new(MsgType::Retrieve)),
-                db_name: "".to_owned(),
+                db_name: self.db_name.clone(),
                 collection_name: collection_name.to_owned(),
                 expr: expr.as_ref().to_owned(),
-                output_fields: output_fields,
+                output_fields,
                 partition_names: options.partition_names.clone(),
                 travel_timestamp: 0,
                 guarantee_timestamp: self
@@ -218,17 +208,14 @@ impl Client {
                 not_return_all_meta: false,
                 consistency_level: ConsistencyLevel::default() as _,
                 use_default_consistency: false,
+                ..Default::default()
             })
             .await?
             .into_inner();
 
         status_to_result(&res.status)?;
 
-        Ok(res
-            .fields_data
-            .into_iter()
-            .map(|f| FieldColumn::from(f))
-            .collect())
+        Ok(res.fields_data.into_iter().map(FieldColumn::from).collect())
     }
 
     pub async fn search<S>(
@@ -273,19 +260,14 @@ impl Client {
             .clone()
             .search(SearchRequest {
                 base: Some(MsgBase::new(MsgType::Search)),
-                db_name: "".to_string(),
+                db_name: self.db_name.clone(),
                 collection_name: collection_name.clone(),
                 partition_names: option.partitions.clone(),
                 dsl: option.expr.clone(),
                 nq: data.len() as _,
                 placeholder_group: get_place_holder_group(data)?,
                 dsl_type: DslType::BoolExprV1 as _,
-                output_fields: option
-                    .output_fields
-                    .clone()
-                    .into_iter()
-                    .map(|f| f.into())
-                    .collect(),
+                output_fields: option.output_fields.clone(),
                 search_params,
                 travel_timestamp: 0,
                 guarantee_timestamp: self
@@ -295,6 +277,7 @@ impl Client {
                 consistency_level: ConsistencyLevel::default() as _,
                 use_default_consistency: false,
                 search_by_primary_keys: false,
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -356,7 +339,7 @@ fn get_place_holder_group(vectors: Vec<Value>) -> Result<Vec<u8>> {
     };
     let mut buf = BytesMut::new();
     group.encode(&mut buf).unwrap();
-    return Ok(buf.to_vec());
+    Ok(buf.to_vec())
 }
 
 fn get_place_holder_value(vectors: Vec<Value>) -> Result<PlaceholderValue> {
@@ -366,7 +349,7 @@ fn get_place_holder_value(vectors: Vec<Value>) -> Result<PlaceholderValue> {
         values: Vec::new(),
     };
     // if no vectors, return an empty one
-    if vectors.len() == 0 {
+    if vectors.is_empty() {
         return Ok(place_holder);
     };
 
@@ -399,5 +382,5 @@ fn get_place_holder_value(vectors: Vec<Value>) -> Result<PlaceholderValue> {
             }
         };
     }
-    return Ok(place_holder);
+    Ok(place_holder)
 }

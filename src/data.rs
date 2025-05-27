@@ -135,6 +135,10 @@ impl FieldColumn {
         self.value.len() / self.dim as usize
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn copy_with_metadata(&self) -> Self {
         Self {
             dim: self.dim,

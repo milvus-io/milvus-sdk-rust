@@ -17,6 +17,7 @@
 pub mod client;
 pub mod collection;
 pub mod data;
+pub mod database;
 pub mod error;
 pub mod mutate;
 pub mod options;

@@ -75,6 +75,7 @@ async fn create_has_drop_collection() -> Result<()> {
     let schema = schema
         .add_field(FieldSchema::new_int64("i64_field", ""))
         .add_field(FieldSchema::new_bool("bool_field", ""))
+        .add_field(FieldSchema::new_float_vector("float_field", "", 2))
         .set_primary_key("i64_field")?
         .enable_auto_id()?
         .build()?;

@@ -43,7 +43,7 @@ impl Interceptor for AuthInterceptor {
         mut req: Request<()>,
     ) -> std::result::Result<tonic::Request<()>, tonic::Status> {
         if let Some(ref token) = self.token {
-            let header_value = format!("{}", token);
+            let header_value = token;
             req.metadata_mut()
                 .insert("authorization", header_value.parse().unwrap());
         }
@@ -92,6 +92,7 @@ where
 pub struct Client {
     pub(crate) client: MilvusServiceClient<InterceptedService<Channel, AuthInterceptor>>,
     pub(crate) collection_cache: CollectionCache,
+    pub(crate) db_name: String,
 }
 
 impl Client {
@@ -137,7 +138,8 @@ impl Client {
 
         Ok(Self {
             client: client.clone(),
-            collection_cache: CollectionCache::new(client),
+            collection_cache: CollectionCache::new(client, ""),
+            db_name: String::new(),
         })
     }
 
@@ -151,7 +153,7 @@ impl Client {
             .clone()
             .flush(FlushRequest {
                 base: Some(MsgBase::new(MsgType::Flush)),
-                db_name: "".to_string(),
+                db_name: self.db_name.clone(),
                 collection_names: collections.into_iter().map(|x| x.to_string()).collect(),
             })
             .await?
@@ -190,7 +192,7 @@ impl Client {
                 .clone()
                 .create_alias(crate::proto::milvus::CreateAliasRequest {
                     base: Some(MsgBase::new(MsgType::CreateAlias)),
-                    db_name: "".to_string(), // reserved
+                    db_name: self.db_name.clone(),
                     collection_name,
                     alias,
                 })
@@ -218,7 +220,7 @@ impl Client {
                 .clone()
                 .drop_alias(crate::proto::milvus::DropAliasRequest {
                     base: Some(MsgBase::new(MsgType::DropAlias)),
-                    db_name: "".to_string(), // reserved
+                    db_name: self.db_name.clone(),
                     alias,
                 })
                 .await?
@@ -248,7 +250,7 @@ impl Client {
                 .clone()
                 .alter_alias(crate::proto::milvus::AlterAliasRequest {
                     base: Some(MsgBase::new(MsgType::AlterAlias)),
-                    db_name: "".to_string(), // reserved
+                    db_name: self.db_name.clone(),
                     collection_name,
                     alias,
                 })

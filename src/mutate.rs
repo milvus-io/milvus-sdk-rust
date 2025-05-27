@@ -1,33 +1,20 @@
-use prost::bytes::{BufMut, BytesMut};
-
 use crate::error::Result;
 use crate::{
     client::Client,
-    collection,
     data::FieldColumn,
     error::Error,
     proto::{
         self,
         common::{MsgBase, MsgType},
         milvus::{InsertRequest, UpsertRequest},
-        schema::{scalar_field::Data, DataType},
+        schema::DataType,
     },
-    schema::FieldData,
-    utils::status_to_result,
     value::ValueVec,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct InsertOptions {
     pub(crate) partition_name: String,
-}
-
-impl Default for InsertOptions {
-    fn default() -> Self {
-        Self {
-            partition_name: String::new(),
-        }
-    }
 }
 
 impl InsertOptions {
@@ -98,12 +85,13 @@ impl Client {
             .clone()
             .insert(InsertRequest {
                 base: Some(MsgBase::new(MsgType::Insert)),
-                db_name: "".to_string(),
+                db_name: self.db_name.clone(),
                 collection_name: collection_name.clone(),
                 partition_name: options.partition_name,
                 num_rows: row_num as u32,
                 fields_data: fields_data.into_iter().map(|f| f.into()).collect(),
                 hash_keys: Vec::new(),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -128,11 +116,12 @@ impl Client {
             .clone()
             .delete(proto::milvus::DeleteRequest {
                 base: Some(MsgBase::new(MsgType::Delete)),
-                db_name: "".to_string(),
+                db_name: self.db_name.clone(),
                 collection_name: collection_name.clone(),
-                expr: expr,
+                expr,
                 partition_name: options.partition_name.clone(),
                 hash_keys: Vec::new(),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -157,7 +146,7 @@ impl Client {
                     (DataType::Int64, ValueVec::Long(values)) => {
                         for (i, v) in values.iter().enumerate() {
                             if i > 0 {
-                                expr.push_str(",");
+                                expr.push(',');
                             }
                             expr.push_str(format!("{}", v).as_str());
                         }
@@ -167,7 +156,7 @@ impl Client {
                     (DataType::VarChar, ValueVec::String(values)) => {
                         for (i, v) in values.iter().enumerate() {
                             if i > 0 {
-                                expr.push_str(",");
+                                expr.push(',');
                             }
                             expr.push_str(v.as_str());
                         }
@@ -208,12 +197,13 @@ impl Client {
             .clone()
             .upsert(UpsertRequest {
                 base: Some(MsgBase::new(MsgType::Upsert)),
-                db_name: "".to_string(),
+                db_name: self.db_name.clone(),
                 collection_name: collection_name.clone(),
                 partition_name: options.partition_name,
                 num_rows: row_num as u32,
                 fields_data: fields_data.into_iter().map(|f| f.into()).collect(),
                 hash_keys: Vec::new(),
+                ..Default::default()
             })
             .await?
             .into_inner();
