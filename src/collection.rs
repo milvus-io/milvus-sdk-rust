@@ -64,7 +64,7 @@ pub(crate) struct CollectionCache {
     collections: dashmap::DashMap<String, Collection>,
     timestamps: dashmap::DashMap<String, Timestamp>,
     client: MilvusServiceClient<InterceptedService<Channel, AuthInterceptor>>,
-    pub(crate) db_name: String,
+    db_name: String,
 }
 
 impl CollectionCache {

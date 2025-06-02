@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     client::Client,
+    collection::CollectionCache,
     error::{Error, Result},
     proto::{
         common::{KeyValuePair, MsgBase, MsgType},
@@ -135,7 +136,7 @@ impl Client {
         }
 
         self.db_name = db.clone();
-        self.collection_cache.db_name = db;
+        self.collection_cache = CollectionCache::new(self.client.clone(), db_name);
         Result::Ok(())
     }
 
