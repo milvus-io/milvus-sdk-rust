@@ -14,9 +14,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::error;
+use std::collections::HashMap;
+
 use crate::error::Result;
 use crate::proto::schema::FieldState;
+use crate::{
+    error,
+    utils::{hashmap_to_vec, vec_to_hashmap},
+};
 use prost::alloc::vec::Vec;
 use prost::encoding::bool;
 use thiserror::Error as ThisError;
@@ -410,7 +415,7 @@ impl From<FieldSchema> for schema::FieldSchema {
 
         schema::FieldSchema {
             field_id: 0,
-            name: fld.name.into(),
+            name: fld.name,
             is_primary_key: fld.is_primary,
             description: fld.description,
             data_type: fld.dtype as i32,
@@ -422,6 +427,7 @@ impl From<FieldSchema> for schema::FieldSchema {
             default_value: None,
             is_dynamic: false,
             is_partition_key: false,
+            ..Default::default()
         }
     }
 }
@@ -432,6 +438,8 @@ pub struct CollectionSchema {
     pub(crate) description: String,
     pub(crate) fields: Vec<FieldSchema>,
     pub(crate) enable_dynamic_field: bool,
+    pub(crate) db_name: String,
+    pub(crate) properties: HashMap<String, String>,
 }
 
 impl CollectionSchema {
@@ -449,7 +457,7 @@ impl CollectionSchema {
     }
 
     pub fn validate(&self) -> Result<()> {
-        self.primary_column().ok_or_else(|| Error::NoPrimaryKey)?;
+        self.primary_column().ok_or(Error::NoPrimaryKey)?;
         // TODO addidtional schema checks need to be added here
         Ok(())
     }
@@ -474,7 +482,7 @@ impl CollectionSchema {
                 }
             }
         }
-        return Err(error::Error::from(Error::NoSuchKey(field_name.to_owned())));
+        Err(error::Error::from(Error::NoSuchKey(field_name.to_owned())))
     }
 }
 
@@ -486,6 +494,8 @@ impl From<CollectionSchema> for schema::CollectionSchema {
             description: col.description,
             fields: col.fields.into_iter().map(Into::into).collect(),
             enable_dynamic_field: col.enable_dynamic_field,
+            db_name: col.db_name,
+            properties: hashmap_to_vec(&col.properties),
         }
     }
 }
@@ -497,6 +507,8 @@ impl From<schema::CollectionSchema> for CollectionSchema {
             name: v.name,
             description: v.description,
             enable_dynamic_field: v.enable_dynamic_field,
+            db_name: v.db_name,
+            properties: vec_to_hashmap(&v.properties),
         }
     }
 }
@@ -507,6 +519,8 @@ pub struct CollectionSchemaBuilder {
     description: String,
     inner: Vec<FieldSchema>,
     enable_dynamic_field: bool,
+    db_name: String,
+    properties: HashMap<String, String>,
 }
 
 impl CollectionSchemaBuilder {
@@ -516,6 +530,8 @@ impl CollectionSchemaBuilder {
             description: description.to_owned(),
             inner: Vec::new(),
             enable_dynamic_field: false,
+            db_name: String::new(),
+            properties: HashMap::new(),
         }
     }
 
@@ -554,6 +570,16 @@ impl CollectionSchemaBuilder {
         Err(error::Error::from(Error::NoSuchKey(n.to_string())))
     }
 
+    pub fn set_database(&mut self, db_name: &str) -> &mut Self {
+        self.db_name = db_name.to_owned();
+        self
+    }
+
+    pub fn set_property(&mut self, key: &str, value: &str) -> &mut Self {
+        self.properties.insert(key.to_owned(), value.to_owned());
+        self
+    }
+
     pub fn enable_auto_id(&mut self) -> Result<&mut Self> {
         for f in self.inner.iter_mut() {
             if f.is_primary {
@@ -590,13 +616,15 @@ impl CollectionSchemaBuilder {
             return Err(error::Error::from(Error::NoPrimaryKey));
         }
 
-        let this = std::mem::replace(self, CollectionSchemaBuilder::new("".into(), ""));
+        let this = std::mem::replace(self, CollectionSchemaBuilder::new("", ""));
 
         Ok(CollectionSchema {
-            fields: this.inner.into(),
+            fields: this.inner,
             name: this.name,
             description: this.description,
             enable_dynamic_field: self.enable_dynamic_field,
+            db_name: self.db_name.clone(),
+            properties: self.properties.clone(),
         })
     }
 }

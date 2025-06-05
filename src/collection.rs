@@ -25,7 +25,7 @@ use crate::proto::milvus::{
     ReleaseCollectionRequest, ShowCollectionsRequest,
 };
 use crate::proto::schema::DataType;
-use crate::schema::CollectionSchema;
+use crate::schema::{CollectionSchema, FieldSchema};
 use crate::types::*;
 use crate::utils::status_to_result;
 use crate::value::Value;
@@ -55,7 +55,7 @@ pub struct Collection {
     // pub num_partitions: usize,
     pub consistency_level: ConsistencyLevel,
     pub description: String,
-    pub fields: Vec<Field>,
+    pub fields: Vec<FieldSchema>,
     // pub enable_dynamic_field: bool,
 }
 
@@ -64,25 +64,30 @@ pub(crate) struct CollectionCache {
     collections: dashmap::DashMap<String, Collection>,
     timestamps: dashmap::DashMap<String, Timestamp>,
     client: MilvusServiceClient<InterceptedService<Channel, AuthInterceptor>>,
+    db_name: String,
 }
 
 impl CollectionCache {
-    pub fn new(client: MilvusServiceClient<InterceptedService<Channel, AuthInterceptor>>) -> Self {
+    pub fn new(
+        client: MilvusServiceClient<InterceptedService<Channel, AuthInterceptor>>,
+        db_name: &str,
+    ) -> Self {
         Self {
             collections: dashmap::DashMap::new(),
             timestamps: dashmap::DashMap::new(),
-            client: client,
+            client,
+            db_name: db_name.to_string(),
         }
     }
 
-    pub async fn get<'a>(&self, name: &str) -> Result<Collection> {
+    pub async fn get(&self, name: &str) -> Result<Collection> {
         if !self.local_exist(name) {
             let resp = self
                 .client
                 .clone()
                 .describe_collection(DescribeCollectionRequest {
                     base: Some(MsgBase::new(MsgType::DescribeCollection)),
-                    db_name: "".to_owned(),
+                    db_name: self.db_name.clone(),
                     collection_name: name.into(),
                     collection_id: 0,
                     time_stamp: 0,
@@ -115,7 +120,7 @@ impl CollectionCache {
     }
 
     pub fn get_timestamp(&self, name: &str) -> Option<Timestamp> {
-        self.timestamps.get(name).map(|v| v.value().clone())
+        self.timestamps.get(name).map(|v| *v.value())
     }
 
     fn local_exist(&self, name: &str) -> bool {
@@ -134,7 +139,7 @@ impl From<proto::milvus::DescribeCollectionResponse> for Collection {
             // num_partitions: value.partitions_num as usize,
             consistency_level: ConsistencyLevel::from_i32(value.consistency_level).unwrap(),
             description: schema.description,
-            fields: schema.fields.into_iter().map(|f| Field::from(f)).collect(),
+            fields: schema.fields.into_iter().map(FieldSchema::from).collect(),
             // enable_dynamic_field: value.enable_dynamic_field,
         }
     }
@@ -182,8 +187,6 @@ impl From<GetCompactionStateResponse> for CompactionState {
     }
 }
 
-type ConcurrentHashMap<K, V> = tokio::sync::RwLock<std::collections::HashMap<K, V>>;
-
 impl Client {
     /// Creates a new collection with the specified schema and options.
     ///
@@ -211,6 +214,7 @@ impl Client {
                 schema: buf.to_vec(),
                 shards_num: options.shard_num,
                 consistency_level: options.consistency_level as i32,
+                db_name: self.db_name.clone(),
                 ..Default::default()
             })
             .await?
@@ -238,7 +242,7 @@ impl Client {
                 .drop_collection(DropCollectionRequest {
                     base: Some(MsgBase::new(MsgType::DropCollection)),
                     collection_name: name.into(),
-                    ..Default::default()
+                    db_name: self.db_name.clone(),
                 })
                 .await?
                 .into_inner(),
@@ -256,6 +260,7 @@ impl Client {
             .clone()
             .show_collections(ShowCollectionsRequest {
                 base: Some(MsgBase::new(MsgType::ShowCollections)),
+                db_name: self.db_name.clone(),
                 ..Default::default()
             })
             .await?
@@ -283,7 +288,7 @@ impl Client {
             .clone()
             .describe_collection(DescribeCollectionRequest {
                 base: Some(MsgBase::new(MsgType::DescribeCollection)),
-                db_name: "".to_owned(),
+                db_name: self.db_name.clone(),
                 collection_name: name.into(),
                 collection_id: 0,
                 time_stamp: 0,
@@ -315,7 +320,7 @@ impl Client {
             .clone()
             .has_collection(HasCollectionRequest {
                 base: Some(MsgBase::new(MsgType::HasCollection)),
-                db_name: "".to_string(),
+                db_name: self.db_name.clone(),
                 collection_name: name.clone(),
                 time_stamp: 0,
             })
@@ -365,7 +370,7 @@ impl Client {
             .clone()
             .get_collection_statistics(proto::milvus::GetCollectionStatisticsRequest {
                 base: Some(MsgBase::new(MsgType::GetCollectionStatistics)),
-                db_name: "".into(),
+                db_name: self.db_name.clone(),
                 collection_name: name.to_owned(),
             })
             .await?
@@ -401,11 +406,12 @@ impl Client {
                 .clone()
                 .load_collection(LoadCollectionRequest {
                     base: Some(MsgBase::new(MsgType::LoadCollection)),
-                    db_name: "".to_string(),
+                    db_name: self.db_name.clone(),
                     collection_name: collection_name.clone(),
                     replica_number: options.replica_number,
                     resource_groups: vec![],
                     refresh: false,
+                    ..Default::default()
                 })
                 .await?
                 .into_inner(),
@@ -455,7 +461,7 @@ impl Client {
             .clone()
             .get_load_state(proto::milvus::GetLoadStateRequest {
                 base: Some(MsgBase::new(MsgType::Undefined)),
-                db_name: "".into(),
+                db_name: self.db_name.clone(),
                 collection_name: collection_name.into(),
                 partition_names: options.partition_names,
             })
@@ -485,7 +491,7 @@ impl Client {
                 .clone()
                 .release_collection(ReleaseCollectionRequest {
                     base: Some(MsgBase::new(MsgType::ReleaseCollection)),
-                    db_name: "".to_string(),
+                    db_name: self.db_name.clone(),
                     collection_name: collection_name.into(),
                 })
                 .await?
@@ -502,7 +508,7 @@ impl Client {
             .clone()
             .flush(FlushRequest {
                 base: Some(MsgBase::new(MsgType::Flush)),
-                db_name: "".to_string(),
+                db_name: self.db_name.clone(),
                 collection_names: vec![collection_name.into()],
             })
             .await?
@@ -528,7 +534,7 @@ impl Client {
             .clone()
             .create_index(CreateIndexRequest {
                 base: Some(MsgBase::new(MsgType::CreateIndex)),
-                db_name: "".to_string(),
+                db_name: self.db_name.clone(),
                 collection_name: collection_name.into(),
                 field_name,
                 extra_params: index_params.extra_kv_params(),
@@ -593,7 +599,7 @@ impl Client {
             .clone()
             .describe_index(DescribeIndexRequest {
                 base: Some(MsgBase::new(MsgType::DescribeIndex)),
-                db_name: "".to_string(),
+                db_name: self.db_name.clone(),
                 collection_name: collection_name.into(),
                 field_name: field_name.into(),
                 index_name: "".to_string(),
@@ -615,7 +621,7 @@ impl Client {
             .clone()
             .drop_index(DropIndexRequest {
                 base: Some(MsgBase::new(MsgType::DropIndex)),
-                db_name: "".to_string(),
+                db_name: self.db_name.clone(),
                 collection_name: collection_name.into(),
                 field_name: field_name.into(),
                 index_name: "".to_string(),
@@ -637,6 +643,8 @@ impl Client {
             .manual_compaction(ManualCompactionRequest {
                 collection_id: collection.id,
                 timetravel: 0,
+                db_name: self.db_name.clone(),
+                ..Default::default()
             })
             .await?
             .into_inner();

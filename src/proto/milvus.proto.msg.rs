@@ -170,6 +170,20 @@ pub struct DataNodeTtMsg {
     #[prost(message, repeated, tag = "4")]
     pub segments_stats: ::prost::alloc::vec::Vec<super::common::SegmentStats>,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ReplicateMsg {
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    #[prost(bool, tag = "2")]
+    pub is_end: bool,
+    #[prost(bool, tag = "3")]
+    pub is_cluster: bool,
+    #[prost(string, tag = "4")]
+    pub database: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub collection: ::prost::alloc::string::String,
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum InsertDataVersion {

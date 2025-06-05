@@ -189,25 +189,26 @@ impl ValueVec {
             DataType::FloatVector => Self::Float(Vec::new()),
             DataType::Float16Vector => Self::Binary(Vec::new()),
             DataType::BFloat16Vector => Self::Binary(Vec::new()),
+            DataType::SparseFloatVector => unimplemented!(),
         }
     }
 
     pub fn check_dtype(&self, dtype: DataType) -> bool {
-        match (self, dtype) {
+        matches!(
+            (self, dtype),
             (ValueVec::Binary(..), DataType::BinaryVector)
-            | (ValueVec::Float(..), DataType::FloatVector)
-            | (ValueVec::Float(..), DataType::Float)
-            | (ValueVec::Int(..), DataType::Int8)
-            | (ValueVec::Int(..), DataType::Int16)
-            | (ValueVec::Int(..), DataType::Int32)
-            | (ValueVec::Long(..), DataType::Int64)
-            | (ValueVec::Bool(..), DataType::Bool)
-            | (ValueVec::String(..), DataType::String)
-            | (ValueVec::String(..), DataType::VarChar)
-            | (ValueVec::None, _)
-            | (ValueVec::Double(..), DataType::Double) => true,
-            _ => false,
-        }
+                | (ValueVec::Float(..), DataType::FloatVector)
+                | (ValueVec::Float(..), DataType::Float)
+                | (ValueVec::Int(..), DataType::Int8)
+                | (ValueVec::Int(..), DataType::Int16)
+                | (ValueVec::Int(..), DataType::Int32)
+                | (ValueVec::Long(..), DataType::Int64)
+                | (ValueVec::Bool(..), DataType::Bool)
+                | (ValueVec::String(..), DataType::String)
+                | (ValueVec::String(..), DataType::VarChar)
+                | (ValueVec::None, _)
+                | (ValueVec::Double(..), DataType::Double)
+        )
     }
 
     #[inline]
@@ -270,6 +271,7 @@ impl From<Field> for ValueVec {
                     VectorData::BinaryVector(v) => Self::Binary(v),
                     VectorData::Bfloat16Vector(v) => Self::Binary(v),
                     VectorData::Float16Vector(v) => Self::Binary(v),
+                    VectorData::SparseFloatVector(_) => unimplemented!(),
                 },
                 None => Self::None,
             },

@@ -3,10 +3,7 @@ use std::collections::HashMap;
 use crate::error::*;
 use crate::{
     client::Client,
-    proto::{
-        self,
-        common::{MsgBase, MsgType},
-    },
+    proto::common::{MsgBase, MsgType},
     utils::status_to_result,
 };
 
@@ -21,7 +18,7 @@ impl Client {
                 .clone()
                 .create_partition(crate::proto::milvus::CreatePartitionRequest {
                     base: Some(MsgBase::new(MsgType::CreatePartition)),
-                    db_name: "".to_string(), // reserved
+                    db_name: self.db_name.clone(),
                     collection_name,
                     partition_name,
                 })
@@ -40,7 +37,7 @@ impl Client {
                 .clone()
                 .drop_partition(crate::proto::milvus::DropPartitionRequest {
                     base: Some(MsgBase::new(MsgType::DropPartition)),
-                    db_name: "".to_string(), // reserved
+                    db_name: self.db_name.clone(),
                     collection_name,
                     partition_name,
                 })
@@ -55,11 +52,9 @@ impl Client {
             .clone()
             .show_partitions(crate::proto::milvus::ShowPartitionsRequest {
                 base: Some(MsgBase::new(MsgType::ShowPartitions)),
-                db_name: "".to_string(), // reserved
+                db_name: self.db_name.clone(),
                 collection_name,
-                collection_id: 0,        // reserved
-                partition_names: vec![], // reserved
-                r#type: 0,               // reserved
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -77,7 +72,7 @@ impl Client {
             .clone()
             .has_partition(crate::proto::milvus::HasPartitionRequest {
                 base: Some(MsgBase::new(MsgType::HasPartition)),
-                db_name: "".to_string(), // reserved
+                db_name: self.db_name.clone(),
                 collection_name,
                 partition_name,
             })
@@ -97,7 +92,7 @@ impl Client {
             .clone()
             .get_partition_statistics(crate::proto::milvus::GetPartitionStatisticsRequest {
                 base: Some(MsgBase::new(MsgType::GetPartitionStatistics)),
-                db_name: "".to_string(), // reserved
+                db_name: self.db_name.clone(),
                 collection_name,
                 partition_name,
             })
@@ -120,7 +115,7 @@ impl Client {
     //             .clone()
     //             .load_partitions(proto::milvus::LoadPartitionsRequest {
     //                 base: Some(MsgBase::new(MsgType::LoadPartitions)),
-    //                 db_name: "".to_string(),
+    //                 db_name: self.db_name.clone(),
     //                 collection_name: collection_name.into(),
     //                 replica_number,
     //                 partition_names: names.clone(),
@@ -147,7 +142,7 @@ impl Client {
     //             .clone()
     //             .release_partitions(ReleasePartitionsRequest {
     //                 base: Some(MsgBase::new(MsgType::ReleasePartitions)),
-    //                 db_name: "".to_string(),
+    //                 db_name: self.db_name.clone(),
     //                 collection_name: self.schema().name.to_string(),
     //                 partition_names: partition_names.into_iter().map(|x| x.to_string()).collect(),
     //             })

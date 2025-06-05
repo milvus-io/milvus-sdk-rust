@@ -12,6 +12,11 @@ pub struct Status {
     pub retriable: bool,
     #[prost(string, tag = "5")]
     pub detail: ::prost::alloc::string::String,
+    #[prost(map = "string, string", tag = "6")]
+    pub extra_info: ::std::collections::HashMap<
+        ::prost::alloc::string::String,
+        ::prost::alloc::string::String,
+    >,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -42,7 +47,9 @@ pub struct PlaceholderValue {
     pub tag: ::prost::alloc::string::String,
     #[prost(enumeration = "PlaceholderType", tag = "2")]
     pub r#type: i32,
-    /// values is a 2d-array, every array contains a vector
+    /// values is a 2d-array of nq rows, every row contains a query vector.
+    /// for dense vector, all rows are of the same length; for sparse vector,
+    /// the length of each row may vary depending on their number of non-zeros.
     #[prost(bytes = "vec", repeated, tag = "3")]
     pub values: ::prost::alloc::vec::Vec<::prost::alloc::vec::Vec<u8>>,
 }
@@ -88,6 +95,8 @@ pub struct ReplicateInfo {
     pub is_replicate: bool,
     #[prost(uint64, tag = "2")]
     pub msg_timestamp: u64,
+    #[prost(string, tag = "3")]
+    pub replicate_id: ::prost::alloc::string::String,
 }
 /// Don't Modify This. @czs
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -167,6 +176,17 @@ pub struct ServerInfo {
         ::prost::alloc::string::String,
     >,
 }
+/// NodeInfo is used to describe the node information.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct NodeInfo {
+    #[prost(int64, tag = "1")]
+    pub node_id: i64,
+    #[prost(string, tag = "2")]
+    pub address: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub hostname: ::prost::alloc::string::String,
+}
 /// Deprecated
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
@@ -229,6 +249,11 @@ pub enum ErrorCode {
     NotReadyServe = 56,
     /// Coord is switching from standby mode to active mode
     NotReadyCoordActivating = 57,
+    CreatePrivilegeGroupFailure = 58,
+    DropPrivilegeGroupFailure = 59,
+    ListPrivilegeGroupsFailure = 60,
+    OperatePrivilegeGroupFailure = 61,
+    SchemaMismatch = 62,
     /// Service availability.
     /// NA: Not Available.
     DataCoordNa = 100,
@@ -299,6 +324,11 @@ impl ErrorCode {
             ErrorCode::TimeTickLongDelay => "TimeTickLongDelay",
             ErrorCode::NotReadyServe => "NotReadyServe",
             ErrorCode::NotReadyCoordActivating => "NotReadyCoordActivating",
+            ErrorCode::CreatePrivilegeGroupFailure => "CreatePrivilegeGroupFailure",
+            ErrorCode::DropPrivilegeGroupFailure => "DropPrivilegeGroupFailure",
+            ErrorCode::ListPrivilegeGroupsFailure => "ListPrivilegeGroupsFailure",
+            ErrorCode::OperatePrivilegeGroupFailure => "OperatePrivilegeGroupFailure",
+            ErrorCode::SchemaMismatch => "SchemaMismatch",
             ErrorCode::DataCoordNa => "DataCoordNA",
             ErrorCode::DdRequestRace => "DDRequestRace",
         }
@@ -363,6 +393,11 @@ impl ErrorCode {
             "TimeTickLongDelay" => Some(Self::TimeTickLongDelay),
             "NotReadyServe" => Some(Self::NotReadyServe),
             "NotReadyCoordActivating" => Some(Self::NotReadyCoordActivating),
+            "CreatePrivilegeGroupFailure" => Some(Self::CreatePrivilegeGroupFailure),
+            "DropPrivilegeGroupFailure" => Some(Self::DropPrivilegeGroupFailure),
+            "ListPrivilegeGroupsFailure" => Some(Self::ListPrivilegeGroupsFailure),
+            "OperatePrivilegeGroupFailure" => Some(Self::OperatePrivilegeGroupFailure),
+            "SchemaMismatch" => Some(Self::SchemaMismatch),
             "DataCoordNA" => Some(Self::DataCoordNa),
             "DDRequestRace" => Some(Self::DdRequestRace),
             _ => None,
@@ -453,12 +488,49 @@ impl SegmentState {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
+pub enum SegmentLevel {
+    /// zero value for legacy logic
+    Legacy = 0,
+    /// L0 segment, contains delta data for current channel
+    L0 = 1,
+    /// L1 segment, normal segment, with no extra compaction attribute
+    L1 = 2,
+    /// L2 segment, segment with extra data distribution info
+    L2 = 3,
+}
+impl SegmentLevel {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            SegmentLevel::Legacy => "Legacy",
+            SegmentLevel::L0 => "L0",
+            SegmentLevel::L1 => "L1",
+            SegmentLevel::L2 => "L2",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "Legacy" => Some(Self::Legacy),
+            "L0" => Some(Self::L0),
+            "L1" => Some(Self::L1),
+            "L2" => Some(Self::L2),
+            _ => None,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
 pub enum PlaceholderType {
     None = 0,
     BinaryVector = 100,
     FloatVector = 101,
     Float16Vector = 102,
     BFloat16Vector = 103,
+    SparseFloatVector = 104,
     Int64 = 5,
     VarChar = 21,
 }
@@ -474,6 +546,7 @@ impl PlaceholderType {
             PlaceholderType::FloatVector => "FloatVector",
             PlaceholderType::Float16Vector => "Float16Vector",
             PlaceholderType::BFloat16Vector => "BFloat16Vector",
+            PlaceholderType::SparseFloatVector => "SparseFloatVector",
             PlaceholderType::Int64 => "Int64",
             PlaceholderType::VarChar => "VarChar",
         }
@@ -486,6 +559,7 @@ impl PlaceholderType {
             "FloatVector" => Some(Self::FloatVector),
             "Float16Vector" => Some(Self::Float16Vector),
             "BFloat16Vector" => Some(Self::BFloat16Vector),
+            "SparseFloatVector" => Some(Self::SparseFloatVector),
             "Int64" => Some(Self::Int64),
             "VarChar" => Some(Self::VarChar),
             _ => None,
@@ -512,6 +586,7 @@ pub enum MsgType {
     RenameCollection = 112,
     DescribeAlias = 113,
     ListAliases = 114,
+    AlterCollectionField = 115,
     /// DEFINITION REQUESTS: PARTITION
     CreatePartition = 200,
     DropPartition = 201,
@@ -535,12 +610,19 @@ pub enum MsgType {
     DescribeIndex = 301,
     DropIndex = 302,
     GetIndexStatistics = 303,
+    AlterIndex = 304,
     /// MANIPULATION REQUESTS
     Insert = 400,
     Delete = 401,
     Flush = 402,
     ResendSegmentStats = 403,
     Upsert = 404,
+    /// streaming service new msg type for internal usage compatible
+    ManualFlush = 405,
+    /// streaming service new msg type for internal usage compatible
+    FlushSegment = 406,
+    /// streaming service new msg type for internal usage compatible
+    CreateSegment = 407,
     /// QUERY
     Search = 500,
     SearchResult = 501,
@@ -580,6 +662,7 @@ pub enum MsgType {
     Connect = 1209,
     ListClientInfos = 1210,
     AllocTimestamp = 1211,
+    Replicate = 1212,
     /// Credential
     CreateCredential = 1500,
     GetCredential = 1501,
@@ -597,6 +680,11 @@ pub enum MsgType {
     SelectGrant = 1607,
     RefreshPolicyInfoCache = 1608,
     ListPolicy = 1609,
+    CreatePrivilegeGroup = 1610,
+    DropPrivilegeGroup = 1611,
+    ListPrivilegeGroups = 1612,
+    OperatePrivilegeGroup = 1613,
+    OperatePrivilegeV2 = 1614,
     /// Resource group
     CreateResourceGroup = 1700,
     DropResourceGroup = 1701,
@@ -604,10 +692,13 @@ pub enum MsgType {
     DescribeResourceGroup = 1703,
     TransferNode = 1704,
     TransferReplica = 1705,
+    UpdateResourceGroups = 1706,
     /// Database group
     CreateDatabase = 1801,
     DropDatabase = 1802,
     ListDatabases = 1803,
+    AlterDatabase = 1804,
+    DescribeDatabase = 1805,
 }
 impl MsgType {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -632,6 +723,7 @@ impl MsgType {
             MsgType::RenameCollection => "RenameCollection",
             MsgType::DescribeAlias => "DescribeAlias",
             MsgType::ListAliases => "ListAliases",
+            MsgType::AlterCollectionField => "AlterCollectionField",
             MsgType::CreatePartition => "CreatePartition",
             MsgType::DropPartition => "DropPartition",
             MsgType::HasPartition => "HasPartition",
@@ -652,11 +744,15 @@ impl MsgType {
             MsgType::DescribeIndex => "DescribeIndex",
             MsgType::DropIndex => "DropIndex",
             MsgType::GetIndexStatistics => "GetIndexStatistics",
+            MsgType::AlterIndex => "AlterIndex",
             MsgType::Insert => "Insert",
             MsgType::Delete => "Delete",
             MsgType::Flush => "Flush",
             MsgType::ResendSegmentStats => "ResendSegmentStats",
             MsgType::Upsert => "Upsert",
+            MsgType::ManualFlush => "ManualFlush",
+            MsgType::FlushSegment => "FlushSegment",
+            MsgType::CreateSegment => "CreateSegment",
             MsgType::Search => "Search",
             MsgType::SearchResult => "SearchResult",
             MsgType::GetIndexState => "GetIndexState",
@@ -692,6 +788,7 @@ impl MsgType {
             MsgType::Connect => "Connect",
             MsgType::ListClientInfos => "ListClientInfos",
             MsgType::AllocTimestamp => "AllocTimestamp",
+            MsgType::Replicate => "Replicate",
             MsgType::CreateCredential => "CreateCredential",
             MsgType::GetCredential => "GetCredential",
             MsgType::DeleteCredential => "DeleteCredential",
@@ -707,15 +804,23 @@ impl MsgType {
             MsgType::SelectGrant => "SelectGrant",
             MsgType::RefreshPolicyInfoCache => "RefreshPolicyInfoCache",
             MsgType::ListPolicy => "ListPolicy",
+            MsgType::CreatePrivilegeGroup => "CreatePrivilegeGroup",
+            MsgType::DropPrivilegeGroup => "DropPrivilegeGroup",
+            MsgType::ListPrivilegeGroups => "ListPrivilegeGroups",
+            MsgType::OperatePrivilegeGroup => "OperatePrivilegeGroup",
+            MsgType::OperatePrivilegeV2 => "OperatePrivilegeV2",
             MsgType::CreateResourceGroup => "CreateResourceGroup",
             MsgType::DropResourceGroup => "DropResourceGroup",
             MsgType::ListResourceGroups => "ListResourceGroups",
             MsgType::DescribeResourceGroup => "DescribeResourceGroup",
             MsgType::TransferNode => "TransferNode",
             MsgType::TransferReplica => "TransferReplica",
+            MsgType::UpdateResourceGroups => "UpdateResourceGroups",
             MsgType::CreateDatabase => "CreateDatabase",
             MsgType::DropDatabase => "DropDatabase",
             MsgType::ListDatabases => "ListDatabases",
+            MsgType::AlterDatabase => "AlterDatabase",
+            MsgType::DescribeDatabase => "DescribeDatabase",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -737,6 +842,7 @@ impl MsgType {
             "RenameCollection" => Some(Self::RenameCollection),
             "DescribeAlias" => Some(Self::DescribeAlias),
             "ListAliases" => Some(Self::ListAliases),
+            "AlterCollectionField" => Some(Self::AlterCollectionField),
             "CreatePartition" => Some(Self::CreatePartition),
             "DropPartition" => Some(Self::DropPartition),
             "HasPartition" => Some(Self::HasPartition),
@@ -757,11 +863,15 @@ impl MsgType {
             "DescribeIndex" => Some(Self::DescribeIndex),
             "DropIndex" => Some(Self::DropIndex),
             "GetIndexStatistics" => Some(Self::GetIndexStatistics),
+            "AlterIndex" => Some(Self::AlterIndex),
             "Insert" => Some(Self::Insert),
             "Delete" => Some(Self::Delete),
             "Flush" => Some(Self::Flush),
             "ResendSegmentStats" => Some(Self::ResendSegmentStats),
             "Upsert" => Some(Self::Upsert),
+            "ManualFlush" => Some(Self::ManualFlush),
+            "FlushSegment" => Some(Self::FlushSegment),
+            "CreateSegment" => Some(Self::CreateSegment),
             "Search" => Some(Self::Search),
             "SearchResult" => Some(Self::SearchResult),
             "GetIndexState" => Some(Self::GetIndexState),
@@ -797,6 +907,7 @@ impl MsgType {
             "Connect" => Some(Self::Connect),
             "ListClientInfos" => Some(Self::ListClientInfos),
             "AllocTimestamp" => Some(Self::AllocTimestamp),
+            "Replicate" => Some(Self::Replicate),
             "CreateCredential" => Some(Self::CreateCredential),
             "GetCredential" => Some(Self::GetCredential),
             "DeleteCredential" => Some(Self::DeleteCredential),
@@ -812,15 +923,23 @@ impl MsgType {
             "SelectGrant" => Some(Self::SelectGrant),
             "RefreshPolicyInfoCache" => Some(Self::RefreshPolicyInfoCache),
             "ListPolicy" => Some(Self::ListPolicy),
+            "CreatePrivilegeGroup" => Some(Self::CreatePrivilegeGroup),
+            "DropPrivilegeGroup" => Some(Self::DropPrivilegeGroup),
+            "ListPrivilegeGroups" => Some(Self::ListPrivilegeGroups),
+            "OperatePrivilegeGroup" => Some(Self::OperatePrivilegeGroup),
+            "OperatePrivilegeV2" => Some(Self::OperatePrivilegeV2),
             "CreateResourceGroup" => Some(Self::CreateResourceGroup),
             "DropResourceGroup" => Some(Self::DropResourceGroup),
             "ListResourceGroups" => Some(Self::ListResourceGroups),
             "DescribeResourceGroup" => Some(Self::DescribeResourceGroup),
             "TransferNode" => Some(Self::TransferNode),
             "TransferReplica" => Some(Self::TransferReplica),
+            "UpdateResourceGroups" => Some(Self::UpdateResourceGroups),
             "CreateDatabase" => Some(Self::CreateDatabase),
             "DropDatabase" => Some(Self::DropDatabase),
             "ListDatabases" => Some(Self::ListDatabases),
+            "AlterDatabase" => Some(Self::AlterDatabase),
+            "DescribeDatabase" => Some(Self::DescribeDatabase),
             _ => None,
         }
     }
@@ -1041,6 +1160,31 @@ pub enum ObjectPrivilege {
     PrivilegeShowPartitions = 41,
     PrivilegeHasPartition = 42,
     PrivilegeGetFlushState = 43,
+    PrivilegeCreateAlias = 44,
+    PrivilegeDropAlias = 45,
+    PrivilegeDescribeAlias = 46,
+    PrivilegeListAliases = 47,
+    PrivilegeUpdateResourceGroups = 48,
+    PrivilegeAlterDatabase = 49,
+    PrivilegeDescribeDatabase = 50,
+    PrivilegeBackupRbac = 51,
+    PrivilegeRestoreRbac = 52,
+    PrivilegeGroupReadOnly = 53,
+    PrivilegeGroupReadWrite = 54,
+    PrivilegeGroupAdmin = 55,
+    PrivilegeCreatePrivilegeGroup = 56,
+    PrivilegeDropPrivilegeGroup = 57,
+    PrivilegeListPrivilegeGroups = 58,
+    PrivilegeOperatePrivilegeGroup = 59,
+    PrivilegeGroupClusterReadOnly = 60,
+    PrivilegeGroupClusterReadWrite = 61,
+    PrivilegeGroupClusterAdmin = 62,
+    PrivilegeGroupDatabaseReadOnly = 63,
+    PrivilegeGroupDatabaseReadWrite = 64,
+    PrivilegeGroupDatabaseAdmin = 65,
+    PrivilegeGroupCollectionReadOnly = 66,
+    PrivilegeGroupCollectionReadWrite = 67,
+    PrivilegeGroupCollectionAdmin = 68,
 }
 impl ObjectPrivilege {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -1097,6 +1241,53 @@ impl ObjectPrivilege {
             ObjectPrivilege::PrivilegeShowPartitions => "PrivilegeShowPartitions",
             ObjectPrivilege::PrivilegeHasPartition => "PrivilegeHasPartition",
             ObjectPrivilege::PrivilegeGetFlushState => "PrivilegeGetFlushState",
+            ObjectPrivilege::PrivilegeCreateAlias => "PrivilegeCreateAlias",
+            ObjectPrivilege::PrivilegeDropAlias => "PrivilegeDropAlias",
+            ObjectPrivilege::PrivilegeDescribeAlias => "PrivilegeDescribeAlias",
+            ObjectPrivilege::PrivilegeListAliases => "PrivilegeListAliases",
+            ObjectPrivilege::PrivilegeUpdateResourceGroups => {
+                "PrivilegeUpdateResourceGroups"
+            }
+            ObjectPrivilege::PrivilegeAlterDatabase => "PrivilegeAlterDatabase",
+            ObjectPrivilege::PrivilegeDescribeDatabase => "PrivilegeDescribeDatabase",
+            ObjectPrivilege::PrivilegeBackupRbac => "PrivilegeBackupRBAC",
+            ObjectPrivilege::PrivilegeRestoreRbac => "PrivilegeRestoreRBAC",
+            ObjectPrivilege::PrivilegeGroupReadOnly => "PrivilegeGroupReadOnly",
+            ObjectPrivilege::PrivilegeGroupReadWrite => "PrivilegeGroupReadWrite",
+            ObjectPrivilege::PrivilegeGroupAdmin => "PrivilegeGroupAdmin",
+            ObjectPrivilege::PrivilegeCreatePrivilegeGroup => {
+                "PrivilegeCreatePrivilegeGroup"
+            }
+            ObjectPrivilege::PrivilegeDropPrivilegeGroup => "PrivilegeDropPrivilegeGroup",
+            ObjectPrivilege::PrivilegeListPrivilegeGroups => {
+                "PrivilegeListPrivilegeGroups"
+            }
+            ObjectPrivilege::PrivilegeOperatePrivilegeGroup => {
+                "PrivilegeOperatePrivilegeGroup"
+            }
+            ObjectPrivilege::PrivilegeGroupClusterReadOnly => {
+                "PrivilegeGroupClusterReadOnly"
+            }
+            ObjectPrivilege::PrivilegeGroupClusterReadWrite => {
+                "PrivilegeGroupClusterReadWrite"
+            }
+            ObjectPrivilege::PrivilegeGroupClusterAdmin => "PrivilegeGroupClusterAdmin",
+            ObjectPrivilege::PrivilegeGroupDatabaseReadOnly => {
+                "PrivilegeGroupDatabaseReadOnly"
+            }
+            ObjectPrivilege::PrivilegeGroupDatabaseReadWrite => {
+                "PrivilegeGroupDatabaseReadWrite"
+            }
+            ObjectPrivilege::PrivilegeGroupDatabaseAdmin => "PrivilegeGroupDatabaseAdmin",
+            ObjectPrivilege::PrivilegeGroupCollectionReadOnly => {
+                "PrivilegeGroupCollectionReadOnly"
+            }
+            ObjectPrivilege::PrivilegeGroupCollectionReadWrite => {
+                "PrivilegeGroupCollectionReadWrite"
+            }
+            ObjectPrivilege::PrivilegeGroupCollectionAdmin => {
+                "PrivilegeGroupCollectionAdmin"
+            }
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -1148,6 +1339,43 @@ impl ObjectPrivilege {
             "PrivilegeShowPartitions" => Some(Self::PrivilegeShowPartitions),
             "PrivilegeHasPartition" => Some(Self::PrivilegeHasPartition),
             "PrivilegeGetFlushState" => Some(Self::PrivilegeGetFlushState),
+            "PrivilegeCreateAlias" => Some(Self::PrivilegeCreateAlias),
+            "PrivilegeDropAlias" => Some(Self::PrivilegeDropAlias),
+            "PrivilegeDescribeAlias" => Some(Self::PrivilegeDescribeAlias),
+            "PrivilegeListAliases" => Some(Self::PrivilegeListAliases),
+            "PrivilegeUpdateResourceGroups" => Some(Self::PrivilegeUpdateResourceGroups),
+            "PrivilegeAlterDatabase" => Some(Self::PrivilegeAlterDatabase),
+            "PrivilegeDescribeDatabase" => Some(Self::PrivilegeDescribeDatabase),
+            "PrivilegeBackupRBAC" => Some(Self::PrivilegeBackupRbac),
+            "PrivilegeRestoreRBAC" => Some(Self::PrivilegeRestoreRbac),
+            "PrivilegeGroupReadOnly" => Some(Self::PrivilegeGroupReadOnly),
+            "PrivilegeGroupReadWrite" => Some(Self::PrivilegeGroupReadWrite),
+            "PrivilegeGroupAdmin" => Some(Self::PrivilegeGroupAdmin),
+            "PrivilegeCreatePrivilegeGroup" => Some(Self::PrivilegeCreatePrivilegeGroup),
+            "PrivilegeDropPrivilegeGroup" => Some(Self::PrivilegeDropPrivilegeGroup),
+            "PrivilegeListPrivilegeGroups" => Some(Self::PrivilegeListPrivilegeGroups),
+            "PrivilegeOperatePrivilegeGroup" => {
+                Some(Self::PrivilegeOperatePrivilegeGroup)
+            }
+            "PrivilegeGroupClusterReadOnly" => Some(Self::PrivilegeGroupClusterReadOnly),
+            "PrivilegeGroupClusterReadWrite" => {
+                Some(Self::PrivilegeGroupClusterReadWrite)
+            }
+            "PrivilegeGroupClusterAdmin" => Some(Self::PrivilegeGroupClusterAdmin),
+            "PrivilegeGroupDatabaseReadOnly" => {
+                Some(Self::PrivilegeGroupDatabaseReadOnly)
+            }
+            "PrivilegeGroupDatabaseReadWrite" => {
+                Some(Self::PrivilegeGroupDatabaseReadWrite)
+            }
+            "PrivilegeGroupDatabaseAdmin" => Some(Self::PrivilegeGroupDatabaseAdmin),
+            "PrivilegeGroupCollectionReadOnly" => {
+                Some(Self::PrivilegeGroupCollectionReadOnly)
+            }
+            "PrivilegeGroupCollectionReadWrite" => {
+                Some(Self::PrivilegeGroupCollectionReadWrite)
+            }
+            "PrivilegeGroupCollectionAdmin" => Some(Self::PrivilegeGroupCollectionAdmin),
             _ => None,
         }
     }

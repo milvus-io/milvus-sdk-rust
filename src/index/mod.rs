@@ -40,6 +40,8 @@ pub enum IndexType {
     NGTPANNG,
     #[strum(serialize = "NGT_ONNG")]
     NGTONNG,
+    #[strum(serialize = "AUTOINDEX")]
+    AUTOINDEX,
 }
 
 #[derive(Debug, Clone, Copy, EnumString, Display)]
@@ -51,6 +53,9 @@ pub enum MetricType {
     TANIMOTO,
     SUBSTRUCTURE,
     SUPERSTRUCTURE,
+    COSINE,
+    #[strum(serialize = "")]
+    None,
 }
 
 #[derive(Debug, Clone)]
@@ -148,7 +153,10 @@ impl From<IndexDescription> for IndexInfo {
 
         let index_type = IndexType::from_str(&params.remove("index_type").unwrap()).unwrap();
         let metric_type = MetricType::from_str(&params.remove("metric_type").unwrap()).unwrap();
-        let params = serde_json::from_str(params.get("params").unwrap()).unwrap();
+        let params = match params.get("params") {
+            Some(v) => serde_json::from_str(v).unwrap(),
+            None => HashMap::new(),
+        };
 
         let params = IndexParams::new(
             description.index_name.clone(),
@@ -159,7 +167,7 @@ impl From<IndexDescription> for IndexInfo {
         Self {
             field_name: description.field_name.clone(),
             id: description.index_id,
-            params: params,
+            params,
             state: description.state(),
         }
     }

@@ -14,9 +14,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use crate::{
     error::Error,
-    proto::common::{ErrorCode, Status},
+    proto::common::{ErrorCode, KeyValuePair, Status},
 };
 
 pub fn status_to_result(status: &Option<Status>) -> Result<(), Error> {
@@ -34,4 +36,17 @@ pub fn status_to_result(status: &Option<Status>) -> Result<(), Error> {
             status.error_code
         ))),
     }
+}
+
+pub fn vec_to_hashmap(vec: &[KeyValuePair]) -> HashMap<String, String> {
+    HashMap::from_iter(vec.iter().map(|kv| (kv.key.clone(), kv.value.clone())))
+}
+
+pub fn hashmap_to_vec(map: &HashMap<String, String>) -> Vec<KeyValuePair> {
+    map.iter()
+        .map(|(k, v)| KeyValuePair {
+            key: k.clone(),
+            value: v.clone(),
+        })
+        .collect()
 }

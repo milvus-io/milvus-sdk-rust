@@ -24,6 +24,8 @@ pub mod feder;
 pub mod milvus;
 #[path = "milvus.proto.msg.rs"]
 pub mod msg;
+#[path = "milvus.proto.rg.rs"]
+pub mod rg;
 #[path = "milvus.proto.schema.rs"]
 pub mod schema;
 
