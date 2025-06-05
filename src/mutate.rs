@@ -137,7 +137,7 @@ impl Client {
         match options.filter.len() {
             0 => {
                 let collection = self.collection_cache.get(collection_name).await?;
-                let pk = collection.fields.iter().find(|f| f.is_primary_key).unwrap();
+                let pk = collection.fields.iter().find(|f| f.is_primary).unwrap();
 
                 let mut expr = String::new();
                 expr.push_str(&pk.name);

@@ -2,9 +2,7 @@ use milvus::index::{IndexParams, IndexType};
 use milvus::options::LoadOptions;
 use milvus::query::QueryOptions;
 use milvus::schema::{CollectionSchema, CollectionSchemaBuilder};
-use milvus::{
-    client::Client, collection::Collection, data::FieldColumn, error::Error, schema::FieldSchema,
-};
+use milvus::{client::Client, data::FieldColumn, error::Error, schema::FieldSchema};
 use std::collections::HashMap;
 
 use rand::prelude::*;

@@ -25,7 +25,7 @@ use crate::proto::milvus::{
     ReleaseCollectionRequest, ShowCollectionsRequest,
 };
 use crate::proto::schema::DataType;
-use crate::schema::CollectionSchema;
+use crate::schema::{CollectionSchema, FieldSchema};
 use crate::types::*;
 use crate::utils::status_to_result;
 use crate::value::Value;
@@ -55,7 +55,7 @@ pub struct Collection {
     // pub num_partitions: usize,
     pub consistency_level: ConsistencyLevel,
     pub description: String,
-    pub fields: Vec<Field>,
+    pub fields: Vec<FieldSchema>,
     // pub enable_dynamic_field: bool,
 }
 
@@ -139,7 +139,7 @@ impl From<proto::milvus::DescribeCollectionResponse> for Collection {
             // num_partitions: value.partitions_num as usize,
             consistency_level: ConsistencyLevel::from_i32(value.consistency_level).unwrap(),
             description: schema.description,
-            fields: schema.fields.into_iter().map(Field::from).collect(),
+            fields: schema.fields.into_iter().map(FieldSchema::from).collect(),
             // enable_dynamic_field: value.enable_dynamic_field,
         }
     }
