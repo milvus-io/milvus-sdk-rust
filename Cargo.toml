@@ -22,6 +22,7 @@ strum = "0.24"
 strum_macros = "0.24"
 base64 = "0.21.0"
 dashmap = "5.5.3"
+lazy_static = "1.4"
 
 [build-dependencies]
 tonic-build = { version = "0.8.2", default-features = false, features = [

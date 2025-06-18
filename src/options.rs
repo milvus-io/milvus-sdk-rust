@@ -39,14 +39,26 @@ impl CreateCollectionOptions {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct LoadOptions {
     pub(crate) replica_number: i32,
+    pub(crate) resource_groups: Vec<String>,
+    pub(crate) refresh: bool,
+    pub(crate) load_fields: Vec<String>,
+    pub(crate) skip_load_dynamic_field: bool,
+    pub(crate) load_params: std::collections::HashMap<String, String>,
 }
 
 impl Default for LoadOptions {
     fn default() -> Self {
-        Self { replica_number: 1 }
+        Self {
+            replica_number: 1,
+            resource_groups: vec![],
+            refresh: false,
+            load_fields: vec![],
+            skip_load_dynamic_field: false,
+            load_params: std::collections::HashMap::new(),
+        }
     }
 }
 
@@ -61,6 +73,31 @@ impl LoadOptions {
 
     pub fn replica_number(mut self, replica_number: i32) -> Self {
         self.replica_number = replica_number;
+        self
+    }
+
+    pub fn resource_groups(mut self, resource_groups: Vec<String>) -> Self {
+        self.resource_groups = resource_groups;
+        self
+    }
+
+    pub fn refresh(mut self, refresh: bool) -> Self {
+        self.refresh = refresh;
+        self
+    }
+
+    pub fn load_fields(mut self, load_fields: Vec<String>) -> Self {
+        self.load_fields = load_fields;
+        self
+    }
+
+    pub fn skip_load_dynamic_field(mut self, skip_load_dynamic_field: bool) -> Self {
+        self.skip_load_dynamic_field = skip_load_dynamic_field;
+        self
+    }
+
+    pub fn load_params(mut self, load_params: std::collections::HashMap<String, String>) -> Self {
+        self.load_params = load_params;
         self
     }
 }

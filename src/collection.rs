@@ -17,24 +17,23 @@
 use crate::config;
 use crate::data::FieldColumn;
 use crate::error::{Error as SuperError, Result};
-use crate::index::{IndexInfo, IndexParams};
 use crate::proto::milvus::{
-    CreateCollectionRequest, CreateIndexRequest, DescribeIndexRequest, DropCollectionRequest,
-    DropIndexRequest, FlushRequest, GetCompactionStateRequest, GetCompactionStateResponse,
+    AlterCollectionFieldRequest, AlterCollectionRequest, CreateCollectionRequest,
+    DropCollectionRequest, FlushRequest, GetCompactionStateRequest, GetCompactionStateResponse,
     HasCollectionRequest, LoadCollectionRequest, ManualCompactionRequest, ManualCompactionResponse,
     ReleaseCollectionRequest, ShowCollectionsRequest,
 };
 use crate::proto::schema::DataType;
-use crate::schema::CollectionSchema;
+use crate::schema::{CollectionSchema, CollectionSchemaBuilder};
 use crate::types::*;
 use crate::utils::status_to_result;
 use crate::value::Value;
 use crate::{
-    client::{AuthInterceptor, Client},
+    client::{Client, CombinedInterceptor},
     options::{CreateCollectionOptions, GetLoadStateOptions, LoadOptions},
     proto::{
         self,
-        common::{ConsistencyLevel, IndexState, MsgBase, MsgType},
+        common::{ConsistencyLevel, MsgBase, MsgType},
         milvus::{milvus_service_client::MilvusServiceClient, DescribeCollectionRequest},
     },
 };
@@ -59,20 +58,39 @@ pub struct Collection {
     // pub enable_dynamic_field: bool,
 }
 
+/// Return type for describe collection,containing enough messages
+pub struct DescribeCollection {
+    pub collection_name: String,
+    pub collection_id: i64,
+    pub shards_num: i32,
+    pub aliases: Vec<String>,
+    pub consistency_level: i32,
+    pub properties: Vec<proto::common::KeyValuePair>,
+    pub num_partitions: i64,
+    pub schema: crate::proto::schema::CollectionSchema,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct CollectionCache {
     collections: dashmap::DashMap<String, Collection>,
     timestamps: dashmap::DashMap<String, Timestamp>,
-    client: MilvusServiceClient<InterceptedService<Channel, AuthInterceptor>>,
+    client: MilvusServiceClient<InterceptedService<Channel, CombinedInterceptor>>,
 }
 
 impl CollectionCache {
-    pub fn new(client: MilvusServiceClient<InterceptedService<Channel, AuthInterceptor>>) -> Self {
+    pub fn new(
+        client: MilvusServiceClient<InterceptedService<Channel, CombinedInterceptor>>,
+    ) -> Self {
         Self {
             collections: dashmap::DashMap::new(),
             timestamps: dashmap::DashMap::new(),
             client: client,
         }
+    }
+
+    pub fn clear(&self) {
+        self.collections.clear();
+        self.timestamps.clear();
     }
 
     pub async fn get<'a>(&self, name: &str) -> Result<Collection> {
@@ -182,7 +200,7 @@ impl From<GetCompactionStateResponse> for CompactionState {
     }
 }
 
-type ConcurrentHashMap<K, V> = tokio::sync::RwLock<std::collections::HashMap<K, V>>;
+//type ConcurrentHashMap<K, V> = tokio::sync::RwLock<std::collections::HashMap<K, V>>;
 
 impl Client {
     /// Creates a new collection with the specified schema and options.
@@ -274,7 +292,7 @@ impl Client {
     /// # Returns
     ///
     /// Returns a `Result` containing the `Collection` information if successful, or an error if the collection does not exist or cannot be accessed.
-    pub async fn describe_collection<S>(&self, name: S) -> Result<Collection>
+    pub async fn describe_collection<S>(&self, name: S) -> Result<DescribeCollection>
     where
         S: Into<String>,
     {
@@ -293,7 +311,16 @@ impl Client {
 
         status_to_result(&resp.status)?;
 
-        Ok(resp.into())
+        Ok(DescribeCollection {
+            collection_name: resp.collection_name,
+            collection_id: resp.collection_id,
+            shards_num: resp.shards_num,
+            aliases: resp.aliases,
+            consistency_level: resp.consistency_level,
+            properties: resp.properties,
+            num_partitions: resp.num_partitions,
+            schema: resp.schema.unwrap_or_default(),
+        })
     }
 
     /// Checks if a collection with the given name exists.
@@ -327,28 +354,38 @@ impl Client {
         Ok(res.value)
     }
 
-    // todo(yah01): implement this after the refactor done
-    // pub async fn rename_collection<S>(&self, name: S, new_name: S) -> Result<()>
-    // where
-    //     S: Into<String>,
-    // {
-    //     let name = name.into();
-    //     let new_name = new_name.into();
-    //     let res = self
-    //         .client
-    //         .clone()
-    //         .rename_collection(proto::milvus::RenameCollectionRequest {
-    //             base: Some(MsgBase::new(MsgType::RenameCollection)),
-    //             collection_name: name.clone(),
-    //             new_collection_name: new_name.clone(),
-    //         })
-    //         .await?
-    //         .into_inner();
+    pub async fn rename_collection<S>(
+        &self,
+        name: S,
+        new_name: S,
+        options: Option<(String, String)>,
+    ) -> Result<()>
+    where
+        S: Into<String>,
+    {
+        let name = name.into();
+        let new_name = new_name.into();
+        let (db_name, new_db_name) = match options {
+            Some((db_name, new_db_name)) => (db_name, new_db_name),
+            None => ("".to_string(), "".to_string()),
+        };
+        let res = self
+            .client
+            .clone()
+            .rename_collection(crate::proto::milvus::RenameCollectionRequest {
+                base: Some(MsgBase::new(MsgType::RenameCollection)),
+                db_name: db_name,
+                old_name: name,
+                new_name: new_name,
+                new_db_name: new_db_name,
+            })
+            .await?
+            .into_inner();
 
-    //     status_to_result(&Some(res))?;
+        status_to_result(&Some(res))?;
 
-    //     Ok(())
-    // }
+        Ok(())
+    }
 
     /// Retrieves the statistics of a collection.
     ///
@@ -404,8 +441,11 @@ impl Client {
                     db_name: "".to_string(),
                     collection_name: collection_name.clone(),
                     replica_number: options.replica_number,
-                    resource_groups: vec![],
-                    refresh: false,
+                    resource_groups: options.resource_groups,
+                    refresh: options.refresh,
+                    load_fields: options.load_fields,
+                    skip_load_dynamic_field: options.skip_load_dynamic_field,
+                    load_params: options.load_params,
                 })
                 .await?
                 .into_inner(),
@@ -467,7 +507,13 @@ impl Client {
         Ok(res.state())
     }
 
-    /// Releases a collection with the given name.
+    pub async fn refresh_load<S: Into<String>>(&self, collection_name: S) -> Result<()> {
+        let options = LoadOptions::new().refresh(true);
+        self.load_collection(collection_name, Some(options)).await?;
+        Ok(())
+    }
+
+    /// Releases a collection with the given name from memory.
     ///
     /// # Arguments
     ///
@@ -493,6 +539,142 @@ impl Client {
         ))
     }
 
+    /// Alters the field of a collection.
+    ///
+    /// # Arguments
+    ///
+    /// * `collection_name` - The name of the collection.
+    /// * `field_name` - The name of the field to alter.
+    /// * `field_params` - A `HashMap` containing the parameters to alter the field.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` indicating success or failure.
+    pub async fn alter_collection_field<S>(
+        &self,
+        collection_name: S,
+        field_name: S,
+        field_params: HashMap<String, String>,
+    ) -> Result<()>
+    where
+        S: Into<String>,
+    {
+        //collect field_params into a vec
+        let properties: Vec<crate::proto::common::KeyValuePair> = field_params
+            .iter()
+            .map(|(k, v)| crate::proto::common::KeyValuePair {
+                key: k.clone(),
+                value: v.clone(),
+            })
+            .collect();
+
+        let resp = self
+            .client
+            .clone()
+            .alter_collection_field(AlterCollectionFieldRequest {
+                base: Some(MsgBase::new(MsgType::AlterCollectionField)),
+                db_name: "".to_string(),
+                collection_name: collection_name.into(),
+                field_name: field_name.into(),
+                properties: properties,
+                delete_keys: vec![],
+            })
+            .await?
+            .into_inner();
+        status_to_result(&Some(resp))
+    }
+
+    /// alter a collection
+    ///
+    /// # Arguments
+    ///
+    /// * `collection_name` - The name of a collection
+    /// * `properties` - A HashMap containing the properties need to be alter
+    ///
+    /// # Returns
+    ///
+    /// Retrun a `Result` indicating success or failure.
+    pub async fn alter_collection_properties<S>(
+        &self,
+        collection_name: S,
+        properties: HashMap<String, String>,
+    ) -> Result<()>
+    where
+        S: Into<String>,
+    {
+        let properties: Vec<crate::proto::common::KeyValuePair> = properties
+            .iter()
+            .map(|(k, v)| crate::proto::common::KeyValuePair {
+                key: k.clone(),
+                value: v.clone(),
+            })
+            .collect();
+
+        let resp = self
+            .client
+            .clone()
+            .alter_collection(AlterCollectionRequest {
+                base: Some(MsgBase::new(MsgType::AlterCollection)),
+                db_name: "".to_string(),
+                collection_name: collection_name.into(),
+                collection_id: 0,
+                properties: properties,
+                delete_keys: Vec::new(),
+            })
+            .await?
+            .into_inner();
+        status_to_result(&Some(resp))
+    }
+
+    /// Drop properties of a collection.
+    ///
+    /// # Arguments
+    ///
+    /// * `collection_name` - The name of the collection.
+    /// * `delet_keys` - The keys of the properties to be deleted.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` indicating success or failure.
+    pub async fn drop_collection_properties<S>(
+        &self,
+        collection_name: S,
+        delet_keys: Vec<String>,
+    ) -> Result<()>
+    where
+        S: Into<String>,
+    {
+        let resp = self
+            .client
+            .clone()
+            .alter_collection(AlterCollectionRequest {
+                base: Some(MsgBase::new(MsgType::AlterCollection)),
+                db_name: "".to_string(),
+                collection_name: collection_name.into(),
+                collection_id: 0,
+                properties: Vec::new(),
+                delete_keys: delet_keys,
+            })
+            .await?
+            .into_inner();
+        status_to_result(&Some(resp))?;
+        Ok(())
+    }
+
+    /// create a schema
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the schema
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` containing the `CollectionSchemaBuilder` if successful, or an error if the schema creation fails.
+    pub async fn create_schema(&self, name: &str) -> Result<CollectionSchemaBuilder> {
+        let schema = CollectionSchemaBuilder::new(name, "");
+        Ok(schema)
+    }
+
     pub async fn flush<S>(&self, collection_name: S) -> Result<()>
     where
         S: Into<String>,
@@ -513,123 +695,26 @@ impl Client {
         Ok(())
     }
 
-    async fn create_index_impl<S>(
+    /// manual compaction
+    ///
+    /// # Arguments
+    ///
+    /// * `collection_name` - The name of the collection
+    /// * `is_clustering` - Whether to perform clustering compaction
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` containing the `CompactionInfo` if successful, or an error if the compaction fails.
+    pub async fn manual_compaction<S>(
         &self,
         collection_name: S,
-        field_name: impl Into<String>,
-        index_params: IndexParams,
-    ) -> Result<()>
-    where
-        S: Into<String>,
-    {
-        let field_name = field_name.into();
-        let status = self
-            .client
-            .clone()
-            .create_index(CreateIndexRequest {
-                base: Some(MsgBase::new(MsgType::CreateIndex)),
-                db_name: "".to_string(),
-                collection_name: collection_name.into(),
-                field_name,
-                extra_params: index_params.extra_kv_params(),
-                index_name: index_params.name().clone(),
-            })
-            .await?
-            .into_inner();
-        status_to_result(&Some(status))
-    }
-
-    pub async fn create_index<S>(
-        &self,
-        collection_name: S,
-        field_name: impl Into<String>,
-        index_params: IndexParams,
-    ) -> Result<()>
-    where
-        S: Into<String>,
-    {
-        let collection_name = collection_name.into();
-        let field_name = field_name.into();
-        self.create_index_impl(
-            collection_name.clone(),
-            field_name.clone(),
-            index_params.clone(),
-        )
-        .await?;
-
-        loop {
-            let index_infos = self
-                .describe_index(collection_name.clone(), field_name.clone())
-                .await?;
-
-            let index_info = index_infos
-                .iter()
-                .find(|&x| x.params().name() == index_params.name());
-            if index_info.is_none() {
-                return Err(SuperError::Unexpected(
-                    "failed to describe index".to_owned(),
-                ));
-            }
-            match index_info.unwrap().state() {
-                IndexState::Finished => return Ok(()),
-                IndexState::Failed => return Err(SuperError::Collection(Error::IndexBuildFailed)),
-                _ => (),
-            };
-
-            tokio::time::sleep(Duration::from_millis(config::WAIT_CREATE_INDEX_DURATION_MS)).await;
-        }
-    }
-
-    pub async fn describe_index<S>(
-        &self,
-        collection_name: S,
-        field_name: S,
-    ) -> Result<Vec<IndexInfo>>
-    where
-        S: Into<String>,
-    {
-        let res = self
-            .client
-            .clone()
-            .describe_index(DescribeIndexRequest {
-                base: Some(MsgBase::new(MsgType::DescribeIndex)),
-                db_name: "".to_string(),
-                collection_name: collection_name.into(),
-                field_name: field_name.into(),
-                index_name: "".to_string(),
-                timestamp: 0,
-            })
-            .await?
-            .into_inner();
-        status_to_result(&res.status)?;
-
-        Ok(res.index_descriptions.into_iter().map(Into::into).collect())
-    }
-
-    pub async fn drop_index<S>(&self, collection_name: S, field_name: S) -> Result<()>
-    where
-        S: Into<String>,
-    {
-        let status = self
-            .client
-            .clone()
-            .drop_index(DropIndexRequest {
-                base: Some(MsgBase::new(MsgType::DropIndex)),
-                db_name: "".to_string(),
-                collection_name: collection_name.into(),
-                field_name: field_name.into(),
-                index_name: "".to_string(),
-            })
-            .await?
-            .into_inner();
-        status_to_result(&Some(status))
-    }
-
-    pub async fn manual_compaction<S>(&self, collection_name: S) -> Result<CompactionInfo>
+        is_clustering: Option<bool>,
+    ) -> Result<CompactionInfo>
     where
         S: Into<String>,
     {
         let collection = self.collection_cache.get(&collection_name.into()).await?;
+        let major_compaction = is_clustering.unwrap_or(false);
 
         let resp = self
             .client
@@ -637,6 +722,12 @@ impl Client {
             .manual_compaction(ManualCompactionRequest {
                 collection_id: collection.id,
                 timetravel: 0,
+                major_compaction,
+                collection_name: collection.name,
+                db_name: "".to_string(),
+                partition_id: 0,
+                segment_ids: vec![],
+                channel: "".to_string(),
             })
             .await?
             .into_inner();
@@ -660,6 +751,7 @@ pub type ParamValue = serde_json::Value;
 pub use serde_json::json as ParamValue;
 
 // search result for a single vector
+#[derive(Clone,Debug)]
 pub struct SearchResult<'a> {
     pub size: i64,
     pub id: Vec<Value<'a>>,

@@ -8,6 +8,7 @@ use crate::proto::{
     },
 };
 
+#[derive(Debug, Clone)]
 pub enum Value<'a> {
     None,
     Bool(bool),
@@ -60,6 +61,25 @@ impl Value<'_> {
             Value::FloatArray(_) => DataType::FloatVector,
             Value::Binary(_) => DataType::BinaryVector,
             Value::Array(_) => DataType::Array,
+        }
+    }
+
+    /// Convert borrowed data to owned data
+    pub fn into_owned(self) -> Value<'static> {
+        match self {
+            Value::None => Value::None,
+            Value::Bool(v) => Value::Bool(v),
+            Value::Int8(v) => Value::Int8(v),
+            Value::Int16(v) => Value::Int16(v),
+            Value::Int32(v) => Value::Int32(v),
+            Value::Long(v) => Value::Long(v),
+            Value::Float(v) => Value::Float(v),
+            Value::Double(v) => Value::Double(v),
+            Value::FloatArray(cow) => Value::FloatArray(Cow::Owned(cow.into_owned())),
+            Value::Binary(cow) => Value::Binary(Cow::Owned(cow.into_owned())),
+            Value::String(cow) => Value::String(Cow::Owned(cow.into_owned())),
+            Value::Json(cow) => Value::Json(Cow::Owned(cow.into_owned())),
+            Value::Array(cow) => Value::Array(Cow::Owned(cow.into_owned())),
         }
     }
 }
@@ -171,6 +191,7 @@ impl From<Vec<i16>> for ValueVec {
 }
 
 impl ValueVec {
+    //todo add more new types
     pub fn new(dtype: DataType) -> Self {
         match dtype {
             DataType::None => Self::None,
@@ -189,6 +210,12 @@ impl ValueVec {
             DataType::FloatVector => Self::Float(Vec::new()),
             DataType::Float16Vector => Self::Binary(Vec::new()),
             DataType::BFloat16Vector => Self::Binary(Vec::new()),
+            DataType::Geometry => Self::Binary(Vec::new()),
+            DataType::Text => Self::String(Vec::new()),
+            DataType::SparseFloatVector => Self::Float(Vec::new()),
+            DataType::Int8Vector => Self::Int(Vec::new()),
+            DataType::ArrayOfVector => Self::Float(Vec::new()),
+            DataType::ArrayOfStruct => Self::Array(Vec::new()),
         }
     }
 
@@ -260,6 +287,7 @@ impl From<Field> for ValueVec {
                     ScalarData::JsonData(v) => Self::Json(v.data),
                     ScalarData::ArrayData(v) => Self::Array(v.data),
                     ScalarData::BytesData(_) => unimplemented!(), // Self::Bytes(v.data),
+                    ScalarData::GeometryData(_) => Self::Binary(Vec::new()),
                 },
                 None => Self::None,
             },
@@ -270,9 +298,13 @@ impl From<Field> for ValueVec {
                     VectorData::BinaryVector(v) => Self::Binary(v),
                     VectorData::Bfloat16Vector(v) => Self::Binary(v),
                     VectorData::Float16Vector(v) => Self::Binary(v),
+                    VectorData::SparseFloatVector(_) => Self::Float(Vec::new()),
+                    VectorData::Int8Vector(_) => Self::Int(Vec::new()),
+                    VectorData::VectorArray(_) => Self::Float(Vec::new()),
                 },
                 None => Self::None,
             },
+            Field::StructArrays(_) => Self::Array(Vec::new()),
         }
     }
 }

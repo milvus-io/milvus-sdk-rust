@@ -1,3 +1,5 @@
+pub mod utils;
+
 use strum_macros::{Display, EnumString};
 
 use crate::proto::{
@@ -40,6 +42,10 @@ pub enum IndexType {
     NGTPANNG,
     #[strum(serialize = "NGT_ONNG")]
     NGTONNG,
+    #[strum(serialize = "Trie")]
+    Trie,
+    #[strum(serialize = "BITMAP")]
+    Bitmap,
 }
 
 #[derive(Debug, Clone, Copy, EnumString, Display)]
@@ -113,6 +119,7 @@ impl IndexParams {
 
 #[derive(Debug, Clone)]
 pub struct IndexInfo {
+    index_name:String,
     field_name: String,
     id: i64,
     params: IndexParams,
@@ -134,6 +141,10 @@ impl IndexInfo {
 
     pub fn state(&self) -> IndexState {
         self.state
+    }
+
+    pub fn index_name(&self)->&str {
+        &self.index_name
     }
 }
 
@@ -157,6 +168,7 @@ impl From<IndexDescription> for IndexInfo {
             params,
         );
         Self {
+            index_name:description.index_name.clone(),
             field_name: description.field_name.clone(),
             id: description.index_id,
             params: params,
