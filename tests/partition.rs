@@ -66,9 +66,11 @@ async fn load_release_partitions() -> Result<()> {
         .await?;
     assert_eq!(status, milvus::proto::common::LoadState::Loaded);
 
-    client.release_partitions(schema.name(), vec!["partition_A"]).await?;
+    client
+        .release_partitions(schema.name(), vec!["partition_A"])
+        .await?;
     status = client.get_load_state(schema.name(), None).await?;
-    assert_eq!(status,milvus::proto::common::LoadState::NotLoad);
+    assert_eq!(status, milvus::proto::common::LoadState::NotLoad);
 
     client.drop_collection(schema.name()).await?;
     Ok(())

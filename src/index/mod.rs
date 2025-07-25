@@ -119,7 +119,7 @@ impl IndexParams {
 
 #[derive(Debug, Clone)]
 pub struct IndexInfo {
-    index_name:String,
+    index_name: String,
     field_name: String,
     id: i64,
     params: IndexParams,
@@ -143,7 +143,7 @@ impl IndexInfo {
         self.state
     }
 
-    pub fn index_name(&self)->&str {
+    pub fn index_name(&self) -> &str {
         &self.index_name
     }
 }
@@ -168,7 +168,7 @@ impl From<IndexDescription> for IndexInfo {
             params,
         );
         Self {
-            index_name:description.index_name.clone(),
+            index_name: description.index_name.clone(),
             field_name: description.field_name.clone(),
             id: description.index_id,
             params: params,

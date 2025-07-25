@@ -272,4 +272,3 @@ async fn rename_collection() -> Result<()> {
     client.drop_collection(collection.collection_name).await?;
     Ok(())
 }
-

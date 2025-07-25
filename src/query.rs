@@ -1285,7 +1285,7 @@ impl Client {
 
         let collection_name = collection_name.into();
         let collection = self.collection_cache.get(&collection_name).await?;
-        
+
         let res = self
             .client
             .clone()

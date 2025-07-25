@@ -302,10 +302,8 @@ pub struct LoadCollectionRequest {
     pub skip_load_dynamic_field: bool,
     /// Additional parameters for load
     #[prost(map = "string, string", tag = "9")]
-    pub load_params: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        ::prost::alloc::string::String,
-    >,
+    pub load_params:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
 /// *
 /// Release collection data from query nodes, then you can't do vector search on this collection.
@@ -517,10 +515,8 @@ pub struct LoadPartitionsRequest {
     pub skip_load_dynamic_field: bool,
     /// Additional parameters for load
     #[prost(map = "string, string", tag = "10")]
-    pub load_params: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        ::prost::alloc::string::String,
-    >,
+    pub load_params:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
 ///
 /// Release specific partitions data of one collection from query nodes.
@@ -943,10 +939,8 @@ pub struct DeleteRequest {
     #[prost(enumeration = "super::common::ConsistencyLevel", tag = "7")]
     pub consistency_level: i32,
     #[prost(map = "string, message", tag = "8")]
-    pub expr_template_values: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        super::schema::TemplateValue,
-    >,
+    pub expr_template_values:
+        ::std::collections::HashMap<::prost::alloc::string::String, super::schema::TemplateValue>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -968,10 +962,8 @@ pub struct SubSearchRequest {
     #[prost(int64, tag = "5")]
     pub nq: i64,
     #[prost(map = "string, message", tag = "6")]
-    pub expr_template_values: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        super::schema::TemplateValue,
-    >,
+    pub expr_template_values:
+        ::std::collections::HashMap<::prost::alloc::string::String, super::schema::TemplateValue>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1021,10 +1013,8 @@ pub struct SearchRequest {
     #[prost(message, repeated, tag = "17")]
     pub sub_reqs: ::prost::alloc::vec::Vec<SubSearchRequest>,
     #[prost(map = "string, message", tag = "18")]
-    pub expr_template_values: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        super::schema::TemplateValue,
-    >,
+    pub expr_template_values:
+        ::std::collections::HashMap<::prost::alloc::string::String, super::schema::TemplateValue>,
     #[prost(message, optional, tag = "19")]
     pub function_score: ::core::option::Option<super::schema::FunctionScore>,
 }
@@ -1104,29 +1094,20 @@ pub struct FlushResponse {
     #[prost(string, tag = "2")]
     pub db_name: ::prost::alloc::string::String,
     #[prost(map = "string, message", tag = "3")]
-    pub coll_seg_i_ds: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        super::schema::LongArray,
-    >,
+    pub coll_seg_i_ds:
+        ::std::collections::HashMap<::prost::alloc::string::String, super::schema::LongArray>,
     #[prost(map = "string, message", tag = "4")]
-    pub flush_coll_seg_i_ds: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        super::schema::LongArray,
-    >,
+    pub flush_coll_seg_i_ds:
+        ::std::collections::HashMap<::prost::alloc::string::String, super::schema::LongArray>,
     /// physical time for backup tool
     #[prost(map = "string, int64", tag = "5")]
-    pub coll_seal_times: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        i64,
-    >,
+    pub coll_seal_times: ::std::collections::HashMap<::prost::alloc::string::String, i64>,
     /// hybrid ts for geting flush tate
     #[prost(map = "string, uint64", tag = "6")]
     pub coll_flush_ts: ::std::collections::HashMap<::prost::alloc::string::String, u64>,
     #[prost(map = "string, message", tag = "7")]
-    pub channel_cps: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        super::msg::MsgPosition,
-    >,
+    pub channel_cps:
+        ::std::collections::HashMap<::prost::alloc::string::String, super::msg::MsgPosition>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1158,10 +1139,8 @@ pub struct QueryRequest {
     #[prost(bool, tag = "12")]
     pub use_default_consistency: bool,
     #[prost(map = "string, message", tag = "13")]
-    pub expr_template_values: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        super::schema::TemplateValue,
-    >,
+    pub expr_template_values:
+        ::std::collections::HashMap<::prost::alloc::string::String, super::schema::TemplateValue>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1708,10 +1687,7 @@ pub struct ReplicaInfo {
     pub resource_group_name: ::prost::alloc::string::String,
     /// outbound access rg -> node num
     #[prost(map = "string, int32", tag = "7")]
-    pub num_outbound_node: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        i32,
-    >,
+    pub num_outbound_node: ::std::collections::HashMap<::prost::alloc::string::String, i32>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -2214,10 +2190,8 @@ pub struct UpdateResourceGroupsRequest {
     #[prost(message, optional, tag = "1")]
     pub base: ::core::option::Option<super::common::MsgBase>,
     #[prost(map = "string, message", tag = "2")]
-    pub resource_groups: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        super::rg::ResourceGroupConfig,
-    >,
+    pub resource_groups:
+        ::std::collections::HashMap<::prost::alloc::string::String, super::rg::ResourceGroupConfig>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -2298,22 +2272,13 @@ pub struct ResourceGroup {
     pub num_available_node: i32,
     /// collection name -> loaded replica num
     #[prost(map = "string, int32", tag = "4")]
-    pub num_loaded_replica: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        i32,
-    >,
+    pub num_loaded_replica: ::std::collections::HashMap<::prost::alloc::string::String, i32>,
     /// collection name -> accessed other rg's node num
     #[prost(map = "string, int32", tag = "5")]
-    pub num_outgoing_node: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        i32,
-    >,
+    pub num_outgoing_node: ::std::collections::HashMap<::prost::alloc::string::String, i32>,
     /// collection name -> be accessed node num by other rg
     #[prost(map = "string, int32", tag = "6")]
-    pub num_incoming_node: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        i32,
-    >,
+    pub num_incoming_node: ::std::collections::HashMap<::prost::alloc::string::String, i32>,
     /// resource group configuration.
     #[prost(message, optional, tag = "7")]
     pub config: ::core::option::Option<super::rg::ResourceGroupConfig>,
@@ -2612,9 +2577,7 @@ impl OperatePrivilegeGroupType {
     pub fn as_str_name(&self) -> &'static str {
         match self {
             OperatePrivilegeGroupType::AddPrivilegesToGroup => "AddPrivilegesToGroup",
-            OperatePrivilegeGroupType::RemovePrivilegesFromGroup => {
-                "RemovePrivilegesFromGroup"
-            }
+            OperatePrivilegeGroupType::RemovePrivilegesFromGroup => "RemovePrivilegesFromGroup",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -2748,8 +2711,8 @@ impl QuotaState {
 /// Generated client implementations.
 pub mod milvus_service_client {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
-    use tonic::codegen::*;
     use tonic::codegen::http::Uri;
+    use tonic::codegen::*;
     #[derive(Debug, Clone)]
     pub struct MilvusServiceClient<T> {
         inner: tonic::client::Grpc<T>,
@@ -2782,9 +2745,8 @@ pub mod milvus_service_client {
                     <T as tonic::client::GrpcService<tonic::body::BoxBody>>::ResponseBody,
                 >,
             >,
-            <T as tonic::codegen::Service<
-                http::Request<tonic::body::BoxBody>,
-            >>::Error: Into<StdError> + Send + Sync,
+            <T as tonic::codegen::Service<http::Request<tonic::body::BoxBody>>>::Error:
+                Into<StdError> + Send + Sync,
         {
             MilvusServiceClient::new(InterceptedService::new(inner, interceptor))
         }
@@ -2807,15 +2769,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::CreateCollectionRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/CreateCollection",
@@ -2826,15 +2785,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::DropCollectionRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/DropCollection",
@@ -2845,15 +2801,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::HasCollectionRequest>,
         ) -> Result<tonic::Response<super::BoolResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/HasCollection",
@@ -2864,15 +2817,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::LoadCollectionRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/LoadCollection",
@@ -2883,15 +2833,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::ReleaseCollectionRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/ReleaseCollection",
@@ -2902,15 +2849,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::DescribeCollectionRequest>,
         ) -> Result<tonic::Response<super::DescribeCollectionResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/DescribeCollection",
@@ -2920,19 +2864,14 @@ pub mod milvus_service_client {
         pub async fn get_collection_statistics(
             &mut self,
             request: impl tonic::IntoRequest<super::GetCollectionStatisticsRequest>,
-        ) -> Result<
-            tonic::Response<super::GetCollectionStatisticsResponse>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+        ) -> Result<tonic::Response<super::GetCollectionStatisticsResponse>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/GetCollectionStatistics",
@@ -2943,15 +2882,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::ShowCollectionsRequest>,
         ) -> Result<tonic::Response<super::ShowCollectionsResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/ShowCollections",
@@ -2962,15 +2898,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::AlterCollectionRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/AlterCollection",
@@ -2981,15 +2914,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::AlterCollectionFieldRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/AlterCollectionField",
@@ -3000,15 +2930,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::CreatePartitionRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/CreatePartition",
@@ -3019,15 +2946,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::DropPartitionRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/DropPartition",
@@ -3038,15 +2962,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::HasPartitionRequest>,
         ) -> Result<tonic::Response<super::BoolResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/HasPartition",
@@ -3057,15 +2978,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::LoadPartitionsRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/LoadPartitions",
@@ -3076,15 +2994,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::ReleasePartitionsRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/ReleasePartitions",
@@ -3094,19 +3009,13 @@ pub mod milvus_service_client {
         pub async fn get_partition_statistics(
             &mut self,
             request: impl tonic::IntoRequest<super::GetPartitionStatisticsRequest>,
-        ) -> Result<
-            tonic::Response<super::GetPartitionStatisticsResponse>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+        ) -> Result<tonic::Response<super::GetPartitionStatisticsResponse>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/GetPartitionStatistics",
@@ -3117,15 +3026,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::ShowPartitionsRequest>,
         ) -> Result<tonic::Response<super::ShowPartitionsResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/ShowPartitions",
@@ -3136,15 +3042,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::GetLoadingProgressRequest>,
         ) -> Result<tonic::Response<super::GetLoadingProgressResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/GetLoadingProgress",
@@ -3155,15 +3058,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::GetLoadStateRequest>,
         ) -> Result<tonic::Response<super::GetLoadStateResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/GetLoadState",
@@ -3174,15 +3074,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::CreateAliasRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/CreateAlias",
@@ -3193,15 +3090,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::DropAliasRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/DropAlias",
@@ -3212,15 +3106,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::AlterAliasRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/AlterAlias",
@@ -3231,15 +3122,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::DescribeAliasRequest>,
         ) -> Result<tonic::Response<super::DescribeAliasResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/DescribeAlias",
@@ -3250,15 +3138,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::ListAliasesRequest>,
         ) -> Result<tonic::Response<super::ListAliasesResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/ListAliases",
@@ -3269,15 +3154,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::CreateIndexRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/CreateIndex",
@@ -3288,15 +3170,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::AlterIndexRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/AlterIndex",
@@ -3307,15 +3186,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::DescribeIndexRequest>,
         ) -> Result<tonic::Response<super::DescribeIndexResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/DescribeIndex",
@@ -3326,15 +3202,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::GetIndexStatisticsRequest>,
         ) -> Result<tonic::Response<super::GetIndexStatisticsResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/GetIndexStatistics",
@@ -3346,15 +3219,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::GetIndexStateRequest>,
         ) -> Result<tonic::Response<super::GetIndexStateResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/GetIndexState",
@@ -3365,19 +3235,13 @@ pub mod milvus_service_client {
         pub async fn get_index_build_progress(
             &mut self,
             request: impl tonic::IntoRequest<super::GetIndexBuildProgressRequest>,
-        ) -> Result<
-            tonic::Response<super::GetIndexBuildProgressResponse>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+        ) -> Result<tonic::Response<super::GetIndexBuildProgressResponse>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/GetIndexBuildProgress",
@@ -3388,15 +3252,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::DropIndexRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/DropIndex",
@@ -3407,91 +3268,72 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::InsertRequest>,
         ) -> Result<tonic::Response<super::MutationResult>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/milvus.proto.milvus.MilvusService/Insert",
-            );
+            let path =
+                http::uri::PathAndQuery::from_static("/milvus.proto.milvus.MilvusService/Insert");
             self.inner.unary(request.into_request(), path, codec).await
         }
         pub async fn delete(
             &mut self,
             request: impl tonic::IntoRequest<super::DeleteRequest>,
         ) -> Result<tonic::Response<super::MutationResult>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/milvus.proto.milvus.MilvusService/Delete",
-            );
+            let path =
+                http::uri::PathAndQuery::from_static("/milvus.proto.milvus.MilvusService/Delete");
             self.inner.unary(request.into_request(), path, codec).await
         }
         pub async fn upsert(
             &mut self,
             request: impl tonic::IntoRequest<super::UpsertRequest>,
         ) -> Result<tonic::Response<super::MutationResult>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/milvus.proto.milvus.MilvusService/Upsert",
-            );
+            let path =
+                http::uri::PathAndQuery::from_static("/milvus.proto.milvus.MilvusService/Upsert");
             self.inner.unary(request.into_request(), path, codec).await
         }
         pub async fn search(
             &mut self,
             request: impl tonic::IntoRequest<super::SearchRequest>,
         ) -> Result<tonic::Response<super::SearchResults>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/milvus.proto.milvus.MilvusService/Search",
-            );
+            let path =
+                http::uri::PathAndQuery::from_static("/milvus.proto.milvus.MilvusService/Search");
             self.inner.unary(request.into_request(), path, codec).await
         }
         pub async fn hybrid_search(
             &mut self,
             request: impl tonic::IntoRequest<super::HybridSearchRequest>,
         ) -> Result<tonic::Response<super::SearchResults>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/HybridSearch",
@@ -3502,53 +3344,42 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::FlushRequest>,
         ) -> Result<tonic::Response<super::FlushResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/milvus.proto.milvus.MilvusService/Flush",
-            );
+            let path =
+                http::uri::PathAndQuery::from_static("/milvus.proto.milvus.MilvusService/Flush");
             self.inner.unary(request.into_request(), path, codec).await
         }
         pub async fn query(
             &mut self,
             request: impl tonic::IntoRequest<super::QueryRequest>,
         ) -> Result<tonic::Response<super::QueryResults>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/milvus.proto.milvus.MilvusService/Query",
-            );
+            let path =
+                http::uri::PathAndQuery::from_static("/milvus.proto.milvus.MilvusService/Query");
             self.inner.unary(request.into_request(), path, codec).await
         }
         pub async fn calc_distance(
             &mut self,
             request: impl tonic::IntoRequest<super::CalcDistanceRequest>,
         ) -> Result<tonic::Response<super::CalcDistanceResults>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/CalcDistance",
@@ -3559,34 +3390,27 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::FlushAllRequest>,
         ) -> Result<tonic::Response<super::FlushAllResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/milvus.proto.milvus.MilvusService/FlushAll",
-            );
+            let path =
+                http::uri::PathAndQuery::from_static("/milvus.proto.milvus.MilvusService/FlushAll");
             self.inner.unary(request.into_request(), path, codec).await
         }
         pub async fn add_collection_field(
             &mut self,
             request: impl tonic::IntoRequest<super::AddCollectionFieldRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/AddCollectionField",
@@ -3597,15 +3421,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::GetFlushStateRequest>,
         ) -> Result<tonic::Response<super::GetFlushStateResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/GetFlushState",
@@ -3616,15 +3437,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::GetFlushAllStateRequest>,
         ) -> Result<tonic::Response<super::GetFlushAllStateResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/GetFlushAllState",
@@ -3634,19 +3452,14 @@ pub mod milvus_service_client {
         pub async fn get_persistent_segment_info(
             &mut self,
             request: impl tonic::IntoRequest<super::GetPersistentSegmentInfoRequest>,
-        ) -> Result<
-            tonic::Response<super::GetPersistentSegmentInfoResponse>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+        ) -> Result<tonic::Response<super::GetPersistentSegmentInfoResponse>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/GetPersistentSegmentInfo",
@@ -3657,15 +3470,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::GetQuerySegmentInfoRequest>,
         ) -> Result<tonic::Response<super::GetQuerySegmentInfoResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/GetQuerySegmentInfo",
@@ -3676,15 +3486,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::GetReplicasRequest>,
         ) -> Result<tonic::Response<super::GetReplicasResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/GetReplicas",
@@ -3695,19 +3502,15 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::DummyRequest>,
         ) -> Result<tonic::Response<super::DummyResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/milvus.proto.milvus.MilvusService/Dummy",
-            );
+            let path =
+                http::uri::PathAndQuery::from_static("/milvus.proto.milvus.MilvusService/Dummy");
             self.inner.unary(request.into_request(), path, codec).await
         }
         /// TODO: remove
@@ -3715,15 +3518,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::RegisterLinkRequest>,
         ) -> Result<tonic::Response<super::RegisterLinkResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/RegisterLink",
@@ -3735,15 +3535,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::GetMetricsRequest>,
         ) -> Result<tonic::Response<super::GetMetricsResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/GetMetrics",
@@ -3754,15 +3551,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::GetComponentStatesRequest>,
         ) -> Result<tonic::Response<super::ComponentStates>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/GetComponentStates",
@@ -3773,15 +3567,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::LoadBalanceRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/LoadBalance",
@@ -3792,15 +3583,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::GetCompactionStateRequest>,
         ) -> Result<tonic::Response<super::GetCompactionStateResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/GetCompactionState",
@@ -3811,15 +3599,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::ManualCompactionRequest>,
         ) -> Result<tonic::Response<super::ManualCompactionResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/ManualCompaction",
@@ -3830,15 +3615,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::GetCompactionPlansRequest>,
         ) -> Result<tonic::Response<super::GetCompactionPlansResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/GetCompactionStateWithPlans",
@@ -3850,34 +3632,27 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::ImportRequest>,
         ) -> Result<tonic::Response<super::ImportResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/milvus.proto.milvus.MilvusService/Import",
-            );
+            let path =
+                http::uri::PathAndQuery::from_static("/milvus.proto.milvus.MilvusService/Import");
             self.inner.unary(request.into_request(), path, codec).await
         }
         pub async fn get_import_state(
             &mut self,
             request: impl tonic::IntoRequest<super::GetImportStateRequest>,
         ) -> Result<tonic::Response<super::GetImportStateResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/GetImportState",
@@ -3888,15 +3663,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::ListImportTasksRequest>,
         ) -> Result<tonic::Response<super::ListImportTasksResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/ListImportTasks",
@@ -3908,15 +3680,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::CreateCredentialRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/CreateCredential",
@@ -3927,15 +3696,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::UpdateCredentialRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/UpdateCredential",
@@ -3946,15 +3712,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::DeleteCredentialRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/DeleteCredential",
@@ -3965,15 +3728,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::ListCredUsersRequest>,
         ) -> Result<tonic::Response<super::ListCredUsersResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/ListCredUsers",
@@ -3985,15 +3745,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::CreateRoleRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/CreateRole",
@@ -4004,34 +3761,27 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::DropRoleRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/milvus.proto.milvus.MilvusService/DropRole",
-            );
+            let path =
+                http::uri::PathAndQuery::from_static("/milvus.proto.milvus.MilvusService/DropRole");
             self.inner.unary(request.into_request(), path, codec).await
         }
         pub async fn operate_user_role(
             &mut self,
             request: impl tonic::IntoRequest<super::OperateUserRoleRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/OperateUserRole",
@@ -4042,15 +3792,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::SelectRoleRequest>,
         ) -> Result<tonic::Response<super::SelectRoleResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/SelectRole",
@@ -4061,15 +3808,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::SelectUserRequest>,
         ) -> Result<tonic::Response<super::SelectUserResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/SelectUser",
@@ -4080,15 +3824,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::OperatePrivilegeRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/OperatePrivilege",
@@ -4099,15 +3840,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::OperatePrivilegeV2Request>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/OperatePrivilegeV2",
@@ -4118,15 +3856,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::SelectGrantRequest>,
         ) -> Result<tonic::Response<super::SelectGrantResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/SelectGrant",
@@ -4137,15 +3872,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::GetVersionRequest>,
         ) -> Result<tonic::Response<super::GetVersionResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/GetVersion",
@@ -4156,15 +3888,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::CheckHealthRequest>,
         ) -> Result<tonic::Response<super::CheckHealthResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/CheckHealth",
@@ -4175,15 +3904,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::CreateResourceGroupRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/CreateResourceGroup",
@@ -4194,15 +3920,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::DropResourceGroupRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/DropResourceGroup",
@@ -4213,15 +3936,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::UpdateResourceGroupsRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/UpdateResourceGroups",
@@ -4232,15 +3952,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::TransferNodeRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/TransferNode",
@@ -4251,15 +3968,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::TransferReplicaRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/TransferReplica",
@@ -4270,15 +3984,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::ListResourceGroupsRequest>,
         ) -> Result<tonic::Response<super::ListResourceGroupsResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/ListResourceGroups",
@@ -4288,19 +3999,13 @@ pub mod milvus_service_client {
         pub async fn describe_resource_group(
             &mut self,
             request: impl tonic::IntoRequest<super::DescribeResourceGroupRequest>,
-        ) -> Result<
-            tonic::Response<super::DescribeResourceGroupResponse>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+        ) -> Result<tonic::Response<super::DescribeResourceGroupResponse>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/DescribeResourceGroup",
@@ -4311,15 +4016,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::RenameCollectionRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/RenameCollection",
@@ -4328,22 +4030,15 @@ pub mod milvus_service_client {
         }
         pub async fn list_indexed_segment(
             &mut self,
-            request: impl tonic::IntoRequest<
-                super::super::feder::ListIndexedSegmentRequest,
-            >,
-        ) -> Result<
-            tonic::Response<super::super::feder::ListIndexedSegmentResponse>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            request: impl tonic::IntoRequest<super::super::feder::ListIndexedSegmentRequest>,
+        ) -> Result<tonic::Response<super::super::feder::ListIndexedSegmentResponse>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/ListIndexedSegment",
@@ -4352,22 +4047,17 @@ pub mod milvus_service_client {
         }
         pub async fn describe_segment_index_data(
             &mut self,
-            request: impl tonic::IntoRequest<
-                super::super::feder::DescribeSegmentIndexDataRequest,
-            >,
+            request: impl tonic::IntoRequest<super::super::feder::DescribeSegmentIndexDataRequest>,
         ) -> Result<
             tonic::Response<super::super::feder::DescribeSegmentIndexDataResponse>,
             tonic::Status,
         > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/DescribeSegmentIndexData",
@@ -4378,34 +4068,27 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::ConnectRequest>,
         ) -> Result<tonic::Response<super::ConnectResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/milvus.proto.milvus.MilvusService/Connect",
-            );
+            let path =
+                http::uri::PathAndQuery::from_static("/milvus.proto.milvus.MilvusService/Connect");
             self.inner.unary(request.into_request(), path, codec).await
         }
         pub async fn alloc_timestamp(
             &mut self,
             request: impl tonic::IntoRequest<super::AllocTimestampRequest>,
         ) -> Result<tonic::Response<super::AllocTimestampResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/AllocTimestamp",
@@ -4416,15 +4099,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::CreateDatabaseRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/CreateDatabase",
@@ -4435,15 +4115,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::DropDatabaseRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/DropDatabase",
@@ -4454,15 +4131,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::ListDatabasesRequest>,
         ) -> Result<tonic::Response<super::ListDatabasesResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/ListDatabases",
@@ -4473,15 +4147,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::AlterDatabaseRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/AlterDatabase",
@@ -4492,15 +4163,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::DescribeDatabaseRequest>,
         ) -> Result<tonic::Response<super::DescribeDatabaseResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/DescribeDatabase",
@@ -4511,15 +4179,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::ReplicateMessageRequest>,
         ) -> Result<tonic::Response<super::ReplicateMessageResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/ReplicateMessage",
@@ -4530,15 +4195,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::BackupRbacMetaRequest>,
         ) -> Result<tonic::Response<super::BackupRbacMetaResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/BackupRBAC",
@@ -4549,15 +4211,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::RestoreRbacMetaRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/RestoreRBAC",
@@ -4568,15 +4227,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::CreatePrivilegeGroupRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/CreatePrivilegeGroup",
@@ -4587,15 +4243,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::DropPrivilegeGroupRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/DropPrivilegeGroup",
@@ -4606,15 +4259,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::ListPrivilegeGroupsRequest>,
         ) -> Result<tonic::Response<super::ListPrivilegeGroupsResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/ListPrivilegeGroups",
@@ -4625,15 +4275,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::OperatePrivilegeGroupRequest>,
         ) -> Result<tonic::Response<super::super::common::Status>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/OperatePrivilegeGroup",
@@ -4644,15 +4291,12 @@ pub mod milvus_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::RunAnalyzerRequest>,
         ) -> Result<tonic::Response<super::RunAnalyzerResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.MilvusService/RunAnalyzer",
@@ -4664,8 +4308,8 @@ pub mod milvus_service_client {
 /// Generated client implementations.
 pub mod proxy_service_client {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
-    use tonic::codegen::*;
     use tonic::codegen::http::Uri;
+    use tonic::codegen::*;
     #[derive(Debug, Clone)]
     pub struct ProxyServiceClient<T> {
         inner: tonic::client::Grpc<T>,
@@ -4698,9 +4342,8 @@ pub mod proxy_service_client {
                     <T as tonic::client::GrpcService<tonic::body::BoxBody>>::ResponseBody,
                 >,
             >,
-            <T as tonic::codegen::Service<
-                http::Request<tonic::body::BoxBody>,
-            >>::Error: Into<StdError> + Send + Sync,
+            <T as tonic::codegen::Service<http::Request<tonic::body::BoxBody>>>::Error:
+                Into<StdError> + Send + Sync,
         {
             ProxyServiceClient::new(InterceptedService::new(inner, interceptor))
         }
@@ -4723,15 +4366,12 @@ pub mod proxy_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::RegisterLinkRequest>,
         ) -> Result<tonic::Response<super::RegisterLinkResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/milvus.proto.milvus.ProxyService/RegisterLink",

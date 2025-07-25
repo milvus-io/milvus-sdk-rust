@@ -99,7 +99,7 @@ impl Client {
                 num_rows: row_num as u32,
                 fields_data: fields_data.into_iter().map(|f| f.into()).collect(),
                 hash_keys: Vec::new(),
-                schema_timestamp:0,
+                schema_timestamp: 0,
             })
             .await?
             .into_inner();
@@ -129,8 +129,8 @@ impl Client {
                 expr: expr,
                 partition_name: options.partition_name.clone(),
                 hash_keys: Vec::new(),
-                consistency_level:crate::proto::common::ConsistencyLevel::Strong.into(),
-                expr_template_values:std::collections::HashMap::new(),
+                consistency_level: crate::proto::common::ConsistencyLevel::Strong.into(),
+                expr_template_values: std::collections::HashMap::new(),
             })
             .await?
             .into_inner();
@@ -212,7 +212,7 @@ impl Client {
                 num_rows: row_num as u32,
                 fields_data: fields_data.into_iter().map(|f| f.into()).collect(),
                 hash_keys: Vec::new(),
-                schema_timestamp:0,
+                schema_timestamp: 0,
             })
             .await?
             .into_inner();

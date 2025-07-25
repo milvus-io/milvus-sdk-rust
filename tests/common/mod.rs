@@ -116,4 +116,3 @@ pub fn gen_random_f32_vector_custom(n: i64, dimension: i64) -> Vec<f32> {
     }
     data
 }
-

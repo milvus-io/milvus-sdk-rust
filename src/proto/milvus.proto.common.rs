@@ -13,10 +13,8 @@ pub struct Status {
     #[prost(string, tag = "5")]
     pub detail: ::prost::alloc::string::String,
     #[prost(map = "string, string", tag = "6")]
-    pub extra_info: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        ::prost::alloc::string::String,
-    >,
+    pub extra_info:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -81,10 +79,8 @@ pub struct MsgBase {
     #[prost(int64, tag = "5")]
     pub target_id: i64,
     #[prost(map = "string, string", tag = "6")]
-    pub properties: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        ::prost::alloc::string::String,
-    >,
+    pub properties:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
     #[prost(message, optional, tag = "7")]
     pub replicate_info: ::core::option::Option<ReplicateInfo>,
 }
@@ -151,10 +147,8 @@ pub struct ClientInfo {
     pub host: ::prost::alloc::string::String,
     /// reserved for newly-added feature if necessary.
     #[prost(map = "string, string", tag = "6")]
-    pub reserved: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        ::prost::alloc::string::String,
-    >,
+    pub reserved:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -171,10 +165,8 @@ pub struct ServerInfo {
     pub deploy_mode: ::prost::alloc::string::String,
     /// reserved for newly-added feature if necessary.
     #[prost(map = "string, string", tag = "6")]
-    pub reserved: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        ::prost::alloc::string::String,
-    >,
+    pub reserved:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
 /// NodeInfo is used to describe the node information.
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -1234,13 +1226,9 @@ impl ObjectPrivilege {
             ObjectPrivilege::PrivilegeManageOwnership => "PrivilegeManageOwnership",
             ObjectPrivilege::PrivilegeSelectUser => "PrivilegeSelectUser",
             ObjectPrivilege::PrivilegeUpsert => "PrivilegeUpsert",
-            ObjectPrivilege::PrivilegeCreateResourceGroup => {
-                "PrivilegeCreateResourceGroup"
-            }
+            ObjectPrivilege::PrivilegeCreateResourceGroup => "PrivilegeCreateResourceGroup",
             ObjectPrivilege::PrivilegeDropResourceGroup => "PrivilegeDropResourceGroup",
-            ObjectPrivilege::PrivilegeDescribeResourceGroup => {
-                "PrivilegeDescribeResourceGroup"
-            }
+            ObjectPrivilege::PrivilegeDescribeResourceGroup => "PrivilegeDescribeResourceGroup",
             ObjectPrivilege::PrivilegeListResourceGroups => "PrivilegeListResourceGroups",
             ObjectPrivilege::PrivilegeTransferNode => "PrivilegeTransferNode",
             ObjectPrivilege::PrivilegeTransferReplica => "PrivilegeTransferReplica",
@@ -1260,9 +1248,7 @@ impl ObjectPrivilege {
             ObjectPrivilege::PrivilegeDropAlias => "PrivilegeDropAlias",
             ObjectPrivilege::PrivilegeDescribeAlias => "PrivilegeDescribeAlias",
             ObjectPrivilege::PrivilegeListAliases => "PrivilegeListAliases",
-            ObjectPrivilege::PrivilegeUpdateResourceGroups => {
-                "PrivilegeUpdateResourceGroups"
-            }
+            ObjectPrivilege::PrivilegeUpdateResourceGroups => "PrivilegeUpdateResourceGroups",
             ObjectPrivilege::PrivilegeAlterDatabase => "PrivilegeAlterDatabase",
             ObjectPrivilege::PrivilegeDescribeDatabase => "PrivilegeDescribeDatabase",
             ObjectPrivilege::PrivilegeBackupRbac => "PrivilegeBackupRBAC",
@@ -1270,39 +1256,21 @@ impl ObjectPrivilege {
             ObjectPrivilege::PrivilegeGroupReadOnly => "PrivilegeGroupReadOnly",
             ObjectPrivilege::PrivilegeGroupReadWrite => "PrivilegeGroupReadWrite",
             ObjectPrivilege::PrivilegeGroupAdmin => "PrivilegeGroupAdmin",
-            ObjectPrivilege::PrivilegeCreatePrivilegeGroup => {
-                "PrivilegeCreatePrivilegeGroup"
-            }
+            ObjectPrivilege::PrivilegeCreatePrivilegeGroup => "PrivilegeCreatePrivilegeGroup",
             ObjectPrivilege::PrivilegeDropPrivilegeGroup => "PrivilegeDropPrivilegeGroup",
-            ObjectPrivilege::PrivilegeListPrivilegeGroups => {
-                "PrivilegeListPrivilegeGroups"
-            }
-            ObjectPrivilege::PrivilegeOperatePrivilegeGroup => {
-                "PrivilegeOperatePrivilegeGroup"
-            }
-            ObjectPrivilege::PrivilegeGroupClusterReadOnly => {
-                "PrivilegeGroupClusterReadOnly"
-            }
-            ObjectPrivilege::PrivilegeGroupClusterReadWrite => {
-                "PrivilegeGroupClusterReadWrite"
-            }
+            ObjectPrivilege::PrivilegeListPrivilegeGroups => "PrivilegeListPrivilegeGroups",
+            ObjectPrivilege::PrivilegeOperatePrivilegeGroup => "PrivilegeOperatePrivilegeGroup",
+            ObjectPrivilege::PrivilegeGroupClusterReadOnly => "PrivilegeGroupClusterReadOnly",
+            ObjectPrivilege::PrivilegeGroupClusterReadWrite => "PrivilegeGroupClusterReadWrite",
             ObjectPrivilege::PrivilegeGroupClusterAdmin => "PrivilegeGroupClusterAdmin",
-            ObjectPrivilege::PrivilegeGroupDatabaseReadOnly => {
-                "PrivilegeGroupDatabaseReadOnly"
-            }
-            ObjectPrivilege::PrivilegeGroupDatabaseReadWrite => {
-                "PrivilegeGroupDatabaseReadWrite"
-            }
+            ObjectPrivilege::PrivilegeGroupDatabaseReadOnly => "PrivilegeGroupDatabaseReadOnly",
+            ObjectPrivilege::PrivilegeGroupDatabaseReadWrite => "PrivilegeGroupDatabaseReadWrite",
             ObjectPrivilege::PrivilegeGroupDatabaseAdmin => "PrivilegeGroupDatabaseAdmin",
-            ObjectPrivilege::PrivilegeGroupCollectionReadOnly => {
-                "PrivilegeGroupCollectionReadOnly"
-            }
+            ObjectPrivilege::PrivilegeGroupCollectionReadOnly => "PrivilegeGroupCollectionReadOnly",
             ObjectPrivilege::PrivilegeGroupCollectionReadWrite => {
                 "PrivilegeGroupCollectionReadWrite"
             }
-            ObjectPrivilege::PrivilegeGroupCollectionAdmin => {
-                "PrivilegeGroupCollectionAdmin"
-            }
+            ObjectPrivilege::PrivilegeGroupCollectionAdmin => "PrivilegeGroupCollectionAdmin",
             ObjectPrivilege::PrivilegeGetImportProgress => "PrivilegeGetImportProgress",
             ObjectPrivilege::PrivilegeListImport => "PrivilegeListImport",
             ObjectPrivilege::PrivilegeAddCollectionField => "PrivilegeAddCollectionField",
@@ -1339,9 +1307,7 @@ impl ObjectPrivilege {
             "PrivilegeUpsert" => Some(Self::PrivilegeUpsert),
             "PrivilegeCreateResourceGroup" => Some(Self::PrivilegeCreateResourceGroup),
             "PrivilegeDropResourceGroup" => Some(Self::PrivilegeDropResourceGroup),
-            "PrivilegeDescribeResourceGroup" => {
-                Some(Self::PrivilegeDescribeResourceGroup)
-            }
+            "PrivilegeDescribeResourceGroup" => Some(Self::PrivilegeDescribeResourceGroup),
             "PrivilegeListResourceGroups" => Some(Self::PrivilegeListResourceGroups),
             "PrivilegeTransferNode" => Some(Self::PrivilegeTransferNode),
             "PrivilegeTransferReplica" => Some(Self::PrivilegeTransferReplica),
@@ -1372,27 +1338,15 @@ impl ObjectPrivilege {
             "PrivilegeCreatePrivilegeGroup" => Some(Self::PrivilegeCreatePrivilegeGroup),
             "PrivilegeDropPrivilegeGroup" => Some(Self::PrivilegeDropPrivilegeGroup),
             "PrivilegeListPrivilegeGroups" => Some(Self::PrivilegeListPrivilegeGroups),
-            "PrivilegeOperatePrivilegeGroup" => {
-                Some(Self::PrivilegeOperatePrivilegeGroup)
-            }
+            "PrivilegeOperatePrivilegeGroup" => Some(Self::PrivilegeOperatePrivilegeGroup),
             "PrivilegeGroupClusterReadOnly" => Some(Self::PrivilegeGroupClusterReadOnly),
-            "PrivilegeGroupClusterReadWrite" => {
-                Some(Self::PrivilegeGroupClusterReadWrite)
-            }
+            "PrivilegeGroupClusterReadWrite" => Some(Self::PrivilegeGroupClusterReadWrite),
             "PrivilegeGroupClusterAdmin" => Some(Self::PrivilegeGroupClusterAdmin),
-            "PrivilegeGroupDatabaseReadOnly" => {
-                Some(Self::PrivilegeGroupDatabaseReadOnly)
-            }
-            "PrivilegeGroupDatabaseReadWrite" => {
-                Some(Self::PrivilegeGroupDatabaseReadWrite)
-            }
+            "PrivilegeGroupDatabaseReadOnly" => Some(Self::PrivilegeGroupDatabaseReadOnly),
+            "PrivilegeGroupDatabaseReadWrite" => Some(Self::PrivilegeGroupDatabaseReadWrite),
             "PrivilegeGroupDatabaseAdmin" => Some(Self::PrivilegeGroupDatabaseAdmin),
-            "PrivilegeGroupCollectionReadOnly" => {
-                Some(Self::PrivilegeGroupCollectionReadOnly)
-            }
-            "PrivilegeGroupCollectionReadWrite" => {
-                Some(Self::PrivilegeGroupCollectionReadWrite)
-            }
+            "PrivilegeGroupCollectionReadOnly" => Some(Self::PrivilegeGroupCollectionReadOnly),
+            "PrivilegeGroupCollectionReadWrite" => Some(Self::PrivilegeGroupCollectionReadWrite),
             "PrivilegeGroupCollectionAdmin" => Some(Self::PrivilegeGroupCollectionAdmin),
             "PrivilegeGetImportProgress" => Some(Self::PrivilegeGetImportProgress),
             "PrivilegeListImport" => Some(Self::PrivilegeListImport),

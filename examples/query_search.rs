@@ -164,7 +164,6 @@ async fn prepare_data(client: &Client) -> Result<()> {
     Ok(())
 }
 
-
 // Print functions.
 // You can ignore this part.
 
