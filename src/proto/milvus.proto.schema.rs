@@ -28,7 +28,7 @@ pub struct FieldSchema {
     /// For array type, the element type is stored here
     #[prost(enumeration = "DataType", tag = "10")]
     pub element_type: i32,
-    /// default_value only support scalars except array and json for now
+    /// default_value only support scalars except array, json and timestamptz for now
     #[prost(message, optional, tag = "11")]
     pub default_value: ::core::option::Option<ValueField>,
     /// mark whether this field is the dynamic field
@@ -67,6 +67,16 @@ pub struct FunctionSchema {
     #[prost(message, repeated, tag = "9")]
     pub params: ::prost::alloc::vec::Vec<super::common::KeyValuePair>,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct FunctionScore {
+    /// Currently only a single function is supported, and multiple functions
+    #[prost(message, repeated, tag = "1")]
+    pub functions: ::prost::alloc::vec::Vec<FunctionSchema>,
+    /// may be supported in the future, so repeated is used here.
+    #[prost(message, repeated, tag = "2")]
+    pub params: ::prost::alloc::vec::Vec<super::common::KeyValuePair>,
+}
 /// *
 /// @brief Collection schema
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -91,6 +101,20 @@ pub struct CollectionSchema {
     pub functions: ::prost::alloc::vec::Vec<FunctionSchema>,
     #[prost(string, tag = "8")]
     pub db_name: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "9")]
+    pub struct_array_fields: ::prost::alloc::vec::Vec<StructArrayFieldSchema>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct StructArrayFieldSchema {
+    #[prost(int64, tag = "1")]
+    pub field_id: i64,
+    #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub description: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "4")]
+    pub fields: ::prost::alloc::vec::Vec<FieldSchema>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -157,6 +181,12 @@ pub struct GeometryArray {
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct TimestamptzArray {
+    #[prost(int64, repeated, tag = "1")]
+    pub data: ::prost::alloc::vec::Vec<i64>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GeometryWktArray {
     #[prost(string, repeated, tag = "1")]
     pub data: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
@@ -164,7 +194,7 @@ pub struct GeometryWktArray {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ValueField {
-    #[prost(oneof = "value_field::Data", tags = "1, 2, 3, 4, 5, 6, 7")]
+    #[prost(oneof = "value_field::Data", tags = "1, 2, 3, 4, 5, 6, 7, 8")]
     pub data: ::core::option::Option<value_field::Data>,
 }
 /// Nested message and enum types in `ValueField`.
@@ -186,6 +216,8 @@ pub mod value_field {
         StringData(::prost::alloc::string::String),
         #[prost(bytes, tag = "7")]
         BytesData(::prost::alloc::vec::Vec<u8>),
+        #[prost(int64, tag = "8")]
+        TimestamptzData(i64),
     }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -193,7 +225,7 @@ pub mod value_field {
 pub struct ScalarField {
     #[prost(
         oneof = "scalar_field::Data",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12"
     )]
     pub data: ::core::option::Option<scalar_field::Data>,
 }
@@ -222,8 +254,8 @@ pub mod scalar_field {
         JsonData(super::JsonArray),
         #[prost(message, tag = "10")]
         GeometryData(super::GeometryArray),
-        /// align with master
-        /// TimestamptzArray timestamptz_data = 11;
+        #[prost(message, tag = "11")]
+        TimestamptzData(super::TimestamptzArray),
         #[prost(message, tag = "12")]
         GeometryWktData(super::GeometryWktArray),
     }
@@ -244,7 +276,7 @@ pub struct VectorField {
     /// For sparse vector, dim is the max dimension of the current batch of vectors
     #[prost(int64, tag = "1")]
     pub dim: i64,
-    #[prost(oneof = "vector_field::Data", tags = "2, 3, 4, 5, 6")]
+    #[prost(oneof = "vector_field::Data", tags = "2, 3, 4, 5, 6, 7, 8")]
     pub data: ::core::option::Option<vector_field::Data>,
 }
 /// Nested message and enum types in `VectorField`.
@@ -262,7 +294,27 @@ pub mod vector_field {
         Bfloat16Vector(::prost::alloc::vec::Vec<u8>),
         #[prost(message, tag = "6")]
         SparseFloatVector(super::SparseFloatArray),
+        #[prost(bytes, tag = "7")]
+        Int8Vector(::prost::alloc::vec::Vec<u8>),
+        #[prost(message, tag = "8")]
+        VectorArray(super::VectorArray),
     }
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct VectorArray {
+    #[prost(int64, tag = "1")]
+    pub dim: i64,
+    #[prost(message, repeated, tag = "2")]
+    pub data: ::prost::alloc::vec::Vec<VectorField>,
+    #[prost(enumeration = "DataType", tag = "3")]
+    pub element_type: i32,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct StructArrayField {
+    #[prost(message, repeated, tag = "1")]
+    pub fields: ::prost::alloc::vec::Vec<FieldData>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -277,7 +329,7 @@ pub struct FieldData {
     pub is_dynamic: bool,
     #[prost(bool, repeated, tag = "7")]
     pub valid_data: ::prost::alloc::vec::Vec<bool>,
-    #[prost(oneof = "field_data::Field", tags = "3, 4")]
+    #[prost(oneof = "field_data::Field", tags = "3, 4, 8")]
     pub field: ::core::option::Option<field_data::Field>,
 }
 /// Nested message and enum types in `FieldData`.
@@ -289,6 +341,8 @@ pub mod field_data {
         Scalars(super::ScalarField),
         #[prost(message, tag = "4")]
         Vectors(super::VectorField),
+        #[prost(message, tag = "8")]
+        StructArrays(super::StructArrayField),
     }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -446,11 +500,16 @@ pub enum DataType {
     Array = 22,
     Json = 23,
     Geometry = 24,
+    Text = 25,
+    Timestamptz = 26,
     BinaryVector = 100,
     FloatVector = 101,
     Float16Vector = 102,
     BFloat16Vector = 103,
     SparseFloatVector = 104,
+    Int8Vector = 105,
+    ArrayOfVector = 106,
+    ArrayOfStruct = 200,
 }
 impl DataType {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -472,11 +531,16 @@ impl DataType {
             DataType::Array => "Array",
             DataType::Json => "JSON",
             DataType::Geometry => "Geometry",
+            DataType::Text => "Text",
+            DataType::Timestamptz => "Timestamptz",
             DataType::BinaryVector => "BinaryVector",
             DataType::FloatVector => "FloatVector",
             DataType::Float16Vector => "Float16Vector",
             DataType::BFloat16Vector => "BFloat16Vector",
             DataType::SparseFloatVector => "SparseFloatVector",
+            DataType::Int8Vector => "Int8Vector",
+            DataType::ArrayOfVector => "ArrayOfVector",
+            DataType::ArrayOfStruct => "ArrayOfStruct",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -495,11 +559,16 @@ impl DataType {
             "Array" => Some(Self::Array),
             "JSON" => Some(Self::Json),
             "Geometry" => Some(Self::Geometry),
+            "Text" => Some(Self::Text),
+            "Timestamptz" => Some(Self::Timestamptz),
             "BinaryVector" => Some(Self::BinaryVector),
             "FloatVector" => Some(Self::FloatVector),
             "Float16Vector" => Some(Self::Float16Vector),
             "BFloat16Vector" => Some(Self::BFloat16Vector),
             "SparseFloatVector" => Some(Self::SparseFloatVector),
+            "Int8Vector" => Some(Self::Int8Vector),
+            "ArrayOfVector" => Some(Self::ArrayOfVector),
+            "ArrayOfStruct" => Some(Self::ArrayOfStruct),
             _ => None,
         }
     }
@@ -510,6 +579,7 @@ pub enum FunctionType {
     Unknown = 0,
     Bm25 = 1,
     TextEmbedding = 2,
+    Rerank = 3,
 }
 impl FunctionType {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -521,6 +591,7 @@ impl FunctionType {
             FunctionType::Unknown => "Unknown",
             FunctionType::Bm25 => "BM25",
             FunctionType::TextEmbedding => "TextEmbedding",
+            FunctionType::Rerank => "Rerank",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -529,6 +600,7 @@ impl FunctionType {
             "Unknown" => Some(Self::Unknown),
             "BM25" => Some(Self::Bm25),
             "TextEmbedding" => Some(Self::TextEmbedding),
+            "Rerank" => Some(Self::Rerank),
             _ => None,
         }
     }

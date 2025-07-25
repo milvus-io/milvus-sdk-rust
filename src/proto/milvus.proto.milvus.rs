@@ -273,6 +273,27 @@ pub struct DescribeCollectionResponse {
     #[prost(string, tag = "19")]
     pub update_timestamp_str: ::prost::alloc::string::String,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BatchDescribeCollectionRequest {
+    #[prost(string, tag = "1")]
+    pub db_name: ::prost::alloc::string::String,
+    /// The collection name you want to describe, you can pass collection_name or collectionID
+    #[prost(string, repeated, tag = "2")]
+    pub collection_name: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// The collection ID you want to describe
+    #[prost(int64, repeated, tag = "3")]
+    pub collection_id: ::prost::alloc::vec::Vec<i64>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BatchDescribeCollectionResponse {
+    /// Contain error_code and reason
+    #[prost(message, optional, tag = "1")]
+    pub status: ::core::option::Option<super::common::Status>,
+    #[prost(message, repeated, tag = "2")]
+    pub responses: ::prost::alloc::vec::Vec<DescribeCollectionResponse>,
+}
 /// *
 /// Load collection data into query nodes, then you can do vector search on this collection.
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -430,6 +451,8 @@ pub struct ShowCollectionsResponse {
     /// Indicate whether query service is available
     #[prost(bool, repeated, tag = "7")]
     pub query_service_available: ::prost::alloc::vec::Vec<bool>,
+    #[prost(int32, repeated, tag = "8")]
+    pub shards_num: ::prost::alloc::vec::Vec<i32>,
 }
 ///
 /// Create partition in created collection.
@@ -864,6 +887,21 @@ pub struct InsertRequest {
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AddCollectionFieldRequest {
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    #[prost(string, tag = "2")]
+    pub db_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub collection_name: ::prost::alloc::string::String,
+    #[prost(int64, tag = "4")]
+    pub collection_id: i64,
+    /// The serialized `schema.FieldSchema`
+    #[prost(bytes = "vec", tag = "5")]
+    pub schema: ::prost::alloc::vec::Vec<u8>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct UpsertRequest {
     #[prost(message, optional, tag = "1")]
     pub base: ::core::option::Option<super::common::MsgBase>,
@@ -881,6 +919,8 @@ pub struct UpsertRequest {
     pub num_rows: u32,
     #[prost(uint64, tag = "8")]
     pub schema_timestamp: u64,
+    #[prost(bool, tag = "9")]
+    pub partial_update: bool,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1001,6 +1041,8 @@ pub struct SearchRequest {
     #[prost(map = "string, message", tag = "18")]
     pub expr_template_values:
         ::std::collections::HashMap<::prost::alloc::string::String, super::schema::TemplateValue>,
+    #[prost(message, optional, tag = "19")]
+    pub function_score: ::core::option::Option<super::schema::FunctionScore>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1057,6 +1099,8 @@ pub struct HybridSearchRequest {
     pub consistency_level: i32,
     #[prost(bool, tag = "12")]
     pub use_default_consistency: bool,
+    #[prost(message, optional, tag = "13")]
+    pub function_score: ::core::option::Option<super::schema::FunctionScore>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1260,6 +1304,8 @@ pub struct PersistentSegmentInfo {
     pub level: i32,
     #[prost(bool, tag = "7")]
     pub is_sorted: bool,
+    #[prost(int64, tag = "8")]
+    pub storage_version: i64,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1310,6 +1356,8 @@ pub struct QuerySegmentInfo {
     pub level: i32,
     #[prost(bool, tag = "12")]
     pub is_sorted: bool,
+    #[prost(int64, tag = "13")]
+    pub storage_version: i64,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -2516,6 +2564,189 @@ pub struct RunAnalyzerResponse {
     #[prost(message, repeated, tag = "2")]
     pub results: ::prost::alloc::vec::Vec<AnalyzerResult>,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct FileResourceInfo {
+    #[prost(int64, tag = "1")]
+    pub id: i64,
+    #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub path: ::prost::alloc::string::String,
+    #[prost(enumeration = "super::common::FileResourceType", tag = "4")]
+    pub r#type: i32,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AddFileResourceRequest {
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub path: ::prost::alloc::string::String,
+    #[prost(enumeration = "super::common::FileResourceType", tag = "4")]
+    pub r#type: i32,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RemoveFileResourceRequest {
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListFileResourcesRequest {
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListFileResourcesResponse {
+    #[prost(message, optional, tag = "1")]
+    pub status: ::core::option::Option<super::common::Status>,
+    #[prost(message, repeated, tag = "2")]
+    pub resources: ::prost::alloc::vec::Vec<FileResourceInfo>,
+}
+/// User Tag Management
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AddUserTagsRequest {
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    #[prost(string, tag = "2")]
+    pub user_name: ::prost::alloc::string::String,
+    #[prost(map = "string, string", tag = "3")]
+    pub tags:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DeleteUserTagsRequest {
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    #[prost(string, tag = "2")]
+    pub user_name: ::prost::alloc::string::String,
+    #[prost(string, repeated, tag = "3")]
+    pub tag_keys: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetUserTagsRequest {
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    #[prost(string, tag = "2")]
+    pub user_name: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetUserTagsResponse {
+    #[prost(message, optional, tag = "1")]
+    pub status: ::core::option::Option<super::common::Status>,
+    #[prost(map = "string, string", tag = "2")]
+    pub tags:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListUsersWithTagRequest {
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    #[prost(string, tag = "2")]
+    pub tag_key: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub tag_value: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListUsersWithTagResponse {
+    #[prost(message, optional, tag = "1")]
+    pub status: ::core::option::Option<super::common::Status>,
+    #[prost(string, repeated, tag = "2")]
+    pub user_names: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+/// Row Policy Management
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CreateRowPolicyRequest {
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    #[prost(string, tag = "2")]
+    pub db_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub collection_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub policy_name: ::prost::alloc::string::String,
+    /// actions this policy controls
+    #[prost(enumeration = "RowPolicyAction", repeated, tag = "5")]
+    pub actions: ::prost::alloc::vec::Vec<i32>,
+    /// role names that this policy applies to
+    #[prost(string, repeated, tag = "6")]
+    pub roles: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// expression for filtering data during queries
+    #[prost(string, tag = "7")]
+    pub using_expr: ::prost::alloc::string::String,
+    /// expression for validating data during mutations
+    #[prost(string, tag = "8")]
+    pub check_expr: ::prost::alloc::string::String,
+    /// optional description
+    #[prost(string, tag = "9")]
+    pub description: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DropRowPolicyRequest {
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    #[prost(string, tag = "2")]
+    pub db_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub collection_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub policy_name: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListRowPoliciesRequest {
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    #[prost(string, tag = "2")]
+    pub db_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub collection_name: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RowPolicy {
+    #[prost(string, tag = "1")]
+    pub policy_name: ::prost::alloc::string::String,
+    #[prost(enumeration = "RowPolicyAction", repeated, tag = "2")]
+    pub actions: ::prost::alloc::vec::Vec<i32>,
+    #[prost(string, repeated, tag = "3")]
+    pub roles: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    #[prost(string, tag = "4")]
+    pub using_expr: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub check_expr: ::prost::alloc::string::String,
+    #[prost(string, tag = "6")]
+    pub description: ::prost::alloc::string::String,
+    #[prost(int64, tag = "7")]
+    pub created_at: i64,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListRowPoliciesResponse {
+    #[prost(message, optional, tag = "1")]
+    pub status: ::core::option::Option<super::common::Status>,
+    #[prost(message, repeated, tag = "2")]
+    pub policies: ::prost::alloc::vec::Vec<RowPolicy>,
+    #[prost(string, tag = "3")]
+    pub db_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub collection_name: ::prost::alloc::string::String,
+}
 /// Deprecated: use GetLoadingProgress rpc instead
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
@@ -2686,6 +2917,42 @@ impl QuotaState {
             "DenyToRead" => Some(Self::DenyToRead),
             "DenyToWrite" => Some(Self::DenyToWrite),
             "DenyToDDL" => Some(Self::DenyToDdl),
+            _ => None,
+        }
+    }
+}
+/// Row Policy Action enum
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum RowPolicyAction {
+    Query = 0,
+    Search = 1,
+    Insert = 2,
+    Delete = 3,
+    Upsert = 4,
+}
+impl RowPolicyAction {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            RowPolicyAction::Query => "Query",
+            RowPolicyAction::Search => "Search",
+            RowPolicyAction::Insert => "Insert",
+            RowPolicyAction::Delete => "Delete",
+            RowPolicyAction::Upsert => "Upsert",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "Query" => Some(Self::Query),
+            "Search" => Some(Self::Search),
+            "Insert" => Some(Self::Insert),
+            "Delete" => Some(Self::Delete),
+            "Upsert" => Some(Self::Upsert),
             _ => None,
         }
     }
@@ -2891,6 +3158,30 @@ pub mod milvus_service_client {
             req.extensions_mut().insert(GrpcMethod::new(
                 "milvus.proto.milvus.MilvusService",
                 "DescribeCollection",
+            ));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn batch_describe_collection(
+            &mut self,
+            request: impl tonic::IntoRequest<super::BatchDescribeCollectionRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::BatchDescribeCollectionResponse>,
+            tonic::Status,
+        > {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/BatchDescribeCollection",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new(
+                "milvus.proto.milvus.MilvusService",
+                "BatchDescribeCollection",
             ));
             self.inner.unary(req, path, codec).await
         }
@@ -3629,6 +3920,28 @@ pub mod milvus_service_client {
             req.extensions_mut().insert(GrpcMethod::new(
                 "milvus.proto.milvus.MilvusService",
                 "FlushAll",
+            ));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn add_collection_field(
+            &mut self,
+            request: impl tonic::IntoRequest<super::AddCollectionFieldRequest>,
+        ) -> std::result::Result<tonic::Response<super::super::common::Status>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/AddCollectionField",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new(
+                "milvus.proto.milvus.MilvusService",
+                "AddCollectionField",
             ));
             self.inner.unary(req, path, codec).await
         }
@@ -4842,6 +5155,227 @@ pub mod milvus_service_client {
             req.extensions_mut().insert(GrpcMethod::new(
                 "milvus.proto.milvus.MilvusService",
                 "RunAnalyzer",
+            ));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn add_file_resource(
+            &mut self,
+            request: impl tonic::IntoRequest<super::AddFileResourceRequest>,
+        ) -> std::result::Result<tonic::Response<super::super::common::Status>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/AddFileResource",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new(
+                "milvus.proto.milvus.MilvusService",
+                "AddFileResource",
+            ));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn remove_file_resource(
+            &mut self,
+            request: impl tonic::IntoRequest<super::RemoveFileResourceRequest>,
+        ) -> std::result::Result<tonic::Response<super::super::common::Status>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/RemoveFileResource",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new(
+                "milvus.proto.milvus.MilvusService",
+                "RemoveFileResource",
+            ));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn list_file_resources(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ListFileResourcesRequest>,
+        ) -> std::result::Result<tonic::Response<super::ListFileResourcesResponse>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/ListFileResources",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new(
+                "milvus.proto.milvus.MilvusService",
+                "ListFileResources",
+            ));
+            self.inner.unary(req, path, codec).await
+        }
+        /// Row Level Security (RLS) APIs
+        pub async fn add_user_tags(
+            &mut self,
+            request: impl tonic::IntoRequest<super::AddUserTagsRequest>,
+        ) -> std::result::Result<tonic::Response<super::super::common::Status>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/AddUserTags",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new(
+                "milvus.proto.milvus.MilvusService",
+                "AddUserTags",
+            ));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn delete_user_tags(
+            &mut self,
+            request: impl tonic::IntoRequest<super::DeleteUserTagsRequest>,
+        ) -> std::result::Result<tonic::Response<super::super::common::Status>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/DeleteUserTags",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new(
+                "milvus.proto.milvus.MilvusService",
+                "DeleteUserTags",
+            ));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn get_user_tags(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetUserTagsRequest>,
+        ) -> std::result::Result<tonic::Response<super::GetUserTagsResponse>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/GetUserTags",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new(
+                "milvus.proto.milvus.MilvusService",
+                "GetUserTags",
+            ));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn list_users_with_tag(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ListUsersWithTagRequest>,
+        ) -> std::result::Result<tonic::Response<super::ListUsersWithTagResponse>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/ListUsersWithTag",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new(
+                "milvus.proto.milvus.MilvusService",
+                "ListUsersWithTag",
+            ));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn create_row_policy(
+            &mut self,
+            request: impl tonic::IntoRequest<super::CreateRowPolicyRequest>,
+        ) -> std::result::Result<tonic::Response<super::super::common::Status>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/CreateRowPolicy",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new(
+                "milvus.proto.milvus.MilvusService",
+                "CreateRowPolicy",
+            ));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn drop_row_policy(
+            &mut self,
+            request: impl tonic::IntoRequest<super::DropRowPolicyRequest>,
+        ) -> std::result::Result<tonic::Response<super::super::common::Status>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/DropRowPolicy",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new(
+                "milvus.proto.milvus.MilvusService",
+                "DropRowPolicy",
+            ));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn list_row_policies(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ListRowPoliciesRequest>,
+        ) -> std::result::Result<tonic::Response<super::ListRowPoliciesResponse>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/ListRowPolicies",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new(
+                "milvus.proto.milvus.MilvusService",
+                "ListRowPolicies",
             ));
             self.inner.unary(req, path, codec).await
         }

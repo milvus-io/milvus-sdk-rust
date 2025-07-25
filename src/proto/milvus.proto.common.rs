@@ -524,8 +524,15 @@ pub enum PlaceholderType {
     Float16Vector = 102,
     BFloat16Vector = 103,
     SparseFloatVector = 104,
+    Int8Vector = 105,
     Int64 = 5,
     VarChar = 21,
+    EmbListBinaryVector = 300,
+    EmbListFloatVector = 301,
+    EmbListFloat16Vector = 302,
+    EmbListBFloat16Vector = 303,
+    EmbListSparseFloatVector = 304,
+    EmbListInt8Vector = 305,
 }
 impl PlaceholderType {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -540,8 +547,15 @@ impl PlaceholderType {
             PlaceholderType::Float16Vector => "Float16Vector",
             PlaceholderType::BFloat16Vector => "BFloat16Vector",
             PlaceholderType::SparseFloatVector => "SparseFloatVector",
+            PlaceholderType::Int8Vector => "Int8Vector",
             PlaceholderType::Int64 => "Int64",
             PlaceholderType::VarChar => "VarChar",
+            PlaceholderType::EmbListBinaryVector => "EmbListBinaryVector",
+            PlaceholderType::EmbListFloatVector => "EmbListFloatVector",
+            PlaceholderType::EmbListFloat16Vector => "EmbListFloat16Vector",
+            PlaceholderType::EmbListBFloat16Vector => "EmbListBFloat16Vector",
+            PlaceholderType::EmbListSparseFloatVector => "EmbListSparseFloatVector",
+            PlaceholderType::EmbListInt8Vector => "EmbListInt8Vector",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -553,8 +567,15 @@ impl PlaceholderType {
             "Float16Vector" => Some(Self::Float16Vector),
             "BFloat16Vector" => Some(Self::BFloat16Vector),
             "SparseFloatVector" => Some(Self::SparseFloatVector),
+            "Int8Vector" => Some(Self::Int8Vector),
             "Int64" => Some(Self::Int64),
             "VarChar" => Some(Self::VarChar),
+            "EmbListBinaryVector" => Some(Self::EmbListBinaryVector),
+            "EmbListFloatVector" => Some(Self::EmbListFloatVector),
+            "EmbListFloat16Vector" => Some(Self::EmbListFloat16Vector),
+            "EmbListBFloat16Vector" => Some(Self::EmbListBFloat16Vector),
+            "EmbListSparseFloatVector" => Some(Self::EmbListSparseFloatVector),
+            "EmbListInt8Vector" => Some(Self::EmbListInt8Vector),
             _ => None,
         }
     }
@@ -694,6 +715,7 @@ pub enum MsgType {
     ListDatabases = 1803,
     AlterDatabase = 1804,
     DescribeDatabase = 1805,
+    AddCollectionField = 1900,
 }
 impl MsgType {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -818,6 +840,7 @@ impl MsgType {
             MsgType::ListDatabases => "ListDatabases",
             MsgType::AlterDatabase => "AlterDatabase",
             MsgType::DescribeDatabase => "DescribeDatabase",
+            MsgType::AddCollectionField => "AddCollectionField",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -939,6 +962,7 @@ impl MsgType {
             "ListDatabases" => Some(Self::ListDatabases),
             "AlterDatabase" => Some(Self::AlterDatabase),
             "DescribeDatabase" => Some(Self::DescribeDatabase),
+            "AddCollectionField" => Some(Self::AddCollectionField),
             _ => None,
         }
     }
@@ -1184,6 +1208,12 @@ pub enum ObjectPrivilege {
     PrivilegeGroupCollectionReadOnly = 66,
     PrivilegeGroupCollectionReadWrite = 67,
     PrivilegeGroupCollectionAdmin = 68,
+    PrivilegeGetImportProgress = 69,
+    PrivilegeListImport = 70,
+    PrivilegeAddCollectionField = 71,
+    PrivilegeAddFileResource = 72,
+    PrivilegeRemoveFileResource = 73,
+    PrivilegeListFileResources = 74,
 }
 impl ObjectPrivilege {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -1263,6 +1293,12 @@ impl ObjectPrivilege {
                 "PrivilegeGroupCollectionReadWrite"
             }
             ObjectPrivilege::PrivilegeGroupCollectionAdmin => "PrivilegeGroupCollectionAdmin",
+            ObjectPrivilege::PrivilegeGetImportProgress => "PrivilegeGetImportProgress",
+            ObjectPrivilege::PrivilegeListImport => "PrivilegeListImport",
+            ObjectPrivilege::PrivilegeAddCollectionField => "PrivilegeAddCollectionField",
+            ObjectPrivilege::PrivilegeAddFileResource => "PrivilegeAddFileResource",
+            ObjectPrivilege::PrivilegeRemoveFileResource => "PrivilegeRemoveFileResource",
+            ObjectPrivilege::PrivilegeListFileResources => "PrivilegeListFileResources",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -1337,6 +1373,12 @@ impl ObjectPrivilege {
             "PrivilegeGroupCollectionReadOnly" => Some(Self::PrivilegeGroupCollectionReadOnly),
             "PrivilegeGroupCollectionReadWrite" => Some(Self::PrivilegeGroupCollectionReadWrite),
             "PrivilegeGroupCollectionAdmin" => Some(Self::PrivilegeGroupCollectionAdmin),
+            "PrivilegeGetImportProgress" => Some(Self::PrivilegeGetImportProgress),
+            "PrivilegeListImport" => Some(Self::PrivilegeListImport),
+            "PrivilegeAddCollectionField" => Some(Self::PrivilegeAddCollectionField),
+            "PrivilegeAddFileResource" => Some(Self::PrivilegeAddFileResource),
+            "PrivilegeRemoveFileResource" => Some(Self::PrivilegeRemoveFileResource),
+            "PrivilegeListFileResources" => Some(Self::PrivilegeListFileResources),
             _ => None,
         }
     }
@@ -1430,6 +1472,29 @@ impl LoadPriority {
         match value {
             "HIGH" => Some(Self::High),
             "LOW" => Some(Self::Low),
+            _ => None,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum FileResourceType {
+    AnalyzerDictionary = 0,
+}
+impl FileResourceType {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            FileResourceType::AnalyzerDictionary => "ANALYZER_DICTIONARY",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "ANALYZER_DICTIONARY" => Some(Self::AnalyzerDictionary),
             _ => None,
         }
     }

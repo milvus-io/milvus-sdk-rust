@@ -1394,6 +1394,7 @@ impl SearchIterator {
                 search_by_primary_keys: false,
                 expr_template_values: self.options.expr_template_values.clone(),
                 sub_reqs: vec![],
+                function_score: None,
             })
             .await?
             .into_inner();

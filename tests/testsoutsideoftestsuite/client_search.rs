@@ -61,17 +61,6 @@ async fn test_search() {
 
     let (_ids, _vectors) = insert_data(&client, &collection, 10).await.unwrap();
 
-    let index_params = IndexParams::new(
-        "feature_index".to_string(),
-        IndexType::Flat,
-        MetricType::L2,
-        HashMap::new(),
-    );
-    client
-        .create_index(collection.name(), "feature", index_params)
-        .await
-        .unwrap();
-
     client
         .load_collection(collection.name(), None)
         .await
@@ -86,8 +75,7 @@ async fn test_search() {
         .search(
             collection.name(),
             search_vectors,
-            DEFAULT_VEC_FIELD,
-            &SearchOptions::default().limit(5),
+            Some(SearchOptions::default().limit(5)),
         )
         .await;
 

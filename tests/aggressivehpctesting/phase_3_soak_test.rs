@@ -136,8 +136,11 @@ async fn run_full_sdk_cycle(
         .search(
             collection_name,
             vec![query_vector.into()],
-            &DEFAULT_VEC_FIELD.to_string(),
-            &SearchOptions::new().limit(10),
+            Some(
+                SearchOptions::new()
+                    .limit(10)
+                    .add_param("anns_field", DEFAULT_VEC_FIELD),
+            ),
         )
         .await?;
     println!("Cycle: Performed search");

@@ -1316,6 +1316,7 @@ impl Client {
                 search_by_primary_keys: false,
                 expr_template_values: options.expr_template_values.clone(),
                 sub_reqs: vec![],
+                function_score: None,
             })
             .await?
             .into_inner();
@@ -1514,6 +1515,7 @@ impl Client {
                 search_by_primary_keys: false,
                 sub_reqs: vec![],
                 expr_template_values: req.expr_params.unwrap_or_default(),
+                function_score: None,
             };
 
             search_requests.push(search_request);
@@ -1546,6 +1548,7 @@ impl Client {
             )
             .parse()
             .unwrap_or(true),
+            function_score: None,
         };
 
         let res = self

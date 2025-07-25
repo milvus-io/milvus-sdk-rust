@@ -32,20 +32,6 @@ async fn load_release_partitions() -> Result<()> {
         .create_partition(schema.name().to_string(), "partition_A".to_string())
         .await?;
 
-    // Create an index on the vector field before loading partitions
-    client
-        .create_index(
-            schema.name(),
-            "feature",
-            milvus::index::IndexParams::new(
-                "id".to_string(),
-                IndexType::IvfFlat,
-                milvus::index::MetricType::L2,
-                HashMap::new(),
-            ),
-        )
-        .await?;
-
     client.release_collection(schema.name()).await?;
 
     client

@@ -48,15 +48,6 @@ async fn collection_upsert() -> Result<()> {
     client
         .upsert(schema.name(), vec![pk_col, vec_col], None)
         .await?;
-    let index_params = IndexParams::new(
-        DEFAULT_INDEX_NAME.to_owned(),
-        IndexType::IvfFlat,
-        milvus::index::MetricType::L2,
-        HashMap::from([("nlist".to_owned(), "32".to_owned())]),
-    );
-    client
-        .create_index(schema.name(), DEFAULT_VEC_FIELD, index_params)
-        .await?;
     client
         .load_collection(schema.name(), Some(LoadOptions::default()))
         .await?;
@@ -84,20 +75,12 @@ async fn collection_basic() -> Result<()> {
         .insert(schema.name(), vec![embed_column], None)
         .await?;
     client.flush(schema.name()).await?;
-    let index_params = IndexParams::new(
-        DEFAULT_INDEX_NAME.to_owned(),
-        IndexType::IvfFlat,
-        milvus::index::MetricType::L2,
-        HashMap::from([("nlist".to_owned(), "32".to_owned())]),
-    );
-    client
-        .create_index(schema.name(), DEFAULT_VEC_FIELD, index_params)
-        .await?;
+
     client
         .load_collection(schema.name(), Some(LoadOptions::default()))
         .await?;
 
-    let options = QueryOptions::default();
+    let options = QueryOptions::default().limit(10);
     let result = client.query(schema.name(), "id > 0", &options).await?;
 
     println!(

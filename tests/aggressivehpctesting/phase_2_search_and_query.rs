@@ -134,13 +134,15 @@ async fn high_volume_search_and_query_under_load() -> Result<()> {
             while start_time.elapsed() < test_duration {
                 let query_vector: Vec<f32> =
                     (0..DEFAULT_DIM).map(|_| rand::thread_rng().gen()).collect();
-                let search_options = SearchOptions::new().limit(10).radius(1.0);
+                let search_options = SearchOptions::new()
+                    .limit(10)
+                    .radius(1.0)
+                    .add_param("anns_field", DEFAULT_VEC_FIELD);
                 let result = client
                     .search(
                         &collection_name,
                         vec![query_vector.into()],
-                        &DEFAULT_VEC_FIELD.to_string(),
-                        &search_options,
+                        Some(search_options),
                     )
                     .await;
                 assert!(result.is_ok(), "Search failed: {:?}", result.err());
@@ -198,11 +200,21 @@ async fn high_volume_search_and_query_under_load() -> Result<()> {
                 // Delete a small batch
                 let ids_to_delete = {
                     let mut guard = inserted_ids_clone.lock().unwrap();
-                    let sample: Vec<i64> = guard
-                        .choose_multiple(&mut rand::thread_rng(), 1)
-                        .cloned()
-                        .collect();
-                    sample
+                    if guard.is_empty() {
+                        Vec::new()
+                    } else {
+                        let sample: Vec<i64> = guard
+                            .choose_multiple(&mut rand::thread_rng(), 1)
+                            .cloned()
+                            .collect();
+                        // Remove the selected IDs from the shared list to prevent double deletion
+                        for &id in &sample {
+                            if let Some(pos) = guard.iter().position(|&x| x == id) {
+                                guard.remove(pos);
+                            }
+                        }
+                        sample
+                    }
                 };
                 if !ids_to_delete.is_empty() {
                     let delete_result = client

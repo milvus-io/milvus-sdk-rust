@@ -23,6 +23,8 @@ pub enum Value<'a> {
     String(Cow<'a, str>),
     Json(Cow<'a, [u8]>),
     Array(Cow<'a, proto::schema::ScalarField>),
+    StructArray(Cow<'a, proto::schema::StructArrayField>),
+    VectorArray(Cow<'a, proto::schema::VectorArray>),
 }
 
 macro_rules! impl_from_for_field_data_column {
@@ -61,6 +63,8 @@ impl Value<'_> {
             Value::FloatArray(_) => DataType::FloatVector,
             Value::Binary(_) => DataType::BinaryVector,
             Value::Array(_) => DataType::Array,
+            Value::StructArray(_) => DataType::ArrayOfStruct,
+            Value::VectorArray(_) => DataType::ArrayOfVector,
         }
     }
 
@@ -80,6 +84,8 @@ impl Value<'_> {
             Value::String(cow) => Value::String(Cow::Owned(cow.into_owned())),
             Value::Json(cow) => Value::Json(Cow::Owned(cow.into_owned())),
             Value::Array(cow) => Value::Array(Cow::Owned(cow.into_owned())),
+            Value::StructArray(cow) => Value::StructArray(Cow::Owned(cow.into_owned())),
+            Value::VectorArray(cow) => Value::VectorArray(Cow::Owned(cow.into_owned())),
         }
     }
 }
@@ -296,9 +302,12 @@ impl From<Field> for ValueVec {
                     VectorData::Bfloat16Vector(v) => Self::Binary(v),
                     VectorData::Float16Vector(v) => Self::Binary(v),
                     VectorData::SparseFloatVector(_) => Self::Float(Vec::new()),
+                    VectorData::Int8Vector(_) => unimplemented!(),
+                    VectorData::VectorArray(_) => unimplemented!(),
                 },
                 None => Self::None,
             },
+            Field::StructArrays(_) => unimplemented!(),
         }
     }
 }

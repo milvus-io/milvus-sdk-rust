@@ -492,6 +492,7 @@ impl From<CollectionSchema> for schema::CollectionSchema {
             properties: Vec::new(),
             functions: Vec::new(),
             db_name: "".to_string(),
+            struct_array_fields: Vec::new(),
         }
     }
 }
