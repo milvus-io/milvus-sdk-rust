@@ -23,6 +23,7 @@ use milvus::mutate::InsertOptions;
 use milvus::options::LoadOptions;
 use milvus::query::{QueryOptions, SearchOptions};
 use std::collections::HashMap;
+use tokio::time::{sleep, Duration};
 
 mod common;
 use common::*;
@@ -164,10 +165,11 @@ async fn collection_search() -> Result<()> {
     client
         .create_index(schema.name(), DEFAULT_VEC_FIELD, index_params)
         .await?;
-    client.flush(schema.name()).await?;
     client
         .load_collection(schema.name(), Some(LoadOptions::default()))
         .await?;
+
+    sleep(Duration::from_millis(100)).await;
 
     let mut option = SearchOptions::with_limit(10)
         .metric_type(MetricType::L2)
@@ -210,10 +212,11 @@ async fn collection_range_search() -> Result<()> {
     client
         .create_index(schema.name(), DEFAULT_VEC_FIELD, index_params)
         .await?;
-    client.flush(schema.name()).await?;
     client
         .load_collection(schema.name(), Some(LoadOptions::default()))
         .await?;
+
+    sleep(Duration::from_millis(100)).await;
 
     let radius_limit: f32 = 20.0;
     let range_filter_limit: f32 = 10.0;

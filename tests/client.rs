@@ -75,6 +75,7 @@ async fn create_has_drop_collection() -> Result<()> {
     let schema = schema
         .add_field(FieldSchema::new_int64("i64_field", ""))
         .add_field(FieldSchema::new_bool("bool_field", ""))
+        .add_field(FieldSchema::new_float_vector("float_vec", "", 128))
         .set_primary_key("i64_field")?
         .enable_auto_id()?
         .build()?;
@@ -83,7 +84,7 @@ async fn create_has_drop_collection() -> Result<()> {
         client.drop_collection(NAME).await?;
     }
 
-    let collection = client
+    let _collection = client
         .create_collection(
             schema,
             Some(CreateCollectionOptions::with_consistency_level(

@@ -1,0 +1,19 @@
+# configs/user.yaml
+quotaAndLimits:
+  ddl:
+    enabled: false
+  indexRate:
+    enabled: false
+  dml:
+    enabled: false
+  dql:
+    enabled: false
+  limitWriting:
+    ttProtection:
+      enabled: false
+    memProtection:
+      enabled: false
+    diskProtection:
+      enabled: false
+  flushRate:
+    enabled: false

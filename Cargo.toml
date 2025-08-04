@@ -11,8 +11,8 @@ name = "milvus"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tonic = { version = "0.8.2", features = ["tls", "tls-roots"] }
-prost = "0.11.0"
+tonic = { version = "0.11.0", features = ["tls", "tls-roots"] }
+prost = "0.12.6"
 tokio = { version = "1.17.0", features = ["full"] }
 thiserror = "1.0"
 serde = { version = "1.0", features = ["derive"] }
@@ -22,11 +22,68 @@ strum = "0.24"
 strum_macros = "0.24"
 base64 = "0.21.0"
 dashmap = "5.5.3"
+futures = "0.3.31"
 
 [build-dependencies]
-tonic-build = { version = "0.8.2", default-features = false, features = [
+tonic-build = { version = "0.11.0", default-features = false, features = [
     "prost",
 ] }
 
 [dev-dependencies]
 rand = "0.8.5"
+
+[[test]]
+name = "client_with_timeout"
+path = "tests/testsoutsideoftestsuite/client_with_timeout.rs"
+
+[[test]]
+name = "client_flush_collections"
+path = "tests/testsoutsideoftestsuite/client_flush_collections.rs"
+
+[[test]]
+name = "client_search"
+path = "tests/testsoutsideoftestsuite/client_search.rs"
+
+[[test]]
+name = "collection_list_collections"
+path = "tests/testsoutsideoftestsuite/collection_list_collections.rs"
+
+[[test]]
+name = "collection_get_collection_stats"
+path = "tests/testsoutsideoftestsuite/collection_get_collection_stats.rs"
+
+[[test]]
+name = "collection_release_collection"
+path = "tests/testsoutsideoftestsuite/collection_release_collection.rs"
+
+[[test]]
+name = "collection_get_compaction_state"
+path = "tests/testsoutsideoftestsuite/collection_get_compaction_state.rs"
+
+[[test]]
+name = "partition_create_partition"
+path = "tests/testsoutsideoftestsuite/partition_create_partition.rs"
+
+[[test]]
+name = "partition_drop_partition"
+path = "tests/testsoutsideoftestsuite/partition_drop_partition.rs"
+
+[[test]]
+name = "partition_list_partitions"
+path = "tests/testsoutsideoftestsuite/partition_list_partitions.rs"
+
+[[test]]
+name = "partition_has_partition"
+path = "tests/testsoutsideoftestsuite/partition_has_partition.rs"
+
+[[test]]
+name = "partition_get_partition_stats"
+path = "tests/testsoutsideoftestsuite/partition_get_partition_stats.rs"
+
+[[test]]
+name = "mutate_delete"
+path = "tests/testsoutsideoftestsuite/mutate_delete.rs"
+
+[[test]]
+name = "aggressive_hpc_testing"
+path = "tests/aggressivehpctesting/mod.rs"

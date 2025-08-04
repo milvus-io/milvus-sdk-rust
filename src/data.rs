@@ -206,6 +206,7 @@ impl From<FieldColumn> for schema::FieldData {
                 }),
             }),
             is_dynamic: false,
+            valid_data: vec![],
         }
     }
 }

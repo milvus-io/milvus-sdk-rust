@@ -422,6 +422,9 @@ impl From<FieldSchema> for schema::FieldSchema {
             default_value: None,
             is_dynamic: false,
             is_partition_key: false,
+            is_clustering_key: false,
+            is_function_output: false,
+            nullable: false,
         }
     }
 }
@@ -486,6 +489,10 @@ impl From<CollectionSchema> for schema::CollectionSchema {
             description: col.description,
             fields: col.fields.into_iter().map(Into::into).collect(),
             enable_dynamic_field: col.enable_dynamic_field,
+            db_name: "".to_string(),
+            functions: vec![],
+            properties: vec![],
+            struct_array_fields: vec![],
         }
     }
 }
