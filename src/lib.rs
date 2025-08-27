@@ -24,6 +24,10 @@ pub mod partition;
 pub mod query;
 pub mod schema;
 pub mod value;
+pub mod iterator;
+pub mod database;
+pub mod resource_group;
+pub mod authentication;
 
 mod config;
 pub mod index;

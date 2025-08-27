@@ -33,7 +33,7 @@ use milvus::value::ValueVec;
 #[tokio::test]
 async fn manual_compaction_empty_collection() -> Result<()> {
     let (client, schema) = create_test_collection(true).await?;
-    let resp = client.manual_compaction(schema.name()).await?;
+    let resp = client.manual_compaction(schema.name(), None).await?;
     assert_eq!(0, resp.plan_count);
     Ok(())
 }
@@ -172,17 +172,15 @@ async fn collection_search() -> Result<()> {
     sleep(Duration::from_millis(100)).await;
 
     let mut option = SearchOptions::with_limit(10)
-        .metric_type(MetricType::L2)
         .output_fields(vec!["id".to_owned()]);
-    option = option.add_param("nprobe", ParamValue!(16));
+    option = option.add_param("nprobe", "16");
     let query_vec = gen_random_f32_vector(DEFAULT_DIM);
 
     let result = client
         .search(
             schema.name(),
             vec![query_vec.into()],
-            DEFAULT_VEC_FIELD,
-            &option,
+            Some(option),
         )
         .await?;
 
@@ -222,18 +220,16 @@ async fn collection_range_search() -> Result<()> {
     let range_filter_limit: f32 = 10.0;
 
     let mut option = SearchOptions::with_limit(5)
-        .metric_type(MetricType::L2)
         .output_fields(vec!["id".to_owned()]);
-    option = option.add_param("nprobe", ParamValue!(16));
-    option = option.radius(radius_limit).range_filter(range_filter_limit);
+    option = option.add_param("nprobe", "16");
+    option = option.radius(radius_limit);
     let query_vec = gen_random_f32_vector(DEFAULT_DIM);
 
     let result = client
         .search(
             schema.name(),
             vec![query_vec.into()],
-            DEFAULT_VEC_FIELD,
-            &option,
+            Some(option),
         )
         .await?;
 

@@ -1,21 +1,14 @@
-use std::collections::HashMap;
-
-use prost::bytes::{BufMut, BytesMut};
-
 use crate::error::Result;
 use crate::{
     client::Client,
-    collection,
     data::FieldColumn,
     error::Error,
     proto::{
         self,
         common::{MsgBase, MsgType},
         milvus::{InsertRequest, UpsertRequest},
-        schema::{scalar_field::Data, DataType},
+        schema::DataType,
     },
-    schema::FieldData,
-    utils::status_to_result,
     value::ValueVec,
 };
 
@@ -136,8 +129,8 @@ impl Client {
                 expr: expr,
                 partition_name: options.partition_name.clone(),
                 hash_keys: Vec::new(),
-                consistency_level: 0,
-                expr_template_values: HashMap::new(),
+                consistency_level: crate::proto::common::ConsistencyLevel::Strong.into(),
+                expr_template_values: std::collections::HashMap::new(),
             })
             .await?
             .into_inner();

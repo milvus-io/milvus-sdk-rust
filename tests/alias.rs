@@ -29,3 +29,43 @@ async fn test_alter_alias() -> Result<()> {
     clean_test_collection(client2, schema2.name()).await?;
     Ok(())
 }
+
+#[tokio::test]
+async fn test_describe_alias() -> Result<()> {
+    let alias = "test_describe_alias";
+    let (client, schema) = create_test_collection(true).await?;
+
+    client.create_alias(schema.name(), alias).await?;
+    let (alias, collection, db_name) = client.describe_alias(alias).await?;
+    assert_eq!(alias, "test_describe_alias");
+    assert_eq!(collection, schema.name());
+    assert_eq!(db_name, "default");
+    client.drop_alias(alias).await?;
+    clean_test_collection(client, schema.name()).await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn list_aliases() -> Result<()> {
+    let alias1 = "test_list_alias_1";
+    let alias2 = "test_list_alias_2";
+    let (client, schema) = create_test_collection(true).await?;
+    client.create_alias(schema.name(), alias1).await?;
+    client.create_alias(schema.name(), alias2).await?;
+
+    let (db_name, collection_name, aliases) = client.list_aliases(schema.name()).await?;
+
+    assert_eq!(db_name, "default");
+    assert_eq!(collection_name, schema.name());
+
+    // the result is not in order,so transfer to hashset
+    let set1: std::collections::HashSet<_> = aliases.iter().collect();
+    let vec = vec![alias1.to_string(),alias2.to_string()];
+    let set2: std::collections::HashSet<_> = vec.iter().collect();
+    assert_eq!(set1, set2);
+
+    client.drop_alias(alias1).await?;
+    client.drop_alias(alias2).await?;
+    clean_test_collection(client, schema.name()).await?;
+    Ok(())
+}
