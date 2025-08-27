@@ -171,17 +171,12 @@ async fn collection_search() -> Result<()> {
 
     sleep(Duration::from_millis(100)).await;
 
-    let mut option = SearchOptions::with_limit(10)
-        .output_fields(vec!["id".to_owned()]);
+    let mut option = SearchOptions::with_limit(10).output_fields(vec!["id".to_owned()]);
     option = option.add_param("nprobe", "16");
     let query_vec = gen_random_f32_vector(DEFAULT_DIM);
 
     let result = client
-        .search(
-            schema.name(),
-            vec![query_vec.into()],
-            Some(option),
-        )
+        .search(schema.name(), vec![query_vec.into()], Some(option))
         .await?;
 
     assert_eq!(result[0].size, 10);
@@ -219,18 +214,13 @@ async fn collection_range_search() -> Result<()> {
     let radius_limit: f32 = 20.0;
     let range_filter_limit: f32 = 10.0;
 
-    let mut option = SearchOptions::with_limit(5)
-        .output_fields(vec!["id".to_owned()]);
+    let mut option = SearchOptions::with_limit(5).output_fields(vec!["id".to_owned()]);
     option = option.add_param("nprobe", "16");
     option = option.radius(radius_limit);
     let query_vec = gen_random_f32_vector(DEFAULT_DIM);
 
     let result = client
-        .search(
-            schema.name(),
-            vec![query_vec.into()],
-            Some(option),
-        )
+        .search(schema.name(), vec![query_vec.into()], Some(option))
         .await?;
 
     for record in &result {

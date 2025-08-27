@@ -61,21 +61,24 @@ async fn test_search() {
 
     let (_ids, _vectors) = insert_data(&client, &collection, 10).await.unwrap();
 
-    let index_params =
-        IndexParams::new(
-            "feature_index".to_string(),
-            IndexType::Flat,
-            MetricType::L2,
-            HashMap::new(),
-        );
+    let index_params = IndexParams::new(
+        "feature_index".to_string(),
+        IndexType::Flat,
+        MetricType::L2,
+        HashMap::new(),
+    );
     client
         .create_index(collection.name(), "feature", index_params)
         .await
         .unwrap();
 
-    client.load_collection(collection.name(), None).await.unwrap();
+    client
+        .load_collection(collection.name(), None)
+        .await
+        .unwrap();
 
-    let search_vectors = vec![Value::FloatArray(Cow::Owned(vec![0.0;
+    let search_vectors = vec![Value::FloatArray(Cow::Owned(vec![
+        0.0;
         DEFAULT_DIM as usize
     ]))];
 

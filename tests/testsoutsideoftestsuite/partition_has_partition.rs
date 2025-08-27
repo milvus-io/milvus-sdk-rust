@@ -13,10 +13,7 @@ async fn test_has_partition() {
         .unwrap();
 
     let result = client
-        .has_partition(
-            collection.name().to_string(),
-            "test_partition".to_string(),
-        )
+        .has_partition(collection.name().to_string(), "test_partition".to_string())
         .await;
 
     assert!(result.is_ok());

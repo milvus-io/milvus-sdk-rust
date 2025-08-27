@@ -2,7 +2,9 @@
 mod common;
 
 use common::*;
-use milvus::{client::*, data::FieldColumn, error::Result, mutate::DeleteOptions, schema::CollectionSchema};
+use milvus::{
+    client::*, data::FieldColumn, error::Result, mutate::DeleteOptions, schema::CollectionSchema,
+};
 
 async fn insert_data(
     client: &Client,

@@ -21,7 +21,6 @@ use crate::{config, proto};
 use std::time::Duration;
 
 impl Client {
-
     async fn create_index_impl<S>(
         &self,
         collection_name: S,
@@ -157,7 +156,7 @@ impl Client {
                 db_name: "".to_string(),
                 collection_name: collection_name.into(),
                 field_name: "".to_string(),
-                index_name: index_name.into()
+                index_name: index_name.into(),
             })
             .await?
             .into_inner();

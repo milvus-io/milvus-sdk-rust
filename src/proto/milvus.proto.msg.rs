@@ -210,10 +210,8 @@ pub struct ImportMsg {
     #[prost(int64, repeated, tag = "5")]
     pub partition_i_ds: ::prost::alloc::vec::Vec<i64>,
     #[prost(map = "string, string", tag = "6")]
-    pub options: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        ::prost::alloc::string::String,
-    >,
+    pub options:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
     #[prost(message, repeated, tag = "7")]
     pub files: ::prost::alloc::vec::Vec<ImportFile>,
     #[prost(message, optional, tag = "8")]

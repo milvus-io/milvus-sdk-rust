@@ -60,7 +60,7 @@ async fn list_aliases() -> Result<()> {
 
     // the result is not in order,so transfer to hashset
     let set1: std::collections::HashSet<_> = aliases.iter().collect();
-    let vec = vec![alias1.to_string(),alias2.to_string()];
+    let vec = vec![alias1.to_string(), alias2.to_string()];
     let set2: std::collections::HashSet<_> = vec.iter().collect();
     assert_eq!(set1, set2);
 
