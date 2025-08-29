@@ -57,6 +57,7 @@ pub struct ClientBuilder<D> {
     dst: D,
     username: Option<String>,
     password: Option<String>,
+    timeout: Option<Duration>,
 }
 
 impl<D> ClientBuilder<D>
@@ -70,6 +71,7 @@ where
             dst,
             username: None,
             password: None,
+            timeout: None,
         }
     }
 
@@ -83,8 +85,19 @@ where
         self
     }
 
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
     pub async fn build(self) -> Result<Client> {
-        Client::with_timeout(self.dst, RPC_TIMEOUT, self.username, self.password).await
+        Client::with_timeout(
+            self.dst,
+            self.timeout.unwrap_or(RPC_TIMEOUT),
+            self.username,
+            self.password,
+        )
+        .await
     }
 }
 

@@ -218,6 +218,7 @@ impl Client {
                 not_return_all_meta: false,
                 consistency_level: ConsistencyLevel::default() as _,
                 use_default_consistency: false,
+                expr_template_values: HashMap::new(),
             })
             .await?
             .into_inner();
@@ -268,6 +269,7 @@ impl Client {
         let collection_name = collection_name.into();
         let collection = self.collection_cache.get(&collection_name).await?;
 
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         let res = self
             .client
             .clone()
@@ -295,6 +297,9 @@ impl Client {
                 consistency_level: ConsistencyLevel::default() as _,
                 use_default_consistency: false,
                 search_by_primary_keys: false,
+                expr_template_values: HashMap::new(),
+                function_score: None,
+                sub_reqs: vec![],
             })
             .await?
             .into_inner();

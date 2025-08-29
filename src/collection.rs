@@ -406,6 +406,9 @@ impl Client {
                     replica_number: options.replica_number,
                     resource_groups: vec![],
                     refresh: false,
+                    load_fields: vec![],
+                    load_params: HashMap::new(),
+                    skip_load_dynamic_field: false,
                 })
                 .await?
                 .into_inner(),
@@ -629,7 +632,8 @@ impl Client {
     where
         S: Into<String>,
     {
-        let collection = self.collection_cache.get(&collection_name.into()).await?;
+        let collection_name = collection_name.into();
+        let collection = self.collection_cache.get(&collection_name).await?;
 
         let resp = self
             .client
@@ -637,6 +641,12 @@ impl Client {
             .manual_compaction(ManualCompactionRequest {
                 collection_id: collection.id,
                 timetravel: 0,
+                channel: "".to_string(),
+                collection_name: collection_name.into(),
+                db_name: "".to_string(),
+                major_compaction: false,
+                partition_id: 0,
+                segment_ids: vec![],
             })
             .await?
             .into_inner();

@@ -189,6 +189,12 @@ impl ValueVec {
             DataType::FloatVector => Self::Float(Vec::new()),
             DataType::Float16Vector => Self::Binary(Vec::new()),
             DataType::BFloat16Vector => Self::Binary(Vec::new()),
+            DataType::Geometry => unimplemented!(),
+            DataType::Text => unimplemented!(),
+            DataType::SparseFloatVector => unimplemented!(),
+            DataType::Int8Vector => unimplemented!(),
+            DataType::ArrayOfVector => unimplemented!(),
+            _ => unimplemented!(),
         }
     }
 
@@ -260,6 +266,7 @@ impl From<Field> for ValueVec {
                     ScalarData::JsonData(v) => Self::Json(v.data),
                     ScalarData::ArrayData(v) => Self::Array(v.data),
                     ScalarData::BytesData(_) => unimplemented!(), // Self::Bytes(v.data),
+                    _ => unimplemented!(),
                 },
                 None => Self::None,
             },
@@ -270,9 +277,11 @@ impl From<Field> for ValueVec {
                     VectorData::BinaryVector(v) => Self::Binary(v),
                     VectorData::Bfloat16Vector(v) => Self::Binary(v),
                     VectorData::Float16Vector(v) => Self::Binary(v),
+                    _ => unimplemented!(),
                 },
                 None => Self::None,
             },
+            _ => unimplemented!(),
         }
     }
 }
