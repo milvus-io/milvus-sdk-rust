@@ -33,7 +33,7 @@ use milvus::value::ValueVec;
 #[tokio::test]
 async fn manual_compaction_empty_collection() -> Result<()> {
     let (client, schema) = create_test_collection(true).await?;
-    let resp = client.manual_compaction(schema.name()).await?;
+    let resp = client.manual_compaction(schema.name(), None).await?;
     assert_eq!(0, resp.plan_count);
     Ok(())
 }
@@ -47,15 +47,6 @@ async fn collection_upsert() -> Result<()> {
     let vec_col = FieldColumn::new(schema.get_field(DEFAULT_VEC_FIELD).unwrap(), vec_data);
     client
         .upsert(schema.name(), vec![pk_col, vec_col], None)
-        .await?;
-    let index_params = IndexParams::new(
-        DEFAULT_INDEX_NAME.to_owned(),
-        IndexType::IvfFlat,
-        milvus::index::MetricType::L2,
-        HashMap::from([("nlist".to_owned(), "32".to_owned())]),
-    );
-    client
-        .create_index(schema.name(), DEFAULT_VEC_FIELD, index_params)
         .await?;
     client
         .load_collection(schema.name(), Some(LoadOptions::default()))
@@ -84,20 +75,12 @@ async fn collection_basic() -> Result<()> {
         .insert(schema.name(), vec![embed_column], None)
         .await?;
     client.flush(schema.name()).await?;
-    let index_params = IndexParams::new(
-        DEFAULT_INDEX_NAME.to_owned(),
-        IndexType::IvfFlat,
-        milvus::index::MetricType::L2,
-        HashMap::from([("nlist".to_owned(), "32".to_owned())]),
-    );
-    client
-        .create_index(schema.name(), DEFAULT_VEC_FIELD, index_params)
-        .await?;
+
     client
         .load_collection(schema.name(), Some(LoadOptions::default()))
         .await?;
 
-    let options = QueryOptions::default();
+    let options = QueryOptions::default().limit(10);
     let result = client.query(schema.name(), "id > 0", &options).await?;
 
     println!(
@@ -171,19 +154,12 @@ async fn collection_search() -> Result<()> {
 
     sleep(Duration::from_millis(100)).await;
 
-    let mut option = SearchOptions::with_limit(10)
-        .metric_type(MetricType::L2)
-        .output_fields(vec!["id".to_owned()]);
-    option = option.add_param("nprobe", ParamValue!(16));
+    let mut option = SearchOptions::with_limit(10).output_fields(vec!["id".to_owned()]);
+    option = option.add_param("nprobe", "16");
     let query_vec = gen_random_f32_vector(DEFAULT_DIM);
 
     let result = client
-        .search(
-            schema.name(),
-            vec![query_vec.into()],
-            DEFAULT_VEC_FIELD,
-            &option,
-        )
+        .search(schema.name(), vec![query_vec.into()], Some(option))
         .await?;
 
     assert_eq!(result[0].size, 10);
@@ -221,20 +197,13 @@ async fn collection_range_search() -> Result<()> {
     let radius_limit: f32 = 20.0;
     let range_filter_limit: f32 = 10.0;
 
-    let mut option = SearchOptions::with_limit(5)
-        .metric_type(MetricType::L2)
-        .output_fields(vec!["id".to_owned()]);
-    option = option.add_param("nprobe", ParamValue!(16));
-    option = option.radius(radius_limit).range_filter(range_filter_limit);
+    let mut option = SearchOptions::with_limit(5).output_fields(vec!["id".to_owned()]);
+    option = option.add_param("nprobe", "16");
+    option = option.radius(radius_limit);
     let query_vec = gen_random_f32_vector(DEFAULT_DIM);
 
     let result = client
-        .search(
-            schema.name(),
-            vec![query_vec.into()],
-            DEFAULT_VEC_FIELD,
-            &option,
-        )
+        .search(schema.name(), vec![query_vec.into()], Some(option))
         .await?;
 
     for record in &result {

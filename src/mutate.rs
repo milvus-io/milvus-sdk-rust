@@ -1,21 +1,14 @@
-use std::collections::HashMap;
-
-use prost::bytes::{BufMut, BytesMut};
-
 use crate::error::Result;
 use crate::{
     client::Client,
-    collection,
     data::FieldColumn,
     error::Error,
     proto::{
         self,
         common::{MsgBase, MsgType},
         milvus::{InsertRequest, UpsertRequest},
-        schema::{scalar_field::Data, DataType},
+        schema::DataType,
     },
-    schema::FieldData,
-    utils::status_to_result,
     value::ValueVec,
 };
 
@@ -136,8 +129,8 @@ impl Client {
                 expr: expr,
                 partition_name: options.partition_name.clone(),
                 hash_keys: Vec::new(),
-                consistency_level: 0,
-                expr_template_values: HashMap::new(),
+                consistency_level: crate::proto::common::ConsistencyLevel::Strong.into(),
+                expr_template_values: std::collections::HashMap::new(),
             })
             .await?
             .into_inner();
@@ -149,8 +142,7 @@ impl Client {
     }
 
     async fn compose_expr(&self, collection_name: &str, options: &DeleteOptions) -> Result<String> {
-        let mut expr = String::new();
-        match options.filter.len() {
+        let expr = match options.filter.len() {
             0 => {
                 let collection = self.collection_cache.get(collection_name).await?;
                 let pk = collection.fields.iter().find(|f| f.is_primary_key).unwrap();
@@ -166,6 +158,7 @@ impl Client {
                             }
                             expr.push_str(format!("{}", v).as_str());
                         }
+                        expr.push_str("]");
                         expr
                     }
 
@@ -176,6 +169,7 @@ impl Client {
                             }
                             expr.push_str(v.as_str());
                         }
+                        expr.push_str("]");
                         expr
                     }
 
@@ -190,7 +184,6 @@ impl Client {
 
             _ => options.filter.clone(),
         };
-        expr.push(')');
 
         Ok(expr)
     }
@@ -220,6 +213,7 @@ impl Client {
                 fields_data: fields_data.into_iter().map(|f| f.into()).collect(),
                 hash_keys: Vec::new(),
                 schema_timestamp: 0,
+                partial_update: false,
             })
             .await?
             .into_inner();

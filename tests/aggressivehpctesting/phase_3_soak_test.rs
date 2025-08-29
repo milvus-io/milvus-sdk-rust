@@ -45,8 +45,7 @@ async fn soak_test_for_stability_and_memory_leaks() -> Result<()> {
         let partition_name = "soak_partition".to_string();
 
         // Wrap a full cycle in an error-checked block
-        let cycle_result =
-            run_full_sdk_cycle(&client, &collection_name, &partition_name).await;
+        let cycle_result = run_full_sdk_cycle(&client, &collection_name, &partition_name).await;
 
         if let Err(e) = cycle_result {
             eprintln!(
@@ -56,7 +55,10 @@ async fn soak_test_for_stability_and_memory_leaks() -> Result<()> {
             // In a real CI/CD, this would fail the test. For local runs, we panic.
             panic!("Soak test cycle failed.");
         } else {
-            println!("--- Soak Test Cycle {} Completed Successfully ---", cycle_count);
+            println!(
+                "--- Soak Test Cycle {} Completed Successfully ---",
+                cycle_count
+            );
         }
 
         // Clean up collection even if it failed, to avoid leaving residue
@@ -104,14 +106,22 @@ async fn run_full_sdk_cycle(
         .collect();
     let fields = vec![FieldColumn::new(&vec_schema, vectors)];
     let insert_result = client
-        .insert(collection_name, fields, Some(InsertOptions::new().partition_name(partition_name.to_string())))
+        .insert(
+            collection_name,
+            fields,
+            Some(InsertOptions::new().partition_name(partition_name.to_string())),
+        )
         .await?;
     println!("Cycle: Inserted {} entities", insert_count);
     client.flush(collection_name).await?;
 
     // 3. Create Index & Load
-    let index_params =
-        IndexParams::new("soak_index".to_string(), IndexType::IvfFlat, MetricType::L2, HashMap::new());
+    let index_params = IndexParams::new(
+        "soak_index".to_string(),
+        IndexType::IvfFlat,
+        MetricType::L2,
+        HashMap::new(),
+    );
     client
         .create_index(collection_name, DEFAULT_VEC_FIELD, index_params)
         .await?;
@@ -126,18 +136,24 @@ async fn run_full_sdk_cycle(
         .search(
             collection_name,
             vec![query_vector.into()],
-            &DEFAULT_VEC_FIELD.to_string(),
-            &SearchOptions::new().limit(10),
+            Some(
+                SearchOptions::new()
+                    .limit(10)
+                    .add_param("anns_field", DEFAULT_VEC_FIELD),
+            ),
         )
         .await?;
     println!("Cycle: Performed search");
 
     let ids = match insert_result.i_ds {
         Some(proto::schema::IDs {
-            id_field:
-                Some(proto::schema::i_ds::IdField::IntId(proto::schema::LongArray { data })),
+            id_field: Some(proto::schema::i_ds::IdField::IntId(proto::schema::LongArray { data })),
         }) => data,
-        _ => return Err(milvus::error::Error::Unexpected("Expected int IDs".to_string())),
+        _ => {
+            return Err(milvus::error::Error::Unexpected(
+                "Expected int IDs".to_string(),
+            ))
+        }
     };
     let ids_to_query = &ids[0..5];
     let expr = format!("id in {:?}", ids_to_query);

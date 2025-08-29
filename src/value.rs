@@ -8,6 +8,7 @@ use crate::proto::{
     },
 };
 
+#[derive(Debug, Clone)]
 pub enum Value<'a> {
     None,
     Bool(bool),
@@ -22,6 +23,8 @@ pub enum Value<'a> {
     String(Cow<'a, str>),
     Json(Cow<'a, [u8]>),
     Array(Cow<'a, proto::schema::ScalarField>),
+    StructArray(Cow<'a, proto::schema::StructArrayField>),
+    VectorArray(Cow<'a, proto::schema::VectorArray>),
 }
 
 macro_rules! impl_from_for_field_data_column {
@@ -60,6 +63,29 @@ impl Value<'_> {
             Value::FloatArray(_) => DataType::FloatVector,
             Value::Binary(_) => DataType::BinaryVector,
             Value::Array(_) => DataType::Array,
+            Value::StructArray(_) => DataType::ArrayOfStruct,
+            Value::VectorArray(_) => DataType::ArrayOfVector,
+        }
+    }
+
+    /// Convert borrowed data to owned data
+    pub fn into_owned(self) -> Value<'static> {
+        match self {
+            Value::None => Value::None,
+            Value::Bool(v) => Value::Bool(v),
+            Value::Int8(v) => Value::Int8(v),
+            Value::Int16(v) => Value::Int16(v),
+            Value::Int32(v) => Value::Int32(v),
+            Value::Long(v) => Value::Long(v),
+            Value::Float(v) => Value::Float(v),
+            Value::Double(v) => Value::Double(v),
+            Value::FloatArray(cow) => Value::FloatArray(Cow::Owned(cow.into_owned())),
+            Value::Binary(cow) => Value::Binary(Cow::Owned(cow.into_owned())),
+            Value::String(cow) => Value::String(Cow::Owned(cow.into_owned())),
+            Value::Json(cow) => Value::Json(Cow::Owned(cow.into_owned())),
+            Value::Array(cow) => Value::Array(Cow::Owned(cow.into_owned())),
+            Value::StructArray(cow) => Value::StructArray(Cow::Owned(cow.into_owned())),
+            Value::VectorArray(cow) => Value::VectorArray(Cow::Owned(cow.into_owned())),
         }
     }
 }
@@ -171,6 +197,7 @@ impl From<Vec<i16>> for ValueVec {
 }
 
 impl ValueVec {
+    //todo add more new types
     pub fn new(dtype: DataType) -> Self {
         match dtype {
             DataType::None => Self::None,
@@ -190,10 +217,7 @@ impl ValueVec {
             DataType::Float16Vector => Self::Binary(Vec::new()),
             DataType::BFloat16Vector => Self::Binary(Vec::new()),
             DataType::Geometry => unimplemented!(),
-            DataType::Text => unimplemented!(),
             DataType::SparseFloatVector => unimplemented!(),
-            DataType::Int8Vector => unimplemented!(),
-            DataType::ArrayOfVector => unimplemented!(),
             _ => unimplemented!(),
         }
     }
@@ -277,11 +301,13 @@ impl From<Field> for ValueVec {
                     VectorData::BinaryVector(v) => Self::Binary(v),
                     VectorData::Bfloat16Vector(v) => Self::Binary(v),
                     VectorData::Float16Vector(v) => Self::Binary(v),
-                    _ => unimplemented!(),
+                    VectorData::SparseFloatVector(_) => Self::Float(Vec::new()),
+                    VectorData::Int8Vector(_) => unimplemented!(),
+                    VectorData::VectorArray(_) => unimplemented!(),
                 },
                 None => Self::None,
             },
-            _ => unimplemented!(),
+            Field::StructArrays(_) => unimplemented!(),
         }
     }
 }

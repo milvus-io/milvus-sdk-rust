@@ -163,6 +163,7 @@ impl From<FieldColumn> for schema::FieldData {
         schema::FieldData {
             field_name: this.name.to_string(),
             field_id: 0,
+            valid_data: vec![],
             r#type: this.dtype as _,
             field: Some(match this.value {
                 ValueVec::None => Field::Scalars(ScalarField { data: None }),
@@ -206,7 +207,6 @@ impl From<FieldColumn> for schema::FieldData {
                 }),
             }),
             is_dynamic: false,
-            valid_data: vec![],
         }
     }
 }

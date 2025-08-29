@@ -13,10 +13,7 @@ async fn test_get_partition_stats() {
         .unwrap();
 
     let result = client
-        .get_partition_stats(
-            collection.name().to_string(),
-            "test_partition".to_string(),
-        )
+        .get_partition_stats(collection.name().to_string(), "test_partition".to_string())
         .await;
 
     assert!(result.is_ok());

@@ -489,10 +489,10 @@ impl From<CollectionSchema> for schema::CollectionSchema {
             description: col.description,
             fields: col.fields.into_iter().map(Into::into).collect(),
             enable_dynamic_field: col.enable_dynamic_field,
+            properties: Vec::new(),
+            functions: Vec::new(),
             db_name: "".to_string(),
-            functions: vec![],
-            properties: vec![],
-            struct_array_fields: vec![],
+            struct_array_fields: Vec::new(),
         }
     }
 }

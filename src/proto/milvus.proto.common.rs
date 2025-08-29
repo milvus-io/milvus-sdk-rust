@@ -14,10 +14,8 @@ pub struct Status {
     #[prost(string, tag = "5")]
     pub detail: ::prost::alloc::string::String,
     #[prost(map = "string, string", tag = "6")]
-    pub extra_info: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        ::prost::alloc::string::String,
-    >,
+    pub extra_info:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -82,10 +80,8 @@ pub struct MsgBase {
     #[prost(int64, tag = "5")]
     pub target_id: i64,
     #[prost(map = "string, string", tag = "6")]
-    pub properties: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        ::prost::alloc::string::String,
-    >,
+    pub properties:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
     #[prost(message, optional, tag = "7")]
     pub replicate_info: ::core::option::Option<ReplicateInfo>,
 }
@@ -152,10 +148,8 @@ pub struct ClientInfo {
     pub host: ::prost::alloc::string::String,
     /// reserved for newly-added feature if necessary.
     #[prost(map = "string, string", tag = "6")]
-    pub reserved: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        ::prost::alloc::string::String,
-    >,
+    pub reserved:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -172,10 +166,8 @@ pub struct ServerInfo {
     pub deploy_mode: ::prost::alloc::string::String,
     /// reserved for newly-added feature if necessary.
     #[prost(map = "string, string", tag = "6")]
-    pub reserved: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        ::prost::alloc::string::String,
-    >,
+    pub reserved:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
 /// NodeInfo is used to describe the node information.
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -1219,6 +1211,9 @@ pub enum ObjectPrivilege {
     PrivilegeGetImportProgress = 69,
     PrivilegeListImport = 70,
     PrivilegeAddCollectionField = 71,
+    PrivilegeAddFileResource = 72,
+    PrivilegeRemoveFileResource = 73,
+    PrivilegeListFileResources = 74,
 }
 impl ObjectPrivilege {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -1253,13 +1248,9 @@ impl ObjectPrivilege {
             ObjectPrivilege::PrivilegeManageOwnership => "PrivilegeManageOwnership",
             ObjectPrivilege::PrivilegeSelectUser => "PrivilegeSelectUser",
             ObjectPrivilege::PrivilegeUpsert => "PrivilegeUpsert",
-            ObjectPrivilege::PrivilegeCreateResourceGroup => {
-                "PrivilegeCreateResourceGroup"
-            }
+            ObjectPrivilege::PrivilegeCreateResourceGroup => "PrivilegeCreateResourceGroup",
             ObjectPrivilege::PrivilegeDropResourceGroup => "PrivilegeDropResourceGroup",
-            ObjectPrivilege::PrivilegeDescribeResourceGroup => {
-                "PrivilegeDescribeResourceGroup"
-            }
+            ObjectPrivilege::PrivilegeDescribeResourceGroup => "PrivilegeDescribeResourceGroup",
             ObjectPrivilege::PrivilegeListResourceGroups => "PrivilegeListResourceGroups",
             ObjectPrivilege::PrivilegeTransferNode => "PrivilegeTransferNode",
             ObjectPrivilege::PrivilegeTransferReplica => "PrivilegeTransferReplica",
@@ -1279,9 +1270,7 @@ impl ObjectPrivilege {
             ObjectPrivilege::PrivilegeDropAlias => "PrivilegeDropAlias",
             ObjectPrivilege::PrivilegeDescribeAlias => "PrivilegeDescribeAlias",
             ObjectPrivilege::PrivilegeListAliases => "PrivilegeListAliases",
-            ObjectPrivilege::PrivilegeUpdateResourceGroups => {
-                "PrivilegeUpdateResourceGroups"
-            }
+            ObjectPrivilege::PrivilegeUpdateResourceGroups => "PrivilegeUpdateResourceGroups",
             ObjectPrivilege::PrivilegeAlterDatabase => "PrivilegeAlterDatabase",
             ObjectPrivilege::PrivilegeDescribeDatabase => "PrivilegeDescribeDatabase",
             ObjectPrivilege::PrivilegeBackupRbac => "PrivilegeBackupRBAC",
@@ -1289,42 +1278,27 @@ impl ObjectPrivilege {
             ObjectPrivilege::PrivilegeGroupReadOnly => "PrivilegeGroupReadOnly",
             ObjectPrivilege::PrivilegeGroupReadWrite => "PrivilegeGroupReadWrite",
             ObjectPrivilege::PrivilegeGroupAdmin => "PrivilegeGroupAdmin",
-            ObjectPrivilege::PrivilegeCreatePrivilegeGroup => {
-                "PrivilegeCreatePrivilegeGroup"
-            }
+            ObjectPrivilege::PrivilegeCreatePrivilegeGroup => "PrivilegeCreatePrivilegeGroup",
             ObjectPrivilege::PrivilegeDropPrivilegeGroup => "PrivilegeDropPrivilegeGroup",
-            ObjectPrivilege::PrivilegeListPrivilegeGroups => {
-                "PrivilegeListPrivilegeGroups"
-            }
-            ObjectPrivilege::PrivilegeOperatePrivilegeGroup => {
-                "PrivilegeOperatePrivilegeGroup"
-            }
-            ObjectPrivilege::PrivilegeGroupClusterReadOnly => {
-                "PrivilegeGroupClusterReadOnly"
-            }
-            ObjectPrivilege::PrivilegeGroupClusterReadWrite => {
-                "PrivilegeGroupClusterReadWrite"
-            }
+            ObjectPrivilege::PrivilegeListPrivilegeGroups => "PrivilegeListPrivilegeGroups",
+            ObjectPrivilege::PrivilegeOperatePrivilegeGroup => "PrivilegeOperatePrivilegeGroup",
+            ObjectPrivilege::PrivilegeGroupClusterReadOnly => "PrivilegeGroupClusterReadOnly",
+            ObjectPrivilege::PrivilegeGroupClusterReadWrite => "PrivilegeGroupClusterReadWrite",
             ObjectPrivilege::PrivilegeGroupClusterAdmin => "PrivilegeGroupClusterAdmin",
-            ObjectPrivilege::PrivilegeGroupDatabaseReadOnly => {
-                "PrivilegeGroupDatabaseReadOnly"
-            }
-            ObjectPrivilege::PrivilegeGroupDatabaseReadWrite => {
-                "PrivilegeGroupDatabaseReadWrite"
-            }
+            ObjectPrivilege::PrivilegeGroupDatabaseReadOnly => "PrivilegeGroupDatabaseReadOnly",
+            ObjectPrivilege::PrivilegeGroupDatabaseReadWrite => "PrivilegeGroupDatabaseReadWrite",
             ObjectPrivilege::PrivilegeGroupDatabaseAdmin => "PrivilegeGroupDatabaseAdmin",
-            ObjectPrivilege::PrivilegeGroupCollectionReadOnly => {
-                "PrivilegeGroupCollectionReadOnly"
-            }
+            ObjectPrivilege::PrivilegeGroupCollectionReadOnly => "PrivilegeGroupCollectionReadOnly",
             ObjectPrivilege::PrivilegeGroupCollectionReadWrite => {
                 "PrivilegeGroupCollectionReadWrite"
             }
-            ObjectPrivilege::PrivilegeGroupCollectionAdmin => {
-                "PrivilegeGroupCollectionAdmin"
-            }
+            ObjectPrivilege::PrivilegeGroupCollectionAdmin => "PrivilegeGroupCollectionAdmin",
             ObjectPrivilege::PrivilegeGetImportProgress => "PrivilegeGetImportProgress",
             ObjectPrivilege::PrivilegeListImport => "PrivilegeListImport",
             ObjectPrivilege::PrivilegeAddCollectionField => "PrivilegeAddCollectionField",
+            ObjectPrivilege::PrivilegeAddFileResource => "PrivilegeAddFileResource",
+            ObjectPrivilege::PrivilegeRemoveFileResource => "PrivilegeRemoveFileResource",
+            ObjectPrivilege::PrivilegeListFileResources => "PrivilegeListFileResources",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -1358,9 +1332,7 @@ impl ObjectPrivilege {
             "PrivilegeUpsert" => Some(Self::PrivilegeUpsert),
             "PrivilegeCreateResourceGroup" => Some(Self::PrivilegeCreateResourceGroup),
             "PrivilegeDropResourceGroup" => Some(Self::PrivilegeDropResourceGroup),
-            "PrivilegeDescribeResourceGroup" => {
-                Some(Self::PrivilegeDescribeResourceGroup)
-            }
+            "PrivilegeDescribeResourceGroup" => Some(Self::PrivilegeDescribeResourceGroup),
             "PrivilegeListResourceGroups" => Some(Self::PrivilegeListResourceGroups),
             "PrivilegeTransferNode" => Some(Self::PrivilegeTransferNode),
             "PrivilegeTransferReplica" => Some(Self::PrivilegeTransferReplica),
@@ -1391,31 +1363,22 @@ impl ObjectPrivilege {
             "PrivilegeCreatePrivilegeGroup" => Some(Self::PrivilegeCreatePrivilegeGroup),
             "PrivilegeDropPrivilegeGroup" => Some(Self::PrivilegeDropPrivilegeGroup),
             "PrivilegeListPrivilegeGroups" => Some(Self::PrivilegeListPrivilegeGroups),
-            "PrivilegeOperatePrivilegeGroup" => {
-                Some(Self::PrivilegeOperatePrivilegeGroup)
-            }
+            "PrivilegeOperatePrivilegeGroup" => Some(Self::PrivilegeOperatePrivilegeGroup),
             "PrivilegeGroupClusterReadOnly" => Some(Self::PrivilegeGroupClusterReadOnly),
-            "PrivilegeGroupClusterReadWrite" => {
-                Some(Self::PrivilegeGroupClusterReadWrite)
-            }
+            "PrivilegeGroupClusterReadWrite" => Some(Self::PrivilegeGroupClusterReadWrite),
             "PrivilegeGroupClusterAdmin" => Some(Self::PrivilegeGroupClusterAdmin),
-            "PrivilegeGroupDatabaseReadOnly" => {
-                Some(Self::PrivilegeGroupDatabaseReadOnly)
-            }
-            "PrivilegeGroupDatabaseReadWrite" => {
-                Some(Self::PrivilegeGroupDatabaseReadWrite)
-            }
+            "PrivilegeGroupDatabaseReadOnly" => Some(Self::PrivilegeGroupDatabaseReadOnly),
+            "PrivilegeGroupDatabaseReadWrite" => Some(Self::PrivilegeGroupDatabaseReadWrite),
             "PrivilegeGroupDatabaseAdmin" => Some(Self::PrivilegeGroupDatabaseAdmin),
-            "PrivilegeGroupCollectionReadOnly" => {
-                Some(Self::PrivilegeGroupCollectionReadOnly)
-            }
-            "PrivilegeGroupCollectionReadWrite" => {
-                Some(Self::PrivilegeGroupCollectionReadWrite)
-            }
+            "PrivilegeGroupCollectionReadOnly" => Some(Self::PrivilegeGroupCollectionReadOnly),
+            "PrivilegeGroupCollectionReadWrite" => Some(Self::PrivilegeGroupCollectionReadWrite),
             "PrivilegeGroupCollectionAdmin" => Some(Self::PrivilegeGroupCollectionAdmin),
             "PrivilegeGetImportProgress" => Some(Self::PrivilegeGetImportProgress),
             "PrivilegeListImport" => Some(Self::PrivilegeListImport),
             "PrivilegeAddCollectionField" => Some(Self::PrivilegeAddCollectionField),
+            "PrivilegeAddFileResource" => Some(Self::PrivilegeAddFileResource),
+            "PrivilegeRemoveFileResource" => Some(Self::PrivilegeRemoveFileResource),
+            "PrivilegeListFileResources" => Some(Self::PrivilegeListFileResources),
             _ => None,
         }
     }
@@ -1509,6 +1472,29 @@ impl LoadPriority {
         match value {
             "HIGH" => Some(Self::High),
             "LOW" => Some(Self::Low),
+            _ => None,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum FileResourceType {
+    AnalyzerDictionary = 0,
+}
+impl FileResourceType {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            FileResourceType::AnalyzerDictionary => "ANALYZER_DICTIONARY",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "ANALYZER_DICTIONARY" => Some(Self::AnalyzerDictionary),
             _ => None,
         }
     }

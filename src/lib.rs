@@ -14,14 +14,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod authentication;
 pub mod client;
 pub mod collection;
 pub mod data;
+pub mod database;
 pub mod error;
+pub mod iterator;
 pub mod mutate;
 pub mod options;
 pub mod partition;
 pub mod query;
+pub mod resource_group;
 pub mod schema;
 pub mod value;
 

@@ -60,6 +60,15 @@ pub enum Error {
 
     #[error("{0}")]
     Unexpected(String),
+
+    #[error("{0}")]
+    Param(String),
+
+    #[error("{0:?}")]
+    Io(#[from] std::io::Error),
+
+    #[error("{0:?}")]
+    ParseInt(#[from] std::num::ParseIntError),
 }
 
 impl From<Status> for Error {

@@ -28,7 +28,7 @@ pub struct FieldSchema {
     /// For array type, the element type is stored here
     #[prost(enumeration = "DataType", tag = "10")]
     pub element_type: i32,
-    /// default_value only support scalars except array and json for now
+    /// default_value only support scalars except array, json and timestamptz for now
     #[prost(message, optional, tag = "11")]
     pub default_value: ::core::option::Option<ValueField>,
     /// mark whether this field is the dynamic field
@@ -181,8 +181,20 @@ pub struct GeometryArray {
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct TimestamptzArray {
+    #[prost(int64, repeated, tag = "1")]
+    pub data: ::prost::alloc::vec::Vec<i64>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GeometryWktArray {
+    #[prost(string, repeated, tag = "1")]
+    pub data: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ValueField {
-    #[prost(oneof = "value_field::Data", tags = "1, 2, 3, 4, 5, 6, 7")]
+    #[prost(oneof = "value_field::Data", tags = "1, 2, 3, 4, 5, 6, 7, 8")]
     pub data: ::core::option::Option<value_field::Data>,
 }
 /// Nested message and enum types in `ValueField`.
@@ -204,12 +216,17 @@ pub mod value_field {
         StringData(::prost::alloc::string::String),
         #[prost(bytes, tag = "7")]
         BytesData(::prost::alloc::vec::Vec<u8>),
+        #[prost(int64, tag = "8")]
+        TimestamptzData(i64),
     }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ScalarField {
-    #[prost(oneof = "scalar_field::Data", tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10")]
+    #[prost(
+        oneof = "scalar_field::Data",
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12"
+    )]
     pub data: ::core::option::Option<scalar_field::Data>,
 }
 /// Nested message and enum types in `ScalarField`.
@@ -237,6 +254,10 @@ pub mod scalar_field {
         JsonData(super::JsonArray),
         #[prost(message, tag = "10")]
         GeometryData(super::GeometryArray),
+        #[prost(message, tag = "11")]
+        TimestamptzData(super::TimestamptzArray),
+        #[prost(message, tag = "12")]
+        GeometryWktData(super::GeometryWktArray),
     }
 }
 /// beta, api may change
@@ -480,6 +501,7 @@ pub enum DataType {
     Json = 23,
     Geometry = 24,
     Text = 25,
+    Timestamptz = 26,
     BinaryVector = 100,
     FloatVector = 101,
     Float16Vector = 102,
@@ -510,6 +532,7 @@ impl DataType {
             DataType::Json => "JSON",
             DataType::Geometry => "Geometry",
             DataType::Text => "Text",
+            DataType::Timestamptz => "Timestamptz",
             DataType::BinaryVector => "BinaryVector",
             DataType::FloatVector => "FloatVector",
             DataType::Float16Vector => "Float16Vector",
@@ -537,6 +560,7 @@ impl DataType {
             "JSON" => Some(Self::Json),
             "Geometry" => Some(Self::Geometry),
             "Text" => Some(Self::Text),
+            "Timestamptz" => Some(Self::Timestamptz),
             "BinaryVector" => Some(Self::BinaryVector),
             "FloatVector" => Some(Self::FloatVector),
             "Float16Vector" => Some(Self::Float16Vector),
