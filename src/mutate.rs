@@ -193,6 +193,7 @@ impl Client {
         collection_name: S,
         fields_data: Vec<FieldColumn>,
         options: Option<InsertOptions>,
+        partial_update: bool,
     ) -> Result<crate::proto::milvus::MutationResult>
     where
         S: Into<String>,
@@ -213,7 +214,7 @@ impl Client {
                 fields_data: fields_data.into_iter().map(|f| f.into()).collect(),
                 hash_keys: Vec::new(),
                 schema_timestamp: 0,
-                partial_update: false,
+                partial_update,
             })
             .await?
             .into_inner();
