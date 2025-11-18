@@ -46,6 +46,10 @@ pub enum IndexType {
     Trie,
     #[strum(serialize = "BITMAP")]
     Bitmap,
+    #[strum(serialize = "INVERTED")]
+    Inverted,
+    #[strum(serialize = "AUTOINDEX")]
+    Auto,
 }
 
 #[derive(Debug, Clone, Copy, EnumString, Display)]
