@@ -54,7 +54,7 @@ impl Interceptor for AuthInterceptor {
         mut req: Request<()>,
     ) -> std::result::Result<tonic::Request<()>, tonic::Status> {
         if let Some(ref token) = self.token {
-            let header_value = format!("{}", token);
+            let header_value = token.to_string();
             req.metadata_mut()
                 .insert("authorization", header_value.parse().unwrap());
         }

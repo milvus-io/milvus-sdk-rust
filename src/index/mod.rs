@@ -171,7 +171,7 @@ impl From<IndexDescription> for IndexInfo {
             index_name: description.index_name.clone(),
             field_name: description.field_name.clone(),
             id: description.index_id,
-            params: params,
+            params,
             state: description.state(),
         }
     }

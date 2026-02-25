@@ -57,7 +57,7 @@ use crate::{error::*, proto};
 ///     .force_deny_writing(false)
 ///     .force_deny_reading(false);
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CreateDbOptions {
     /// Number of replicas for the database
     replica_number: Option<i32>,
@@ -75,19 +75,6 @@ pub struct CreateDbOptions {
 
 /// Type alias for database properties, currently equivalent to CreateDbOptions
 type DbProperties = CreateDbOptions;
-
-impl Default for CreateDbOptions {
-    fn default() -> Self {
-        Self {
-            replica_number: None,
-            resource_groups: None,
-            diskquota_mb: None,
-            max_collections: None,
-            force_deny_writing: None,
-            force_deny_reading: None,
-        }
-    }
-}
 
 impl CreateDbOptions {
     /// Creates a new `CreateDbOptions` instance with default values.
