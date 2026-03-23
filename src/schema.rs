@@ -187,7 +187,7 @@ impl From<schema::FieldSchema> for FieldSchema {
             .and_then(|x| x.value.parse().ok())
             .unwrap_or(1);
 
-        let dtype = DataType::from_i32(fld.data_type).unwrap();
+        let dtype = DataType::try_from(fld.data_type).unwrap_or(DataType::None);
 
         FieldSchema {
             name: fld.name,

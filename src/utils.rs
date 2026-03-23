@@ -24,12 +24,12 @@ pub fn status_to_result(status: &Option<Status>) -> Result<(), Error> {
         .clone()
         .ok_or(Error::Unexpected("no status".to_owned()))?;
 
-    match ErrorCode::from_i32(status.error_code) {
-        Some(i) => match i {
+    match ErrorCode::try_from(status.error_code) {
+        Ok(i) => match i {
             ErrorCode::Success => Ok(()),
             _ => Err(Error::from(status)),
         },
-        None => Err(Error::Unexpected(format!(
+        Err(_) => Err(Error::Unexpected(format!(
             "unknown error code {}",
             status.error_code
         ))),
