@@ -67,6 +67,7 @@ pub struct QueryIteratorOptions {
     pub filter: String,
     pub output_fields: Vec<String>,
     pub partition_names: Vec<String>,
+    pub namespace: Option<String>,
     pub timeout: Option<f64>,
     pub consistency_level: Option<i32>,
     pub guarantee_timestamp: Option<u64>,
@@ -85,6 +86,7 @@ impl Default for QueryIteratorOptions {
             filter: "".to_string(),
             output_fields: Vec::new(),
             partition_names: Vec::new(),
+            namespace: None,
             timeout: None,
             consistency_level: None,
             guarantee_timestamp: None,
@@ -136,6 +138,11 @@ impl QueryIteratorOptions {
 
     pub fn partition_names(mut self, partition_names: Vec<String>) -> Self {
         self.partition_names = partition_names;
+        self
+    }
+
+    pub fn namespace(mut self, namespace: String) -> Self {
+        self.namespace = Some(namespace);
         self
     }
 
@@ -192,6 +199,7 @@ pub struct SearchIteratorOptions {
     pub filter: String,
     pub output_fields: Vec<String>,
     pub partition_names: Vec<String>,
+    pub namespace: Option<String>,
     pub timeout: Option<f64>,
     pub consistency_level: Option<i32>,
     pub guarantee_timestamp: Option<u64>,
@@ -213,6 +221,7 @@ impl Default for SearchIteratorOptions {
             filter: "".to_string(),
             output_fields: Vec::new(),
             partition_names: Vec::new(),
+            namespace: None,
             timeout: None,
             consistency_level: None,
             guarantee_timestamp: None,
@@ -252,6 +261,11 @@ impl SearchIteratorOptions {
 
     pub fn limit(mut self, limit: usize) -> Self {
         self.limit = Some(limit);
+        self
+    }
+
+    pub fn namespace(mut self, namespace: String) -> Self {
+        self.namespace = Some(namespace);
         self
     }
 
@@ -557,6 +571,7 @@ impl QueryIterator {
                 consistency_level: self.options.consistency_level.unwrap_or(0),
                 use_default_consistency: self.options.consistency_level.is_none(),
                 expr_template_values: self.options.expr_template_values.clone(),
+                namespace: self.options.namespace.clone(),
             })
             .await?
             .into_inner();
@@ -711,6 +726,7 @@ impl QueryIterator {
                 consistency_level: self.options.consistency_level.unwrap_or(0),
                 use_default_consistency: self.options.consistency_level.is_none(),
                 expr_template_values: self.options.expr_template_values.clone(),
+                namespace: self.options.namespace.clone(),
             })
             .await?
             .into_inner();
@@ -954,6 +970,7 @@ impl QueryIterator {
                     consistency_level: self.options.consistency_level.unwrap_or(0),
                     use_default_consistency: self.options.consistency_level.is_none(),
                     expr_template_values: self.options.expr_template_values.clone(),
+                    namespace: self.options.namespace.clone(),
                 })
                 .await?
                 .into_inner();
@@ -1041,6 +1058,26 @@ impl QueryIterator {
                                     *v = v[..min_len].to_vec();
                                 }
                             }
+                            ValueVec::Geometry(v) => {
+                                if v.len() >= min_len {
+                                    *v = v[..min_len].to_vec();
+                                }
+                            }
+                            ValueVec::GeometryWkt(v) => {
+                                if v.len() >= min_len {
+                                    *v = v[..min_len].to_vec();
+                                }
+                            }
+                            ValueVec::Timestamptz(v) => {
+                                if v.len() >= min_len {
+                                    *v = v[..min_len].to_vec();
+                                }
+                            }
+                            // SparseFloat, StructArray, VectorArray are complex types
+                            // that don't support simple truncation
+                            ValueVec::SparseFloat(_)
+                            | ValueVec::StructArray(_)
+                            | ValueVec::VectorArray(_) => {}
                         }
                         new_field
                     })
@@ -1382,7 +1419,11 @@ impl SearchIterator {
                 partition_names: self.options.partition_names.clone(),
                 dsl: self.options.filter.clone(),
                 nq: self.data.len() as _,
-                placeholder_group: crate::query::get_place_holder_group(&self.data)?,
+                search_input: Some(
+                    crate::proto::milvus::search_request::SearchInput::PlaceholderGroup(
+                        crate::query::get_place_holder_group(&self.data)?,
+                    ),
+                ),
                 dsl_type: crate::proto::common::DslType::BoolExprV1 as _,
                 output_fields: self.options.output_fields.clone(),
                 search_params,
@@ -1391,10 +1432,13 @@ impl SearchIterator {
                 not_return_all_meta: false,
                 consistency_level: self.options.consistency_level.unwrap_or(0),
                 use_default_consistency: self.options.consistency_level.is_none(),
+                #[allow(deprecated)]
                 search_by_primary_keys: false,
                 expr_template_values: self.options.expr_template_values.clone(),
                 sub_reqs: vec![],
                 function_score: None,
+                namespace: self.options.namespace.clone(),
+                highlighter: None,
             })
             .await?
             .into_inner();
@@ -1499,6 +1543,7 @@ impl SearchIterator {
                 score,
                 field: result_data,
                 id,
+                highlight_results: vec![],
             });
 
             offset += k;

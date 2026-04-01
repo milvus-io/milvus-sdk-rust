@@ -20,11 +20,22 @@ pub enum Value<'a> {
     Double(f64),
     FloatArray(Cow<'a, [f32]>),
     Binary(Cow<'a, [u8]>),
+    Int8Vector(Cow<'a, [u8]>),
+    Float16Vector(Cow<'a, [u8]>),
+    BFloat16Vector(Cow<'a, [u8]>),
     String(Cow<'a, str>),
     Json(Cow<'a, [u8]>),
     Array(Cow<'a, proto::schema::ScalarField>),
     StructArray(Cow<'a, proto::schema::StructArrayField>),
     VectorArray(Cow<'a, proto::schema::VectorArray>),
+    /// Geometry data in WKB (Well-Known Binary) format
+    Geometry(Cow<'a, [u8]>),
+    /// Geometry data in WKT (Well-Known Text) format
+    GeometryWkt(Cow<'a, str>),
+    /// Timestamp with timezone (stored as i64 microseconds)
+    Timestamptz(i64),
+    /// Sparse float vector (serialized sparse representation)
+    SparseFloat(Cow<'a, proto::schema::SparseFloatArray>),
 }
 
 macro_rules! impl_from_for_field_data_column {
@@ -62,9 +73,16 @@ impl Value<'_> {
             Value::Json(_) => DataType::Json,
             Value::FloatArray(_) => DataType::FloatVector,
             Value::Binary(_) => DataType::BinaryVector,
+            Value::Int8Vector(_) => DataType::Int8Vector,
+            Value::Float16Vector(_) => DataType::Float16Vector,
+            Value::BFloat16Vector(_) => DataType::BFloat16Vector,
             Value::Array(_) => DataType::Array,
             Value::StructArray(_) => DataType::ArrayOfStruct,
             Value::VectorArray(_) => DataType::ArrayOfVector,
+            Value::Geometry(_) => DataType::Geometry,
+            Value::GeometryWkt(_) => DataType::Geometry,
+            Value::Timestamptz(_) => DataType::Timestamptz,
+            Value::SparseFloat(_) => DataType::SparseFloatVector,
         }
     }
 
@@ -81,11 +99,18 @@ impl Value<'_> {
             Value::Double(v) => Value::Double(v),
             Value::FloatArray(cow) => Value::FloatArray(Cow::Owned(cow.into_owned())),
             Value::Binary(cow) => Value::Binary(Cow::Owned(cow.into_owned())),
+            Value::Int8Vector(cow) => Value::Int8Vector(Cow::Owned(cow.into_owned())),
+            Value::Float16Vector(cow) => Value::Float16Vector(Cow::Owned(cow.into_owned())),
+            Value::BFloat16Vector(cow) => Value::BFloat16Vector(Cow::Owned(cow.into_owned())),
             Value::String(cow) => Value::String(Cow::Owned(cow.into_owned())),
             Value::Json(cow) => Value::Json(Cow::Owned(cow.into_owned())),
             Value::Array(cow) => Value::Array(Cow::Owned(cow.into_owned())),
             Value::StructArray(cow) => Value::StructArray(Cow::Owned(cow.into_owned())),
             Value::VectorArray(cow) => Value::VectorArray(Cow::Owned(cow.into_owned())),
+            Value::Geometry(cow) => Value::Geometry(Cow::Owned(cow.into_owned())),
+            Value::GeometryWkt(cow) => Value::GeometryWkt(Cow::Owned(cow.into_owned())),
+            Value::Timestamptz(v) => Value::Timestamptz(v),
+            Value::SparseFloat(cow) => Value::SparseFloat(Cow::Owned(cow.into_owned())),
         }
     }
 }
@@ -138,6 +163,18 @@ pub enum ValueVec {
     String(Vec<String>),
     Json(Vec<Vec<u8>>),
     Array(Vec<proto::schema::ScalarField>),
+    /// Geometry WKB data (each element is a WKB-encoded geometry)
+    Geometry(Vec<Vec<u8>>),
+    /// Geometry WKT data
+    GeometryWkt(Vec<String>),
+    /// Timestamp with timezone (microseconds)
+    Timestamptz(Vec<i64>),
+    /// Sparse float vector
+    SparseFloat(proto::schema::SparseFloatArray),
+    /// Struct array field
+    StructArray(proto::schema::StructArrayField),
+    /// Vector array
+    VectorArray(proto::schema::VectorArray),
 }
 
 macro_rules! impl_from_for_value_vec {
@@ -197,7 +234,6 @@ impl From<Vec<i16>> for ValueVec {
 }
 
 impl ValueVec {
-    //todo add more new types
     pub fn new(dtype: DataType) -> Self {
         match dtype {
             DataType::None => Self::None,
@@ -216,15 +252,34 @@ impl ValueVec {
             DataType::FloatVector => Self::Float(Vec::new()),
             DataType::Float16Vector => Self::Binary(Vec::new()),
             DataType::BFloat16Vector => Self::Binary(Vec::new()),
-            DataType::Geometry => unimplemented!(),
-            DataType::SparseFloatVector => unimplemented!(),
-            _ => unimplemented!(),
+            DataType::Int8Vector => Self::Binary(Vec::new()),
+            DataType::Geometry => Self::Geometry(Vec::new()),
+            DataType::Text => Self::String(Vec::new()),
+            DataType::Timestamptz => Self::Timestamptz(Vec::new()),
+            DataType::SparseFloatVector => Self::SparseFloat(proto::schema::SparseFloatArray {
+                contents: Vec::new(),
+                dim: 0,
+            }),
+            DataType::ArrayOfVector => Self::VectorArray(proto::schema::VectorArray {
+                dim: 0,
+                data: Vec::new(),
+                element_type: 0,
+            }),
+            DataType::ArrayOfStruct => Self::StructArray(proto::schema::StructArrayField {
+                fields: Vec::new(),
+            }),
+            DataType::Struct => Self::StructArray(proto::schema::StructArrayField {
+                fields: Vec::new(),
+            }),
         }
     }
 
     pub fn check_dtype(&self, dtype: DataType) -> bool {
         match (self, dtype) {
             (ValueVec::Binary(..), DataType::BinaryVector)
+            | (ValueVec::Binary(..), DataType::Float16Vector)
+            | (ValueVec::Binary(..), DataType::BFloat16Vector)
+            | (ValueVec::Binary(..), DataType::Int8Vector)
             | (ValueVec::Float(..), DataType::FloatVector)
             | (ValueVec::Float(..), DataType::Float)
             | (ValueVec::Int(..), DataType::Int8)
@@ -234,6 +289,13 @@ impl ValueVec {
             | (ValueVec::Bool(..), DataType::Bool)
             | (ValueVec::String(..), DataType::String)
             | (ValueVec::String(..), DataType::VarChar)
+            | (ValueVec::String(..), DataType::Text)
+            | (ValueVec::Geometry(..), DataType::Geometry)
+            | (ValueVec::GeometryWkt(..), DataType::Geometry)
+            | (ValueVec::Timestamptz(..), DataType::Timestamptz)
+            | (ValueVec::SparseFloat(..), DataType::SparseFloatVector)
+            | (ValueVec::StructArray(..), DataType::ArrayOfStruct)
+            | (ValueVec::VectorArray(..), DataType::ArrayOfVector)
             | (ValueVec::None, _)
             | (ValueVec::Double(..), DataType::Double) => true,
             _ => false,
@@ -257,6 +319,12 @@ impl ValueVec {
             ValueVec::String(v) => v.len(),
             ValueVec::Json(v) => v.len(),
             ValueVec::Array(v) => v.len(),
+            ValueVec::Geometry(v) => v.len(),
+            ValueVec::GeometryWkt(v) => v.len(),
+            ValueVec::Timestamptz(v) => v.len(),
+            ValueVec::SparseFloat(v) => v.contents.len(),
+            ValueVec::StructArray(v) => struct_array_len(v),
+            ValueVec::VectorArray(v) => v.data.len(),
         }
     }
 
@@ -272,8 +340,60 @@ impl ValueVec {
             ValueVec::String(v) => v.clear(),
             ValueVec::Json(v) => v.clear(),
             ValueVec::Array(v) => v.clear(),
+            ValueVec::Geometry(v) => v.clear(),
+            ValueVec::GeometryWkt(v) => v.clear(),
+            ValueVec::Timestamptz(v) => v.clear(),
+            ValueVec::SparseFloat(v) => v.contents.clear(),
+            ValueVec::StructArray(v) => v.fields.clear(),
+            ValueVec::VectorArray(v) => v.data.clear(),
         }
     }
+}
+
+fn struct_array_len(v: &proto::schema::StructArrayField) -> usize {
+    v.fields
+        .first()
+        .map(|field| match field.field.as_ref() {
+            Some(Field::Scalars(scalars)) => match scalars.data.as_ref() {
+                Some(ScalarData::BoolData(v)) => v.data.len(),
+                Some(ScalarData::IntData(v)) => v.data.len(),
+                Some(ScalarData::LongData(v)) => v.data.len(),
+                Some(ScalarData::FloatData(v)) => v.data.len(),
+                Some(ScalarData::DoubleData(v)) => v.data.len(),
+                Some(ScalarData::StringData(v)) => v.data.len(),
+                Some(ScalarData::JsonData(v)) => v.data.len(),
+                Some(ScalarData::ArrayData(v)) => v.data.len(),
+                Some(ScalarData::BytesData(_)) => 0,
+                Some(ScalarData::GeometryData(v)) => v.data.len(),
+                Some(ScalarData::TimestamptzData(v)) => v.data.len(),
+                Some(ScalarData::GeometryWktData(v)) => v.data.len(),
+                None => 0,
+            },
+            Some(Field::Vectors(vectors)) => match vectors.data.as_ref() {
+                Some(VectorData::FloatVector(v)) => {
+                    let dim = vectors.dim.max(1) as usize;
+                    v.data.len() / dim
+                }
+                Some(VectorData::BinaryVector(v)) => {
+                    let bytes_per_row = (vectors.dim as usize / 8).max(1);
+                    v.len() / bytes_per_row
+                }
+                Some(VectorData::Float16Vector(v)) | Some(VectorData::Bfloat16Vector(v)) => {
+                    let bytes_per_row = (vectors.dim.max(1) as usize) * 2;
+                    v.len() / bytes_per_row
+                }
+                Some(VectorData::SparseFloatVector(v)) => v.contents.len(),
+                Some(VectorData::Int8Vector(v)) => {
+                    let bytes_per_row = vectors.dim.max(1) as usize;
+                    v.len() / bytes_per_row
+                }
+                Some(VectorData::VectorArray(v)) => v.data.len(),
+                None => 0,
+            },
+            Some(Field::StructArrays(v)) => struct_array_len(v),
+            None => 0,
+        })
+        .unwrap_or(0)
 }
 
 impl From<Field> for ValueVec {
@@ -289,8 +409,10 @@ impl From<Field> for ValueVec {
                     ScalarData::StringData(v) => Self::String(v.data),
                     ScalarData::JsonData(v) => Self::Json(v.data),
                     ScalarData::ArrayData(v) => Self::Array(v.data),
-                    ScalarData::BytesData(_) => unimplemented!(), // Self::Bytes(v.data),
-                    _ => unimplemented!(),
+                    ScalarData::BytesData(_) => Self::None,
+                    ScalarData::GeometryData(v) => Self::Geometry(v.data),
+                    ScalarData::TimestamptzData(v) => Self::Timestamptz(v.data),
+                    ScalarData::GeometryWktData(v) => Self::GeometryWkt(v.data),
                 },
                 None => Self::None,
             },
@@ -301,13 +423,13 @@ impl From<Field> for ValueVec {
                     VectorData::BinaryVector(v) => Self::Binary(v),
                     VectorData::Bfloat16Vector(v) => Self::Binary(v),
                     VectorData::Float16Vector(v) => Self::Binary(v),
-                    VectorData::SparseFloatVector(_) => Self::Float(Vec::new()),
-                    VectorData::Int8Vector(_) => unimplemented!(),
-                    VectorData::VectorArray(_) => unimplemented!(),
+                    VectorData::SparseFloatVector(v) => Self::SparseFloat(v),
+                    VectorData::Int8Vector(v) => Self::Binary(v),
+                    VectorData::VectorArray(v) => Self::VectorArray(v),
                 },
                 None => Self::None,
             },
-            Field::StructArrays(_) => unimplemented!(),
+            Field::StructArrays(v) => Self::StructArray(v),
         }
     }
 }

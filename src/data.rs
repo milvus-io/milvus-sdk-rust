@@ -93,7 +93,10 @@ impl FieldColumn {
                 DataType::Int32 => Value::Int32(*v.get(idx)?),
                 _ => unreachable!(),
             },
-            ValueVec::Long(v) => Value::Long(*v.get(idx)?),
+            ValueVec::Long(v) => match self.dtype {
+                DataType::Timestamptz => Value::Timestamptz(*v.get(idx)?),
+                _ => Value::Long(*v.get(idx)?),
+            },
             ValueVec::Float(v) => match self.dtype {
                 DataType::Float => Value::Float(*v.get(idx)?),
                 DataType::FloatVector => {
@@ -103,13 +106,52 @@ impl FieldColumn {
                 _ => unreachable!(),
             },
             ValueVec::Double(v) => Value::Double(*v.get(idx)?),
-            ValueVec::Binary(v) => {
-                let dim = (self.dim / 8) as usize;
-                Value::Binary(Cow::Borrowed(&v[idx * dim..idx * dim + dim]))
-            }
+            ValueVec::Binary(v) => match self.dtype {
+                DataType::BinaryVector => {
+                    let dim = (self.dim / 8) as usize;
+                    Value::Binary(Cow::Borrowed(&v[idx * dim..idx * dim + dim]))
+                }
+                DataType::Int8Vector => {
+                    let dim = self.dim as usize;
+                    Value::Int8Vector(Cow::Borrowed(&v[idx * dim..idx * dim + dim]))
+                }
+                DataType::Float16Vector => {
+                    let dim = (self.dim * 2) as usize;
+                    Value::Float16Vector(Cow::Borrowed(&v[idx * dim..idx * dim + dim]))
+                }
+                DataType::BFloat16Vector => {
+                    let dim = (self.dim * 2) as usize;
+                    Value::BFloat16Vector(Cow::Borrowed(&v[idx * dim..idx * dim + dim]))
+                }
+                _ => unreachable!(),
+            },
             ValueVec::String(v) => Value::String(Cow::Borrowed(v.get(idx)?.as_ref())),
             ValueVec::Json(v) => Value::Json(Cow::Borrowed(v.get(idx)?.as_ref())),
             ValueVec::Array(v) => Value::Array(Cow::Borrowed(v.get(idx)?)),
+            ValueVec::Geometry(v) => Value::Geometry(Cow::Borrowed(v.get(idx)?.as_ref())),
+            ValueVec::GeometryWkt(v) => Value::GeometryWkt(Cow::Borrowed(v.get(idx)?.as_ref())),
+            ValueVec::Timestamptz(v) => Value::Timestamptz(*v.get(idx)?),
+            // Known proto-level limitation: aggregate field payloads do not expose
+            // row-level element access, so callers can only retrieve the whole
+            // aggregate after a bounds check against the batch's row count.
+            ValueVec::SparseFloat(v) => {
+                if idx >= v.contents.len() {
+                    return None;
+                }
+                Value::SparseFloat(Cow::Borrowed(v))
+            }
+            ValueVec::StructArray(v) => {
+                if idx >= struct_array_row_count(v) {
+                    return None;
+                }
+                Value::StructArray(Cow::Borrowed(v))
+            }
+            ValueVec::VectorArray(v) => {
+                if idx >= v.data.len() {
+                    return None;
+                }
+                Value::VectorArray(Cow::Borrowed(v))
+            }
         })
     }
 
@@ -121,41 +163,101 @@ impl FieldColumn {
             (ValueVec::Int(vec), Value::Int16(i)) => vec.push(i as _),
             (ValueVec::Int(vec), Value::Int32(i)) => vec.push(i),
             (ValueVec::Long(vec), Value::Long(i)) => vec.push(i),
+            (ValueVec::Long(vec), Value::Timestamptz(i)) => vec.push(i),
+            (ValueVec::Timestamptz(vec), Value::Timestamptz(i)) => vec.push(i),
             (ValueVec::Float(vec), Value::Float(i)) => vec.push(i),
             (ValueVec::Double(vec), Value::Double(i)) => vec.push(i),
             (ValueVec::String(vec), Value::String(i)) => vec.push(i.to_string()),
-            (ValueVec::Binary(vec), Value::Binary(i)) => vec.extend_from_slice(i.as_ref()),
+            (ValueVec::Binary(vec), Value::Binary(i))
+            | (ValueVec::Binary(vec), Value::Int8Vector(i))
+            | (ValueVec::Binary(vec), Value::Float16Vector(i))
+            | (ValueVec::Binary(vec), Value::BFloat16Vector(i)) => vec.extend_from_slice(i.as_ref()),
             (ValueVec::Float(vec), Value::FloatArray(i)) => vec.extend_from_slice(i.as_ref()),
+            (ValueVec::Geometry(vec), Value::Geometry(i)) => vec.push(i.into_owned()),
+            (ValueVec::GeometryWkt(vec), Value::GeometryWkt(i)) => vec.push(i.to_string()),
+            // Complex aggregate types: these represent the entire field data and are
+            // copied as a whole rather than pushed element by element.
+            (ValueVec::SparseFloat(dst), Value::SparseFloat(src)) => *dst = src.into_owned(),
+            (ValueVec::StructArray(dst), Value::StructArray(src)) => *dst = src.into_owned(),
+            (ValueVec::VectorArray(dst), Value::VectorArray(src)) => *dst = src.into_owned(),
             _ => panic!("column type mismatch"),
         }
     }
 
     #[inline]
     pub fn len(&self) -> usize {
-        self.value.len() / self.dim as usize
+        let dim = self.dim as usize;
+        if dim == 0 {
+            return self.value.len();
+        }
+        match self.dtype {
+            // Binary vectors: dim bits per vector = dim/8 bytes per vector
+            DataType::BinaryVector => self.value.len() / (dim / 8).max(1),
+            // Float16/BFloat16 vectors: 2 bytes per dimension
+            DataType::Float16Vector | DataType::BFloat16Vector => self.value.len() / (dim * 2),
+            // Int8 vectors: 1 byte per dimension
+            DataType::Int8Vector => self.value.len() / dim,
+            // Float vectors: 1 float (in the vec) per dimension
+            // Scalar types: 1 element per row
+            _ => self.value.len() / dim,
+        }
     }
 
     pub fn copy_with_metadata(&self) -> Self {
+        // Preserve the actual ValueVec variant rather than recreating from dtype,
+        // because some types (e.g., Geometry) can have multiple wire representations
+        // (WKB vs WKT) that both map to the same DataType.
+        let empty_value = match &self.value {
+            ValueVec::None => ValueVec::None,
+            ValueVec::Bool(_) => ValueVec::Bool(Vec::new()),
+            ValueVec::Int(_) => ValueVec::Int(Vec::new()),
+            ValueVec::Long(_) => ValueVec::Long(Vec::new()),
+            ValueVec::Float(_) => ValueVec::Float(Vec::new()),
+            ValueVec::Double(_) => ValueVec::Double(Vec::new()),
+            ValueVec::String(_) => ValueVec::String(Vec::new()),
+            ValueVec::Json(_) => ValueVec::Json(Vec::new()),
+            ValueVec::Binary(_) => ValueVec::Binary(Vec::new()),
+            ValueVec::Array(_) => ValueVec::Array(Vec::new()),
+            ValueVec::Geometry(_) => ValueVec::Geometry(Vec::new()),
+            ValueVec::GeometryWkt(_) => ValueVec::GeometryWkt(Vec::new()),
+            ValueVec::Timestamptz(_) => ValueVec::Timestamptz(Vec::new()),
+            ValueVec::SparseFloat(_) => ValueVec::SparseFloat(
+                crate::proto::schema::SparseFloatArray {
+                    contents: Vec::new(),
+                    dim: 0,
+                },
+            ),
+            ValueVec::StructArray(_) => ValueVec::StructArray(
+                crate::proto::schema::StructArrayField {
+                    fields: Vec::new(),
+                },
+            ),
+            ValueVec::VectorArray(_) => ValueVec::VectorArray(
+                crate::proto::schema::VectorArray {
+                    dim: 0,
+                    data: Vec::new(),
+                    element_type: 0,
+                },
+            ),
+        };
         Self {
             dim: self.dim,
             dtype: self.dtype,
             max_length: self.max_length,
             name: self.name.clone(),
-            value: match &self.value {
-                ValueVec::None => ValueVec::None,
-                ValueVec::Bool(_) => ValueVec::Bool(Vec::new()),
-                ValueVec::Int(_) => ValueVec::Int(Vec::new()),
-                ValueVec::Long(_) => ValueVec::Long(Vec::new()),
-                ValueVec::Float(_) => ValueVec::Float(Vec::new()),
-                ValueVec::Double(_) => ValueVec::Double(Vec::new()),
-                ValueVec::String(_) => ValueVec::String(Vec::new()),
-                ValueVec::Json(_) => ValueVec::Json(Vec::new()),
-                ValueVec::Binary(_) => ValueVec::Binary(Vec::new()),
-                ValueVec::Array(_) => ValueVec::Array(Vec::new()),
-            },
+            value: empty_value,
             is_dynamic: self.is_dynamic,
         }
     }
+}
+
+fn struct_array_row_count(v: &crate::proto::schema::StructArrayField) -> usize {
+    v.fields
+        .first()
+        .cloned()
+        .map(FieldColumn::from)
+        .map(|column| column.len())
+        .unwrap_or(0)
 }
 
 impl From<FieldColumn> for schema::FieldData {
@@ -173,9 +275,16 @@ impl From<FieldColumn> for schema::FieldData {
                 ValueVec::Int(v) => Field::Scalars(ScalarField {
                     data: Some(ScalarData::IntData(schema::IntArray { data: v })),
                 }),
-                ValueVec::Long(v) => Field::Scalars(ScalarField {
-                    data: Some(ScalarData::LongData(schema::LongArray { data: v })),
-                }),
+                ValueVec::Long(v) => match this.dtype {
+                    DataType::Timestamptz => Field::Scalars(ScalarField {
+                        data: Some(ScalarData::TimestamptzData(schema::TimestamptzArray {
+                            data: v,
+                        })),
+                    }),
+                    _ => Field::Scalars(ScalarField {
+                        data: Some(ScalarData::LongData(schema::LongArray { data: v })),
+                    }),
+                },
                 ValueVec::Float(v) => match this.dtype {
                     DataType::Float => Field::Scalars(ScalarField {
                         data: Some(ScalarData::FloatData(schema::FloatArray { data: v })),
@@ -184,7 +293,9 @@ impl From<FieldColumn> for schema::FieldData {
                         data: Some(VectorData::FloatVector(schema::FloatArray { data: v })),
                         dim: this.dim,
                     }),
-                    _ => unimplemented!(),
+                    _ => Field::Scalars(ScalarField {
+                        data: Some(ScalarData::FloatData(schema::FloatArray { data: v })),
+                    }),
                 },
                 ValueVec::Double(v) => Field::Scalars(ScalarField {
                     data: Some(ScalarData::DoubleData(schema::DoubleArray { data: v })),
@@ -201,8 +312,44 @@ impl From<FieldColumn> for schema::FieldData {
                         element_type: this.dtype as _,
                     })),
                 }),
-                ValueVec::Binary(v) => Field::Vectors(VectorField {
-                    data: Some(VectorData::BinaryVector(v)),
+                ValueVec::Binary(v) => match this.dtype {
+                    DataType::Int8Vector => Field::Vectors(VectorField {
+                        data: Some(VectorData::Int8Vector(v)),
+                        dim: this.dim,
+                    }),
+                    DataType::Float16Vector => Field::Vectors(VectorField {
+                        data: Some(VectorData::Float16Vector(v)),
+                        dim: this.dim,
+                    }),
+                    DataType::BFloat16Vector => Field::Vectors(VectorField {
+                        data: Some(VectorData::Bfloat16Vector(v)),
+                        dim: this.dim,
+                    }),
+                    _ => Field::Vectors(VectorField {
+                        data: Some(VectorData::BinaryVector(v)),
+                        dim: this.dim,
+                    }),
+                },
+                ValueVec::Geometry(v) => Field::Scalars(ScalarField {
+                    data: Some(ScalarData::GeometryData(schema::GeometryArray { data: v })),
+                }),
+                ValueVec::GeometryWkt(v) => Field::Scalars(ScalarField {
+                    data: Some(ScalarData::GeometryWktData(schema::GeometryWktArray {
+                        data: v,
+                    })),
+                }),
+                ValueVec::Timestamptz(v) => Field::Scalars(ScalarField {
+                    data: Some(ScalarData::TimestamptzData(schema::TimestamptzArray {
+                        data: v,
+                    })),
+                }),
+                ValueVec::SparseFloat(v) => Field::Vectors(VectorField {
+                    data: Some(VectorData::SparseFloatVector(v)),
+                    dim: this.dim,
+                }),
+                ValueVec::StructArray(v) => Field::StructArrays(v),
+                ValueVec::VectorArray(v) => Field::Vectors(VectorField {
+                    data: Some(VectorData::VectorArray(v)),
                     dim: this.dim,
                 }),
             }),
@@ -261,6 +408,7 @@ fn get_dim_max_length(field: &Field) -> (Option<i64>, Option<i32>) {
     let dim = match field {
         Field::Scalars(ScalarField { data: Some(_) }) => 1i64,
         Field::Vectors(VectorField { dim, .. }) => *dim,
+        Field::StructArrays(_) => 1i64,
         _ => 0i64,
     };
 

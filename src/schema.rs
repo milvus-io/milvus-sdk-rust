@@ -14,6 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use crate::error;
 use crate::error::Result;
 use crate::proto::schema::FieldState;
@@ -155,10 +157,12 @@ pub struct FieldSchema {
     pub chunk_size: usize,
     pub dim: i64,        // only for BinaryVector and FloatVector
     pub max_length: i32, // only for VarChar
+    pub nullable: bool,
+    pub extra_type_params: HashMap<String, String>,
 }
 
 impl FieldSchema {
-    pub const fn const_default() -> Self {
+    pub fn const_default() -> Self {
         Self {
             name: String::new(),
             description: String::new(),
@@ -168,7 +172,21 @@ impl FieldSchema {
             chunk_size: 0,
             dim: 0,
             max_length: 0,
+            nullable: false,
+            extra_type_params: HashMap::new(),
         }
+    }
+
+    /// Mark this field as nullable. Required for fields added via schema evolution.
+    pub fn set_nullable(mut self, nullable: bool) -> Self {
+        self.nullable = nullable;
+        self
+    }
+
+    /// Add an extra type parameter (e.g., enable_analyzer, analyzer_params).
+    pub fn add_type_param(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.extra_type_params.insert(key.into(), value.into());
+        self
     }
 }
 
@@ -180,12 +198,24 @@ impl Default for FieldSchema {
 
 impl From<schema::FieldSchema> for FieldSchema {
     fn from(fld: schema::FieldSchema) -> Self {
+        let max_length = fld
+            .type_params
+            .iter()
+            .find(|k| k.key == "max_length")
+            .and_then(|x| x.value.parse().ok())
+            .unwrap_or(0);
         let dim: i64 = fld
             .type_params
             .iter()
             .find(|k| &k.key == "dim")
             .and_then(|x| x.value.parse().ok())
             .unwrap_or(1);
+        let extra_type_params = fld
+            .type_params
+            .iter()
+            .filter(|param| param.key != "dim" && param.key != "max_length")
+            .map(|param| (param.key.clone(), param.value.clone()))
+            .collect();
 
         let dtype = DataType::try_from(fld.data_type).unwrap_or(DataType::None);
 
@@ -195,13 +225,15 @@ impl From<schema::FieldSchema> for FieldSchema {
             dtype,
             is_primary: fld.is_primary_key,
             auto_id: fld.auto_id,
-            max_length: 0,
+            max_length,
             chunk_size: (dim
                 * match dtype {
                     DataType::BinaryVector => dim / 8,
                     _ => dim,
                 }) as _,
             dim,
+            nullable: fld.nullable,
+            extra_type_params,
         }
     }
 }
@@ -217,6 +249,8 @@ impl FieldSchema {
             chunk_size: 1,
             dim: 1,
             max_length: 0,
+            nullable: false,
+            extra_type_params: HashMap::new(),
         }
     }
 
@@ -230,6 +264,8 @@ impl FieldSchema {
             chunk_size: 1,
             dim: 1,
             max_length: 0,
+            nullable: false,
+            extra_type_params: HashMap::new(),
         }
     }
 
@@ -243,6 +279,8 @@ impl FieldSchema {
             chunk_size: 1,
             dim: 1,
             max_length: 0,
+            nullable: false,
+            extra_type_params: HashMap::new(),
         }
     }
 
@@ -256,6 +294,8 @@ impl FieldSchema {
             chunk_size: 1,
             dim: 1,
             max_length: 0,
+            nullable: false,
+            extra_type_params: HashMap::new(),
         }
     }
 
@@ -269,6 +309,8 @@ impl FieldSchema {
             chunk_size: 1,
             dim: 1,
             max_length: 0,
+            nullable: false,
+            extra_type_params: HashMap::new(),
         }
     }
 
@@ -282,6 +324,8 @@ impl FieldSchema {
             chunk_size: 1,
             dim: 1,
             max_length: 0,
+            nullable: false,
+            extra_type_params: HashMap::new(),
         }
     }
 
@@ -300,6 +344,8 @@ impl FieldSchema {
             max_length,
             chunk_size: 1,
             dim: 1,
+            nullable: false,
+            extra_type_params: HashMap::new(),
         }
     }
 
@@ -313,6 +359,8 @@ impl FieldSchema {
             chunk_size: 1,
             dim: 1,
             max_length: 0,
+            nullable: false,
+            extra_type_params: HashMap::new(),
         }
     }
 
@@ -326,6 +374,8 @@ impl FieldSchema {
             chunk_size: 1,
             dim: 1,
             max_length: 0,
+            nullable: false,
+            extra_type_params: HashMap::new(),
         }
     }
 
@@ -339,6 +389,8 @@ impl FieldSchema {
             chunk_size: 1,
             dim: 1,
             max_length: 0,
+            nullable: false,
+            extra_type_params: HashMap::new(),
         }
     }
 
@@ -356,6 +408,8 @@ impl FieldSchema {
             auto_id: false,
             chunk_size: 1,
             dim: 1,
+            nullable: false,
+            extra_type_params: HashMap::new(),
         }
     }
 
@@ -373,6 +427,8 @@ impl FieldSchema {
             is_primary: false,
             auto_id: false,
             max_length: 0,
+            nullable: false,
+            extra_type_params: HashMap::new(),
         }
     }
 
@@ -390,14 +446,137 @@ impl FieldSchema {
             is_primary: false,
             auto_id: false,
             max_length: 0,
+            nullable: false,
+            extra_type_params: HashMap::new(),
+        }
+    }
+
+    pub fn new_float16_vector(name: &str, description: &str, dim: i64) -> Self {
+        if dim <= 0 {
+            panic!("dim should be positive");
+        }
+
+        Self {
+            name: name.to_owned(),
+            description: description.to_owned(),
+            dtype: DataType::Float16Vector,
+            chunk_size: (dim * 2) as usize,
+            dim,
+            is_primary: false,
+            auto_id: false,
+            max_length: 0,
+            nullable: false,
+            extra_type_params: HashMap::new(),
+        }
+    }
+
+    pub fn new_bfloat16_vector(name: &str, description: &str, dim: i64) -> Self {
+        if dim <= 0 {
+            panic!("dim should be positive");
+        }
+
+        Self {
+            name: name.to_owned(),
+            description: description.to_owned(),
+            dtype: DataType::BFloat16Vector,
+            chunk_size: (dim * 2) as usize,
+            dim,
+            is_primary: false,
+            auto_id: false,
+            max_length: 0,
+            nullable: false,
+            extra_type_params: HashMap::new(),
+        }
+    }
+
+    pub fn new_sparse_float_vector(name: &str, description: &str) -> Self {
+        Self {
+            name: name.to_owned(),
+            description: description.to_owned(),
+            dtype: DataType::SparseFloatVector,
+            is_primary: false,
+            auto_id: false,
+            chunk_size: 0,
+            dim: 0,
+            max_length: 0,
+            nullable: false,
+            extra_type_params: HashMap::new(),
+        }
+    }
+
+    pub fn new_int8_vector(name: &str, description: &str, dim: i64) -> Self {
+        if dim <= 0 {
+            panic!("dim should be positive");
+        }
+
+        Self {
+            name: name.to_owned(),
+            description: description.to_owned(),
+            dtype: DataType::Int8Vector,
+            chunk_size: dim as usize,
+            dim,
+            is_primary: false,
+            auto_id: false,
+            max_length: 0,
+            nullable: false,
+            extra_type_params: HashMap::new(),
+        }
+    }
+
+    pub fn new_geometry(name: &str, description: &str) -> Self {
+        Self {
+            name: name.to_owned(),
+            description: description.to_owned(),
+            dtype: DataType::Geometry,
+            is_primary: false,
+            auto_id: false,
+            chunk_size: 0,
+            dim: 1,
+            max_length: 0,
+            nullable: false,
+            extra_type_params: HashMap::new(),
+        }
+    }
+
+    pub fn new_text(name: &str, description: &str) -> Self {
+        Self {
+            name: name.to_owned(),
+            description: description.to_owned(),
+            dtype: DataType::Text,
+            is_primary: false,
+            auto_id: false,
+            chunk_size: 0,
+            dim: 1,
+            max_length: 0,
+            nullable: false,
+            extra_type_params: HashMap::new(),
+        }
+    }
+
+    pub fn new_timestamptz(name: &str, description: &str) -> Self {
+        Self {
+            name: name.to_owned(),
+            description: description.to_owned(),
+            dtype: DataType::Timestamptz,
+            is_primary: false,
+            auto_id: false,
+            chunk_size: 1,
+            dim: 1,
+            max_length: 0,
+            nullable: false,
+            extra_type_params: HashMap::new(),
         }
     }
 }
 
 impl From<FieldSchema> for schema::FieldSchema {
     fn from(fld: FieldSchema) -> schema::FieldSchema {
-        let params = match fld.dtype {
-            DataType::BinaryVector | DataType::FloatVector => vec![KeyValuePair {
+        let mut params = match fld.dtype {
+            DataType::BinaryVector
+            | DataType::FloatVector
+            | DataType::Float16Vector
+            | DataType::BFloat16Vector
+            | DataType::Int8Vector => vec![KeyValuePair {
                 key: "dim".to_string(),
                 value: fld.dim.to_string(),
             }],
@@ -407,6 +586,13 @@ impl From<FieldSchema> for schema::FieldSchema {
             }],
             _ => Vec::new(),
         };
+        // Append extra type params (e.g., enable_analyzer, analyzer_params)
+        for (k, v) in fld.extra_type_params {
+            params.push(KeyValuePair {
+                key: k,
+                value: v,
+            });
+        }
 
         schema::FieldSchema {
             field_id: 0,
@@ -424,7 +610,7 @@ impl From<FieldSchema> for schema::FieldSchema {
             is_partition_key: false,
             is_clustering_key: false,
             is_function_output: false,
-            nullable: false,
+            nullable: fld.nullable,
         }
     }
 }
@@ -435,6 +621,7 @@ pub struct CollectionSchema {
     pub(crate) description: String,
     pub(crate) fields: Vec<FieldSchema>,
     pub(crate) enable_dynamic_field: bool,
+    pub(crate) functions: Vec<schema::FunctionSchema>,
 }
 
 impl CollectionSchema {
@@ -468,7 +655,15 @@ impl CollectionSchema {
     pub fn is_valid_vector_field(&self, field_name: &str) -> Result<()> {
         for f in &self.fields {
             if f.name == field_name {
-                if f.dtype == DataType::BinaryVector || f.dtype == DataType::FloatVector {
+                if matches!(
+                    f.dtype,
+                    DataType::BinaryVector
+                        | DataType::FloatVector
+                        | DataType::Float16Vector
+                        | DataType::BFloat16Vector
+                        | DataType::SparseFloatVector
+                        | DataType::Int8Vector
+                ) {
                     return Ok(());
                 } else {
                     return Err(error::Error::from(Error::NotVectorField(
@@ -483,16 +678,35 @@ impl CollectionSchema {
 
 impl From<CollectionSchema> for schema::CollectionSchema {
     fn from(col: CollectionSchema) -> Self {
+        let auto_id = col.auto_id();
+        // Collect function output field names before moving fields
+        let output_names: std::collections::HashSet<String> = col
+            .functions
+            .iter()
+            .flat_map(|f| f.output_field_names.iter().cloned())
+            .collect();
+        let mut proto_fields: Vec<schema::FieldSchema> =
+            col.fields.into_iter().map(Into::into).collect();
+        // Mark function output fields
+        for field in proto_fields.iter_mut() {
+            if output_names.contains(&field.name) {
+                field.is_function_output = true;
+            }
+        }
+
         schema::CollectionSchema {
-            name: col.name.to_string(),
-            auto_id: col.auto_id(),
+            name: col.name,
+            #[allow(deprecated)]
+            auto_id,
             description: col.description,
-            fields: col.fields.into_iter().map(Into::into).collect(),
+            fields: proto_fields,
             enable_dynamic_field: col.enable_dynamic_field,
             properties: Vec::new(),
-            functions: Vec::new(),
+            functions: col.functions,
             db_name: "".to_string(),
             struct_array_fields: Vec::new(),
+            version: 0,
+            enable_namespace: false,
         }
     }
 }
@@ -504,6 +718,7 @@ impl From<schema::CollectionSchema> for CollectionSchema {
             name: v.name,
             description: v.description,
             enable_dynamic_field: v.enable_dynamic_field,
+            functions: v.functions,
         }
     }
 }
@@ -514,6 +729,7 @@ pub struct CollectionSchemaBuilder {
     description: String,
     inner: Vec<FieldSchema>,
     enable_dynamic_field: bool,
+    functions: Vec<schema::FunctionSchema>,
 }
 
 impl CollectionSchemaBuilder {
@@ -523,11 +739,19 @@ impl CollectionSchemaBuilder {
             description: description.to_owned(),
             inner: Vec::new(),
             enable_dynamic_field: false,
+            functions: Vec::new(),
         }
     }
 
     pub fn add_field(&mut self, schema: FieldSchema) -> &mut Self {
         self.inner.push(schema);
+        self
+    }
+
+    /// Add a server-side function (BM25, TextEmbedding, Rerank) to the schema.
+    /// Functions must be defined at collection creation time.
+    pub fn add_function(&mut self, function: schema::FunctionSchema) -> &mut Self {
+        self.functions.push(function);
         self
     }
 
@@ -604,6 +828,7 @@ impl CollectionSchemaBuilder {
             name: this.name,
             description: this.description,
             enable_dynamic_field: self.enable_dynamic_field,
+            functions: this.functions,
         })
     }
 }

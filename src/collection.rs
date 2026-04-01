@@ -728,6 +728,8 @@ impl Client {
                 partition_id: 0,
                 segment_ids: vec![],
                 channel: "".to_string(),
+                l0_compaction: false,
+                target_size: 0,
             })
             .await?
             .into_inner();
@@ -745,6 +747,192 @@ impl Client {
         status_to_result(&resp.status)?;
         Ok(resp.into())
     }
+
+    /// Truncate a collection (remove all data without dropping the collection).
+    /// Requires Milvus 2.6+.
+    pub async fn truncate_collection<S>(&self, collection_name: S) -> Result<()>
+    where
+        S: Into<String>,
+    {
+        let resp = self
+            .client
+            .clone()
+            .truncate_collection(proto::milvus::TruncateCollectionRequest {
+                base: Some(MsgBase::new(MsgType::TruncateCollection)),
+                db_name: "".to_string(),
+                collection_name: collection_name.into(),
+            })
+            .await?
+            .into_inner();
+        status_to_result(&resp.status)?;
+        Ok(())
+    }
+
+    /// Describe multiple collections in a single call.
+    /// Requires Milvus 2.6+.
+    pub async fn batch_describe_collections<S>(
+        &self,
+        collection_names: Vec<S>,
+    ) -> Result<Vec<Collection>>
+    where
+        S: Into<String>,
+    {
+        let resp = self
+            .client
+            .clone()
+            .batch_describe_collection(proto::milvus::BatchDescribeCollectionRequest {
+                db_name: "".to_string(),
+                collection_name: collection_names.into_iter().map(Into::into).collect(),
+                collection_id: vec![],
+            })
+            .await?
+            .into_inner();
+        status_to_result(&resp.status)?;
+
+        Ok(resp
+            .responses
+            .into_iter()
+            .map(|r| r.into())
+            .collect())
+    }
+
+    /// Add a field to an existing collection (schema evolution).
+    /// The new field must be nullable. Requires Milvus 2.6+.
+    pub async fn add_collection_field<S>(
+        &self,
+        collection_name: S,
+        field: crate::schema::FieldSchema,
+    ) -> Result<()>
+    where
+        S: Into<String>,
+    {
+        let proto_field: crate::proto::schema::FieldSchema = field.into();
+        let mut buf = BytesMut::new();
+        proto_field.encode(&mut buf)?;
+
+        let resp = self
+            .client
+            .clone()
+            .add_collection_field(proto::milvus::AddCollectionFieldRequest {
+                base: Some(MsgBase::new(MsgType::AddCollectionField)),
+                db_name: "".to_string(),
+                collection_name: collection_name.into(),
+                collection_id: 0,
+                schema: buf.to_vec(),
+            })
+            .await?
+            .into_inner();
+        status_to_result(&Some(resp))?;
+        Ok(())
+    }
+
+    /// Add a function to an existing collection.
+    /// Requires Milvus 2.6+.
+    pub async fn add_collection_function<S>(
+        &self,
+        collection_name: S,
+        function: proto::schema::FunctionSchema,
+    ) -> Result<()>
+    where
+        S: Into<String>,
+    {
+        let resp = self
+            .client
+            .clone()
+            .add_collection_function(proto::milvus::AddCollectionFunctionRequest {
+                base: Some(MsgBase::new(MsgType::AddCollectionFunction)),
+                db_name: "".to_string(),
+                collection_name: collection_name.into(),
+                collection_id: 0,
+                function_schema: Some(function),
+            })
+            .await?
+            .into_inner();
+        status_to_result(&Some(resp))?;
+        Ok(())
+    }
+
+    /// Alter a function on an existing collection.
+    /// Requires Milvus 2.6+.
+    pub async fn alter_collection_function<S>(
+        &self,
+        collection_name: S,
+        function_name: S,
+        function: proto::schema::FunctionSchema,
+    ) -> Result<()>
+    where
+        S: Into<String>,
+    {
+        let resp = self
+            .client
+            .clone()
+            .alter_collection_function(proto::milvus::AlterCollectionFunctionRequest {
+                base: Some(MsgBase::new(MsgType::AlterCollectionFunction)),
+                db_name: "".to_string(),
+                collection_name: collection_name.into(),
+                collection_id: 0,
+                function_name: function_name.into(),
+                function_schema: Some(function),
+            })
+            .await?
+            .into_inner();
+        status_to_result(&Some(resp))?;
+        Ok(())
+    }
+
+    /// Drop a function from a collection.
+    /// Requires Milvus 2.6+.
+    pub async fn drop_collection_function<S>(
+        &self,
+        collection_name: S,
+        function_name: S,
+    ) -> Result<()>
+    where
+        S: Into<String>,
+    {
+        let resp = self
+            .client
+            .clone()
+            .drop_collection_function(proto::milvus::DropCollectionFunctionRequest {
+                base: Some(MsgBase::new(MsgType::DropCollectionFunction)),
+                db_name: "".to_string(),
+                collection_name: collection_name.into(),
+                collection_id: 0,
+                function_name: function_name.into(),
+            })
+            .await?
+            .into_inner();
+        status_to_result(&Some(resp))?;
+        Ok(())
+    }
+
+    /// Test text analyzers. Returns tokenized results.
+    /// Requires Milvus 2.6+.
+    pub async fn run_analyzer(
+        &self,
+        texts: Vec<String>,
+        analyzer_params: &str,
+    ) -> Result<Vec<proto::milvus::AnalyzerResult>>
+    {
+        let resp = self
+            .client
+            .clone()
+            .run_analyzer(proto::milvus::RunAnalyzerRequest {
+                base: Some(MsgBase::new(MsgType::RunAnalyzer)),
+                analyzer_params: analyzer_params.to_string(),
+                placeholder: texts.into_iter().map(|t| t.into_bytes()).collect(),
+                with_detail: true,
+                with_hash: false,
+                db_name: "".to_string(),
+                collection_name: "".to_string(),
+                field_name: "".to_string(),
+                analyzer_names: vec![],
+            })
+            .await?
+            .into_inner();
+        status_to_result(&resp.status)?;
+        Ok(resp.results)
+    }
 }
 
 pub type ParamValue = serde_json::Value;
@@ -757,6 +945,8 @@ pub struct SearchResult<'a> {
     pub id: Vec<Value<'a>>,
     pub field: Vec<FieldColumn>,
     pub score: Vec<f32>,
+    /// Highlight results for full-text search (Milvus 2.6+)
+    pub highlight_results: Vec<crate::proto::common::HighlightResult>,
 }
 
 pub struct IndexProgress {

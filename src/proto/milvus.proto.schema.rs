@@ -99,6 +99,15 @@ pub struct CollectionSchema {
     pub db_name: ::prost::alloc::string::String,
     #[prost(message, repeated, tag = "9")]
     pub struct_array_fields: ::prost::alloc::vec::Vec<StructArrayFieldSchema>,
+    /// The version of current collection schema updates, increment every time the schema content is updating,
+    #[prost(int32, tag = "10")]
+    pub version: i32,
+    /// 0 when the collection is created or the collection schema is updated before 2.6.5.
+    /// the name dbName and description take no effect to it.
+    ///
+    /// 11-14 are occupied on master branch
+    #[prost(bool, tag = "15")]
+    pub enable_namespace: bool,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct StructArrayFieldSchema {
@@ -110,6 +119,8 @@ pub struct StructArrayFieldSchema {
     pub description: ::prost::alloc::string::String,
     #[prost(message, repeated, tag = "4")]
     pub fields: ::prost::alloc::vec::Vec<FieldSchema>,
+    #[prost(message, repeated, tag = "5")]
+    pub type_params: ::prost::alloc::vec::Vec<super::common::KeyValuePair>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct BoolArray {
@@ -367,6 +378,8 @@ pub struct SearchResultData {
     pub recalls: ::prost::alloc::vec::Vec<f32>,
     #[prost(string, tag = "13")]
     pub primary_field_name: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "14")]
+    pub highlight_results: ::prost::alloc::vec::Vec<super::common::HighlightResult>,
 }
 /// vector field clustering info
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -469,7 +482,9 @@ pub enum DataType {
     SparseFloatVector = 104,
     Int8Vector = 105,
     ArrayOfVector = 106,
+    /// internal types, not used in user interface
     ArrayOfStruct = 200,
+    Struct = 201,
 }
 impl DataType {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -501,6 +516,7 @@ impl DataType {
             Self::Int8Vector => "Int8Vector",
             Self::ArrayOfVector => "ArrayOfVector",
             Self::ArrayOfStruct => "ArrayOfStruct",
+            Self::Struct => "Struct",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -529,6 +545,7 @@ impl DataType {
             "Int8Vector" => Some(Self::Int8Vector),
             "ArrayOfVector" => Some(Self::ArrayOfVector),
             "ArrayOfStruct" => Some(Self::ArrayOfStruct),
+            "Struct" => Some(Self::Struct),
             _ => None,
         }
     }
