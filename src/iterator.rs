@@ -141,8 +141,8 @@ impl QueryIteratorOptions {
         self
     }
 
-    pub fn namespace(mut self, namespace: String) -> Self {
-        self.namespace = Some(namespace);
+    pub fn namespace(mut self, namespace: impl Into<String>) -> Self {
+        self.namespace = Some(namespace.into());
         self
     }
 
@@ -264,8 +264,8 @@ impl SearchIteratorOptions {
         self
     }
 
-    pub fn namespace(mut self, namespace: String) -> Self {
-        self.namespace = Some(namespace);
+    pub fn namespace(mut self, namespace: impl Into<String>) -> Self {
+        self.namespace = Some(namespace.into());
         self
     }
 

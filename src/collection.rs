@@ -789,11 +789,7 @@ impl Client {
             .into_inner();
         status_to_result(&resp.status)?;
 
-        Ok(resp
-            .responses
-            .into_iter()
-            .map(|r| r.into())
-            .collect())
+        Ok(resp.responses.into_iter().map(|r| r.into()).collect())
     }
 
     /// Add a field to an existing collection (schema evolution).
@@ -912,8 +908,7 @@ impl Client {
         &self,
         texts: Vec<String>,
         analyzer_params: &str,
-    ) -> Result<Vec<proto::milvus::AnalyzerResult>>
-    {
+    ) -> Result<Vec<proto::milvus::AnalyzerResult>> {
         let resp = self
             .client
             .clone()

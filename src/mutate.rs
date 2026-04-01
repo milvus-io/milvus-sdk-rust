@@ -33,18 +33,18 @@ impl InsertOptions {
         Self::default()
     }
 
-    pub fn with_partition_name(partition_name: String) -> Self {
+    pub fn with_partition_name(partition_name: impl Into<String>) -> Self {
         Self::default().partition_name(partition_name)
     }
 
-    pub fn partition_name(mut self, partition_name: String) -> Self {
-        self.partition_name = partition_name.to_owned();
+    pub fn partition_name(mut self, partition_name: impl Into<String>) -> Self {
+        self.partition_name = partition_name.into();
         self
     }
 
     /// Set namespace for multi-tenancy (Milvus 2.6+)
-    pub fn namespace(mut self, namespace: String) -> Self {
-        self.namespace = Some(namespace);
+    pub fn namespace(mut self, namespace: impl Into<String>) -> Self {
+        self.namespace = Some(namespace.into());
         self
     }
 }
@@ -71,14 +71,14 @@ impl UpsertOptions {
         Self::default()
     }
 
-    pub fn partition_name(mut self, partition_name: String) -> Self {
-        self.partition_name = partition_name;
+    pub fn partition_name(mut self, partition_name: impl Into<String>) -> Self {
+        self.partition_name = partition_name.into();
         self
     }
 
     /// Set namespace for multi-tenancy (Milvus 2.6+)
-    pub fn namespace(mut self, namespace: String) -> Self {
-        self.namespace = Some(namespace);
+    pub fn namespace(mut self, namespace: impl Into<String>) -> Self {
+        self.namespace = Some(namespace.into());
         self
     }
 
@@ -121,6 +121,12 @@ impl IntoUpsertOptions for Option<UpsertOptions> {
     }
 }
 
+impl IntoUpsertOptions for Option<InsertOptions> {
+    fn into_upsert_options(self) -> UpsertOptions {
+        self.unwrap_or_default().into()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct DeleteOptions {
     pub(crate) ids: ValueVec,
@@ -152,6 +158,25 @@ impl DeleteOptions {
     pub fn partition_name(mut self, partition_name: String) -> Self {
         self.partition_name = partition_name;
         self
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::{InsertOptions, IntoUpsertOptions};
+
+    #[test]
+    fn option_insert_options_convert_to_upsert_options() {
+        let options = Some(
+            InsertOptions::new()
+                .partition_name("p0")
+                .namespace("tenant-a"),
+        )
+        .into_upsert_options();
+
+        assert_eq!(options.partition_name, "p0");
+        assert_eq!(options.namespace.as_deref(), Some("tenant-a"));
+        assert!(!options.partial_update);
     }
 }
 

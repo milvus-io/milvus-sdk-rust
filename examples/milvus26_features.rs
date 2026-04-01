@@ -12,7 +12,6 @@
 ///
 /// Requires: Milvus 2.6+ running on localhost:19530.
 /// Start with: docker-compose up -d
-
 use milvus::client::Client;
 use milvus::data::FieldColumn;
 use milvus::error::Error;
@@ -62,9 +61,7 @@ async fn cosine_search_example(client: &Client) -> Result<(), Error> {
     let num = 500;
     let mut rng = rand::thread_rng();
     let embeddings: Vec<f32> = (0..num * DIM).map(|_| rng.gen_range(-1.0..1.0)).collect();
-    let categories: Vec<String> = (0..num)
-        .map(|i| format!("cat_{}", i % 5))
-        .collect();
+    let categories: Vec<String> = (0..num).map(|i| format!("cat_{}", i % 5)).collect();
 
     let embed_col = FieldColumn::new(schema.get_field("embedding").unwrap(), embeddings);
     let cat_col = FieldColumn::new(schema.get_field("category").unwrap(), categories);
@@ -307,16 +304,7 @@ async fn timestamptz_example(client: &Client) -> Result<(), Error> {
     // Timestamps in microseconds since epoch
     let timestamps: Vec<i64> = vec![1700000000_000_000, 1700000001_000_000, 1700000002_000_000];
 
-    // Use ValueVec::Timestamptz for correct wire type serialization
-    let ts_value = milvus::value::ValueVec::Timestamptz(timestamps);
-    let ts_col = FieldColumn {
-        name: "created_at".to_string(),
-        dtype: milvus::proto::schema::DataType::Timestamptz,
-        value: ts_value,
-        dim: 1,
-        max_length: 0,
-        is_dynamic: false,
-    };
+    let ts_col = FieldColumn::new(schema.get_field("created_at").unwrap(), timestamps);
 
     client
         .insert(
@@ -437,8 +425,8 @@ async fn bm25_function_example(client: &Client) -> Result<(), Error> {
         "Milvus supports hybrid search combining vectors and text".into(),
     ];
     let dense_vecs: Vec<f32> = vec![
-        0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7,
-        1.8, 1.9, 2.0,
+        0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8,
+        1.9, 2.0,
     ];
 
     client
@@ -460,9 +448,14 @@ async fn bm25_function_example(client: &Client) -> Result<(), Error> {
         "sparse_idx".to_owned(),
         IndexType::SparseInvertedIndex,
         MetricType::BM25,
-        HashMap::from([("bm25_k1".to_owned(), "1.2".to_owned()), ("bm25_b".to_owned(), "0.75".to_owned())]),
+        HashMap::from([
+            ("bm25_k1".to_owned(), "1.2".to_owned()),
+            ("bm25_b".to_owned(), "0.75".to_owned()),
+        ]),
     );
-    client.create_index(name, "sparse_vector", sparse_idx).await?;
+    client
+        .create_index(name, "sparse_vector", sparse_idx)
+        .await?;
 
     let dense_idx = IndexParams::new(
         "dense_idx".to_owned(),

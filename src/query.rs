@@ -529,7 +529,7 @@ impl QueryOptions {
     /// # Returns
     ///
     /// A new `QueryOptions` instance
-    pub fn with_namespace(namespace: String) -> Self {
+    pub fn with_namespace(namespace: impl Into<String>) -> Self {
         Self::default().namespace(namespace)
     }
 
@@ -584,8 +584,8 @@ impl QueryOptions {
     /// # Returns
     ///
     /// Self for method chaining
-    pub fn namespace(mut self, namespace: String) -> Self {
-        self.namespace = Some(namespace);
+    pub fn namespace(mut self, namespace: impl Into<String>) -> Self {
+        self.namespace = Some(namespace.into());
         self
     }
 
@@ -1130,8 +1130,8 @@ impl SearchOptions {
     }
 
     /// Set namespace for multi-tenancy (Milvus 2.6+)
-    pub fn namespace(mut self, namespace: String) -> Self {
-        self.namespace = Some(namespace);
+    pub fn namespace(mut self, namespace: impl Into<String>) -> Self {
+        self.namespace = Some(namespace.into());
         self
     }
 

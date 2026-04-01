@@ -131,14 +131,12 @@ impl FieldColumn {
             ValueVec::Geometry(v) => Value::Geometry(Cow::Borrowed(v.get(idx)?.as_ref())),
             ValueVec::GeometryWkt(v) => Value::GeometryWkt(Cow::Borrowed(v.get(idx)?.as_ref())),
             ValueVec::Timestamptz(v) => Value::Timestamptz(*v.get(idx)?),
-            // Known proto-level limitation: aggregate field payloads do not expose
-            // row-level element access, so callers can only retrieve the whole
-            // aggregate after a bounds check against the batch's row count.
             ValueVec::SparseFloat(v) => {
-                if idx >= v.contents.len() {
-                    return None;
-                }
-                Value::SparseFloat(Cow::Borrowed(v))
+                let content = v.contents.get(idx)?.clone();
+                Value::SparseFloat(Cow::Owned(schema::SparseFloatArray {
+                    contents: vec![content],
+                    dim: v.dim,
+                }))
             }
             ValueVec::StructArray(v) => {
                 if idx >= struct_array_row_count(v) {
@@ -171,7 +169,9 @@ impl FieldColumn {
             (ValueVec::Binary(vec), Value::Binary(i))
             | (ValueVec::Binary(vec), Value::Int8Vector(i))
             | (ValueVec::Binary(vec), Value::Float16Vector(i))
-            | (ValueVec::Binary(vec), Value::BFloat16Vector(i)) => vec.extend_from_slice(i.as_ref()),
+            | (ValueVec::Binary(vec), Value::BFloat16Vector(i)) => {
+                vec.extend_from_slice(i.as_ref())
+            }
             (ValueVec::Float(vec), Value::FloatArray(i)) => vec.extend_from_slice(i.as_ref()),
             (ValueVec::Geometry(vec), Value::Geometry(i)) => vec.push(i.into_owned()),
             (ValueVec::GeometryWkt(vec), Value::GeometryWkt(i)) => vec.push(i.to_string()),
@@ -221,24 +221,20 @@ impl FieldColumn {
             ValueVec::Geometry(_) => ValueVec::Geometry(Vec::new()),
             ValueVec::GeometryWkt(_) => ValueVec::GeometryWkt(Vec::new()),
             ValueVec::Timestamptz(_) => ValueVec::Timestamptz(Vec::new()),
-            ValueVec::SparseFloat(_) => ValueVec::SparseFloat(
-                crate::proto::schema::SparseFloatArray {
+            ValueVec::SparseFloat(_) => {
+                ValueVec::SparseFloat(crate::proto::schema::SparseFloatArray {
                     contents: Vec::new(),
                     dim: 0,
-                },
-            ),
-            ValueVec::StructArray(_) => ValueVec::StructArray(
-                crate::proto::schema::StructArrayField {
-                    fields: Vec::new(),
-                },
-            ),
-            ValueVec::VectorArray(_) => ValueVec::VectorArray(
-                crate::proto::schema::VectorArray {
-                    dim: 0,
-                    data: Vec::new(),
-                    element_type: 0,
-                },
-            ),
+                })
+            }
+            ValueVec::StructArray(_) => {
+                ValueVec::StructArray(crate::proto::schema::StructArrayField { fields: Vec::new() })
+            }
+            ValueVec::VectorArray(_) => ValueVec::VectorArray(crate::proto::schema::VectorArray {
+                dim: 0,
+                data: Vec::new(),
+                element_type: 0,
+            }),
         };
         Self {
             dim: self.dim,
@@ -254,9 +250,46 @@ impl FieldColumn {
 fn struct_array_row_count(v: &crate::proto::schema::StructArrayField) -> usize {
     v.fields
         .first()
-        .cloned()
-        .map(FieldColumn::from)
-        .map(|column| column.len())
+        .map(|field| match field.field.as_ref() {
+            Some(Field::Scalars(scalars)) => match scalars.data.as_ref() {
+                Some(ScalarData::BoolData(v)) => v.data.len(),
+                Some(ScalarData::IntData(v)) => v.data.len(),
+                Some(ScalarData::LongData(v)) => v.data.len(),
+                Some(ScalarData::FloatData(v)) => v.data.len(),
+                Some(ScalarData::DoubleData(v)) => v.data.len(),
+                Some(ScalarData::StringData(v)) => v.data.len(),
+                Some(ScalarData::JsonData(v)) => v.data.len(),
+                Some(ScalarData::ArrayData(v)) => v.data.len(),
+                Some(ScalarData::BytesData(_)) => 0,
+                Some(ScalarData::GeometryData(v)) => v.data.len(),
+                Some(ScalarData::TimestamptzData(v)) => v.data.len(),
+                Some(ScalarData::GeometryWktData(v)) => v.data.len(),
+                None => 0,
+            },
+            Some(Field::Vectors(vectors)) => match vectors.data.as_ref() {
+                Some(VectorData::FloatVector(v)) => {
+                    let dim = vectors.dim.max(1) as usize;
+                    v.data.len() / dim
+                }
+                Some(VectorData::BinaryVector(v)) => {
+                    let bytes_per_row = (vectors.dim as usize / 8).max(1);
+                    v.len() / bytes_per_row
+                }
+                Some(VectorData::Float16Vector(v)) | Some(VectorData::Bfloat16Vector(v)) => {
+                    let bytes_per_row = (vectors.dim.max(1) as usize) * 2;
+                    v.len() / bytes_per_row
+                }
+                Some(VectorData::SparseFloatVector(v)) => v.contents.len(),
+                Some(VectorData::Int8Vector(v)) => {
+                    let bytes_per_row = vectors.dim.max(1) as usize;
+                    v.len() / bytes_per_row
+                }
+                Some(VectorData::VectorArray(v)) => v.data.len(),
+                None => 0,
+            },
+            Some(Field::StructArrays(v)) => struct_array_row_count(v),
+            None => 0,
+        })
         .unwrap_or(0)
 }
 
@@ -354,6 +387,39 @@ impl From<FieldColumn> for schema::FieldData {
                 }),
             }),
             is_dynamic: false,
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::FieldColumn;
+    use crate::{
+        proto::schema::{DataType, SparseFloatArray},
+        value::{Value, ValueVec},
+    };
+
+    #[test]
+    fn sparse_float_get_returns_single_row() {
+        let column = FieldColumn {
+            name: "sparse".to_string(),
+            dtype: DataType::SparseFloatVector,
+            value: ValueVec::SparseFloat(SparseFloatArray {
+                contents: vec![vec![1, 2], vec![3, 4]],
+                dim: 8,
+            }),
+            dim: 0,
+            max_length: 0,
+            is_dynamic: false,
+        };
+
+        let value = column.get(1).unwrap();
+        match value {
+            Value::SparseFloat(data) => {
+                assert_eq!(data.dim, 8);
+                assert_eq!(data.contents, vec![vec![3, 4]]);
+            }
+            _ => panic!("expected sparse float row"),
         }
     }
 }

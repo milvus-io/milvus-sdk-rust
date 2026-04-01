@@ -13,10 +13,8 @@ pub struct Status {
     #[prost(string, tag = "5")]
     pub detail: ::prost::alloc::string::String,
     #[prost(map = "string, string", tag = "6")]
-    pub extra_info: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        ::prost::alloc::string::String,
-    >,
+    pub extra_info:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct KeyValuePair {
@@ -74,10 +72,8 @@ pub struct MsgBase {
     #[prost(int64, tag = "5")]
     pub target_id: i64,
     #[prost(map = "string, string", tag = "6")]
-    pub properties: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        ::prost::alloc::string::String,
-    >,
+    pub properties:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
     #[prost(message, optional, tag = "7")]
     pub replicate_info: ::core::option::Option<ReplicateInfo>,
 }
@@ -138,10 +134,8 @@ pub struct ClientInfo {
     pub host: ::prost::alloc::string::String,
     /// reserved for newly-added feature if necessary.
     #[prost(map = "string, string", tag = "6")]
-    pub reserved: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        ::prost::alloc::string::String,
-    >,
+    pub reserved:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ServerInfo {
@@ -157,10 +151,8 @@ pub struct ServerInfo {
     pub deploy_mode: ::prost::alloc::string::String,
     /// reserved for newly-added feature if necessary.
     #[prost(map = "string, string", tag = "6")]
-    pub reserved: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        ::prost::alloc::string::String,
-    >,
+    pub reserved:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
 /// NodeInfo is used to describe the node information.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -227,10 +219,8 @@ pub struct ImmutableMessage {
     pub payload: ::prost::alloc::vec::Vec<u8>,
     /// message properties
     #[prost(map = "string, string", tag = "3")]
-    pub properties: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        ::prost::alloc::string::String,
-    >,
+    pub properties:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
 /// ReplicateCheckpoint is the WAL replicate checkpoint of source cluster.
 /// It will be persisted in the target cluster metadata.
@@ -1362,13 +1352,9 @@ impl ObjectPrivilege {
             Self::PrivilegeManageOwnership => "PrivilegeManageOwnership",
             Self::PrivilegeSelectUser => "PrivilegeSelectUser",
             Self::PrivilegeUpsert => "PrivilegeUpsert",
-            Self::PrivilegeCreateResourceGroup => {
-                "PrivilegeCreateResourceGroup"
-            }
+            Self::PrivilegeCreateResourceGroup => "PrivilegeCreateResourceGroup",
             Self::PrivilegeDropResourceGroup => "PrivilegeDropResourceGroup",
-            Self::PrivilegeDescribeResourceGroup => {
-                "PrivilegeDescribeResourceGroup"
-            }
+            Self::PrivilegeDescribeResourceGroup => "PrivilegeDescribeResourceGroup",
             Self::PrivilegeListResourceGroups => "PrivilegeListResourceGroups",
             Self::PrivilegeTransferNode => "PrivilegeTransferNode",
             Self::PrivilegeTransferReplica => "PrivilegeTransferReplica",
@@ -1388,9 +1374,7 @@ impl ObjectPrivilege {
             Self::PrivilegeDropAlias => "PrivilegeDropAlias",
             Self::PrivilegeDescribeAlias => "PrivilegeDescribeAlias",
             Self::PrivilegeListAliases => "PrivilegeListAliases",
-            Self::PrivilegeUpdateResourceGroups => {
-                "PrivilegeUpdateResourceGroups"
-            }
+            Self::PrivilegeUpdateResourceGroups => "PrivilegeUpdateResourceGroups",
             Self::PrivilegeAlterDatabase => "PrivilegeAlterDatabase",
             Self::PrivilegeDescribeDatabase => "PrivilegeDescribeDatabase",
             Self::PrivilegeBackupRbac => "PrivilegeBackupRBAC",
@@ -1398,33 +1382,17 @@ impl ObjectPrivilege {
             Self::PrivilegeGroupReadOnly => "PrivilegeGroupReadOnly",
             Self::PrivilegeGroupReadWrite => "PrivilegeGroupReadWrite",
             Self::PrivilegeGroupAdmin => "PrivilegeGroupAdmin",
-            Self::PrivilegeCreatePrivilegeGroup => {
-                "PrivilegeCreatePrivilegeGroup"
-            }
+            Self::PrivilegeCreatePrivilegeGroup => "PrivilegeCreatePrivilegeGroup",
             Self::PrivilegeDropPrivilegeGroup => "PrivilegeDropPrivilegeGroup",
-            Self::PrivilegeListPrivilegeGroups => {
-                "PrivilegeListPrivilegeGroups"
-            }
-            Self::PrivilegeOperatePrivilegeGroup => {
-                "PrivilegeOperatePrivilegeGroup"
-            }
-            Self::PrivilegeGroupClusterReadOnly => {
-                "PrivilegeGroupClusterReadOnly"
-            }
-            Self::PrivilegeGroupClusterReadWrite => {
-                "PrivilegeGroupClusterReadWrite"
-            }
+            Self::PrivilegeListPrivilegeGroups => "PrivilegeListPrivilegeGroups",
+            Self::PrivilegeOperatePrivilegeGroup => "PrivilegeOperatePrivilegeGroup",
+            Self::PrivilegeGroupClusterReadOnly => "PrivilegeGroupClusterReadOnly",
+            Self::PrivilegeGroupClusterReadWrite => "PrivilegeGroupClusterReadWrite",
             Self::PrivilegeGroupClusterAdmin => "PrivilegeGroupClusterAdmin",
-            Self::PrivilegeGroupDatabaseReadOnly => {
-                "PrivilegeGroupDatabaseReadOnly"
-            }
-            Self::PrivilegeGroupDatabaseReadWrite => {
-                "PrivilegeGroupDatabaseReadWrite"
-            }
+            Self::PrivilegeGroupDatabaseReadOnly => "PrivilegeGroupDatabaseReadOnly",
+            Self::PrivilegeGroupDatabaseReadWrite => "PrivilegeGroupDatabaseReadWrite",
             Self::PrivilegeGroupDatabaseAdmin => "PrivilegeGroupDatabaseAdmin",
-            Self::PrivilegeGroupCollectionReadOnly => {
-                "PrivilegeGroupCollectionReadOnly"
-            }
+            Self::PrivilegeGroupCollectionReadOnly => "PrivilegeGroupCollectionReadOnly",
             Self::PrivilegeGroupCollectionReadWrite => {
                 "PrivilegeGroupCollectionReadWrite"
             }
@@ -1476,9 +1444,7 @@ impl ObjectPrivilege {
             "PrivilegeUpsert" => Some(Self::PrivilegeUpsert),
             "PrivilegeCreateResourceGroup" => Some(Self::PrivilegeCreateResourceGroup),
             "PrivilegeDropResourceGroup" => Some(Self::PrivilegeDropResourceGroup),
-            "PrivilegeDescribeResourceGroup" => {
-                Some(Self::PrivilegeDescribeResourceGroup)
-            }
+            "PrivilegeDescribeResourceGroup" => Some(Self::PrivilegeDescribeResourceGroup),
             "PrivilegeListResourceGroups" => Some(Self::PrivilegeListResourceGroups),
             "PrivilegeTransferNode" => Some(Self::PrivilegeTransferNode),
             "PrivilegeTransferReplica" => Some(Self::PrivilegeTransferReplica),

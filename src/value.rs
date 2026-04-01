@@ -265,12 +265,12 @@ impl ValueVec {
                 data: Vec::new(),
                 element_type: 0,
             }),
-            DataType::ArrayOfStruct => Self::StructArray(proto::schema::StructArrayField {
-                fields: Vec::new(),
-            }),
-            DataType::Struct => Self::StructArray(proto::schema::StructArrayField {
-                fields: Vec::new(),
-            }),
+            DataType::ArrayOfStruct => {
+                Self::StructArray(proto::schema::StructArrayField { fields: Vec::new() })
+            }
+            DataType::Struct => {
+                Self::StructArray(proto::schema::StructArrayField { fields: Vec::new() })
+            }
         }
     }
 
@@ -286,6 +286,7 @@ impl ValueVec {
             | (ValueVec::Int(..), DataType::Int16)
             | (ValueVec::Int(..), DataType::Int32)
             | (ValueVec::Long(..), DataType::Int64)
+            | (ValueVec::Long(..), DataType::Timestamptz)
             | (ValueVec::Bool(..), DataType::Bool)
             | (ValueVec::String(..), DataType::String)
             | (ValueVec::String(..), DataType::VarChar)

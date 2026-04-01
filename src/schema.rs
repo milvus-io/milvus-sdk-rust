@@ -162,7 +162,7 @@ pub struct FieldSchema {
 }
 
 impl FieldSchema {
-    pub fn const_default() -> Self {
+    pub fn empty() -> Self {
         Self {
             name: String::new(),
             description: String::new(),
@@ -175,6 +175,11 @@ impl FieldSchema {
             nullable: false,
             extra_type_params: HashMap::new(),
         }
+    }
+
+    #[deprecated(note = "use FieldSchema::empty() instead")]
+    pub fn const_default() -> Self {
+        Self::empty()
     }
 
     /// Mark this field as nullable. Required for fields added via schema evolution.
@@ -192,7 +197,7 @@ impl FieldSchema {
 
 impl Default for FieldSchema {
     fn default() -> Self {
-        Self::const_default()
+        Self::empty()
     }
 }
 
@@ -226,11 +231,12 @@ impl From<schema::FieldSchema> for FieldSchema {
             is_primary: fld.is_primary_key,
             auto_id: fld.auto_id,
             max_length,
-            chunk_size: (dim
-                * match dtype {
-                    DataType::BinaryVector => dim / 8,
-                    _ => dim,
-                }) as _,
+            chunk_size: match dtype {
+                DataType::BinaryVector => (dim / 8) as usize,
+                DataType::FloatVector | DataType::Int8Vector => dim as usize,
+                DataType::Float16Vector | DataType::BFloat16Vector => (dim * 2) as usize,
+                _ => 1,
+            },
             dim,
             nullable: fld.nullable,
             extra_type_params,
@@ -588,10 +594,7 @@ impl From<FieldSchema> for schema::FieldSchema {
         };
         // Append extra type params (e.g., enable_analyzer, analyzer_params)
         for (k, v) in fld.extra_type_params {
-            params.push(KeyValuePair {
-                key: k,
-                value: v,
-            });
+            params.push(KeyValuePair { key: k, value: v });
         }
 
         schema::FieldSchema {
@@ -821,15 +824,59 @@ impl CollectionSchemaBuilder {
             return Err(error::Error::from(Error::NoPrimaryKey));
         }
 
-        let this = std::mem::replace(self, CollectionSchemaBuilder::new("".into(), ""));
+        let this = std::mem::replace(self, CollectionSchemaBuilder::new("", ""));
 
         Ok(CollectionSchema {
             fields: this.inner.into(),
             name: this.name,
             description: this.description,
-            enable_dynamic_field: self.enable_dynamic_field,
+            enable_dynamic_field: this.enable_dynamic_field,
             functions: this.functions,
         })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::{CollectionSchemaBuilder, FieldSchema};
+    use crate::proto::schema::{self, DataType};
+
+    #[test]
+    fn field_schema_from_proto_uses_correct_vector_chunk_sizes() {
+        let cases = [
+            (DataType::FloatVector, 1024, 1024usize),
+            (DataType::BinaryVector, 1024, 128usize),
+            (DataType::Float16Vector, 1024, 2048usize),
+            (DataType::BFloat16Vector, 1024, 2048usize),
+            (DataType::Int8Vector, 1024, 1024usize),
+        ];
+
+        for (dtype, dim, expected_chunk_size) in cases {
+            let proto_field = schema::FieldSchema {
+                name: "embedding".to_string(),
+                description: String::new(),
+                data_type: dtype as i32,
+                type_params: vec![crate::proto::common::KeyValuePair {
+                    key: "dim".to_string(),
+                    value: dim.to_string(),
+                }],
+                ..Default::default()
+            };
+
+            let field = FieldSchema::from(proto_field);
+            assert_eq!(field.chunk_size, expected_chunk_size);
+        }
+    }
+
+    #[test]
+    fn collection_schema_builder_preserves_dynamic_field() {
+        let schema = CollectionSchemaBuilder::new("test", "test")
+            .add_field(FieldSchema::new_primary_int64("id", "", false))
+            .enable_dynamic_field()
+            .build()
+            .unwrap();
+
+        assert!(schema.enable_dynamic_field);
     }
 }
 

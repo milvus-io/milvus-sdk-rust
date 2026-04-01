@@ -991,6 +991,7 @@ pub struct SubSearchRequest {
     #[prost(string, optional, tag = "7")]
     pub namespace: ::core::option::Option<::prost::alloc::string::String>,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SearchRequest {
     /// must
@@ -2623,8 +2624,6 @@ pub struct FileResourceInfo {
     pub name: ::prost::alloc::string::String,
     #[prost(string, tag = "3")]
     pub path: ::prost::alloc::string::String,
-    #[prost(enumeration = "super::common::FileResourceType", tag = "4")]
-    pub r#type: i32,
 }
 
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -2635,8 +2634,6 @@ pub struct AddFileResourceRequest {
     pub name: ::prost::alloc::string::String,
     #[prost(string, tag = "3")]
     pub path: ::prost::alloc::string::String,
-    #[prost(enumeration = "super::common::FileResourceType", tag = "4")]
-    pub r#type: i32,
 }
 
 #[derive(Clone, PartialEq, ::prost::Message)]

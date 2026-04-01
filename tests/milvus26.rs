@@ -156,8 +156,8 @@ async fn truncate_collection() -> Result<()> {
     let (client, schema) = create_test_collection(true).await?;
 
     // Verify data exists
-    let options = milvus::query::QueryOptions::default()
-        .output_fields(vec![String::from("count(*)")]);
+    let options =
+        milvus::query::QueryOptions::default().output_fields(vec![String::from("count(*)")]);
     let result = client.query(schema.name(), "", &options).await?;
     if let ValueVec::Long(vec) = &result[0].value {
         assert!(*vec.first().unwrap() > 0, "collection should have data");
@@ -178,10 +178,7 @@ async fn batch_describe_collections() -> Result<()> {
     let (_, schema2) = create_test_collection(true).await?;
 
     let collections = client
-        .batch_describe_collections(vec![
-            schema1.name().to_string(),
-            schema2.name().to_string(),
-        ])
+        .batch_describe_collections(vec![schema1.name().to_string(), schema2.name().to_string()])
         .await?;
 
     assert_eq!(collections.len(), 2);
@@ -210,13 +207,18 @@ async fn add_collection_field_schema_evolution() -> Result<()> {
         )
         .await?;
 
-    // Add a new nullable varchar field to the existing collection
-    let _new_field = FieldSchema::new_varchar("description", "added later", 256);
-    // The field must be nullable for schema evolution
-    // We set nullable via the proto conversion path
-    // Currently the FieldSchema struct does not expose nullable directly
-    // but the AddCollectionField RPC requires it.
-    // This test verifies the RPC call works; full nullable support is a follow-up.
+    let new_field = FieldSchema::new_varchar("description", "added later", 256).set_nullable(true);
+
+    client
+        .add_collection_field(&collection_name, new_field)
+        .await?;
+
+    let updated = client.describe_collection(&collection_name).await?;
+    assert!(updated
+        .schema
+        .fields
+        .iter()
+        .any(|field| field.name == "description" && field.nullable),);
 
     client.drop_collection(&collection_name).await?;
     Ok(())
@@ -264,9 +266,7 @@ async fn search_with_cosine_metric() -> Result<()> {
         .create_index(&collection_name, "embedding", index_params)
         .await?;
 
-    client
-        .load_collection(&collection_name, None)
-        .await?;
+    client.load_collection(&collection_name, None).await?;
 
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
@@ -362,7 +362,7 @@ async fn index_type_inverted() -> Result<()> {
     let index_params = IndexParams::new(
         "category_idx".to_owned(),
         IndexType::Inverted,
-        MetricType::L2,  // metric type not used for scalar index
+        MetricType::L2, // metric type not used for scalar index
         HashMap::new(),
     );
     client
