@@ -850,14 +850,15 @@ impl Client {
 
     /// Alter a function on an existing collection.
     /// Requires Milvus 2.6+.
-    pub async fn alter_collection_function<S>(
+    pub async fn alter_collection_function<S, F>(
         &self,
         collection_name: S,
-        function_name: S,
+        function_name: F,
         function: proto::schema::FunctionSchema,
     ) -> Result<()>
     where
         S: Into<String>,
+        F: Into<String>,
     {
         let resp = self
             .client
@@ -878,13 +879,14 @@ impl Client {
 
     /// Drop a function from a collection.
     /// Requires Milvus 2.6+.
-    pub async fn drop_collection_function<S>(
+    pub async fn drop_collection_function<S, F>(
         &self,
         collection_name: S,
-        function_name: S,
+        function_name: F,
     ) -> Result<()>
     where
         S: Into<String>,
+        F: Into<String>,
     {
         let resp = self
             .client
