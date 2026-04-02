@@ -40,7 +40,7 @@ use prost::Message;
 
 use crate::client::{Client, ConsistencyLevel};
 use crate::collection::{Collection, SearchResult};
-use crate::data::FieldColumn;
+use crate::data::{slice_field_columns, FieldColumn};
 use crate::error::Error as SuperError;
 use crate::proto::common::{
     DslType, KeyValuePair, MsgBase, MsgType, PlaceholderGroup, PlaceholderType, PlaceholderValue,
@@ -1399,17 +1399,8 @@ impl Client {
             let k = k as usize;
             let mut score = Vec::new();
             score.extend_from_slice(&raw_data.scores[offset..offset + k]);
-            let mut result_data = fields_data
-                .iter()
-                .map(FieldColumn::copy_with_metadata)
-                .collect::<Vec<FieldColumn>>();
-            for j in 0..fields_data.len() {
-                for i in offset..offset + k {
-                    result_data[j].push(fields_data[j].get(i).ok_or(SuperError::Unexpected(
-                        "out of range while indexing field data".to_owned(),
-                    ))?);
-                }
-            }
+            let result_data = slice_field_columns(&fields_data, offset, k)
+                .map_err(SuperError::Unexpected)?;
 
             let id = match raw_id {
                 proto::schema::i_ds::IdField::IntId(ref d) => {
@@ -1657,17 +1648,8 @@ impl Client {
             let k = k as usize;
             let mut score = Vec::new();
             score.extend_from_slice(&raw_data.scores[offset..offset + k]);
-            let mut result_data = fields_data
-                .iter()
-                .map(FieldColumn::copy_with_metadata)
-                .collect::<Vec<FieldColumn>>();
-            for j in 0..fields_data.len() {
-                for i in offset..offset + k {
-                    result_data[j].push(fields_data[j].get(i).ok_or(SuperError::Unexpected(
-                        "out of range while indexing field data".to_owned(),
-                    ))?);
-                }
-            }
+            let result_data = slice_field_columns(&fields_data, offset, k)
+                .map_err(SuperError::Unexpected)?;
 
             let id = match raw_id {
                 proto::schema::i_ds::IdField::IntId(ref d) => {

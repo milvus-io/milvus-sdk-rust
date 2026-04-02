@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use crate::client::{Client, ConsistencyLevel};
-use crate::data::FieldColumn;
+use crate::data::{slice_field_columns, FieldColumn};
 use crate::error::*;
 use crate::proto::common::{KeyValuePair, MsgBase, MsgType};
 use crate::proto::milvus::{QueryCursor, QueryRequest};
@@ -1490,26 +1490,8 @@ impl SearchIterator {
 
             let mut score = Vec::new();
             score.extend_from_slice(&raw_data.scores[offset..offset + k]);
-            let mut result_data = fields_data
-                .iter()
-                .map(FieldColumn::copy_with_metadata)
-                .collect::<Vec<FieldColumn>>();
-
-            for j in 0..fields_data.len() {
-                for i in offset..offset + k {
-                    if i >= fields_data[j].len() {
-                        return Err(Error::Unexpected(format!(
-                            "field data bounds exceeded: field={}, index={}, field_len={}",
-                            fields_data[j].name,
-                            i,
-                            fields_data[j].len()
-                        )));
-                    }
-                    result_data[j].push(fields_data[j].get(i).ok_or(Error::Unexpected(
-                        "out of range while indexing field data".to_owned(),
-                    ))?);
-                }
-            }
+            let result_data =
+                slice_field_columns(&fields_data, offset, k).map_err(Error::Unexpected)?;
 
             let id = match raw_id {
                 crate::proto::schema::i_ds::IdField::IntId(ref d) => {
