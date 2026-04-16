@@ -1,4 +1,5 @@
 use crate::error::Result;
+use crate::utils::status_to_result;
 use crate::{
     client::Client,
     data::FieldColumn,
@@ -104,6 +105,8 @@ impl Client {
             .await?
             .into_inner();
 
+        status_to_result(&result.status)?;
+
         self.collection_cache
             .update_timestamp(&collection_name, result.timestamp);
 
@@ -134,6 +137,8 @@ impl Client {
             })
             .await?
             .into_inner();
+
+        status_to_result(&result.status)?;
 
         self.collection_cache
             .update_timestamp(&collection_name, result.timestamp);
@@ -218,9 +223,67 @@ impl Client {
             .await?
             .into_inner();
 
+        status_to_result(&result.status)?;
+
         self.collection_cache
             .update_timestamp(&collection_name, result.timestamp);
 
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::proto::common::{ErrorCode, Status};
+    use crate::proto::milvus::MutationResult;
+    use crate::utils::status_to_result;
+
+    #[test]
+    fn status_to_result_success() {
+        let result = MutationResult {
+            status: Some(Status {
+                error_code: ErrorCode::Success as i32,
+                reason: "ok".to_string(),
+                code: 0,
+                retriable: false,
+                detail: "".to_string(),
+                extra_info: Default::default(),
+            }),
+            i_ds: None,
+            succ_index: vec![],
+            err_index: vec![],
+            acknowledged: true,
+            insert_cnt: 10,
+            delete_cnt: 0,
+            upsert_cnt: 0,
+            timestamp: 0,
+        };
+
+        assert!(status_to_result(&result.status).is_ok());
+    }
+
+    #[test]
+    fn status_to_result_error() {
+        let result = MutationResult {
+            status: Some(Status {
+                error_code: ErrorCode::IllegalArgument as i32,
+                reason: "varchar length exceeds limit".to_string(),
+                code: 5,
+                retriable: false,
+                detail: "".to_string(),
+                extra_info: Default::default(),
+            }),
+            i_ds: None,
+            succ_index: vec![],
+            err_index: vec![1, 2, 3],
+            acknowledged: false,
+            insert_cnt: 0,
+            delete_cnt: 0,
+            upsert_cnt: 0,
+            timestamp: 0,
+        };
+
+        let err = status_to_result(&result.status).unwrap_err();
+        assert!(format!("{err}").contains("varchar length exceeds limit"));
     }
 }
