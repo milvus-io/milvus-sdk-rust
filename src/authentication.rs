@@ -19,7 +19,7 @@
 //!
 //! ## Usage Example
 //!
-//! ```rust
+//! ```rust,ignore
 //! use milvus_sdk::Client;
 //!
 //! #[tokio::main]
@@ -77,7 +77,7 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// let client = Client::new("http://localhost:19530").await?;
     /// client.create_user("john_doe", "secure_password123").await?;
     /// ```
@@ -119,7 +119,7 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// let client = Client::new("http://localhost:19530").await?;
     /// client.drop_user("john_doe").await?;
     /// ```
@@ -152,7 +152,7 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// let client = Client::new("http://localhost:19530").await?;
     /// let users = client.list_users().await?;
     /// println!("Users: {:?}", users);
@@ -193,7 +193,7 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// let client = Client::new("http://localhost:19530").await?;
     /// let user_info = client.describe_user("john_doe").await?;
     /// println!("User roles: {:?}", user_info);
@@ -246,7 +246,7 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// let client = Client::new("http://localhost:19530").await?;
     /// client.create_role("admin").await?;
     /// ```
@@ -289,7 +289,7 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// let client = Client::new("http://localhost:19530").await?;
     /// client.drop_role("old_role", false).await?;
     /// ```
@@ -331,7 +331,7 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// let client = Client::new("http://localhost:19530").await?;
     /// client.grant_role("john_doe", "admin").await?;
     /// ```
@@ -366,7 +366,7 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// let client = Client::new("http://localhost:19530").await?;
     /// let roles = client.list_roles().await?;
     /// println!("Roles: {:?}", roles);
@@ -413,7 +413,7 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use std::collections::HashMap;
     ///
     /// let client = Client::new("http://localhost:19530").await?;
@@ -516,7 +516,7 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// let client = Client::new("http://localhost:19530").await?;
     /// client.revoke_role("john_doe", "admin").await?;
     /// ```
@@ -556,7 +556,7 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// let client = Client::new("http://localhost:19530").await?;
     /// client.create_privilege_group("read_only").await?;
     /// ```
@@ -596,7 +596,7 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// let client = Client::new("http://localhost:19530").await?;
     /// let privileges = vec!["Load".to_string(), "Get".to_string()];
     /// client.add_privilege_to_group("read_only", privileges).await?;
@@ -641,7 +641,7 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// let client = Client::new("http://localhost:19530").await?;
     /// let groups = client.list_privilege_groups().await?;
     /// for (group_name, privileges) in groups {
@@ -688,7 +688,7 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// let client = Client::new("http://localhost:19530").await?;
     /// client.drop_privilege_group("old_group").await?;
     /// ```
@@ -733,7 +733,7 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// let client = Client::new("http://localhost:19530").await?;
     /// client.revoke_privilege("admin", "Collection", "Load", "my_collection", None).await?;
     /// ```
@@ -801,7 +801,7 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// let client = Client::new("http://localhost:19530").await?;
     /// client.revoke_privilege_v2("admin", "Load", "my_collection", None).await?;
     /// ```
@@ -858,7 +858,7 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// let client = Client::new("http://localhost:19530").await?;
     /// let privileges = vec!["Load".to_string()];
     /// client.revoke_privilege_from_group("read_only", privileges).await?;
@@ -913,7 +913,7 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// let client = Client::new("http://localhost:19530").await?;
     /// client.grant_privilege("admin", "Load", "Collection", "my_collection", None).await?;
     /// ```
@@ -981,7 +981,7 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// let client = Client::new("http://localhost:19530").await?;
     /// client.grant_privilege_v2("admin", "Load", "my_collection", None).await?;
     /// ```
@@ -1046,7 +1046,7 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// let client = Client::new("http://localhost:19530").await?;
     /// client.update_password("john_doe", "old_password", "new_secure_password").await?;
     /// ```

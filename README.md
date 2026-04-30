@@ -37,24 +37,81 @@ async fn main() -> Result<(), Error> {
 
 ## Development
 
-Pre-requisites:
-- cargo
-- protocol-compiler
-- docker (for testing)
+### Prerequisites
 
-### How to test
-Many tests require the Milvus server, the project provide a docker-compose file to setup a Milvus cluster:
+- Rust toolchain with Cargo
+- initialized `milvus-proto` submodule
+- Docker or Docker Compose for integration tests
+
+The protobuf compiler is provided through Cargo during build, so a system-installed `protoc` is not required.
+
+Initialize submodules if needed:
+
+```
+git submodule update --init --recursive
+```
+
+### Build
+
+This repository uses Cargo directly; there is no Makefile.
+
+Build the SDK:
+
+```
+cargo build
+```
+
+Build an optimized release artifact:
+
+```
+cargo build --release
+```
+
+### Test
+
+Many tests require a Milvus server at `localhost:19530`. Start one with the provided Docker Compose file:
+
 ```
 docker-compose -f ./docker-compose.yml up -d
 ```
-You may need to wait for seconds until the system ready
 
-Run all tests:
+On systems using Docker Compose v2, use:
+
+```
+docker compose -f ./docker-compose.yml up -d
+```
+
+Wait until Milvus is ready, then run all tests:
+
 ```
 cargo test
 ```
 
+Run a single test target:
+
+```
+cargo test --test client_flush_collections -- --nocapture
+```
+
 Enable the full backtrace for debugging:
+
 ```
 RUST_BACKTRACE=1 cargo test
+```
+
+### Clean
+
+Remove build artifacts:
+
+```
+cargo clean
+```
+
+### Rebuild
+
+Force a clean rebuild, including regenerated protobuf bindings:
+
+```
+cargo clean
+cargo build
 ```

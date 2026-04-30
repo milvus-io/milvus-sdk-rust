@@ -2,7 +2,6 @@
 mod common;
 
 use common::*;
-use milvus::client::*;
 
 #[tokio::test]
 async fn test_drop_partition() {
@@ -11,9 +10,10 @@ async fn test_drop_partition() {
         .create_partition(collection.name().to_string(), "test_partition".to_string())
         .await
         .unwrap();
+    client.release_collection(collection.name()).await.unwrap();
     let result = client
         .drop_partition(collection.name().to_string(), "test_partition".to_string())
         .await;
 
-    assert!(result.is_ok());
+    assert!(result.is_ok(), "drop_partition failed: {:?}", result);
 }
