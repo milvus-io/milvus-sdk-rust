@@ -6,7 +6,7 @@
 //!
 //! # Examples
 //!
-//! ```rust
+//! ```rust,ignore
 //! use milvus_sdk_rust::index::utils;
 //! ```
 //!

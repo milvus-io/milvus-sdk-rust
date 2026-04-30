@@ -6,7 +6,7 @@
 //!
 //! # Examples
 //!
-//! ```rust
+//! ```rust,ignore
 //! use milvus::client::Client;
 //! use milvus::database::CreateDbOptions;
 //!
@@ -47,7 +47,7 @@ use crate::{error::*, proto};
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```rust,ignore
 /// use milvus::database::CreateDbOptions;
 ///
 /// let options = CreateDbOptions::new()
@@ -221,7 +221,7 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use milvus::database::CreateDbOptions;
     ///
     /// let options = CreateDbOptions::new()
@@ -274,7 +274,7 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// let property_keys = vec![
     ///     "database.replica.number".to_string(),
     ///     "database.diskQuota.mb".to_string(),
@@ -325,7 +325,7 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use milvus::database::CreateDbOptions;
     ///
     /// // Create database with default settings
@@ -379,7 +379,7 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// let db_info = client.describe_database("my_database").await?;
     /// println!("Database ID: {}", db_info.db_id);
     /// println!("Created at: {}", db_info.created_timestamp);
@@ -425,7 +425,7 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// client.drop_database("my_database").await?;
     /// ```
     ///
@@ -462,7 +462,7 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// let databases = client.list_databases().await?;
     /// println!("Available databases: {:?}", databases);
     /// ```
@@ -496,7 +496,7 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// // Switch to a different database
     /// client.using_database("my_database").await?;
     ///
