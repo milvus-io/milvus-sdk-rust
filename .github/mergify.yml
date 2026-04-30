@@ -23,50 +23,29 @@ pull_request_rules:
         add:
           - dco-passed
 
-  - name: Test passed for code changed
+  - name: Add ci-passed when eligible
     conditions:
       - base=main
-      - "status-success=Unittest AMD64 Ubuntu 22.04"
-      - "status-success=Compile tests macOS 15"
+      - or:
+        - and:
+          - "status-success=UT on Ubuntu-22.04"
+          - "status-success=Compile on macOS 15"
+        - and:
+          - -files~=^[^\.]+$
+          - -files~=\.(?!md|png)
+        - and:
+          - -files~=^(?!\.github\/mergify\.yml).*$
     actions:
       label:
         add:
           - ci-passed
 
-  - name: Test passed for document changed
+  - name: Remove ci-passed when CI failed
     conditions:
       - base=main
-      - -files~=^[^\.]+$
-      - -files~=\.(?!md|png)
-    actions:
-      label:
-        add:
-          - ci-passed
-
-  - name: Test passed for mergify changed
-    conditions:
-      - base=main
-      - -files~=^(?!\.github\/mergify\.yml).*$
-    actions:
-      label:
-        add:
-          - ci-passed
-
-  - name: Remove ci-passed when linux unittest failed
-    conditions:
-      - base=main
-      - "check-failure=Unittest AMD64 Ubuntu 22.04"
-      - files~=^(?!\.github\/mergify\.yml).*$
-      - files~=\.(?!md|png)
-    actions:
-      label:
-        remove:
-          - ci-passed
-
-  - name: Remove ci-passed when macOS test compile failed
-    conditions:
-      - base=main
-      - "check-failure=Compile tests macOS 15"
+      - or:
+        - "check-failure=UT on Ubuntu-22.04"
+        - "check-failure=Compile on macOS 15"
       - files~=^(?!\.github\/mergify\.yml).*$
       - files~=\.(?!md|png)
     actions:
