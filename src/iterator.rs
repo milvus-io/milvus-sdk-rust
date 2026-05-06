@@ -1041,6 +1041,16 @@ impl QueryIterator {
                                     *v = v[..min_len].to_vec();
                                 }
                             }
+                            ValueVec::Bytes(v) => {
+                                if v.len() >= min_len {
+                                    *v = v[..min_len].to_vec();
+                                }
+                            }
+                            ValueVec::Geometry(v) => {
+                                if v.len() >= min_len {
+                                    *v = v[..min_len].to_vec();
+                                }
+                            }
                         }
                         new_field
                     })

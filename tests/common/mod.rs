@@ -46,9 +46,10 @@ pub async fn create_test_collection_custom(
     client
         .create_collection(
             schema.clone(),
-            Some(CreateCollectionOptions::with_consistency_level(
-                ConsistencyLevel::Eventually,
-            )),
+            Some(
+                CreateCollectionOptions::with_consistency_level(ConsistencyLevel::Eventually)
+                    .add_property("collection.insertRate.max.mb", "2000000"),
+            ),
         )
         .await?;
 

@@ -20,3 +20,5 @@ Cargo.lock
 
 # docker container data
 /volumes/
+
+/.vscode/
