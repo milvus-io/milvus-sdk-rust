@@ -35,6 +35,10 @@ protoc-bin-vendored = "=3.2.0"
 rand = "0.8.5"
 
 [[test]]
+name = "client_keepalive"
+path = "tests/testsoutsideoftestsuite/client_keepalive.rs"
+
+[[test]]
 name = "client_with_timeout"
 path = "tests/testsoutsideoftestsuite/client_with_timeout.rs"
 
