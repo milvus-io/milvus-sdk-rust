@@ -14,6 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::convert::TryFrom;
+
 use crate::{
     error::Error,
     proto::common::{ErrorCode, Status},
@@ -24,14 +26,12 @@ pub fn status_to_result(status: &Option<Status>) -> Result<(), Error> {
         .clone()
         .ok_or(Error::Unexpected("no status".to_owned()))?;
 
-    match ErrorCode::from_i32(status.error_code) {
-        Some(i) => match i {
-            ErrorCode::Success => Ok(()),
-            _ => Err(Error::from(status)),
-        },
-        None => Err(Error::Unexpected(format!(
-            "unknown error code {}",
-            status.error_code
-        ))),
+    match ErrorCode::try_from(status.code) {
+        Ok(ErrorCode::Success) => Ok(()),
+        Ok(_) => Err(Error::from(status)),
+        Err(_) => Err(Error::Server(
+            ErrorCode::UnexpectedError,
+            format!("{} (code {})", status.reason, status.code),
+        )),
     }
 }
