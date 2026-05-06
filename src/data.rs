@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::convert::TryFrom;
 
 use crate::{
     proto::schema::{
@@ -58,7 +59,7 @@ impl From<schema::FieldData> for FieldColumn {
             .unwrap_or((Some(1), None));
 
         let value: ValueVec = fd.field.map(Into::into).unwrap_or(ValueVec::None);
-        let dtype = DataType::from_i32(fd.r#type).unwrap_or(DataType::None);
+        let dtype = DataType::try_from(fd.r#type).unwrap_or(DataType::None);
 
         FieldColumn {
             name: fd.field_name,
@@ -133,6 +134,11 @@ impl FieldColumn {
     #[inline]
     pub fn len(&self) -> usize {
         self.value.len() / self.dim as usize
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     pub fn copy_with_metadata(&self) -> Self {

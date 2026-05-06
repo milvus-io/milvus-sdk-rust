@@ -187,7 +187,7 @@ impl From<schema::FieldSchema> for FieldSchema {
             .and_then(|x| x.value.parse().ok())
             .unwrap_or(1);
 
-        let dtype = DataType::from_i32(fld.data_type).unwrap();
+        let dtype = DataType::try_from(fld.data_type).unwrap();
 
         FieldSchema {
             name: fld.name,
@@ -410,7 +410,7 @@ impl From<FieldSchema> for schema::FieldSchema {
 
         schema::FieldSchema {
             field_id: 0,
-            name: fld.name.into(),
+            name: fld.name.clone(),
             is_primary_key: fld.is_primary,
             description: fld.description,
             data_type: fld.dtype as i32,
@@ -452,7 +452,7 @@ impl CollectionSchema {
     }
 
     pub fn validate(&self) -> Result<()> {
-        self.primary_column().ok_or_else(|| Error::NoPrimaryKey)?;
+        self.primary_column().ok_or(Error::NoPrimaryKey)?;
         // TODO addidtional schema checks need to be added here
         Ok(())
     }
@@ -477,7 +477,7 @@ impl CollectionSchema {
                 }
             }
         }
-        return Err(error::Error::from(Error::NoSuchKey(field_name.to_owned())));
+        Err(error::Error::from(Error::NoSuchKey(field_name.to_owned())))
     }
 }
 
@@ -597,10 +597,10 @@ impl CollectionSchemaBuilder {
             return Err(error::Error::from(Error::NoPrimaryKey));
         }
 
-        let this = std::mem::replace(self, CollectionSchemaBuilder::new("".into(), ""));
+        let this = std::mem::replace(self, CollectionSchemaBuilder::new("", ""));
 
         Ok(CollectionSchema {
-            fields: this.inner.into(),
+            fields: this.inner,
             name: this.name,
             description: this.description,
             enable_dynamic_field: self.enable_dynamic_field,

@@ -102,17 +102,9 @@ impl LoadOptions {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct GetLoadStateOptions {
     pub(crate) partition_names: Vec<String>,
-}
-
-impl Default for GetLoadStateOptions {
-    fn default() -> Self {
-        Self {
-            partition_names: vec![],
-        }
-    }
 }
 
 impl GetLoadStateOptions {

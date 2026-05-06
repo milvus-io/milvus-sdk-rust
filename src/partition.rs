@@ -13,25 +13,13 @@ use crate::{
 /// load_partitions' waitting time
 const WAIT_LOAD_DURATION_MS: u64 = 100;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct LoadPartitionsOption {
     resource_groups: Vec<String>,
     refresh: bool,
     load_fields: Vec<String>,
     skip_load_dynamic_field: bool,
     load_params: HashMap<String, String>,
-}
-
-impl Default for LoadPartitionsOption {
-    fn default() -> Self {
-        LoadPartitionsOption {
-            resource_groups: Vec::new(),
-            refresh: false,
-            load_fields: Vec::new(),
-            skip_load_dynamic_field: false,
-            load_params: HashMap::new(),
-        }
-    }
 }
 
 impl Client {
@@ -103,19 +91,16 @@ impl Client {
     ///
     /// Returns a `Result` containing a vector of partition names if successful, or an error if the operation fails.
     pub async fn list_partitions(&self, collection_name: String) -> Result<Vec<String>> {
-        let res = self
-            .client
-            .clone()
-            .show_partitions(crate::proto::milvus::ShowPartitionsRequest {
-                base: Some(MsgBase::new(MsgType::ShowPartitions)),
-                db_name: "".to_string(), // reserved
-                collection_name,
-                collection_id: 0,        // reserved
-                partition_names: vec![], // reserved
-                r#type: 0,               // reserved
-            })
-            .await?
-            .into_inner();
+        let req = crate::proto::milvus::ShowPartitionsRequest {
+            base: Some(MsgBase::new(MsgType::ShowPartitions)),
+            db_name: "".to_string(),
+            collection_name,
+            collection_id: 0,
+            partition_names: vec![],
+            ..Default::default()
+        };
+
+        let res = self.client.clone().show_partitions(req).await?.into_inner();
         status_to_result(&res.status)?;
         Ok(res.partition_names)
     }
@@ -208,7 +193,7 @@ impl Client {
                 base: Some(MsgBase::new(MsgType::LoadPartitions)),
                 db_name: "".to_string(),
                 collection_name: collection_name.into(),
-                partition_names: partition_names,
+                partition_names,
             })
             .await?
             .into_inner();
