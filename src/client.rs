@@ -172,7 +172,11 @@ impl Client {
             Error::InvalidParameter("url".to_owned(), format!("to parse {:?}", err))
         })?;
 
-        dst = dst.timeout(timeout);
+        dst = dst
+            .timeout(timeout)
+            .http2_keep_alive_interval(Duration::from_secs(10))
+            .keep_alive_timeout(Duration::from_secs(5))
+            .keep_alive_while_idle(true);
 
         let token = match (username, password) {
             (Some(username), Some(password)) => {
