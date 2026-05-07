@@ -14,12 +14,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use milvus::client::ConsistencyLevel;
-use milvus::collection::{Collection, ParamValue};
 use milvus::data::FieldColumn;
 use milvus::error::Result;
 use milvus::index::{IndexParams, IndexType, MetricType};
-use milvus::mutate::InsertOptions;
 use milvus::options::LoadOptions;
 use milvus::query::{QueryOptions, SearchOptions};
 use std::collections::HashMap;
@@ -41,22 +38,25 @@ async fn manual_compaction_empty_collection() -> Result<()> {
 #[tokio::test]
 async fn collection_upsert() -> Result<()> {
     let (client, schema) = create_test_collection(false).await?;
-    let pk_data = gen_random_int64_vector(2000);
-    let vec_data = gen_random_f32_vector(DEFAULT_DIM * 2000);
+    let pk_data: Vec<i64> = (0..2000).map(|id| 10_000_000_000_i64 + id).collect();
+    let vec_data = gen_random_f32_vector(2000);
     let pk_col = FieldColumn::new(schema.get_field("id").unwrap(), pk_data);
     let vec_col = FieldColumn::new(schema.get_field(DEFAULT_VEC_FIELD).unwrap(), vec_data);
-    client
+    let upsert_result = client
         .upsert(schema.name(), vec![pk_col, vec_col], None)
         .await?;
+    assert_eq!(2000, upsert_result.upsert_cnt);
+    client.flush(schema.name()).await?;
     client
         .load_collection(schema.name(), Some(LoadOptions::default()))
         .await?;
 
-    let options = QueryOptions::default();
-    let options = options.output_fields(vec![String::from("count(*)")]);
+    let options = QueryOptions::default()
+        .guarantee_timestamp(upsert_result.timestamp)
+        .output_fields(vec![String::from("count(*)")]);
     let result = client.query(schema.name(), "", &options).await?;
     if let ValueVec::Long(vec) = &result[0].value {
-        assert_eq!(2000, vec[0]);
+        assert_eq!(ENTITYNUM + 2000, vec[0]);
     } else {
         panic!("invalid result");
     }
@@ -67,7 +67,7 @@ async fn collection_upsert() -> Result<()> {
 async fn collection_basic() -> Result<()> {
     let (client, schema) = create_test_collection(true).await?;
 
-    let embed_data = gen_random_f32_vector(DEFAULT_DIM * 2000);
+    let embed_data = gen_random_f32_vector(2000);
 
     let embed_column = FieldColumn::new(schema.get_field(DEFAULT_VEC_FIELD).unwrap(), embed_data);
 
@@ -96,7 +96,7 @@ async fn collection_basic() -> Result<()> {
 async fn collection_index() -> Result<()> {
     let (client, schema) = create_test_collection(true).await?;
 
-    let feature = gen_random_f32_vector(DEFAULT_DIM * 2000);
+    let feature = gen_random_f32_vector(2000);
 
     let feature_column = FieldColumn::new(schema.get_field(DEFAULT_VEC_FIELD).unwrap(), feature);
 
@@ -108,12 +108,9 @@ async fn collection_index() -> Result<()> {
     let index_params = IndexParams::new(
         DEFAULT_INDEX_NAME.to_owned(),
         IndexType::IvfFlat,
-        milvus::index::MetricType::L2,
-        HashMap::from([("nlist".to_owned(), "32".to_owned())]),
+        MetricType::L2,
+        HashMap::new(),
     );
-    client
-        .create_index(schema.name(), DEFAULT_VEC_FIELD, index_params.clone())
-        .await?;
     let index_list = client
         .describe_index(schema.name(), DEFAULT_VEC_FIELD)
         .await?;
@@ -123,6 +120,7 @@ async fn collection_index() -> Result<()> {
     assert_eq!(index.params().name(), index_params.name());
     assert_eq!(index.params().extra_params(), index_params.extra_params());
 
+    client.release_collection(schema.name()).await?;
     client.drop_index(schema.name(), DEFAULT_VEC_FIELD).await?;
     client.drop_collection(schema.name()).await?;
     Ok(())
@@ -132,22 +130,13 @@ async fn collection_index() -> Result<()> {
 async fn collection_search() -> Result<()> {
     let (client, schema) = create_test_collection(true).await?;
 
-    let embed_data = gen_random_f32_vector(DEFAULT_DIM * 2000);
+    let embed_data = gen_random_f32_vector(2000);
     let embed_column = FieldColumn::new(schema.get_field(DEFAULT_VEC_FIELD).unwrap(), embed_data);
 
     client
         .insert(schema.name(), vec![embed_column], None)
         .await?;
     client.flush(schema.name()).await?;
-    let index_params = IndexParams::new(
-        "ivf_flat".to_owned(),
-        IndexType::IvfFlat,
-        MetricType::L2,
-        HashMap::from_iter([("nlist".to_owned(), 32.to_string())]),
-    );
-    client
-        .create_index(schema.name(), DEFAULT_VEC_FIELD, index_params)
-        .await?;
     client
         .load_collection(schema.name(), Some(LoadOptions::default()))
         .await?;
@@ -156,7 +145,7 @@ async fn collection_search() -> Result<()> {
 
     let mut option = SearchOptions::with_limit(10).output_fields(vec!["id".to_owned()]);
     option = option.add_param("nprobe", "16");
-    let query_vec = gen_random_f32_vector(DEFAULT_DIM);
+    let query_vec = gen_random_f32_vector_custom(1, DEFAULT_DIM);
 
     let result = client
         .search(schema.name(), vec![query_vec.into()], Some(option))
@@ -172,22 +161,13 @@ async fn collection_search() -> Result<()> {
 async fn collection_range_search() -> Result<()> {
     let (client, schema) = create_test_collection(true).await?;
 
-    let embed_data = gen_random_f32_vector(DEFAULT_DIM * 2000);
+    let embed_data = gen_random_f32_vector(2000);
     let embed_column = FieldColumn::new(schema.get_field(DEFAULT_VEC_FIELD).unwrap(), embed_data);
 
     client
         .insert(schema.name(), vec![embed_column], None)
         .await?;
     client.flush(schema.name()).await?;
-    let index_params = IndexParams::new(
-        "ivf_flat".to_owned(),
-        IndexType::IvfFlat,
-        MetricType::L2,
-        HashMap::from_iter([("nlist".to_owned(), 32.to_string())]),
-    );
-    client
-        .create_index(schema.name(), DEFAULT_VEC_FIELD, index_params)
-        .await?;
     client
         .load_collection(schema.name(), Some(LoadOptions::default()))
         .await?;
@@ -200,7 +180,7 @@ async fn collection_range_search() -> Result<()> {
     let mut option = SearchOptions::with_limit(5).output_fields(vec!["id".to_owned()]);
     option = option.add_param("nprobe", "16");
     option = option.radius(radius_limit);
-    let query_vec = gen_random_f32_vector(DEFAULT_DIM);
+    let query_vec = gen_random_f32_vector_custom(1, DEFAULT_DIM);
 
     let result = client
         .search(schema.name(), vec![query_vec.into()], Some(option))

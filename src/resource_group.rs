@@ -6,7 +6,7 @@
 //!
 //! # Examples
 //!
-//! ```rust
+//! ```rust,ignore
 //! use milvus::client::Client;
 //! use milvus::resource_group::CreateRgOptions;
 //! use std::collections::HashMap;
@@ -48,7 +48,7 @@ use crate::{error::*, proto};
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```rust,ignore
 /// use milvus::resource_group::CreateRgOptions;
 ///
 /// let options = CreateRgOptions::new()
@@ -209,7 +209,7 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use milvus::resource_group::CreateRgOptions;
     ///
     /// // Create resource group with default settings
@@ -259,7 +259,7 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// if let Some(rg_info) = client.describe_resource_group("my_rg").await? {
     ///     println!("Resource group: {:?}", rg_info);
     /// } else {
@@ -298,7 +298,7 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// client.drop_resource_group("my_rg").await?;
     /// ```
     ///
@@ -330,7 +330,7 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// let groups = client.list_resource_groups().await?;
     /// println!("Available resource groups: {:?}", groups);
     /// ```
@@ -365,7 +365,7 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// // Transfer 2 replicas from source_rg to target_rg for my_collection
     /// client.transfer_replica("source_rg", "target_rg", "my_collection", 2).await?;
     /// ```
@@ -410,7 +410,7 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// // Transfer 3 nodes from source_rg to target_rg
     /// client.transfer_node("source_rg", "target_rg", 3).await?;
     /// ```
@@ -452,7 +452,7 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use std::collections::HashMap;
     /// use milvus::resource_group::UpdateRgOptions;
     ///

@@ -26,7 +26,8 @@ pull_request_rules:
   - name: Test passed for code changed
     conditions:
       - base=main
-      - "status-success=Unittest AMD64 Ubuntu 18.04"
+      - "status-success=Unittest AMD64 Ubuntu 22.04"
+      - "status-success=Compile tests macOS 15"
     actions:
       label:
         add:
@@ -51,10 +52,21 @@ pull_request_rules:
         add:
           - ci-passed
 
-  - name: Remove ci-passed when unittest failed
+  - name: Remove ci-passed when linux unittest failed
     conditions:
       - base=main
-      - "check-failure=Unittest AMD64 Ubuntu 18.04"
+      - "check-failure=Unittest AMD64 Ubuntu 22.04"
+      - files~=^(?!\.github\/mergify\.yml).*$
+      - files~=\.(?!md|png)
+    actions:
+      label:
+        remove:
+          - ci-passed
+
+  - name: Remove ci-passed when macOS test compile failed
+    conditions:
+      - base=main
+      - "check-failure=Compile tests macOS 15"
       - files~=^(?!\.github\/mergify\.yml).*$
       - files~=\.(?!md|png)
     actions:
