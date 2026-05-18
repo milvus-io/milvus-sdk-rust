@@ -27,7 +27,7 @@ use base64::Engine;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::time::Duration;
-use tonic::codegen::{InterceptedService, StdError};
+use tonic::codegen::InterceptedService;
 use tonic::service::Interceptor;
 use tonic::transport::Channel;
 use tonic::Request;
@@ -101,7 +101,7 @@ pub struct ClientBuilder<D> {
 impl<D> ClientBuilder<D>
 where
     D: TryInto<tonic::transport::Endpoint> + Clone,
-    D::Error: Into<StdError>,
+    D::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
     D::Error: std::fmt::Debug,
 {
     pub fn new(dst: D) -> Self {
@@ -152,7 +152,7 @@ impl Client {
     pub async fn new<D>(dst: D) -> Result<Self>
     where
         D: TryInto<tonic::transport::Endpoint>,
-        D::Error: Into<StdError> + std::fmt::Debug,
+        D::Error: Into<Box<dyn std::error::Error + Send + Sync>> + std::fmt::Debug,
     {
         Self::with_timeout(dst, RPC_TIMEOUT, None, None).await
     }
@@ -165,7 +165,7 @@ impl Client {
     ) -> Result<Self>
     where
         D: TryInto<tonic::transport::Endpoint>,
-        D::Error: Into<StdError>,
+        D::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
         D::Error: std::fmt::Debug,
     {
         let mut dst: tonic::transport::Endpoint = dst.try_into().map_err(|err| {
@@ -194,7 +194,7 @@ impl Client {
             db: db_interceptor,
         };
 
-        let channel = tonic::transport::Endpoint::new(dst)?.connect().await?;
+        let channel = dst.connect().await?;
 
         let client = MilvusServiceClient::with_interceptor(channel.clone(), combined_interceptor);
 

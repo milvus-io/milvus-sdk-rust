@@ -150,7 +150,7 @@ impl From<proto::milvus::DescribeCollectionResponse> for Collection {
             auto_id: schema.auto_id,
             num_shards: value.shards_num as usize,
             // num_partitions: value.partitions_num as usize,
-            consistency_level: ConsistencyLevel::from_i32(value.consistency_level).unwrap(),
+            consistency_level: ConsistencyLevel::try_from(value.consistency_level).unwrap_or(ConsistencyLevel::Strong),
             description: schema.description,
             fields: schema.fields.into_iter().map(|f| Field::from(f)).collect(),
             // enable_dynamic_field: value.enable_dynamic_field,
@@ -191,7 +191,7 @@ pub struct CompactionState {
 impl From<GetCompactionStateResponse> for CompactionState {
     fn from(value: GetCompactionStateResponse) -> Self {
         Self {
-            state: crate::proto::common::CompactionState::from_i32(value.state).unwrap(),
+            state: crate::proto::common::CompactionState::try_from(value.state).unwrap_or(crate::proto::common::CompactionState::UndefiedState),
             executing_plan_num: value.executing_plan_no,
             timeout_plan_num: value.timeout_plan_no,
             completed_plan_num: value.completed_plan_no,
