@@ -24,6 +24,7 @@ use milvus::query::{IdType, QueryOptions};
 use milvus::{collection, schema::*};
 use rand::Rng;
 use std::collections::HashMap;
+
 mod common;
 use common::*;
 

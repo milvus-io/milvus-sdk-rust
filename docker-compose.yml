@@ -36,6 +36,8 @@ services:
     environment:
       ETCD_USE_EMBED: true
       MINIO_ADDRESS: minio:9000
+      COMMON_GRPC_RATE_LIMIT_ENABLE: "false"
+      COMMON_GRPC_RATE_LIMIT_QPSPERCALL: "1000"
     volumes:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/milvus:/var/lib/milvus
       - ./configs/user.yaml:/milvus/configs/user.yaml

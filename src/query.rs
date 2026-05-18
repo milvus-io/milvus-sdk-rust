@@ -1792,6 +1792,7 @@ fn get_place_holder_value(vectors: &Vec<Value>) -> Result<PlaceholderValue> {
     match vectors[0] {
         Value::FloatArray(_) => place_holder.r#type = PlaceholderType::FloatVector as _,
         Value::Binary(_) => place_holder.r#type = PlaceholderType::BinaryVector as _,
+        Value::String(_) => place_holder.r#type = PlaceholderType::VarChar as _,
         _ => {
             return Err(SuperError::from(crate::collection::Error::IllegalType(
                 "place holder".to_string(),
@@ -1810,6 +1811,7 @@ fn get_place_holder_value(vectors: &Vec<Value>) -> Result<PlaceholderValue> {
                 place_holder.values.push(bytes)
             }
             (Value::Binary(d), Value::Binary(_)) => place_holder.values.push(d.to_vec()),
+            (Value::String(d), Value::String(_)) => place_holder.values.push(d.as_bytes().to_vec()),
             _ => {
                 return Err(SuperError::from(crate::collection::Error::IllegalType(
                     "place holder".to_string(),

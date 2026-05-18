@@ -17,6 +17,7 @@
 use crate::config;
 use crate::data::FieldColumn;
 use crate::error::{Error as SuperError, Result};
+use crate::proto::common::KeyValuePair;
 use crate::proto::milvus::{
     AlterCollectionFieldRequest, AlterCollectionRequest, CreateCollectionRequest,
     DropCollectionRequest, FlushRequest, GetCompactionStateRequest, GetCompactionStateResponse,
@@ -229,6 +230,11 @@ impl Client {
                 schema: buf.to_vec(),
                 shards_num: options.shard_num,
                 consistency_level: options.consistency_level as i32,
+                properties: options
+                    .properties
+                    .into_iter()
+                    .map(|(k, v)| KeyValuePair { key: k, value: v })
+                    .collect(),
                 ..Default::default()
             })
             .await?

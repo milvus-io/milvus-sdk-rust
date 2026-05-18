@@ -23,6 +23,8 @@ pub enum Value<'a> {
     String(Cow<'a, str>),
     Json(Cow<'a, [u8]>),
     Array(Cow<'a, proto::schema::ScalarField>),
+    Bytes(Cow<'a, [u8]>),
+    Geometry(Cow<'a, [u8]>),
     StructArray(Cow<'a, proto::schema::StructArrayField>),
     VectorArray(Cow<'a, proto::schema::VectorArray>),
 }
@@ -63,6 +65,8 @@ impl Value<'_> {
             Value::FloatArray(_) => DataType::FloatVector,
             Value::Binary(_) => DataType::BinaryVector,
             Value::Array(_) => DataType::Array,
+            Value::Bytes(_) => DataType::Int8Vector,
+            Value::Geometry(_) => DataType::Geometry,
             Value::StructArray(_) => DataType::ArrayOfStruct,
             Value::VectorArray(_) => DataType::ArrayOfVector,
         }
@@ -84,6 +88,8 @@ impl Value<'_> {
             Value::String(cow) => Value::String(Cow::Owned(cow.into_owned())),
             Value::Json(cow) => Value::Json(Cow::Owned(cow.into_owned())),
             Value::Array(cow) => Value::Array(Cow::Owned(cow.into_owned())),
+            Value::Bytes(cow) => Value::Bytes(Cow::Owned(cow.into_owned())),
+            Value::Geometry(cow) => Value::Geometry(Cow::Owned(cow.into_owned())),
             Value::StructArray(cow) => Value::StructArray(Cow::Owned(cow.into_owned())),
             Value::VectorArray(cow) => Value::VectorArray(Cow::Owned(cow.into_owned())),
         }
@@ -138,6 +144,8 @@ pub enum ValueVec {
     String(Vec<String>),
     Json(Vec<Vec<u8>>),
     Array(Vec<proto::schema::ScalarField>),
+    Bytes(Vec<Vec<u8>>),
+    Geometry(Vec<Vec<u8>>),
 }
 
 macro_rules! impl_from_for_value_vec {
@@ -216,8 +224,10 @@ impl ValueVec {
             DataType::FloatVector => Self::Float(Vec::new()),
             DataType::Float16Vector => Self::Binary(Vec::new()),
             DataType::BFloat16Vector => Self::Binary(Vec::new()),
-            DataType::Geometry => unimplemented!(),
-            DataType::SparseFloatVector => unimplemented!(),
+            DataType::SparseFloatVector => Self::Bytes(Vec::new()),
+            DataType::Int8Vector => Self::Binary(Vec::new()),
+            DataType::Geometry => Self::Geometry(Vec::new()),
+            DataType::Text => Self::String(Vec::new()),
             _ => unimplemented!(),
         }
     }
@@ -257,6 +267,8 @@ impl ValueVec {
             ValueVec::String(v) => v.len(),
             ValueVec::Json(v) => v.len(),
             ValueVec::Array(v) => v.len(),
+            ValueVec::Bytes(v) => v.len(),
+            ValueVec::Geometry(v) => v.len(),
         }
     }
 
@@ -272,6 +284,8 @@ impl ValueVec {
             ValueVec::String(v) => v.clear(),
             ValueVec::Json(v) => v.clear(),
             ValueVec::Array(v) => v.clear(),
+            ValueVec::Bytes(v) => v.clear(),
+            ValueVec::Geometry(v) => v.clear(),
         }
     }
 }
@@ -289,7 +303,8 @@ impl From<Field> for ValueVec {
                     ScalarData::StringData(v) => Self::String(v.data),
                     ScalarData::JsonData(v) => Self::Json(v.data),
                     ScalarData::ArrayData(v) => Self::Array(v.data),
-                    ScalarData::BytesData(_) => unimplemented!(), // Self::Bytes(v.data),
+                    ScalarData::BytesData(v) => Self::Bytes(v.data),
+                    ScalarData::GeometryData(v) => Self::Geometry(v.data),
                     _ => unimplemented!(),
                 },
                 None => Self::None,
@@ -301,8 +316,8 @@ impl From<Field> for ValueVec {
                     VectorData::BinaryVector(v) => Self::Binary(v),
                     VectorData::Bfloat16Vector(v) => Self::Binary(v),
                     VectorData::Float16Vector(v) => Self::Binary(v),
-                    VectorData::SparseFloatVector(_) => Self::Float(Vec::new()),
-                    VectorData::Int8Vector(_) => unimplemented!(),
+                    VectorData::Int8Vector(v) => Self::Binary(v),
+                    VectorData::SparseFloatVector(v) => Self::Bytes(v.contents),
                     VectorData::VectorArray(_) => unimplemented!(),
                 },
                 None => Self::None,
