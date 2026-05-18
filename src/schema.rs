@@ -392,6 +392,19 @@ impl FieldSchema {
             max_length: 0,
         }
     }
+
+    pub fn new_json(name: &str, description: &str) -> Self {
+        Self {
+            name: name.to_owned(),
+            description: description.to_owned(),
+            dtype: DataType::Json,
+            is_primary: false,
+            auto_id: false,
+            chunk_size: 1,
+            dim: 1,
+            max_length: 0,
+        }
+    }
 }
 
 impl From<FieldSchema> for schema::FieldSchema {
