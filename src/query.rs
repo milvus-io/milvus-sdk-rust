@@ -30,7 +30,7 @@
 //! let req2 = AnnSearchRequest::new(vec![vector2], "field2".to_string(), params2, 10);
 //! let ranker = WeightedRanker::new(vec![0.7, 0.3]);
 //!
-//! let results = client.hybrid_search("my_collection", vec![req1, req2], Box::new(ranker), None).await?;
+//! let results = client.hybrid_search("my_collection", vec![req1, req2], Some(Box::new(ranker)), None).await?;
 //! ```
 
 use std::collections::HashMap;
@@ -387,7 +387,7 @@ pub type HybridSearchOptions = SearchOptions;
 ///     .limit(100)
 ///     .offset(0);
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct QueryOptions {
     output_fields: Vec<String>,
     partition_names: Vec<String>,
@@ -412,20 +412,6 @@ pub enum IdType {
     Int64(Vec<i64>),
     /// String IDs (VarChar)
     VarChar(Vec<String>),
-}
-
-impl Default for QueryOptions {
-    fn default() -> Self {
-        Self {
-            output_fields: Vec::new(),
-            partition_names: Vec::new(),
-            guarantee_timestamp: 0,
-            query_params: vec![],
-            consistency_level: 0,
-            use_default_consistency: false,
-            expr_template_values: HashMap::new(),
-        }
-    }
 }
 
 impl QueryOptions {
@@ -832,6 +818,7 @@ pub struct SearchOptions {
     pub(crate) search_params: Vec<KeyValuePair>,
     pub(crate) partition_names: Vec<String>,
     pub(crate) anns_field: Vec<String>,
+    /// Ranker for hybrid search; can be set here or passed to `hybrid_search()`.
     pub(crate) ranker: Option<Box<dyn BaseRanker>>,
     pub(crate) expr_template_values: HashMap<String, proto::schema::TemplateValue>,
     pub(crate) other_params: Option<Vec<KeyValuePair>>,
@@ -900,6 +887,20 @@ impl SearchOptions {
     /// A new `SearchOptions` instance
     pub fn with_partitions(partitions: Vec<String>) -> Self {
         Self::default().partitions(partitions)
+    }
+
+    /// Sets the ranker for hybrid search (alternative to passing ranker to `hybrid_search()`).
+    ///
+    /// # Arguments
+    ///
+    /// * `ranker` - Ranker implementation (e.g. `WeightedRanker`, `RrfRanker`)
+    ///
+    /// # Returns
+    ///
+    /// Self for method chaining
+    pub fn ranker(mut self, ranker: Box<dyn BaseRanker>) -> Self {
+        self.ranker = Some(ranker);
+        self
     }
 
     /// Adds radius parameter for range search
@@ -1297,12 +1298,7 @@ impl Client {
                 nq: data.len() as _,
                 placeholder_group: get_place_holder_group(&data)?,
                 dsl_type: DslType::BoolExprV1 as _,
-                output_fields: options
-                    .output_fields
-                    .clone()
-                    .into_iter()
-                    .map(|f| f.into())
-                    .collect(),
+                output_fields: options.output_fields.clone(),
                 search_params,
                 travel_timestamp: 0,
                 guarantee_timestamp: self
@@ -1386,7 +1382,7 @@ impl Client {
     ///
     /// * `collection_name` - Name of the collection to search
     /// * `reqs` - Vector of ANN search requests
-    /// * `ranker` - Ranking algorithm to combine results
+    /// * `ranker` - Optional ranking algorithm; if `None`, uses options.ranker or default RRF (k=60)
     /// * `options` - Optional search configuration
     ///
     /// # Returns
@@ -1418,19 +1414,25 @@ impl Client {
     /// );
     ///
     /// let ranker = WeightedRanker::new(vec![0.7, 0.3]);
-    /// let results = client.hybrid_search("my_collection", vec![req1, req2], Box::new(ranker), None).await?;
+    /// let results = client.hybrid_search("my_collection", vec![req1, req2], Some(Box::new(ranker)), None).await?;
+    /// // Or pass ranker via options; if omitted, RRF with k=60 is used
+    /// let options = SearchOptions::new().ranker(Box::new(WeightedRanker::new(vec![0.7, 0.3])));
+    /// let results = client.hybrid_search("my_collection", vec![req1, req2], None, Some(options)).await?;
     /// ```
     pub async fn hybrid_search<S>(
         &self,
         collection_name: S,
         reqs: Vec<AnnSearchRequest>,
-        ranker: Box<dyn BaseRanker>,
+        ranker: Option<Box<dyn BaseRanker>>,
         options: Option<HybridSearchOptions>,
     ) -> Result<Vec<SearchResult<'_>>>
     where
         S: Into<String>,
     {
         let options = options.unwrap_or_default();
+        let effective_ranker = ranker
+            .or(options.ranker)
+            .unwrap_or_else(|| Box::new(RrfRanker::new(60.0)) as Box<dyn BaseRanker>);
         let collection_name = collection_name.into();
         let collection = self.collection_cache.get(&collection_name).await?;
 
@@ -1520,7 +1522,7 @@ impl Client {
         }
 
         // Prepare ranker parameters
-        let rank_params = prepare_rank_params(&vec![], ranker.get_params());
+        let rank_params = prepare_rank_params(&[], effective_ranker.get_params());
 
         // Create HybridSearchRequest
         let request = proto::milvus::HybridSearchRequest {
@@ -1654,7 +1656,7 @@ impl Client {
         if data_type == DataType::VarChar {
             let ids: Vec<String> = pks.iter().map(|entry| format!("'{}'", entry)).collect();
             let expr = format!("{pk_field_name} in {:?}", ids);
-            return Ok(expr);
+            Ok(expr)
         } else {
             let mut ids: Vec<i64> = Vec::new();
             for (i, entry) in pks.iter().enumerate() {
@@ -1669,7 +1671,7 @@ impl Client {
                 }
             }
             let expr = format!("{pk_field_name} in {:?}", ids);
-            return Ok(expr);
+            Ok(expr)
         }
     }
 
@@ -1721,7 +1723,7 @@ impl Client {
             IdType::VarChar(ids_string) => ids_string,
         };
 
-        let ids: Vec<String> = ids.into_iter().map(|x| x.into()).collect();
+        let ids: Vec<String> = ids.into_iter().collect();
 
         //If ids is empty,return an empty vec
         if ids.is_empty() {
@@ -1731,7 +1733,7 @@ impl Client {
         let collection = self.collection_cache.get(&collection_name).await?;
         let expr = self.pack_pks_expr(&collection, ids)?;
         let option = options.unwrap_or_default();
-        Ok(self.query(collection_name, expr.as_str(), &option).await?)
+        self.query(collection_name, expr.as_str(), &option).await
     }
 }
 
@@ -1759,7 +1761,7 @@ pub fn get_place_holder_group(vectors: &Vec<Value>) -> Result<Vec<u8>> {
     group.encode(&mut buf).map_err(|e| {
         SuperError::Unexpected(format!("Failed to encode placeholder group: {}", e))
     })?;
-    return Ok(buf.to_vec());
+    Ok(buf.to_vec())
 }
 
 /// Converts vector data to placeholder value format
@@ -1785,9 +1787,9 @@ fn get_place_holder_value(vectors: &Vec<Value>) -> Result<PlaceholderValue> {
         values: Vec::new(),
     };
     // if no vectors, return an empty one
-    if vectors.len() == 0 {
+    if vectors.is_empty() {
         return Ok(place_holder);
-    };
+    }
 
     match vectors[0] {
         Value::FloatArray(_) => place_holder.r#type = PlaceholderType::FloatVector as _,
@@ -1818,7 +1820,7 @@ fn get_place_holder_value(vectors: &Vec<Value>) -> Result<PlaceholderValue> {
             }
         };
     }
-    return Ok(place_holder);
+    Ok(place_holder)
 }
 
 /// Extracts a parameter value from search parameters with a default fallback
@@ -1835,7 +1837,7 @@ fn get_place_holder_value(vectors: &Vec<Value>) -> Result<PlaceholderValue> {
 /// # Returns
 ///
 /// Parameter value as string, or default value if not found
-fn extract_param(search_params: &Vec<KeyValuePair>, key: &str, default: &str) -> String {
+fn extract_param(search_params: &[KeyValuePair], key: &str, default: &str) -> String {
     search_params
         .iter()
         .find(|param| param.key == key)
@@ -1904,15 +1906,15 @@ fn get_params(search_params: &Vec<KeyValuePair>) -> String {
 ///
 /// Combined rank parameters with defaults and optional parameters
 fn prepare_rank_params(
-    search_params: &Vec<KeyValuePair>,
+    search_params: &[KeyValuePair],
     rank_params: Vec<KeyValuePair>,
 ) -> Vec<KeyValuePair> {
     let mut final_rank_params = rank_params;
 
     // Parameters with default values
-    let limit = extract_param(&search_params, "limit", "10");
-    let round_decimal = extract_param(&search_params, "round_decimal", "-1");
-    let offset = extract_param(&search_params, "offset", "0");
+    let limit = extract_param(search_params, "limit", "10");
+    let round_decimal = extract_param(search_params, "round_decimal", "-1");
+    let offset = extract_param(search_params, "offset", "0");
 
     final_rank_params.push(KeyValuePair {
         key: "limit".to_string(),
