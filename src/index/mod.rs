@@ -46,17 +46,35 @@ pub enum IndexType {
     Trie,
     #[strum(serialize = "BITMAP")]
     Bitmap,
+    #[strum(serialize = "INVERTED")]
+    Inverted,
+    #[strum(serialize = "SPARSE_INVERTED_INDEX")]
+    SparseInvertedIndex,
+    #[strum(serialize = "SPARSE_WAND")]
+    SparseWand,
+    #[strum(serialize = "RTREE")]
+    RTree,
+    #[strum(serialize = "AUTOINDEX")]
+    AutoIndex,
+    #[strum(serialize = "DISKANN")]
+    DiskANN,
+    #[strum(serialize = "GPU_IVF_FLAT")]
+    GpuIvfFlat,
+    #[strum(serialize = "GPU_IVF_PQ")]
+    GpuIvfPQ,
 }
 
 #[derive(Debug, Clone, Copy, EnumString, Display)]
 pub enum MetricType {
     L2,
     IP,
+    COSINE,
     HAMMING,
     JACCARD,
     TANIMOTO,
     SUBSTRUCTURE,
     SUPERSTRUCTURE,
+    BM25,
 }
 
 #[derive(Debug, Clone)]
@@ -157,21 +175,30 @@ impl From<IndexDescription> for IndexInfo {
                 .map(|kv| (kv.key.clone(), kv.value.clone())),
         );
 
-        let index_type = IndexType::from_str(&params.remove("index_type").unwrap()).unwrap();
-        let metric_type = MetricType::from_str(&params.remove("metric_type").unwrap()).unwrap();
-        let params = serde_json::from_str(params.get("params").unwrap()).unwrap();
+        let index_type = params
+            .remove("index_type")
+            .and_then(|s| IndexType::from_str(&s).ok())
+            .unwrap_or(IndexType::Flat);
+        let metric_type = params
+            .remove("metric_type")
+            .and_then(|s| MetricType::from_str(&s).ok())
+            .unwrap_or(MetricType::L2);
+        let extra_params = params
+            .get("params")
+            .and_then(|s| serde_json::from_str(s).ok())
+            .unwrap_or_default();
 
         let params = IndexParams::new(
             description.index_name.clone(),
             index_type,
             metric_type,
-            params,
+            extra_params,
         );
         Self {
             index_name: description.index_name.clone(),
             field_name: description.field_name.clone(),
             id: description.index_id,
-            params: params,
+            params,
             state: description.state(),
         }
     }

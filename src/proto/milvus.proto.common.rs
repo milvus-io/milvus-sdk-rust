@@ -13,10 +13,8 @@ pub struct Status {
     #[prost(string, tag = "5")]
     pub detail: ::prost::alloc::string::String,
     #[prost(map = "string, string", tag = "6")]
-    pub extra_info: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        ::prost::alloc::string::String,
-    >,
+    pub extra_info:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct KeyValuePair {
@@ -74,10 +72,8 @@ pub struct MsgBase {
     #[prost(int64, tag = "5")]
     pub target_id: i64,
     #[prost(map = "string, string", tag = "6")]
-    pub properties: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        ::prost::alloc::string::String,
-    >,
+    pub properties:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
     #[prost(message, optional, tag = "7")]
     pub replicate_info: ::core::option::Option<ReplicateInfo>,
 }
@@ -138,10 +134,8 @@ pub struct ClientInfo {
     pub host: ::prost::alloc::string::String,
     /// reserved for newly-added feature if necessary.
     #[prost(map = "string, string", tag = "6")]
-    pub reserved: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        ::prost::alloc::string::String,
-    >,
+    pub reserved:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ServerInfo {
@@ -157,10 +151,8 @@ pub struct ServerInfo {
     pub deploy_mode: ::prost::alloc::string::String,
     /// reserved for newly-added feature if necessary.
     #[prost(map = "string, string", tag = "6")]
-    pub reserved: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        ::prost::alloc::string::String,
-    >,
+    pub reserved:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
 /// NodeInfo is used to describe the node information.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -171,6 +163,104 @@ pub struct NodeInfo {
     pub address: ::prost::alloc::string::String,
     #[prost(string, tag = "3")]
     pub hostname: ::prost::alloc::string::String,
+}
+/// ReplicateConfiguration is the configuration that
+/// describes the replication topology cross multiple cluster milvus.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ReplicateConfiguration {
+    #[prost(message, repeated, tag = "1")]
+    pub clusters: ::prost::alloc::vec::Vec<MilvusCluster>,
+    #[prost(message, repeated, tag = "2")]
+    pub cross_cluster_topology: ::prost::alloc::vec::Vec<CrossClusterTopology>,
+}
+/// ConnectionParam defines the params to connect to the Milvus cluster.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ConnectionParam {
+    #[prost(string, tag = "1")]
+    pub uri: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub token: ::prost::alloc::string::String,
+}
+/// MilvusCluster describes the Milvus cluster information,
+/// including pchannel mapping details.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MilvusCluster {
+    #[prost(string, tag = "1")]
+    pub cluster_id: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "2")]
+    pub connection_param: ::core::option::Option<ConnectionParam>,
+    #[prost(string, repeated, tag = "3")]
+    pub pchannels: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+/// CrossClusterTopology is the topology that
+/// describes the topology cross multiple cluster milvus.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CrossClusterTopology {
+    #[prost(string, tag = "1")]
+    pub source_cluster_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub target_cluster_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MessageId {
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    #[prost(enumeration = "WalName", tag = "2")]
+    pub wal_name: i32,
+}
+/// ImmutableMessage is the message that can not be modified anymore.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ImmutableMessage {
+    /// message id
+    #[prost(message, optional, tag = "1")]
+    pub id: ::core::option::Option<MessageId>,
+    /// message body
+    #[prost(bytes = "vec", tag = "2")]
+    pub payload: ::prost::alloc::vec::Vec<u8>,
+    /// message properties
+    #[prost(map = "string, string", tag = "3")]
+    pub properties:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+}
+/// ReplicateCheckpoint is the WAL replicate checkpoint of source cluster.
+/// It will be persisted in the target cluster metadata.
+/// When a replication started, we will get the replicate checkpoint from target cluster metadata.
+/// And use it to continue the replication at source cluster.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ReplicateCheckpoint {
+    /// the cluster id of source cluster
+    #[prost(string, tag = "1")]
+    pub cluster_id: ::prost::alloc::string::String,
+    /// the pchannel of source cluster
+    #[prost(string, tag = "2")]
+    pub pchannel: ::prost::alloc::string::String,
+    /// the last confirmed message id of the last replicated message
+    #[prost(message, optional, tag = "3")]
+    pub message_id: ::core::option::Option<MessageId>,
+    /// the time tick of the last replicated message
+    #[prost(uint64, tag = "4")]
+    pub time_tick: u64,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct HighlightData {
+    #[prost(string, repeated, tag = "1")]
+    pub fragments: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    #[prost(float, repeated, tag = "2")]
+    pub scores: ::prost::alloc::vec::Vec<f32>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct HighlightResult {
+    #[prost(string, tag = "1")]
+    pub field_name: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "2")]
+    pub datas: ::prost::alloc::vec::Vec<HighlightData>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Highlighter {
+    #[prost(enumeration = "HighlightType", tag = "1")]
+    pub r#type: i32,
+    #[prost(message, repeated, tag = "2")]
+    pub params: ::prost::alloc::vec::Vec<KeyValuePair>,
 }
 /// Deprecated
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -593,6 +683,10 @@ pub enum MsgType {
     DescribeAlias = 113,
     ListAliases = 114,
     AlterCollectionField = 115,
+    AddCollectionFunction = 116,
+    AlterCollectionFunction = 117,
+    DropCollectionFunction = 118,
+    TruncateCollection = 119,
     /// DEFINITION REQUESTS: PARTITION
     CreatePartition = 200,
     DropPartition = 201,
@@ -630,6 +724,8 @@ pub enum MsgType {
     /// streaming service new msg type for internal usage compatible
     CreateSegment = 407,
     Import = 408,
+    /// streaming service new msg type for internal usage compatible
+    FlushAll = 409,
     /// QUERY
     Search = 500,
     SearchResult = 501,
@@ -708,6 +804,8 @@ pub enum MsgType {
     AlterDatabase = 1804,
     DescribeDatabase = 1805,
     AddCollectionField = 1900,
+    /// WAL group
+    AlterWal = 2000,
 }
 impl MsgType {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -733,6 +831,10 @@ impl MsgType {
             Self::DescribeAlias => "DescribeAlias",
             Self::ListAliases => "ListAliases",
             Self::AlterCollectionField => "AlterCollectionField",
+            Self::AddCollectionFunction => "AddCollectionFunction",
+            Self::AlterCollectionFunction => "AlterCollectionFunction",
+            Self::DropCollectionFunction => "DropCollectionFunction",
+            Self::TruncateCollection => "TruncateCollection",
             Self::CreatePartition => "CreatePartition",
             Self::DropPartition => "DropPartition",
             Self::HasPartition => "HasPartition",
@@ -763,6 +865,7 @@ impl MsgType {
             Self::FlushSegment => "FlushSegment",
             Self::CreateSegment => "CreateSegment",
             Self::Import => "Import",
+            Self::FlushAll => "FlushAll",
             Self::Search => "Search",
             Self::SearchResult => "SearchResult",
             Self::GetIndexState => "GetIndexState",
@@ -833,6 +936,7 @@ impl MsgType {
             Self::AlterDatabase => "AlterDatabase",
             Self::DescribeDatabase => "DescribeDatabase",
             Self::AddCollectionField => "AddCollectionField",
+            Self::AlterWal => "AlterWAL",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -855,6 +959,10 @@ impl MsgType {
             "DescribeAlias" => Some(Self::DescribeAlias),
             "ListAliases" => Some(Self::ListAliases),
             "AlterCollectionField" => Some(Self::AlterCollectionField),
+            "AddCollectionFunction" => Some(Self::AddCollectionFunction),
+            "AlterCollectionFunction" => Some(Self::AlterCollectionFunction),
+            "DropCollectionFunction" => Some(Self::DropCollectionFunction),
+            "TruncateCollection" => Some(Self::TruncateCollection),
             "CreatePartition" => Some(Self::CreatePartition),
             "DropPartition" => Some(Self::DropPartition),
             "HasPartition" => Some(Self::HasPartition),
@@ -885,6 +993,7 @@ impl MsgType {
             "FlushSegment" => Some(Self::FlushSegment),
             "CreateSegment" => Some(Self::CreateSegment),
             "Import" => Some(Self::Import),
+            "FlushAll" => Some(Self::FlushAll),
             "Search" => Some(Self::Search),
             "SearchResult" => Some(Self::SearchResult),
             "GetIndexState" => Some(Self::GetIndexState),
@@ -955,6 +1064,7 @@ impl MsgType {
             "AlterDatabase" => Some(Self::AlterDatabase),
             "DescribeDatabase" => Some(Self::DescribeDatabase),
             "AddCollectionField" => Some(Self::AddCollectionField),
+            "AlterWAL" => Some(Self::AlterWal),
             _ => None,
         }
     }
@@ -1206,6 +1316,8 @@ pub enum ObjectPrivilege {
     PrivilegeAddFileResource = 72,
     PrivilegeRemoveFileResource = 73,
     PrivilegeListFileResources = 74,
+    PrivilegeUpdateReplicateConfiguration = 78,
+    PrivilegeGetReplicateConfiguration = 85,
 }
 impl ObjectPrivilege {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -1284,13 +1396,21 @@ impl ObjectPrivilege {
             Self::PrivilegeGroupCollectionReadWrite => {
                 "PrivilegeGroupCollectionReadWrite"
             }
-            Self::PrivilegeGroupCollectionAdmin => "PrivilegeGroupCollectionAdmin",
+            Self::PrivilegeGroupCollectionAdmin => {
+                "PrivilegeGroupCollectionAdmin"
+            }
             Self::PrivilegeGetImportProgress => "PrivilegeGetImportProgress",
             Self::PrivilegeListImport => "PrivilegeListImport",
             Self::PrivilegeAddCollectionField => "PrivilegeAddCollectionField",
             Self::PrivilegeAddFileResource => "PrivilegeAddFileResource",
             Self::PrivilegeRemoveFileResource => "PrivilegeRemoveFileResource",
             Self::PrivilegeListFileResources => "PrivilegeListFileResources",
+            Self::PrivilegeUpdateReplicateConfiguration => {
+                "PrivilegeUpdateReplicateConfiguration"
+            }
+            Self::PrivilegeGetReplicateConfiguration => {
+                "PrivilegeGetReplicateConfiguration"
+            }
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -1324,9 +1444,7 @@ impl ObjectPrivilege {
             "PrivilegeUpsert" => Some(Self::PrivilegeUpsert),
             "PrivilegeCreateResourceGroup" => Some(Self::PrivilegeCreateResourceGroup),
             "PrivilegeDropResourceGroup" => Some(Self::PrivilegeDropResourceGroup),
-            "PrivilegeDescribeResourceGroup" => {
-                Some(Self::PrivilegeDescribeResourceGroup)
-            }
+            "PrivilegeDescribeResourceGroup" => Some(Self::PrivilegeDescribeResourceGroup),
             "PrivilegeListResourceGroups" => Some(Self::PrivilegeListResourceGroups),
             "PrivilegeTransferNode" => Some(Self::PrivilegeTransferNode),
             "PrivilegeTransferReplica" => Some(Self::PrivilegeTransferReplica),
@@ -1385,6 +1503,12 @@ impl ObjectPrivilege {
             "PrivilegeAddFileResource" => Some(Self::PrivilegeAddFileResource),
             "PrivilegeRemoveFileResource" => Some(Self::PrivilegeRemoveFileResource),
             "PrivilegeListFileResources" => Some(Self::PrivilegeListFileResources),
+            "PrivilegeUpdateReplicateConfiguration" => {
+                Some(Self::PrivilegeUpdateReplicateConfiguration)
+            }
+            "PrivilegeGetReplicateConfiguration" => {
+                Some(Self::PrivilegeGetReplicateConfiguration)
+            }
             _ => None,
         }
     }
@@ -1484,23 +1608,64 @@ impl LoadPriority {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
-pub enum FileResourceType {
-    AnalyzerDictionary = 0,
+pub enum WalName {
+    Unknown = 0,
+    RocksMq = 1,
+    Pulsar = 2,
+    Kafka = 3,
+    WoodPecker = 4,
+    Test = 999,
 }
-impl FileResourceType {
+impl WalName {
     /// String value of the enum field names used in the ProtoBuf definition.
     ///
     /// The values are not transformed in any way and thus are considered stable
     /// (if the ProtoBuf definition does not change) and safe for programmatic use.
     pub fn as_str_name(&self) -> &'static str {
         match self {
-            Self::AnalyzerDictionary => "ANALYZER_DICTIONARY",
+            Self::Unknown => "Unknown",
+            Self::RocksMq => "RocksMQ",
+            Self::Pulsar => "Pulsar",
+            Self::Kafka => "Kafka",
+            Self::WoodPecker => "WoodPecker",
+            Self::Test => "Test",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
     pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
         match value {
-            "ANALYZER_DICTIONARY" => Some(Self::AnalyzerDictionary),
+            "Unknown" => Some(Self::Unknown),
+            "RocksMQ" => Some(Self::RocksMq),
+            "Pulsar" => Some(Self::Pulsar),
+            "Kafka" => Some(Self::Kafka),
+            "WoodPecker" => Some(Self::WoodPecker),
+            "Test" => Some(Self::Test),
+            _ => None,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum HighlightType {
+    Lexical = 0,
+    Semantic = 1,
+}
+impl HighlightType {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Lexical => "Lexical",
+            Self::Semantic => "Semantic",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "Lexical" => Some(Self::Lexical),
+            "Semantic" => Some(Self::Semantic),
             _ => None,
         }
     }

@@ -16,12 +16,14 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct InsertOptions {
     pub(crate) partition_name: String,
+    pub(crate) namespace: Option<String>,
 }
 
 impl Default for InsertOptions {
     fn default() -> Self {
         Self {
             partition_name: String::new(),
+            namespace: None,
         }
     }
 }
@@ -31,13 +33,97 @@ impl InsertOptions {
         Self::default()
     }
 
-    pub fn with_partition_name(partition_name: String) -> Self {
+    pub fn with_partition_name(partition_name: impl Into<String>) -> Self {
         Self::default().partition_name(partition_name)
     }
 
-    pub fn partition_name(mut self, partition_name: String) -> Self {
-        self.partition_name = partition_name.to_owned();
+    pub fn partition_name(mut self, partition_name: impl Into<String>) -> Self {
+        self.partition_name = partition_name.into();
         self
+    }
+
+    /// Set namespace for multi-tenancy (Milvus 2.6+)
+    pub fn namespace(mut self, namespace: impl Into<String>) -> Self {
+        self.namespace = Some(namespace.into());
+        self
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct UpsertOptions {
+    pub(crate) partition_name: String,
+    pub(crate) namespace: Option<String>,
+    pub(crate) partial_update: bool,
+}
+
+impl Default for UpsertOptions {
+    fn default() -> Self {
+        Self {
+            partition_name: String::new(),
+            namespace: None,
+            partial_update: false,
+        }
+    }
+}
+
+impl UpsertOptions {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn partition_name(mut self, partition_name: impl Into<String>) -> Self {
+        self.partition_name = partition_name.into();
+        self
+    }
+
+    /// Set namespace for multi-tenancy (Milvus 2.6+)
+    pub fn namespace(mut self, namespace: impl Into<String>) -> Self {
+        self.namespace = Some(namespace.into());
+        self
+    }
+
+    /// Enable partial update: only update specified fields (Milvus 2.6+)
+    pub fn partial_update(mut self, enabled: bool) -> Self {
+        self.partial_update = enabled;
+        self
+    }
+}
+
+impl From<InsertOptions> for UpsertOptions {
+    fn from(options: InsertOptions) -> Self {
+        Self {
+            partition_name: options.partition_name,
+            namespace: options.namespace,
+            partial_update: false,
+        }
+    }
+}
+
+pub trait IntoUpsertOptions {
+    fn into_upsert_options(self) -> UpsertOptions;
+}
+
+impl IntoUpsertOptions for UpsertOptions {
+    fn into_upsert_options(self) -> UpsertOptions {
+        self
+    }
+}
+
+impl IntoUpsertOptions for InsertOptions {
+    fn into_upsert_options(self) -> UpsertOptions {
+        self.into()
+    }
+}
+
+impl IntoUpsertOptions for Option<UpsertOptions> {
+    fn into_upsert_options(self) -> UpsertOptions {
+        self.unwrap_or_default()
+    }
+}
+
+impl IntoUpsertOptions for Option<InsertOptions> {
+    fn into_upsert_options(self) -> UpsertOptions {
+        self.unwrap_or_default().into()
     }
 }
 
@@ -75,6 +161,25 @@ impl DeleteOptions {
     }
 }
 
+#[cfg(test)]
+mod test {
+    use super::{InsertOptions, IntoUpsertOptions};
+
+    #[test]
+    fn option_insert_options_convert_to_upsert_options() {
+        let options = Some(
+            InsertOptions::new()
+                .partition_name("p0")
+                .namespace("tenant-a"),
+        )
+        .into_upsert_options();
+
+        assert_eq!(options.partition_name, "p0");
+        assert_eq!(options.namespace.as_deref(), Some("tenant-a"));
+        assert!(!options.partial_update);
+    }
+}
+
 impl Client {
     pub async fn insert<S>(
         &self,
@@ -101,6 +206,7 @@ impl Client {
                 fields_data: fields_data.into_iter().map(|f| f.into()).collect(),
                 hash_keys: Vec::new(),
                 schema_timestamp: 0,
+                namespace: options.namespace,
             })
             .await?
             .into_inner();
@@ -193,16 +299,17 @@ impl Client {
         Ok(expr)
     }
 
-    pub async fn upsert<S>(
+    pub async fn upsert<S, O>(
         &self,
         collection_name: S,
         fields_data: Vec<FieldColumn>,
-        options: Option<InsertOptions>,
+        options: O,
     ) -> Result<crate::proto::milvus::MutationResult>
     where
         S: Into<String>,
+        O: IntoUpsertOptions,
     {
-        let options = options.unwrap_or_default();
+        let options = options.into_upsert_options();
         let row_num = fields_data.first().map(|c| c.len()).unwrap_or(0);
         let collection_name = collection_name.into();
 
@@ -218,7 +325,8 @@ impl Client {
                 fields_data: fields_data.into_iter().map(|f| f.into()).collect(),
                 hash_keys: Vec::new(),
                 schema_timestamp: 0,
-                partial_update: false,
+                partial_update: options.partial_update,
+                namespace: options.namespace,
             })
             .await?
             .into_inner();

@@ -838,6 +838,8 @@ pub struct InsertRequest {
     pub num_rows: u32,
     #[prost(uint64, tag = "8")]
     pub schema_timestamp: u64,
+    #[prost(string, optional, tag = "9")]
+    pub namespace: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AddCollectionFieldRequest {
@@ -852,6 +854,47 @@ pub struct AddCollectionFieldRequest {
     /// The serialized `schema.FieldSchema`
     #[prost(bytes = "vec", tag = "5")]
     pub schema: ::prost::alloc::vec::Vec<u8>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AddCollectionFunctionRequest {
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    #[prost(string, tag = "2")]
+    pub db_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub collection_name: ::prost::alloc::string::String,
+    #[prost(int64, tag = "4")]
+    pub collection_id: i64,
+    #[prost(message, optional, tag = "5")]
+    pub function_schema: ::core::option::Option<super::schema::FunctionSchema>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AlterCollectionFunctionRequest {
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    #[prost(string, tag = "2")]
+    pub db_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub collection_name: ::prost::alloc::string::String,
+    #[prost(int64, tag = "4")]
+    pub collection_id: i64,
+    #[prost(string, tag = "5")]
+    pub function_name: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "6")]
+    pub function_schema: ::core::option::Option<super::schema::FunctionSchema>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DropCollectionFunctionRequest {
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    #[prost(string, tag = "2")]
+    pub db_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub collection_name: ::prost::alloc::string::String,
+    #[prost(int64, tag = "4")]
+    pub collection_id: i64,
+    #[prost(string, tag = "5")]
+    pub function_name: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct UpsertRequest {
@@ -873,6 +916,8 @@ pub struct UpsertRequest {
     pub schema_timestamp: u64,
     #[prost(bool, tag = "9")]
     pub partial_update: bool,
+    #[prost(string, optional, tag = "10")]
+    pub namespace: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct MutationResult {
@@ -943,7 +988,10 @@ pub struct SubSearchRequest {
         ::prost::alloc::string::String,
         super::schema::TemplateValue,
     >,
+    #[prost(string, optional, tag = "7")]
+    pub namespace: ::core::option::Option<::prost::alloc::string::String>,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SearchRequest {
     /// must
@@ -960,11 +1008,6 @@ pub struct SearchRequest {
     /// must
     #[prost(string, tag = "5")]
     pub dsl: ::prost::alloc::string::String,
-    /// serialized `PlaceholderGroup`
-    ///
-    /// must
-    #[prost(bytes = "vec", tag = "6")]
-    pub placeholder_group: ::prost::alloc::vec::Vec<u8>,
     /// must
     #[prost(enumeration = "super::common::DslType", tag = "7")]
     pub dsl_type: i32,
@@ -986,6 +1029,8 @@ pub struct SearchRequest {
     pub consistency_level: i32,
     #[prost(bool, tag = "15")]
     pub use_default_consistency: bool,
+    /// use search_input instead
+    #[deprecated]
     #[prost(bool, tag = "16")]
     pub search_by_primary_keys: bool,
     #[prost(message, repeated, tag = "17")]
@@ -997,6 +1042,24 @@ pub struct SearchRequest {
     >,
     #[prost(message, optional, tag = "19")]
     pub function_score: ::core::option::Option<super::schema::FunctionScore>,
+    #[prost(string, optional, tag = "20")]
+    pub namespace: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(message, optional, tag = "21")]
+    pub highlighter: ::core::option::Option<super::common::Highlighter>,
+    #[prost(oneof = "search_request::SearchInput", tags = "6, 22")]
+    pub search_input: ::core::option::Option<search_request::SearchInput>,
+}
+/// Nested message and enum types in `SearchRequest`.
+pub mod search_request {
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum SearchInput {
+        /// serialized `PlaceholderGroup` for vector search
+        #[prost(bytes, tag = "6")]
+        PlaceholderGroup(::prost::alloc::vec::Vec<u8>),
+        /// primary keys for search by IDs
+        #[prost(message, tag = "22")]
+        Ids(super::super::schema::IDs),
+    }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Hits {
@@ -1052,6 +1115,8 @@ pub struct HybridSearchRequest {
     pub use_default_consistency: bool,
     #[prost(message, optional, tag = "13")]
     pub function_score: ::core::option::Option<super::schema::FunctionScore>,
+    #[prost(string, optional, tag = "14")]
+    pub namespace: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FlushRequest {
@@ -1126,6 +1191,8 @@ pub struct QueryRequest {
         ::prost::alloc::string::String,
         super::schema::TemplateValue,
     >,
+    #[prost(string, optional, tag = "14")]
+    pub namespace: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct QueryResults {
@@ -1221,19 +1288,94 @@ pub mod calc_distance_results {
         FloatDist(super::super::schema::FloatArray),
     }
 }
+/// Deprecated, FlushAll semantics changed to flushing the entire cluster.
+/// Specific collection to flush with database context
+/// This message allows targeting specific collections within a database for flush operations
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct FlushAllTarget {
+    /// Database name to target for flush operation
+    #[prost(string, tag = "1")]
+    pub db_name: ::prost::alloc::string::String,
+    /// Collection names within this database to flush
+    /// If empty, flush all collections in this database
+    #[prost(string, repeated, tag = "2")]
+    pub collection_names: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FlushAllRequest {
     #[prost(message, optional, tag = "1")]
     pub base: ::core::option::Option<super::common::MsgBase>,
+    #[deprecated]
     #[prost(string, tag = "2")]
     pub db_name: ::prost::alloc::string::String,
+    #[deprecated]
+    #[prost(message, repeated, tag = "3")]
+    pub flush_targets: ::prost::alloc::vec::Vec<FlushAllTarget>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ClusterInfo {
+    #[prost(string, tag = "1")]
+    pub cluster_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub cchannel: ::prost::alloc::string::String,
+    #[prost(string, repeated, tag = "3")]
+    pub pchannels: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FlushAllResponse {
     #[prost(message, optional, tag = "1")]
     pub status: ::core::option::Option<super::common::Status>,
+    #[deprecated]
     #[prost(uint64, tag = "2")]
     pub flush_all_ts: u64,
+    #[deprecated]
+    #[prost(message, repeated, tag = "3")]
+    pub flush_results: ::prost::alloc::vec::Vec<FlushAllResult>,
+    /// pchannel -> FlushAllMsg
+    #[prost(map = "string, message", tag = "4")]
+    pub flush_all_msgs: ::std::collections::HashMap<
+        ::prost::alloc::string::String,
+        super::common::ImmutableMessage,
+    >,
+    #[prost(message, optional, tag = "5")]
+    pub cluster_info: ::core::option::Option<ClusterInfo>,
+}
+/// Deprecated
+/// Flush result for a single flush target
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct FlushAllResult {
+    /// Database name containing the collections
+    #[prost(string, tag = "1")]
+    pub db_name: ::prost::alloc::string::String,
+    /// List of collections that were actually processed for this target
+    /// If the target had empty collection_names (flush all), this shows all collections in the database
+    /// If the target specified collection_names, this shows only those collections
+    #[prost(message, repeated, tag = "2")]
+    pub collection_results: ::prost::alloc::vec::Vec<FlushCollectionResult>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct FlushCollectionResult {
+    /// Collection name
+    #[prost(string, tag = "1")]
+    pub collection_name: ::prost::alloc::string::String,
+    /// Segment IDs
+    #[prost(message, optional, tag = "2")]
+    pub segment_ids: ::core::option::Option<super::schema::LongArray>,
+    /// Segment IDs that were actually flushed
+    #[prost(message, optional, tag = "3")]
+    pub flush_segment_ids: ::core::option::Option<super::schema::LongArray>,
+    /// Seal time (physical time for backup tools)
+    #[prost(int64, tag = "4")]
+    pub seal_time: i64,
+    /// Flush timestamp (hybrid timestamp for getting flush state)
+    #[prost(uint64, tag = "5")]
+    pub flush_ts: u64,
+    /// channel name to checkpoint position
+    #[prost(map = "string, message", tag = "6")]
+    pub channel_cps: ::std::collections::HashMap<
+        ::prost::alloc::string::String,
+        super::msg::MsgPosition,
+    >,
 }
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct PersistentSegmentInfo {
@@ -1416,6 +1558,10 @@ pub struct ManualCompactionRequest {
     pub channel: ::prost::alloc::string::String,
     #[prost(int64, repeated, tag = "8")]
     pub segment_ids: ::prost::alloc::vec::Vec<i64>,
+    #[prost(bool, tag = "9")]
+    pub l0_compaction: bool,
+    #[prost(int64, tag = "10")]
+    pub target_size: i64,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ManualCompactionResponse {
@@ -1489,17 +1635,45 @@ pub struct GetFlushStateResponse {
 pub struct GetFlushAllStateRequest {
     #[prost(message, optional, tag = "1")]
     pub base: ::core::option::Option<super::common::MsgBase>,
+    #[deprecated]
     #[prost(uint64, tag = "2")]
     pub flush_all_ts: u64,
+    #[deprecated]
     #[prost(string, tag = "3")]
     pub db_name: ::prost::alloc::string::String,
+    #[deprecated]
+    #[prost(message, repeated, tag = "4")]
+    pub flush_targets: ::prost::alloc::vec::Vec<FlushAllTarget>,
+    /// pchannel -> flush all ts
+    #[prost(map = "string, uint64", tag = "5")]
+    pub flush_all_tss: ::std::collections::HashMap<::prost::alloc::string::String, u64>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetFlushAllStateResponse {
     #[prost(message, optional, tag = "1")]
     pub status: ::core::option::Option<super::common::Status>,
+    /// True if all data in the cluster are flushed
     #[prost(bool, tag = "2")]
     pub flushed: bool,
+    /// Detailed flush state for each database
+    /// Provides per-database and per-collection flush status information
+    #[deprecated]
+    #[prost(message, repeated, tag = "3")]
+    pub flush_states: ::prost::alloc::vec::Vec<FlushAllState>,
+}
+/// Deprecated
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct FlushAllState {
+    /// Database name for this flush state report
+    #[prost(string, tag = "1")]
+    pub db_name: ::prost::alloc::string::String,
+    /// Collection-level flush state mapping
+    /// Key: collection name, Value: true if collection is fully flushed
+    #[prost(map = "string, bool", tag = "2")]
+    pub collection_flush_states: ::std::collections::HashMap<
+        ::prost::alloc::string::String,
+        bool,
+    >,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ImportRequest {
@@ -2100,6 +2274,7 @@ pub struct DropResourceGroupRequest {
     pub resource_group: ::prost::alloc::string::String,
 }
 /// transfer `nodeNum` nodes from `source_resource_group` to `target_resource_group`
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TransferNodeRequest {
     #[prost(message, optional, tag = "1")]
@@ -2112,6 +2287,7 @@ pub struct TransferNodeRequest {
     pub num_node: i32,
 }
 /// transfer `replicaNum` replicas in `collectionID` from `source_resource_group` to `target_resource_group`
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TransferReplicaRequest {
     #[prost(message, optional, tag = "1")]
@@ -2127,11 +2303,13 @@ pub struct TransferReplicaRequest {
     #[prost(string, tag = "6")]
     pub db_name: ::prost::alloc::string::String,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ListResourceGroupsRequest {
     #[prost(message, optional, tag = "1")]
     pub base: ::core::option::Option<super::common::MsgBase>,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ListResourceGroupsResponse {
     #[prost(message, optional, tag = "1")]
@@ -2139,6 +2317,7 @@ pub struct ListResourceGroupsResponse {
     #[prost(string, repeated, tag = "2")]
     pub resource_groups: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DescribeResourceGroupRequest {
     #[prost(message, optional, tag = "1")]
@@ -2146,6 +2325,7 @@ pub struct DescribeResourceGroupRequest {
     #[prost(string, tag = "2")]
     pub resource_group: ::prost::alloc::string::String,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DescribeResourceGroupResponse {
     #[prost(message, optional, tag = "1")]
@@ -2153,6 +2333,7 @@ pub struct DescribeResourceGroupResponse {
     #[prost(message, optional, tag = "2")]
     pub resource_group: ::core::option::Option<ResourceGroup>,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResourceGroup {
     #[prost(string, tag = "1")]
@@ -2186,6 +2367,7 @@ pub struct ResourceGroup {
     #[prost(message, repeated, tag = "8")]
     pub nodes: ::prost::alloc::vec::Vec<super::common::NodeInfo>,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RenameCollectionRequest {
     #[prost(message, optional, tag = "1")]
@@ -2199,6 +2381,7 @@ pub struct RenameCollectionRequest {
     #[prost(string, tag = "5")]
     pub new_db_name: ::prost::alloc::string::String,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetIndexStatisticsRequest {
     /// Not useful for now
@@ -2216,6 +2399,7 @@ pub struct GetIndexStatisticsRequest {
     #[prost(uint64, tag = "5")]
     pub timestamp: u64,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetIndexStatisticsResponse {
     /// Response status
@@ -2225,6 +2409,7 @@ pub struct GetIndexStatisticsResponse {
     #[prost(message, repeated, tag = "2")]
     pub index_descriptions: ::prost::alloc::vec::Vec<IndexDescription>,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ConnectRequest {
     #[prost(message, optional, tag = "1")]
@@ -2232,6 +2417,7 @@ pub struct ConnectRequest {
     #[prost(message, optional, tag = "2")]
     pub client_info: ::core::option::Option<super::common::ClientInfo>,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ConnectResponse {
     #[prost(message, optional, tag = "1")]
@@ -2241,11 +2427,13 @@ pub struct ConnectResponse {
     #[prost(int64, tag = "3")]
     pub identifier: i64,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AllocTimestampRequest {
     #[prost(message, optional, tag = "1")]
     pub base: ::core::option::Option<super::common::MsgBase>,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AllocTimestampResponse {
     #[prost(message, optional, tag = "1")]
@@ -2253,6 +2441,7 @@ pub struct AllocTimestampResponse {
     #[prost(uint64, tag = "2")]
     pub timestamp: u64,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CreateDatabaseRequest {
     #[prost(message, optional, tag = "1")]
@@ -2262,6 +2451,7 @@ pub struct CreateDatabaseRequest {
     #[prost(message, repeated, tag = "3")]
     pub properties: ::prost::alloc::vec::Vec<super::common::KeyValuePair>,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DropDatabaseRequest {
     #[prost(message, optional, tag = "1")]
@@ -2269,11 +2459,13 @@ pub struct DropDatabaseRequest {
     #[prost(string, tag = "2")]
     pub db_name: ::prost::alloc::string::String,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ListDatabasesRequest {
     #[prost(message, optional, tag = "1")]
     pub base: ::core::option::Option<super::common::MsgBase>,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ListDatabasesResponse {
     #[prost(message, optional, tag = "1")]
@@ -2285,6 +2477,7 @@ pub struct ListDatabasesResponse {
     #[prost(int64, repeated, tag = "4")]
     pub db_ids: ::prost::alloc::vec::Vec<i64>,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AlterDatabaseRequest {
     #[prost(message, optional, tag = "1")]
@@ -2298,6 +2491,7 @@ pub struct AlterDatabaseRequest {
     #[prost(string, repeated, tag = "5")]
     pub delete_keys: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DescribeDatabaseRequest {
     #[prost(message, optional, tag = "1")]
@@ -2305,6 +2499,7 @@ pub struct DescribeDatabaseRequest {
     #[prost(string, tag = "2")]
     pub db_name: ::prost::alloc::string::String,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DescribeDatabaseResponse {
     #[prost(message, optional, tag = "1")]
@@ -2318,6 +2513,7 @@ pub struct DescribeDatabaseResponse {
     #[prost(message, repeated, tag = "5")]
     pub properties: ::prost::alloc::vec::Vec<super::common::KeyValuePair>,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ReplicateMessageRequest {
     #[prost(message, optional, tag = "1")]
@@ -2335,6 +2531,7 @@ pub struct ReplicateMessageRequest {
     #[prost(message, repeated, tag = "7")]
     pub end_positions: ::prost::alloc::vec::Vec<super::msg::MsgPosition>,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ReplicateMessageResponse {
     #[prost(message, optional, tag = "1")]
@@ -2342,6 +2539,7 @@ pub struct ReplicateMessageResponse {
     #[prost(string, tag = "2")]
     pub position: ::prost::alloc::string::String,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ImportAuthPlaceholder {
     #[prost(string, tag = "1")]
@@ -2351,11 +2549,13 @@ pub struct ImportAuthPlaceholder {
     #[prost(string, tag = "3")]
     pub partition_name: ::prost::alloc::string::String,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetImportProgressAuthPlaceholder {
     #[prost(string, tag = "1")]
     pub db_name: ::prost::alloc::string::String,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ListImportsAuthPlaceholder {
     #[prost(string, tag = "3")]
@@ -2363,6 +2563,7 @@ pub struct ListImportsAuthPlaceholder {
     #[prost(string, tag = "1")]
     pub collection_name: ::prost::alloc::string::String,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RunAnalyzerRequest {
     #[prost(message, optional, tag = "1")]
@@ -2384,6 +2585,7 @@ pub struct RunAnalyzerRequest {
     #[prost(string, repeated, tag = "9")]
     pub analyzer_names: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AnalyzerToken {
     #[prost(string, tag = "1")]
@@ -2399,11 +2601,13 @@ pub struct AnalyzerToken {
     #[prost(uint32, tag = "6")]
     pub hash: u32,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AnalyzerResult {
     #[prost(message, repeated, tag = "1")]
     pub tokens: ::prost::alloc::vec::Vec<AnalyzerToken>,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RunAnalyzerResponse {
     #[prost(message, optional, tag = "1")]
@@ -2411,6 +2615,7 @@ pub struct RunAnalyzerResponse {
     #[prost(message, repeated, tag = "2")]
     pub results: ::prost::alloc::vec::Vec<AnalyzerResult>,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FileResourceInfo {
     #[prost(int64, tag = "1")]
@@ -2419,9 +2624,8 @@ pub struct FileResourceInfo {
     pub name: ::prost::alloc::string::String,
     #[prost(string, tag = "3")]
     pub path: ::prost::alloc::string::String,
-    #[prost(enumeration = "super::common::FileResourceType", tag = "4")]
-    pub r#type: i32,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AddFileResourceRequest {
     #[prost(message, optional, tag = "1")]
@@ -2430,9 +2634,8 @@ pub struct AddFileResourceRequest {
     pub name: ::prost::alloc::string::String,
     #[prost(string, tag = "3")]
     pub path: ::prost::alloc::string::String,
-    #[prost(enumeration = "super::common::FileResourceType", tag = "4")]
-    pub r#type: i32,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RemoveFileResourceRequest {
     #[prost(message, optional, tag = "1")]
@@ -2440,11 +2643,13 @@ pub struct RemoveFileResourceRequest {
     #[prost(string, tag = "2")]
     pub name: ::prost::alloc::string::String,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ListFileResourcesRequest {
     #[prost(message, optional, tag = "1")]
     pub base: ::core::option::Option<super::common::MsgBase>,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ListFileResourcesResponse {
     #[prost(message, optional, tag = "1")]
@@ -2453,6 +2658,7 @@ pub struct ListFileResourcesResponse {
     pub resources: ::prost::alloc::vec::Vec<FileResourceInfo>,
 }
 /// User Tag Management
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AddUserTagsRequest {
     #[prost(message, optional, tag = "1")]
@@ -2465,6 +2671,7 @@ pub struct AddUserTagsRequest {
         ::prost::alloc::string::String,
     >,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DeleteUserTagsRequest {
     #[prost(message, optional, tag = "1")]
@@ -2474,6 +2681,7 @@ pub struct DeleteUserTagsRequest {
     #[prost(string, repeated, tag = "3")]
     pub tag_keys: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetUserTagsRequest {
     #[prost(message, optional, tag = "1")]
@@ -2481,6 +2689,7 @@ pub struct GetUserTagsRequest {
     #[prost(string, tag = "2")]
     pub user_name: ::prost::alloc::string::String,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetUserTagsResponse {
     #[prost(message, optional, tag = "1")]
@@ -2491,6 +2700,7 @@ pub struct GetUserTagsResponse {
         ::prost::alloc::string::String,
     >,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ListUsersWithTagRequest {
     #[prost(message, optional, tag = "1")]
@@ -2500,6 +2710,7 @@ pub struct ListUsersWithTagRequest {
     #[prost(string, tag = "3")]
     pub tag_value: ::prost::alloc::string::String,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ListUsersWithTagResponse {
     #[prost(message, optional, tag = "1")]
@@ -2508,6 +2719,7 @@ pub struct ListUsersWithTagResponse {
     pub user_names: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 /// Row Policy Management
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CreateRowPolicyRequest {
     #[prost(message, optional, tag = "1")]
@@ -2534,6 +2746,7 @@ pub struct CreateRowPolicyRequest {
     #[prost(string, tag = "9")]
     pub description: ::prost::alloc::string::String,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DropRowPolicyRequest {
     #[prost(message, optional, tag = "1")]
@@ -2545,6 +2758,7 @@ pub struct DropRowPolicyRequest {
     #[prost(string, tag = "4")]
     pub policy_name: ::prost::alloc::string::String,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ListRowPoliciesRequest {
     #[prost(message, optional, tag = "1")]
@@ -2554,6 +2768,7 @@ pub struct ListRowPoliciesRequest {
     #[prost(string, tag = "3")]
     pub collection_name: ::prost::alloc::string::String,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RowPolicy {
     #[prost(string, tag = "1")]
@@ -2571,6 +2786,7 @@ pub struct RowPolicy {
     #[prost(int64, tag = "7")]
     pub created_at: i64,
 }
+
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ListRowPoliciesResponse {
     #[prost(message, optional, tag = "1")]
@@ -2581,6 +2797,97 @@ pub struct ListRowPoliciesResponse {
     pub db_name: ::prost::alloc::string::String,
     #[prost(string, tag = "4")]
     pub collection_name: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct UpdateReplicateConfigurationRequest {
+    #[prost(message, optional, tag = "1")]
+    pub replicate_configuration: ::core::option::Option<
+        super::common::ReplicateConfiguration,
+    >,
+    /// If true, the current cluster will be promoted to primary forcefully.
+    /// This is intended for failover scenarios.
+    #[prost(bool, tag = "2")]
+    pub force_promote: bool,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetReplicateConfigurationRequest {}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetReplicateConfigurationResponse {
+    #[prost(message, optional, tag = "1")]
+    pub status: ::core::option::Option<super::common::Status>,
+    #[prost(message, optional, tag = "2")]
+    pub configuration: ::core::option::Option<super::common::ReplicateConfiguration>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetReplicateInfoRequest {
+    #[prost(string, tag = "1")]
+    pub source_cluster_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub target_pchannel: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetReplicateInfoResponse {
+    #[prost(message, optional, tag = "1")]
+    pub checkpoint: ::core::option::Option<super::common::ReplicateCheckpoint>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ReplicateMessage {
+    /// the cluster id of source cluster
+    #[prost(string, tag = "1")]
+    pub source_cluster_id: ::prost::alloc::string::String,
+    /// replicate message to be sent
+    #[prost(message, optional, tag = "2")]
+    pub message: ::core::option::Option<super::common::ImmutableMessage>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ReplicateRequest {
+    #[prost(oneof = "replicate_request::Request", tags = "1")]
+    pub request: ::core::option::Option<replicate_request::Request>,
+}
+/// Nested message and enum types in `ReplicateRequest`.
+pub mod replicate_request {
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Request {
+        #[prost(message, tag = "1")]
+        ReplicateMessage(super::ReplicateMessage),
+    }
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ReplicateConfirmedMessageInfo {
+    /// the source time tick of the last confirmed message that persisted into target WAL.
+    #[prost(uint64, tag = "1")]
+    pub confirmed_time_tick: u64,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ReplicateResponse {
+    #[prost(oneof = "replicate_response::Response", tags = "1")]
+    pub response: ::core::option::Option<replicate_response::Response>,
+}
+/// Nested message and enum types in `ReplicateResponse`.
+pub mod replicate_response {
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Response {
+        #[prost(message, tag = "1")]
+        ReplicateConfirmedMessageInfo(super::ReplicateConfirmedMessageInfo),
+    }
+}
+///
+/// Truncate collection in milvus
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct TruncateCollectionRequest {
+    /// Not useful for now
+    #[prost(message, optional, tag = "1")]
+    pub base: ::core::option::Option<super::common::MsgBase>,
+    #[prost(string, tag = "2")]
+    pub db_name: ::prost::alloc::string::String,
+    /// The unique collection name in milvus.(Required)
+    #[prost(string, tag = "3")]
+    pub collection_name: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct TruncateCollectionResponse {
+    #[prost(message, optional, tag = "1")]
+    pub status: ::core::option::Option<super::common::Status>,
 }
 /// Deprecated: use GetLoadingProgress rpc instead
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -3181,6 +3488,122 @@ pub mod milvus_service_client {
                     GrpcMethod::new(
                         "milvus.proto.milvus.MilvusService",
                         "AlterCollectionField",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn add_collection_function(
+            &mut self,
+            request: impl tonic::IntoRequest<super::AddCollectionFunctionRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::super::common::Status>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/AddCollectionFunction",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "milvus.proto.milvus.MilvusService",
+                        "AddCollectionFunction",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn alter_collection_function(
+            &mut self,
+            request: impl tonic::IntoRequest<super::AlterCollectionFunctionRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::super::common::Status>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/AlterCollectionFunction",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "milvus.proto.milvus.MilvusService",
+                        "AlterCollectionFunction",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn drop_collection_function(
+            &mut self,
+            request: impl tonic::IntoRequest<super::DropCollectionFunctionRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::super::common::Status>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/DropCollectionFunction",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "milvus.proto.milvus.MilvusService",
+                        "DropCollectionFunction",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn truncate_collection(
+            &mut self,
+            request: impl tonic::IntoRequest<super::TruncateCollectionRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::TruncateCollectionResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/TruncateCollection",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "milvus.proto.milvus.MilvusService",
+                        "TruncateCollection",
                     ),
                 );
             self.inner.unary(req, path, codec).await
@@ -5286,6 +5709,7 @@ pub mod milvus_service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        /// Deprecated CDC API
         pub async fn replicate_message(
             &mut self,
             request: impl tonic::IntoRequest<super::ReplicateMessageRequest>,
@@ -5790,6 +6214,146 @@ pub mod milvus_service_client {
                     ),
                 );
             self.inner.unary(req, path, codec).await
+        }
+        /// CDC v2 APIs
+        /// UpdateReplicateConfiguration applies a full replacement of the current
+        /// replication configuration across Milvus clusters.
+        ///
+        /// Semantics:
+        ///   - The provided ReplicateConfiguration completely replaces any existing
+        ///     configuration persisted in the metadata store.
+        ///   - Passing an empty ReplicateConfiguration is treated as a "clear"
+        ///     operation, effectively removing all replication configuration.
+        ///   - The RPC is expected to be idempotent: submitting the same configuration
+        ///     multiple times must not cause side effects.
+        pub async fn update_replicate_configuration(
+            &mut self,
+            request: impl tonic::IntoRequest<super::UpdateReplicateConfigurationRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::super::common::Status>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/UpdateReplicateConfiguration",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "milvus.proto.milvus.MilvusService",
+                        "UpdateReplicateConfiguration",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        ///
+        /// GetReplicateConfiguration retrieves the current cross-cluster replication topology.
+        /// Sensitive fields (like connection tokens) are redacted in the response.
+        pub async fn get_replicate_configuration(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetReplicateConfigurationRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetReplicateConfigurationResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/GetReplicateConfiguration",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "milvus.proto.milvus.MilvusService",
+                        "GetReplicateConfiguration",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        ///
+        /// GetReplicateInfo retrieves replication-related metadata of specified channel from a target Milvus cluster.
+        pub async fn get_replicate_info(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetReplicateInfoRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetReplicateInfoResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/GetReplicateInfo",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "milvus.proto.milvus.MilvusService",
+                        "GetReplicateInfo",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        ///
+        /// CreateReplicateStream establishes a replication stream on the target Milvus cluster.
+        ///
+        /// Semantics:
+        ///   - Sets up a continuous data stream that receives replicated messages
+        ///     (DDL, insert, delete, etc.) from the source cluster via CDC.
+        ///   - Once established, the target cluster persists incoming messages into
+        ///     its WAL (Write-Ahead Log) ensuring durability and consistency.
+        pub async fn create_replicate_stream(
+            &mut self,
+            request: impl tonic::IntoStreamingRequest<Message = super::ReplicateRequest>,
+        ) -> std::result::Result<
+            tonic::Response<tonic::codec::Streaming<super::ReplicateResponse>>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/milvus.proto.milvus.MilvusService/CreateReplicateStream",
+            );
+            let mut req = request.into_streaming_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "milvus.proto.milvus.MilvusService",
+                        "CreateReplicateStream",
+                    ),
+                );
+            self.inner.streaming(req, path, codec).await
         }
     }
 }

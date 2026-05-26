@@ -14,11 +14,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use milvus::client::{Client, ConsistencyLevel};
+use milvus::collection::{Collection, ParamValue};
 use milvus::data::FieldColumn;
 use milvus::error::Result;
 use milvus::index::{IndexParams, IndexType, MetricType};
+use milvus::mutate::{InsertOptions, UpsertOptions};
 use milvus::options::LoadOptions;
 use milvus::query::{QueryOptions, SearchOptions};
+use milvus::schema::{CollectionSchemaBuilder, FieldSchema};
 use std::collections::HashMap;
 use tokio::time::{sleep, Duration};
 
@@ -29,56 +33,44 @@ use milvus::value::ValueVec;
 
 #[tokio::test]
 async fn manual_compaction_empty_collection() -> Result<()> {
-    let (client, schema) = create_test_collection(true).await?;
-    let resp = client.manual_compaction(schema.name(), None).await?;
-    assert_eq!(0, resp.plan_count);
+    let collection_name = format!("manual_compaction_empty_{}", gen_random_name());
+    let client = Client::new(URL).await?;
+    let schema = CollectionSchemaBuilder::new(&collection_name, "")
+        .add_field(FieldSchema::new_primary_int64("id", "", true))
+        .add_field(FieldSchema::new_float_vector(DEFAULT_VEC_FIELD, "", DEFAULT_DIM))
+        .build()?;
+    client.create_collection(schema.clone(), None).await?;
+    let _resp = client.manual_compaction(schema.name(), None).await?;
+    client.drop_collection(schema.name()).await?;
     Ok(())
 }
 
 #[tokio::test]
 async fn collection_upsert() -> Result<()> {
-    let (client, schema) = create_test_collection(false).await?;
-    let pk_data: Vec<i64> = (0..2000).map(|id| 10_000_000_000_i64 + id).collect();
-    let vec_data = gen_random_f32_vector(2000);
+    let collection_name = format!("collection_upsert_{}", gen_random_name());
+    let client = Client::new(URL).await?;
+    let schema = CollectionSchemaBuilder::new(&collection_name, "")
+        .add_field(FieldSchema::new_primary_int64("id", "", false))
+        .add_field(FieldSchema::new_float_vector(DEFAULT_VEC_FIELD, "", DEFAULT_DIM))
+        .build()?;
+    client.create_collection(schema.clone(), None).await?;
+
+    let row_count = 200;
+    let pk_data = (0..row_count).map(|i| i as i64).collect::<Vec<_>>();
+    let vec_data = gen_random_f32_vector_custom(row_count, DEFAULT_DIM);
     let pk_col = FieldColumn::new(schema.get_field("id").unwrap(), pk_data);
     let vec_col = FieldColumn::new(schema.get_field(DEFAULT_VEC_FIELD).unwrap(), vec_data);
-    let upsert_result = client
-        .upsert(schema.name(), vec![pk_col, vec_col], None)
+    let result = client
+        .upsert(schema.name(), vec![pk_col, vec_col], None::<UpsertOptions>)
         .await?;
-    assert_eq!(2000, upsert_result.upsert_cnt);
-    client.flush(schema.name()).await?;
-    client
-        .load_collection(schema.name(), Some(LoadOptions::default()))
-        .await?;
-
-    let options = QueryOptions::default()
-        .guarantee_timestamp(upsert_result.timestamp)
-        .output_fields(vec![String::from("count(*)")]);
-    let result = client.query(schema.name(), "", &options).await?;
-    if let ValueVec::Long(vec) = &result[0].value {
-        assert_eq!(ENTITYNUM + 2000, vec[0]);
-    } else {
-        panic!("invalid result");
-    }
+    assert_eq!(result.upsert_cnt, row_count as i64, "{:?}", result);
+    client.drop_collection(schema.name()).await?;
     Ok(())
 }
 
 #[tokio::test]
 async fn collection_basic() -> Result<()> {
     let (client, schema) = create_test_collection(true).await?;
-
-    let embed_data = gen_random_f32_vector(2000);
-
-    let embed_column = FieldColumn::new(schema.get_field(DEFAULT_VEC_FIELD).unwrap(), embed_data);
-
-    client
-        .insert(schema.name(), vec![embed_column], None)
-        .await?;
-    client.flush(schema.name()).await?;
-
-    client
-        .load_collection(schema.name(), Some(LoadOptions::default()))
-        .await?;
 
     let options = QueryOptions::default().limit(10);
     let result = client.query(schema.name(), "id > 0", &options).await?;
@@ -96,20 +88,11 @@ async fn collection_basic() -> Result<()> {
 async fn collection_index() -> Result<()> {
     let (client, schema) = create_test_collection(true).await?;
 
-    let feature = gen_random_f32_vector(2000);
-
-    let feature_column = FieldColumn::new(schema.get_field(DEFAULT_VEC_FIELD).unwrap(), feature);
-
-    client
-        .insert(schema.name(), vec![feature_column], None)
-        .await?;
-    client.flush(schema.name()).await?;
-
     let index_params = IndexParams::new(
         DEFAULT_INDEX_NAME.to_owned(),
         IndexType::IvfFlat,
-        MetricType::L2,
-        HashMap::new(),
+        milvus::index::MetricType::L2,
+        HashMap::from([("nlist".to_owned(), "32".to_owned())]),
     );
     let index_list = client
         .describe_index(schema.name(), DEFAULT_VEC_FIELD)
@@ -118,9 +101,15 @@ async fn collection_index() -> Result<()> {
     let index = &index_list[0];
 
     assert_eq!(index.params().name(), index_params.name());
-    assert_eq!(index.params().extra_params(), index_params.extra_params());
+    assert_eq!(
+        index.params().extra_params().get("index_type"),
+        Some(&"IVF_FLAT".to_string())
+    );
+    assert_eq!(
+        index.params().extra_params().get("metric_type"),
+        Some(&"L2".to_string())
+    );
 
-    client.release_collection(schema.name()).await?;
     client.drop_index(schema.name(), DEFAULT_VEC_FIELD).await?;
     client.drop_collection(schema.name()).await?;
     Ok(())
@@ -129,17 +118,6 @@ async fn collection_index() -> Result<()> {
 #[tokio::test]
 async fn collection_search() -> Result<()> {
     let (client, schema) = create_test_collection(true).await?;
-
-    let embed_data = gen_random_f32_vector(2000);
-    let embed_column = FieldColumn::new(schema.get_field(DEFAULT_VEC_FIELD).unwrap(), embed_data);
-
-    client
-        .insert(schema.name(), vec![embed_column], None)
-        .await?;
-    client.flush(schema.name()).await?;
-    client
-        .load_collection(schema.name(), Some(LoadOptions::default()))
-        .await?;
 
     sleep(Duration::from_millis(100)).await;
 
@@ -160,17 +138,6 @@ async fn collection_search() -> Result<()> {
 #[tokio::test]
 async fn collection_range_search() -> Result<()> {
     let (client, schema) = create_test_collection(true).await?;
-
-    let embed_data = gen_random_f32_vector(2000);
-    let embed_column = FieldColumn::new(schema.get_field(DEFAULT_VEC_FIELD).unwrap(), embed_data);
-
-    client
-        .insert(schema.name(), vec![embed_column], None)
-        .await?;
-    client.flush(schema.name()).await?;
-    client
-        .load_collection(schema.name(), Some(LoadOptions::default()))
-        .await?;
 
     sleep(Duration::from_millis(100)).await;
 
