@@ -291,6 +291,7 @@ impl ValueVec {
             | (ValueVec::String(..), DataType::String)
             | (ValueVec::String(..), DataType::VarChar)
             | (ValueVec::String(..), DataType::Text)
+            | (ValueVec::String(..), DataType::Timestamptz)
             | (ValueVec::Geometry(..), DataType::Geometry)
             | (ValueVec::GeometryWkt(..), DataType::Geometry)
             | (ValueVec::Timestamptz(..), DataType::Timestamptz)

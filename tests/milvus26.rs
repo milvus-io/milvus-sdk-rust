@@ -87,8 +87,12 @@ async fn timestamptz_field() -> Result<()> {
     let id_col = FieldColumn::new(schema.get_field("id").unwrap(), ids);
     let vecs: Vec<f32> = vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2];
     let vec_col = FieldColumn::new(schema.get_field("embedding").unwrap(), vecs);
-    // Timestamps in microseconds
-    let timestamps: Vec<i64> = vec![1700000000000000, 1700000001000000, 1700000002000000];
+    // Server expects ISO 8601 strings; it parses and converts to int64 micros internally.
+    let timestamps: Vec<String> = vec![
+        "2023-11-14T22:13:20Z".into(),
+        "2023-11-14T22:13:21Z".into(),
+        "2023-11-14T22:13:22Z".into(),
+    ];
     let ts_col = FieldColumn::new(schema.get_field("created_at").unwrap(), timestamps);
 
     client
@@ -318,6 +322,20 @@ async fn upsert_with_partial_update() -> Result<()> {
     client
         .insert(&collection_name, vec![id_col, vec_col, name_col], None)
         .await?;
+    client.flush(&collection_name).await?;
+
+    // Partial upsert triggers a server-side query for the unchanged fields,
+    // which requires the collection to be loaded (and therefore indexed).
+    let index_params = IndexParams::new(
+        "embedding_idx".to_owned(),
+        IndexType::IvfFlat,
+        MetricType::L2,
+        HashMap::new(),
+    );
+    client
+        .create_index(&collection_name, "embedding", index_params)
+        .await?;
+    client.load_collection(&collection_name, None).await?;
 
     // Partial upsert - only update the name field
     let upsert_ids: Vec<i64> = vec![1, 2];
