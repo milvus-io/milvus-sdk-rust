@@ -288,9 +288,11 @@ impl Client {
         property_keys: Vec<String>,
     ) -> Result<()> {
         let db_name = db_name.into();
-        let db_info = self.describe_database(db_name.clone()).await?;
-        let db_id = db_info.db_id.to_string();
-        let properties = db_info.properties;
+        let db_id = self
+            .describe_database(db_name.clone())
+            .await?
+            .db_id
+            .to_string();
 
         let res = self
             .client
@@ -299,7 +301,7 @@ impl Client {
                 base: Some(MsgBase::new(MsgType::AlterDatabase)),
                 db_name,
                 db_id,
-                properties,
+                properties: Vec::new(),
                 delete_keys: property_keys,
             })
             .await?

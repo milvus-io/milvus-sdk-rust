@@ -28,36 +28,40 @@ use common::*;
 #[tokio::test]
 async fn load_release_partitions() -> Result<()> {
     let (client, schema) = create_test_collection(true).await?;
-    client
-        .create_partition(schema.name().to_string(), "partition_A".to_string())
-        .await?;
+    let collection_name = schema.name().to_string();
 
-    client.release_collection(schema.name()).await?;
+    run_with_collection_cleanup(&client, vec![collection_name], || async {
+        client
+            .create_partition(schema.name().to_string(), "partition_A".to_string())
+            .await?;
 
-    client
-        .load_partitions(schema.name(), vec!["partition_A"], 0, None)
-        .await?;
+        client.release_collection(schema.name()).await?;
 
-    let mut status = client.get_load_state(schema.name(), None).await?;
+        client
+            .load_partitions(schema.name(), vec!["partition_A"], 0, None)
+            .await?;
 
-    assert_eq!(status, milvus::proto::common::LoadState::Loaded);
+        let mut status = client.get_load_state(schema.name(), None).await?;
 
-    status = client
-        .get_load_state(
-            schema.name(),
-            Some(milvus::options::GetLoadStateOptions::with_partition_names(
-                vec!["partition_A".to_string()],
-            )),
-        )
-        .await?;
-    assert_eq!(status, milvus::proto::common::LoadState::Loaded);
+        assert_eq!(status, milvus::proto::common::LoadState::Loaded);
 
-    client
-        .release_partitions(schema.name(), vec!["partition_A"])
-        .await?;
-    status = client.get_load_state(schema.name(), None).await?;
-    assert_eq!(status, milvus::proto::common::LoadState::NotLoad);
+        status = client
+            .get_load_state(
+                schema.name(),
+                Some(milvus::options::GetLoadStateOptions::with_partition_names(
+                    vec!["partition_A".to_string()],
+                )),
+            )
+            .await?;
+        assert_eq!(status, milvus::proto::common::LoadState::Loaded);
 
-    client.drop_collection(schema.name()).await?;
-    Ok(())
+        client
+            .release_partitions(schema.name(), vec!["partition_A"])
+            .await?;
+        status = client.get_load_state(schema.name(), None).await?;
+        assert_eq!(status, milvus::proto::common::LoadState::NotLoad);
+
+        Ok(())
+    })
+    .await
 }

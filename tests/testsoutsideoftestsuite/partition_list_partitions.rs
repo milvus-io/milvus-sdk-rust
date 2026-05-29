@@ -2,19 +2,23 @@
 mod common;
 
 use common::*;
-use milvus::client::*;
+use milvus::error::Result;
 
 #[tokio::test]
-async fn test_list_partitions() {
-    let (client, collection) = create_test_collection(true).await.unwrap();
-    client
-        .create_partition(collection.name().to_string(), "test_partition".to_string())
-        .await
-        .unwrap();
+async fn test_list_partitions() -> Result<()> {
+    let (client, collection) = create_test_collection(true).await?;
+    let collection_name = collection.name().to_string();
 
-    let result = client.list_partitions(collection.name().to_string()).await;
+    run_with_collection_cleanup(&client, vec![collection_name], || async {
+        client
+            .create_partition(collection.name().to_string(), "test_partition".to_string())
+            .await?;
 
-    assert!(result.is_ok());
-    let partitions = result.unwrap();
-    assert!(partitions.contains(&"test_partition".to_string()));
+        let partitions = client
+            .list_partitions(collection.name().to_string())
+            .await?;
+        assert!(partitions.contains(&"test_partition".to_string()));
+        Ok(())
+    })
+    .await
 }

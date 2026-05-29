@@ -1399,8 +1399,8 @@ impl Client {
             let k = k as usize;
             let mut score = Vec::new();
             score.extend_from_slice(&raw_data.scores[offset..offset + k]);
-            let result_data = slice_field_columns(&fields_data, offset, k)
-                .map_err(SuperError::Unexpected)?;
+            let result_data =
+                slice_field_columns(&fields_data, offset, k).map_err(SuperError::Unexpected)?;
 
             let id = match raw_id {
                 proto::schema::i_ds::IdField::IntId(ref d) => {
@@ -1648,8 +1648,8 @@ impl Client {
             let k = k as usize;
             let mut score = Vec::new();
             score.extend_from_slice(&raw_data.scores[offset..offset + k]);
-            let result_data = slice_field_columns(&fields_data, offset, k)
-                .map_err(SuperError::Unexpected)?;
+            let result_data =
+                slice_field_columns(&fields_data, offset, k).map_err(SuperError::Unexpected)?;
 
             let id = match raw_id {
                 proto::schema::i_ds::IdField::IntId(ref d) => {

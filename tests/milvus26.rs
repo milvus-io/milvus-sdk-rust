@@ -158,38 +158,45 @@ async fn bfloat16_vector_collection() -> Result<()> {
 #[tokio::test]
 async fn truncate_collection() -> Result<()> {
     let (client, schema) = create_test_collection(true).await?;
+    let collection_name = schema.name().to_string();
 
-    // Verify data exists
-    let options =
-        milvus::query::QueryOptions::default().output_fields(vec![String::from("count(*)")]);
-    let result = client.query(schema.name(), "", &options).await?;
-    if let ValueVec::Long(vec) = &result[0].value {
-        assert!(*vec.first().unwrap() > 0, "collection should have data");
-    }
+    run_with_collection_cleanup(&client, vec![collection_name], || async {
+        // Verify data exists
+        let options =
+            milvus::query::QueryOptions::default().output_fields(vec![String::from("count(*)")]);
+        let result = client.query(schema.name(), "", &options).await?;
+        if let ValueVec::Long(vec) = &result[0].value {
+            assert!(*vec.first().unwrap() > 0, "collection should have data");
+        }
 
-    // Truncate
-    client.truncate_collection(schema.name()).await?;
+        // Truncate
+        client.truncate_collection(schema.name()).await?;
 
-    // After truncate, data should eventually be gone (may take a moment)
-    // We just verify the RPC succeeded without error
-    client.drop_collection(schema.name()).await?;
-    Ok(())
+        // After truncate, data should eventually be gone (may take a moment)
+        // We just verify the RPC succeeded without error
+        Ok(())
+    })
+    .await
 }
 
 #[tokio::test]
 async fn batch_describe_collections() -> Result<()> {
     let (client, schema1) = create_test_collection(true).await?;
     let (_, schema2) = create_test_collection(true).await?;
+    let collection_names = vec![schema1.name().to_string(), schema2.name().to_string()];
 
-    let collections = client
-        .batch_describe_collections(vec![schema1.name().to_string(), schema2.name().to_string()])
-        .await?;
+    run_with_collection_cleanup(&client, collection_names, || async {
+        let collections = client
+            .batch_describe_collections(vec![
+                schema1.name().to_string(),
+                schema2.name().to_string(),
+            ])
+            .await?;
 
-    assert_eq!(collections.len(), 2);
-
-    client.drop_collection(schema1.name()).await?;
-    client.drop_collection(schema2.name()).await?;
-    Ok(())
+        assert_eq!(collections.len(), 2);
+        Ok(())
+    })
+    .await
 }
 
 #[tokio::test]

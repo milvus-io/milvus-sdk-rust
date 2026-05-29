@@ -4,16 +4,20 @@ mod common;
 use common::*;
 
 #[tokio::test]
-async fn test_drop_partition() {
-    let (client, collection) = create_test_collection(true).await.unwrap();
-    client
-        .create_partition(collection.name().to_string(), "test_partition".to_string())
-        .await
-        .unwrap();
-    client.release_collection(collection.name()).await.unwrap();
-    let result = client
-        .drop_partition(collection.name().to_string(), "test_partition".to_string())
-        .await;
+async fn test_drop_partition() -> milvus::error::Result<()> {
+    let (client, collection) = create_test_collection(true).await?;
+    let collection_name = collection.name().to_string();
 
-    assert!(result.is_ok(), "drop_partition failed: {:?}", result);
+    run_with_collection_cleanup(&client, vec![collection_name], || async {
+        client
+            .create_partition(collection.name().to_string(), "test_partition".to_string())
+            .await?;
+        client.release_collection(collection.name()).await?;
+        client
+            .drop_partition(collection.name().to_string(), "test_partition".to_string())
+            .await?;
+
+        Ok(())
+    })
+    .await
 }

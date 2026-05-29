@@ -1,3 +1,4 @@
+use futures::FutureExt;
 use milvus::client::*;
 use milvus::data::FieldColumn;
 use milvus::error::Result;
@@ -5,12 +6,74 @@ use milvus::index::IndexType;
 use milvus::options::CreateCollectionOptions;
 use milvus::schema::{CollectionSchema, CollectionSchemaBuilder, FieldSchema};
 use rand::Rng;
+use std::future::Future;
+use std::panic::{catch_unwind, resume_unwind, AssertUnwindSafe};
 
 pub const DEFAULT_DIM: i64 = 128;
 pub const DEFAULT_VEC_FIELD: &str = "feature";
 pub const DEFAULT_INDEX_NAME: &str = "feature_index";
 pub const URL: &str = "http://localhost:19530";
 pub const ENTITYNUM: i64 = 1000;
+
+pub async fn run_with_collection_cleanup<F, Fut>(
+    client: &Client,
+    collection_names: Vec<String>,
+    body: F,
+) -> Result<()>
+where
+    F: FnOnce() -> Fut,
+    Fut: Future<Output = Result<()>>,
+{
+    let body_result = match catch_unwind(AssertUnwindSafe(body)) {
+        Ok(future) => AssertUnwindSafe(future).catch_unwind().await,
+        Err(payload) => Err(payload),
+    };
+    let mut cleanup_error = None;
+
+    for collection_name in collection_names.iter().rev() {
+        match client.has_collection(collection_name).await {
+            Ok(true) => {
+                if let Ok((_, _, aliases)) = client.list_aliases(collection_name).await {
+                    for alias in aliases {
+                        if let Err(error) = client.drop_alias(alias).await {
+                            if cleanup_error.is_none() {
+                                cleanup_error = Some(error);
+                            }
+                        }
+                    }
+                }
+
+                if let Err(error) = client.drop_collection(collection_name).await {
+                    if cleanup_error.is_none() {
+                        cleanup_error = Some(error);
+                    }
+                }
+            }
+            Ok(false) => {}
+            Err(error) => {
+                if cleanup_error.is_none() {
+                    cleanup_error = Some(error);
+                }
+            }
+        }
+    }
+
+    match body_result {
+        Ok(Ok(())) => cleanup_error.map_or(Ok(()), Err),
+        Ok(Err(error)) => {
+            if let Some(cleanup_error) = cleanup_error {
+                eprintln!("collection cleanup failed after test error: {cleanup_error}");
+            }
+            Err(error)
+        }
+        Err(payload) => {
+            if let Some(cleanup_error) = cleanup_error {
+                eprintln!("collection cleanup failed after panic: {cleanup_error}");
+            }
+            resume_unwind(payload)
+        }
+    }
+}
 
 pub async fn create_test_collection(autoid: bool) -> Result<(Client, CollectionSchema)> {
     create_test_collection_with_data(autoid, ENTITYNUM).await

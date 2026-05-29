@@ -248,19 +248,21 @@ impl Client {
         collection_name: S,
         field_name: Option<S>,
     ) -> Result<Vec<String>> {
-        let res = if let Some(field_name) = field_name {
-            self.describe_index(collection_name, field_name)
+        let indexes = if let Some(field_name) = field_name {
+            let field_name = field_name.into();
+            self.describe_index(collection_name.into(), field_name.clone())
                 .await?
                 .into_iter()
-                .map(|x| x.index_name)
+                .filter(|index| index.field_name() == field_name)
+                .map(|index| index.index_name().to_string())
                 .collect()
         } else {
             self.describe_index(collection_name.into(), "".to_string())
                 .await?
                 .into_iter()
-                .map(|x| x.index_name)
+                .map(|index| index.index_name().to_string())
                 .collect()
         };
-        Ok(res)
+        Ok(indexes)
     }
 }

@@ -56,32 +56,31 @@ async fn insert_data(
 }
 
 #[tokio::test]
-async fn test_search() {
-    let (client, collection) = create_test_collection(false).await.unwrap();
+async fn test_search() -> Result<()> {
+    let (client, collection) = create_test_collection(false).await?;
+    let collection_name = collection.name().to_string();
 
-    let (_ids, _vectors) = insert_data(&client, &collection, 10).await.unwrap();
+    run_with_collection_cleanup(&client, vec![collection_name], || async {
+        let (_ids, _vectors) = insert_data(&client, &collection, 10).await?;
 
-    client
-        .load_collection(collection.name(), None)
-        .await
-        .unwrap();
+        client.load_collection(collection.name(), None).await?;
 
-    let search_vectors = vec![Value::FloatArray(Cow::Owned(vec![
-        0.0;
-        DEFAULT_DIM as usize
-    ]))];
+        let search_vectors = vec![Value::FloatArray(Cow::Owned(vec![
+            0.0;
+            DEFAULT_DIM as usize
+        ]))];
 
-    let result = client
-        .search(
-            collection.name(),
-            search_vectors,
-            Some(SearchOptions::default().limit(5)),
-        )
-        .await;
+        let search_result = client
+            .search(
+                collection.name(),
+                search_vectors,
+                Some(SearchOptions::default().limit(5)),
+            )
+            .await?;
 
-    assert!(result.is_ok());
-
-    let search_result = result.unwrap();
-    assert_eq!(search_result.len(), 1);
-    assert_eq!(search_result[0].score.len(), 5);
+        assert_eq!(search_result.len(), 1);
+        assert_eq!(search_result[0].score.len(), 5);
+        Ok(())
+    })
+    .await
 }

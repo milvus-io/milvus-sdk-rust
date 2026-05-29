@@ -241,13 +241,11 @@ impl FieldColumn {
             ValueVec::StructArray(_) => {
                 ValueVec::StructArray(crate::proto::schema::StructArrayField { fields: Vec::new() })
             }
-            ValueVec::VectorArray(v) => {
-                ValueVec::VectorArray(crate::proto::schema::VectorArray {
-                    dim: v.dim,
-                    data: Vec::new(),
-                    element_type: v.element_type,
-                })
-            }
+            ValueVec::VectorArray(v) => ValueVec::VectorArray(crate::proto::schema::VectorArray {
+                dim: v.dim,
+                data: Vec::new(),
+                element_type: v.element_type,
+            }),
         };
         Self {
             dim: self.dim,
@@ -333,67 +331,43 @@ fn field_data_get_row(
 
 fn scalar_data_get_row(sd: &ScalarData, idx: usize) -> Option<ScalarData> {
     Some(match sd {
-        ScalarData::BoolData(v) => {
-            ScalarData::BoolData(schema::BoolArray {
-                data: vec![*v.data.get(idx)?],
-            })
-        }
-        ScalarData::IntData(v) => {
-            ScalarData::IntData(schema::IntArray {
-                data: vec![*v.data.get(idx)?],
-            })
-        }
-        ScalarData::LongData(v) => {
-            ScalarData::LongData(schema::LongArray {
-                data: vec![*v.data.get(idx)?],
-            })
-        }
-        ScalarData::FloatData(v) => {
-            ScalarData::FloatData(schema::FloatArray {
-                data: vec![*v.data.get(idx)?],
-            })
-        }
-        ScalarData::DoubleData(v) => {
-            ScalarData::DoubleData(schema::DoubleArray {
-                data: vec![*v.data.get(idx)?],
-            })
-        }
-        ScalarData::StringData(v) => {
-            ScalarData::StringData(schema::StringArray {
-                data: vec![v.data.get(idx)?.clone()],
-            })
-        }
-        ScalarData::BytesData(v) => {
-            ScalarData::BytesData(schema::BytesArray {
-                data: vec![v.data.get(idx)?.clone()],
-            })
-        }
-        ScalarData::ArrayData(v) => {
-            ScalarData::ArrayData(schema::ArrayArray {
-                data: vec![v.data.get(idx)?.clone()],
-                element_type: v.element_type,
-            })
-        }
-        ScalarData::JsonData(v) => {
-            ScalarData::JsonData(schema::JsonArray {
-                data: vec![v.data.get(idx)?.clone()],
-            })
-        }
-        ScalarData::GeometryData(v) => {
-            ScalarData::GeometryData(schema::GeometryArray {
-                data: vec![v.data.get(idx)?.clone()],
-            })
-        }
-        ScalarData::TimestamptzData(v) => {
-            ScalarData::TimestamptzData(schema::TimestamptzArray {
-                data: vec![*v.data.get(idx)?],
-            })
-        }
-        ScalarData::GeometryWktData(v) => {
-            ScalarData::GeometryWktData(schema::GeometryWktArray {
-                data: vec![v.data.get(idx)?.clone()],
-            })
-        }
+        ScalarData::BoolData(v) => ScalarData::BoolData(schema::BoolArray {
+            data: vec![*v.data.get(idx)?],
+        }),
+        ScalarData::IntData(v) => ScalarData::IntData(schema::IntArray {
+            data: vec![*v.data.get(idx)?],
+        }),
+        ScalarData::LongData(v) => ScalarData::LongData(schema::LongArray {
+            data: vec![*v.data.get(idx)?],
+        }),
+        ScalarData::FloatData(v) => ScalarData::FloatData(schema::FloatArray {
+            data: vec![*v.data.get(idx)?],
+        }),
+        ScalarData::DoubleData(v) => ScalarData::DoubleData(schema::DoubleArray {
+            data: vec![*v.data.get(idx)?],
+        }),
+        ScalarData::StringData(v) => ScalarData::StringData(schema::StringArray {
+            data: vec![v.data.get(idx)?.clone()],
+        }),
+        ScalarData::BytesData(v) => ScalarData::BytesData(schema::BytesArray {
+            data: vec![v.data.get(idx)?.clone()],
+        }),
+        ScalarData::ArrayData(v) => ScalarData::ArrayData(schema::ArrayArray {
+            data: vec![v.data.get(idx)?.clone()],
+            element_type: v.element_type,
+        }),
+        ScalarData::JsonData(v) => ScalarData::JsonData(schema::JsonArray {
+            data: vec![v.data.get(idx)?.clone()],
+        }),
+        ScalarData::GeometryData(v) => ScalarData::GeometryData(schema::GeometryArray {
+            data: vec![v.data.get(idx)?.clone()],
+        }),
+        ScalarData::TimestamptzData(v) => ScalarData::TimestamptzData(schema::TimestamptzArray {
+            data: vec![*v.data.get(idx)?],
+        }),
+        ScalarData::GeometryWktData(v) => ScalarData::GeometryWktData(schema::GeometryWktArray {
+            data: vec![v.data.get(idx)?.clone()],
+        }),
     })
 }
 
@@ -1067,7 +1041,10 @@ mod test {
                 match sa.fields[0].field.as_ref().unwrap() {
                     Field::Scalars(s) => match s.data.as_ref().unwrap() {
                         ScalarData::StringData(v) => {
-                            assert_eq!(v.data, vec!["a".to_string(), "".to_string(), "c".to_string()])
+                            assert_eq!(
+                                v.data,
+                                vec!["a".to_string(), "".to_string(), "c".to_string()]
+                            )
                         }
                         _ => panic!("expected string data"),
                     },

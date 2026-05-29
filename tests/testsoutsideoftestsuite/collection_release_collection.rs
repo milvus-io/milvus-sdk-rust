@@ -2,17 +2,16 @@
 mod common;
 
 use common::*;
-use milvus::{
-    client::*,
-    index::{IndexParams, IndexType, MetricType},
-};
-use std::collections::HashMap;
+use milvus::error::Result;
 
 #[tokio::test]
-async fn test_release_collection() {
-    let (client, collection) = create_test_collection(true).await.unwrap();
+async fn test_release_collection() -> Result<()> {
+    let (client, collection) = create_test_collection(true).await?;
+    let collection_name = collection.name().to_string();
 
-    let result = client.release_collection(collection.name()).await;
-
-    assert!(result.is_ok());
+    run_with_collection_cleanup(&client, vec![collection_name], || async {
+        client.release_collection(collection.name()).await?;
+        Ok(())
+    })
+    .await
 }
