@@ -115,18 +115,22 @@ async fn create_alter_drop_alias() -> Result<()> {
 
     let (_, schema1) = create_test_collection(true).await?;
     let (_, schema2) = create_test_collection(true).await?;
+    let collection_names = vec![schema1.name().to_string(), schema2.name().to_string()];
 
-    client.create_alias(schema1.name(), &alias0).await?;
-    assert!(client.has_collection(alias0).await?);
+    run_with_collection_cleanup(&client, collection_names, || async {
+        client.create_alias(schema1.name(), &alias0).await?;
+        assert!(client.has_collection(alias0).await?);
 
-    client.create_alias(schema2.name(), &alias1).await?;
+        client.create_alias(schema2.name(), &alias1).await?;
 
-    client.alter_alias(schema1.name(), &alias1).await?;
+        client.alter_alias(schema1.name(), &alias1).await?;
 
-    client.drop_collection(schema2.name()).await?;
-    assert!(client.has_collection(alias1).await?);
+        client.drop_collection(schema2.name()).await?;
+        assert!(client.has_collection(alias1).await?);
 
-    Ok(())
+        Ok(())
+    })
+    .await
 }
 
 #[tokio::test]
@@ -261,14 +265,17 @@ async fn test_drop_collection_properties() -> Result<()> {
 async fn rename_collection() -> Result<()> {
     let (client, schema) = create_test_collection(true).await?;
 
+    let original_name = schema.name().to_string();
     let rename = format!("{}_{}", schema.name(), "rename");
 
-    client
-        .rename_collection(schema.name(), rename.as_str(), None)
-        .await?;
+    run_with_collection_cleanup(&client, vec![original_name, rename.clone()], || async {
+        client
+            .rename_collection(schema.name(), rename.as_str(), None)
+            .await?;
 
-    let collection = client.describe_collection(rename.clone()).await?;
-    assert_eq!(collection.collection_name, rename);
-    client.drop_collection(collection.collection_name).await?;
-    Ok(())
+        let collection = client.describe_collection(rename.clone()).await?;
+        assert_eq!(collection.collection_name, rename);
+        Ok(())
+    })
+    .await
 }

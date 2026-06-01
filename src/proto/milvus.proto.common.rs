@@ -1393,24 +1393,16 @@ impl ObjectPrivilege {
             Self::PrivilegeGroupDatabaseReadWrite => "PrivilegeGroupDatabaseReadWrite",
             Self::PrivilegeGroupDatabaseAdmin => "PrivilegeGroupDatabaseAdmin",
             Self::PrivilegeGroupCollectionReadOnly => "PrivilegeGroupCollectionReadOnly",
-            Self::PrivilegeGroupCollectionReadWrite => {
-                "PrivilegeGroupCollectionReadWrite"
-            }
-            Self::PrivilegeGroupCollectionAdmin => {
-                "PrivilegeGroupCollectionAdmin"
-            }
+            Self::PrivilegeGroupCollectionReadWrite => "PrivilegeGroupCollectionReadWrite",
+            Self::PrivilegeGroupCollectionAdmin => "PrivilegeGroupCollectionAdmin",
             Self::PrivilegeGetImportProgress => "PrivilegeGetImportProgress",
             Self::PrivilegeListImport => "PrivilegeListImport",
             Self::PrivilegeAddCollectionField => "PrivilegeAddCollectionField",
             Self::PrivilegeAddFileResource => "PrivilegeAddFileResource",
             Self::PrivilegeRemoveFileResource => "PrivilegeRemoveFileResource",
             Self::PrivilegeListFileResources => "PrivilegeListFileResources",
-            Self::PrivilegeUpdateReplicateConfiguration => {
-                "PrivilegeUpdateReplicateConfiguration"
-            }
-            Self::PrivilegeGetReplicateConfiguration => {
-                "PrivilegeGetReplicateConfiguration"
-            }
+            Self::PrivilegeUpdateReplicateConfiguration => "PrivilegeUpdateReplicateConfiguration",
+            Self::PrivilegeGetReplicateConfiguration => "PrivilegeGetReplicateConfiguration",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -1475,27 +1467,15 @@ impl ObjectPrivilege {
             "PrivilegeCreatePrivilegeGroup" => Some(Self::PrivilegeCreatePrivilegeGroup),
             "PrivilegeDropPrivilegeGroup" => Some(Self::PrivilegeDropPrivilegeGroup),
             "PrivilegeListPrivilegeGroups" => Some(Self::PrivilegeListPrivilegeGroups),
-            "PrivilegeOperatePrivilegeGroup" => {
-                Some(Self::PrivilegeOperatePrivilegeGroup)
-            }
+            "PrivilegeOperatePrivilegeGroup" => Some(Self::PrivilegeOperatePrivilegeGroup),
             "PrivilegeGroupClusterReadOnly" => Some(Self::PrivilegeGroupClusterReadOnly),
-            "PrivilegeGroupClusterReadWrite" => {
-                Some(Self::PrivilegeGroupClusterReadWrite)
-            }
+            "PrivilegeGroupClusterReadWrite" => Some(Self::PrivilegeGroupClusterReadWrite),
             "PrivilegeGroupClusterAdmin" => Some(Self::PrivilegeGroupClusterAdmin),
-            "PrivilegeGroupDatabaseReadOnly" => {
-                Some(Self::PrivilegeGroupDatabaseReadOnly)
-            }
-            "PrivilegeGroupDatabaseReadWrite" => {
-                Some(Self::PrivilegeGroupDatabaseReadWrite)
-            }
+            "PrivilegeGroupDatabaseReadOnly" => Some(Self::PrivilegeGroupDatabaseReadOnly),
+            "PrivilegeGroupDatabaseReadWrite" => Some(Self::PrivilegeGroupDatabaseReadWrite),
             "PrivilegeGroupDatabaseAdmin" => Some(Self::PrivilegeGroupDatabaseAdmin),
-            "PrivilegeGroupCollectionReadOnly" => {
-                Some(Self::PrivilegeGroupCollectionReadOnly)
-            }
-            "PrivilegeGroupCollectionReadWrite" => {
-                Some(Self::PrivilegeGroupCollectionReadWrite)
-            }
+            "PrivilegeGroupCollectionReadOnly" => Some(Self::PrivilegeGroupCollectionReadOnly),
+            "PrivilegeGroupCollectionReadWrite" => Some(Self::PrivilegeGroupCollectionReadWrite),
             "PrivilegeGroupCollectionAdmin" => Some(Self::PrivilegeGroupCollectionAdmin),
             "PrivilegeGetImportProgress" => Some(Self::PrivilegeGetImportProgress),
             "PrivilegeListImport" => Some(Self::PrivilegeListImport),
@@ -1506,9 +1486,7 @@ impl ObjectPrivilege {
             "PrivilegeUpdateReplicateConfiguration" => {
                 Some(Self::PrivilegeUpdateReplicateConfiguration)
             }
-            "PrivilegeGetReplicateConfiguration" => {
-                Some(Self::PrivilegeGetReplicateConfiguration)
-            }
+            "PrivilegeGetReplicateConfiguration" => Some(Self::PrivilegeGetReplicateConfiguration),
             _ => None,
         }
     }

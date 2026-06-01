@@ -47,17 +47,20 @@ jobs:
 
       - name: Setup Milvus
         run: docker compose -f ./docker-compose.yml up -d && sleep 15s
-      
-      # Runs a single command using the runners shell
-      - name: Run Unittest
-        run: RUST_BACKTRACE=1 cargo test
-      # - name: Upload coverage to Codecov
-      #   if: github.repository == 'milvus-io/milvus-sdk-rust'
-      #   uses: codecov/codecov-action@v1
-      #   with:
-      #     token: ${{ secrets.CODECOV_TOKEN }}
-      #     file: ./coverage.project.out
-      #     name: ubuntu-${{ matrix.ubuntu }}-unittests
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Run coverage
+        run: RUST_BACKTRACE=1 cargo llvm-cov --workspace --lcov --output-path lcov.info --ignore-filename-regex 'src/proto/.*'
+
+      - name: Upload coverage to Codecov
+        if: github.repository == 'milvus-io/milvus-sdk-rust'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./lcov.info
+          flags: ubuntu-${{ matrix.ubuntu }}-unittests
 
   ut-macos:
     name: Compile on macOS 15

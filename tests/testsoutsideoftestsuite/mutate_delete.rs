@@ -32,16 +32,21 @@ async fn insert_data(
 }
 
 #[tokio::test]
-async fn test_delete() {
-    let (client, collection) = create_test_collection(false).await.unwrap();
-    let ids = insert_data(&client, &collection, 10).await.unwrap();
+async fn test_delete() -> Result<()> {
+    let (client, collection) = create_test_collection(false).await?;
+    let collection_name = collection.name().to_string();
 
-    let result = client
-        .delete(
-            collection.name().to_string(),
-            &DeleteOptions::with_ids(ids.into()),
-        )
-        .await;
+    run_with_collection_cleanup(&client, vec![collection_name], || async {
+        let ids = insert_data(&client, &collection, 10).await?;
 
-    assert!(result.is_ok());
+        client
+            .delete(
+                collection.name().to_string(),
+                &DeleteOptions::with_ids(ids.into()),
+            )
+            .await?;
+
+        Ok(())
+    })
+    .await
 }

@@ -2,16 +2,17 @@
 mod common;
 
 use common::*;
-use milvus::client::*;
+use milvus::error::Result;
 
 #[tokio::test]
-async fn test_get_compaction_state() {
-    let (client, collection) = create_test_collection(true).await.unwrap();
-    let compaction_info = client
-        .manual_compaction(collection.name(), None)
-        .await
-        .unwrap();
-    let result = client.get_compaction_state(compaction_info.id).await;
+async fn test_get_compaction_state() -> Result<()> {
+    let (client, collection) = create_test_collection(true).await?;
+    let collection_name = collection.name().to_string();
 
-    assert!(result.is_ok());
+    run_with_collection_cleanup(&client, vec![collection_name], || async {
+        let compaction_info = client.manual_compaction(collection.name(), None).await?;
+        client.get_compaction_state(compaction_info.id).await?;
+        Ok(())
+    })
+    .await
 }
