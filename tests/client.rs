@@ -54,6 +54,15 @@ async fn create_client_wrong_fmt() -> Result<()> {
 }
 
 #[tokio::test]
+async fn get_server_version() -> Result<()> {
+    let client = Client::new(URL).await?;
+    let version = client.get_server_version().await?;
+    println!("server version: {version:?}");
+    assert!(!version.version.is_empty());
+    Ok(())
+}
+
+#[tokio::test]
 async fn has_collection() -> Result<()> {
     const NAME: &str = "qwerty";
     let client = Client::new(URL).await?;

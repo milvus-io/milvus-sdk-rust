@@ -586,6 +586,43 @@ impl Client {
         status_to_result(&Some(resp))
     }
 
+    /// Drops properties of a collection field.
+    ///
+    /// # Arguments
+    ///
+    /// * `collection_name` - The name of the collection.
+    /// * `field_name` - The name of the field.
+    /// * `delete_keys` - The keys of the field properties to be deleted.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` indicating success or failure.
+    pub async fn drop_collection_field_properties<C, F>(
+        &self,
+        collection_name: C,
+        field_name: F,
+        delete_keys: Vec<String>,
+    ) -> Result<()>
+    where
+        C: Into<String>,
+        F: Into<String>,
+    {
+        let resp = self
+            .client
+            .clone()
+            .alter_collection_field(AlterCollectionFieldRequest {
+                base: Some(MsgBase::new(MsgType::AlterCollectionField)),
+                db_name: "".to_string(),
+                collection_name: collection_name.into(),
+                field_name: field_name.into(),
+                properties: Vec::new(),
+                delete_keys,
+            })
+            .await?
+            .into_inner();
+        status_to_result(&Some(resp))
+    }
+
     /// alter a collection
     ///
     /// # Arguments

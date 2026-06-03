@@ -206,6 +206,58 @@ async fn collection_refresh_load() -> Result<()> {
 }
 
 #[tokio::test]
+async fn collection_drop_field_properties() -> Result<()> {
+    let collection_name = format!("test_collection_field_properties_{}", gen_random_name());
+    let client = Client::new(URL).await?;
+
+    run_with_collection_cleanup(&client, vec![collection_name.clone()], || async {
+        let schema = CollectionSchemaBuilder::new(&collection_name, "field properties test")
+            .add_field(FieldSchema::new_primary_int64("id", "", true))
+            .add_field(
+                FieldSchema::new_float_vector(DEFAULT_VEC_FIELD, "", DEFAULT_DIM)
+                    .add_type_param("mmap.enabled", "true"),
+            )
+            .build()?;
+        client.create_collection(schema, None).await?;
+
+        let described = client.describe_collection(&collection_name).await?;
+        let vector_field = described
+            .schema
+            .fields
+            .iter()
+            .find(|field| field.name == DEFAULT_VEC_FIELD)
+            .expect("vector field should exist");
+        assert!(vector_field
+            .type_params
+            .iter()
+            .any(|param| param.key == "mmap.enabled" && param.value == "true"));
+
+        client
+            .drop_collection_field_properties(
+                &collection_name,
+                DEFAULT_VEC_FIELD,
+                vec!["mmap.enabled".to_string()],
+            )
+            .await?;
+
+        let described = client.describe_collection(&collection_name).await?;
+        let vector_field = described
+            .schema
+            .fields
+            .iter()
+            .find(|field| field.name == DEFAULT_VEC_FIELD)
+            .expect("vector field should exist");
+        assert!(!vector_field
+            .type_params
+            .iter()
+            .any(|param| param.key == "mmap.enabled"));
+
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test]
 async fn collection_bm25_function_in_schema() -> Result<()> {
     let collection_name = format!("test_collection_function_{}", gen_random_name());
     let client = Client::new(URL).await?;

@@ -20,7 +20,7 @@ use crate::error::{Error, Result};
 pub use crate::proto::common::ConsistencyLevel;
 use crate::proto::common::{MsgBase, MsgType};
 use crate::proto::milvus::milvus_service_client::MilvusServiceClient;
-use crate::proto::milvus::FlushRequest;
+use crate::proto::milvus::{ConnectRequest, FlushRequest};
 use crate::utils::status_to_result;
 use base64::engine::general_purpose;
 use base64::Engine;
@@ -46,6 +46,15 @@ pub struct DbInterceptor {
 pub struct CombinedInterceptor {
     pub auth: AuthInterceptor,
     pub db: DbInterceptor,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ServerVersion {
+    pub version: String,
+    pub build_time: String,
+    pub git_commit: String,
+    pub go_version: String,
+    pub deploy_mode: String,
 }
 
 impl Interceptor for AuthInterceptor {
@@ -230,6 +239,31 @@ impl Client {
             .into_iter()
             .map(|(k, v)| (k, v.data))
             .collect())
+    }
+
+    pub async fn get_server_version(&self) -> Result<ServerVersion> {
+        let res = self
+            .client
+            .clone()
+            .connect(ConnectRequest {
+                base: Some(MsgBase::new(MsgType::Connect)),
+                client_info: None,
+            })
+            .await?
+            .into_inner();
+
+        status_to_result(&res.status)?;
+        let info = res.server_info.ok_or_else(|| {
+            Error::Unexpected("server version response missing server info".to_string())
+        })?;
+
+        Ok(ServerVersion {
+            version: info.build_tags,
+            build_time: info.build_time,
+            git_commit: info.git_commit,
+            go_version: info.go_version,
+            deploy_mode: info.deploy_mode,
+        })
     }
 
     // alias related:
