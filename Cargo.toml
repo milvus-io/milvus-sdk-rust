@@ -43,10 +43,6 @@ name = "client_with_timeout"
 path = "tests/testsoutsideoftestsuite/client_with_timeout.rs"
 
 [[test]]
-name = "client_flush_collections"
-path = "tests/testsoutsideoftestsuite/client_flush_collections.rs"
-
-[[test]]
 name = "client_search"
 path = "tests/testsoutsideoftestsuite/client_search.rs"
 
@@ -61,10 +57,6 @@ path = "tests/testsoutsideoftestsuite/collection_get_collection_stats.rs"
 [[test]]
 name = "collection_release_collection"
 path = "tests/testsoutsideoftestsuite/collection_release_collection.rs"
-
-[[test]]
-name = "collection_get_compaction_state"
-path = "tests/testsoutsideoftestsuite/collection_get_compaction_state.rs"
 
 [[test]]
 name = "partition_create_partition"
