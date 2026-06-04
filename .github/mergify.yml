@@ -43,9 +43,10 @@ pull_request_rules:
   - name: Remove ci-passed when CI failed
     conditions:
       - base=main
+      - label=ci-passed
       - or:
-        - "check-failure=UT on Ubuntu-22.04"
-        - "check-failure=Compile on macOS 15"
+        - "-status-success=UT on Ubuntu-22.04"
+        - "-status-success=Compile on macOS 15"
       - files~=^(?!\.github\/mergify\.yml).*$
       - files~=\.(?!md|png)
     actions:

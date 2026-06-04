@@ -14,20 +14,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use self::common::{MsgBase, MsgType};
+pub mod common {
+    include!(concat!(env!("OUT_DIR"), "/milvus.proto.common.rs"));
+}
 
-#[path = "milvus.proto.common.rs"]
-pub mod common;
-#[path = "milvus.proto.feder.rs"]
-pub mod feder;
-#[path = "milvus.proto.milvus.rs"]
-pub mod milvus;
-#[path = "milvus.proto.msg.rs"]
-pub mod msg;
-#[path = "milvus.proto.rg.rs"]
-pub mod rg;
-#[path = "milvus.proto.schema.rs"]
-pub mod schema;
+pub mod feder {
+    include!(concat!(env!("OUT_DIR"), "/milvus.proto.feder.rs"));
+}
+
+pub mod milvus {
+    include!(concat!(env!("OUT_DIR"), "/milvus.proto.milvus.rs"));
+}
+
+pub mod msg {
+    include!(concat!(env!("OUT_DIR"), "/milvus.proto.msg.rs"));
+}
+
+pub mod rg {
+    include!(concat!(env!("OUT_DIR"), "/milvus.proto.rg.rs"));
+}
+
+pub mod schema {
+    include!(concat!(env!("OUT_DIR"), "/milvus.proto.schema.rs"));
+}
+
+use self::common::{MsgBase, MsgType};
 
 impl MsgBase {
     pub fn new(msg_type: MsgType) -> Self {
