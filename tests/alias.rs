@@ -1,6 +1,34 @@
 mod common;
 use common::*;
+use milvus::client::Client;
 use milvus::error::Result;
+
+#[tokio::test]
+async fn create_alter_drop_alias() -> Result<()> {
+    let alias0 = gen_random_name();
+    let alias1 = gen_random_name();
+
+    let client = Client::new(URL).await?;
+
+    let (_, schema1) = create_test_collection(true).await?;
+    let (_, schema2) = create_test_collection(true).await?;
+    let collection_names = vec![schema1.name().to_string(), schema2.name().to_string()];
+
+    run_with_collection_cleanup(&client, collection_names, || async {
+        client.create_alias(schema1.name(), &alias0).await?;
+        assert!(client.has_collection(alias0).await?);
+
+        client.create_alias(schema2.name(), &alias1).await?;
+
+        client.alter_alias(schema1.name(), &alias1).await?;
+
+        client.drop_collection(schema2.name()).await?;
+        assert!(client.has_collection(alias1).await?);
+
+        Ok(())
+    })
+    .await
+}
 
 #[tokio::test]
 async fn test_create_alias() -> Result<()> {

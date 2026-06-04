@@ -19,9 +19,8 @@ use crate::data::FieldColumn;
 use crate::error::{Error as SuperError, Result};
 use crate::proto::milvus::{
     AlterCollectionFieldRequest, AlterCollectionRequest, CreateCollectionRequest,
-    DropCollectionRequest, FlushRequest, GetCompactionStateRequest, GetCompactionStateResponse,
-    HasCollectionRequest, LoadCollectionRequest, ManualCompactionRequest, ManualCompactionResponse,
-    ReleaseCollectionRequest, ShowCollectionsRequest,
+    DropCollectionRequest, GetCompactionStateResponse, HasCollectionRequest, LoadCollectionRequest,
+    ManualCompactionResponse, ReleaseCollectionRequest, ShowCollectionsRequest,
 };
 use crate::proto::schema::DataType;
 use crate::schema::{CollectionSchema, CollectionSchemaBuilder};
@@ -714,79 +713,6 @@ impl Client {
         Ok(schema)
     }
 
-    pub async fn flush<S>(&self, collection_name: S) -> Result<()>
-    where
-        S: Into<String>,
-    {
-        let res = self
-            .client
-            .clone()
-            .flush(FlushRequest {
-                base: Some(MsgBase::new(MsgType::Flush)),
-                db_name: "".to_string(),
-                collection_names: vec![collection_name.into()],
-            })
-            .await?
-            .into_inner();
-
-        status_to_result(&res.status)?;
-
-        Ok(())
-    }
-
-    /// manual compaction
-    ///
-    /// # Arguments
-    ///
-    /// * `collection_name` - The name of the collection
-    /// * `is_clustering` - Whether to perform clustering compaction
-    ///
-    /// # Returns
-    ///
-    /// Returns a `Result` containing the `CompactionInfo` if successful, or an error if the compaction fails.
-    pub async fn manual_compaction<S>(
-        &self,
-        collection_name: S,
-        is_clustering: Option<bool>,
-    ) -> Result<CompactionInfo>
-    where
-        S: Into<String>,
-    {
-        let collection = self.collection_cache.get(&collection_name.into()).await?;
-        let major_compaction = is_clustering.unwrap_or(false);
-
-        let resp = self
-            .client
-            .clone()
-            .manual_compaction(ManualCompactionRequest {
-                collection_id: collection.id,
-                timetravel: 0,
-                major_compaction,
-                collection_name: collection.name,
-                db_name: "".to_string(),
-                partition_id: 0,
-                segment_ids: vec![],
-                channel: "".to_string(),
-                l0_compaction: false,
-                target_size: 0,
-            })
-            .await?
-            .into_inner();
-        status_to_result(&resp.status)?;
-        Ok(resp.into())
-    }
-
-    pub async fn get_compaction_state(&self, compaction_id: i64) -> Result<CompactionState> {
-        let resp = self
-            .client
-            .clone()
-            .get_compaction_state(GetCompactionStateRequest { compaction_id })
-            .await?
-            .into_inner();
-        status_to_result(&resp.status)?;
-        Ok(resp.into())
-    }
-
     /// Truncate a collection (remove all data without dropping the collection).
     /// Requires Milvus 2.6+.
     pub async fn truncate_collection<S>(&self, collection_name: S) -> Result<()>
@@ -941,33 +867,6 @@ impl Client {
             .into_inner();
         status_to_result(&Some(resp))?;
         Ok(())
-    }
-
-    /// Test text analyzers. Returns tokenized results.
-    /// Requires Milvus 2.6+.
-    pub async fn run_analyzer(
-        &self,
-        texts: Vec<String>,
-        analyzer_params: &str,
-    ) -> Result<Vec<proto::milvus::AnalyzerResult>> {
-        let resp = self
-            .client
-            .clone()
-            .run_analyzer(proto::milvus::RunAnalyzerRequest {
-                base: Some(MsgBase::new(MsgType::RunAnalyzer)),
-                analyzer_params: analyzer_params.to_string(),
-                placeholder: texts.into_iter().map(|t| t.into_bytes()).collect(),
-                with_detail: true,
-                with_hash: false,
-                db_name: "".to_string(),
-                collection_name: "".to_string(),
-                field_name: "".to_string(),
-                analyzer_names: vec![],
-            })
-            .await?
-            .into_inner();
-        status_to_result(&resp.status)?;
-        Ok(resp.results)
     }
 }
 

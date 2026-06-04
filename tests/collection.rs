@@ -14,12 +14,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use milvus::client::Client;
+use milvus::client::{Client, ConsistencyLevel};
 use milvus::data::FieldColumn;
 use milvus::error::Result;
 use milvus::index::{IndexParams, IndexType};
 use milvus::mutate::UpsertOptions;
-use milvus::options::GetLoadStateOptions;
+use milvus::options::{CreateCollectionOptions, GetLoadStateOptions};
 use milvus::proto::common::KeyValuePair;
 use milvus::proto::schema::{FunctionSchema, FunctionType};
 use milvus::query::{QueryOptions, SearchOptions};
@@ -31,21 +31,203 @@ mod common;
 use common::*;
 
 #[tokio::test]
-async fn manual_compaction_empty_collection() -> Result<()> {
-    let collection_name = format!("manual_compaction_empty_{}", gen_random_name());
+async fn has_collection() -> Result<()> {
+    let collection_name = format!("has_collection_{}", gen_random_name());
     let client = Client::new(URL).await?;
-    let schema = CollectionSchemaBuilder::new(&collection_name, "")
-        .add_field(FieldSchema::new_primary_int64("id", "", true))
-        .add_field(FieldSchema::new_float_vector(
-            DEFAULT_VEC_FIELD,
-            "",
-            DEFAULT_DIM,
-        ))
-        .build()?;
-    client.create_collection(schema.clone(), None).await?;
-    let _resp = client.manual_compaction(schema.name(), None).await?;
-    client.drop_collection(schema.name()).await?;
+    let has = client.has_collection(&collection_name).await?;
+    assert!(!has);
     Ok(())
+}
+
+#[tokio::test]
+async fn create_has_drop_collection() -> Result<()> {
+    const NAME: &str = "create_has_drop_collection";
+
+    let client = Client::new(URL).await?;
+
+    let schema = CollectionSchemaBuilder::new(NAME, "hello world")
+        .add_field(FieldSchema::new_int64("i64_field", ""))
+        .add_field(FieldSchema::new_bool("bool_field", ""))
+        .add_field(FieldSchema::new_float_vector("float_vec", "", 128))
+        .set_primary_key("i64_field")?
+        .enable_auto_id()?
+        .build()?;
+
+    if client.has_collection(NAME).await? {
+        client.drop_collection(NAME).await?;
+    }
+
+    run_with_collection_cleanup(&client, vec![NAME.to_string()], || async {
+        let _collection = client
+            .create_collection(
+                schema,
+                Some(CreateCollectionOptions::with_consistency_level(
+                    ConsistencyLevel::Session,
+                )),
+            )
+            .await?;
+
+        assert!(client.has_collection(NAME).await?);
+        Ok(())
+    })
+    .await?;
+
+    assert!(!client.has_collection(NAME).await?);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_alter_collection_field() -> Result<()> {
+    let client = Client::new(URL).await?;
+    let collection_name = "test_alter_collection_field";
+
+    let schema = CollectionSchemaBuilder::new(collection_name, "")
+        .add_field(FieldSchema::new_primary_int64("id", "", true))
+        .add_field(FieldSchema::new_varchar("varchar_field", "", 100))
+        .add_field(FieldSchema::new_float_vector("vector_field", "", 128))
+        .build()?;
+
+    if client.has_collection(collection_name).await? {
+        client.drop_collection(collection_name).await?;
+    }
+
+    run_with_collection_cleanup(&client, vec![collection_name.to_string()], || async {
+        client.create_collection(schema, None).await?;
+        let test_cases = vec![
+            (
+                "varchar_field",
+                HashMap::from([("max_length".to_string(), "200".to_string())]),
+            ),
+            (
+                "vector_field",
+                HashMap::from([("mmap_enabled".to_string(), "true".to_string())]),
+            ),
+        ];
+
+        for (field_name, params) in test_cases {
+            let result = client
+                .alter_collection_field(collection_name, field_name, params)
+                .await;
+            assert!(
+                result.is_ok(),
+                "Failed to alter field {}: {:?}",
+                field_name,
+                result
+            );
+        }
+
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test]
+async fn test_alter_collection() -> Result<()> {
+    let client = Client::new(URL).await?;
+    let collection_name = "test_alter_collection";
+
+    let schema = CollectionSchemaBuilder::new(collection_name, "")
+        .add_field(FieldSchema::new_primary_int64("id", "", true))
+        .add_field(FieldSchema::new_varchar("varchar_field", "", 100))
+        .add_field(FieldSchema::new_float_vector("vector_field", "", 128))
+        .build()?;
+
+    if client.has_collection(collection_name).await? {
+        client.drop_collection(collection_name).await?;
+    }
+
+    run_with_collection_cleanup(&client, vec![collection_name.to_string()], || async {
+        client.create_collection(schema, None).await?;
+        let mut test_case = HashMap::new();
+        test_case.insert("collection.ttl.second".to_string(), "10".to_string());
+        test_case.insert("mmap.enabled".to_string(), "true".to_string());
+        test_case.insert("partitionkey.isolation".to_string(), "false".to_string());
+
+        assert!(client
+            .alter_collection_properties(collection_name, test_case)
+            .await
+            .is_ok());
+
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test]
+async fn create_schema() -> Result<()> {
+    let client = Client::new(URL).await?;
+    let schema = client
+        .create_schema("test_schema")
+        .await?
+        .add_field(FieldSchema::new_primary_int64("id", "", true))
+        .add_field(FieldSchema::new_float_vector("administrator", "", 32))
+        .build()?;
+
+    if client.has_collection("test_schema").await? {
+        client.drop_collection("test_schema").await?;
+    }
+
+    run_with_collection_cleanup(&client, vec!["test_schema".to_string()], || async {
+        client
+            .create_collection(
+                schema,
+                Some(CreateCollectionOptions::with_consistency_level(
+                    ConsistencyLevel::Session,
+                )),
+            )
+            .await?;
+        assert!(client.has_collection("test_schema").await?);
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test]
+async fn test_drop_collection_properties() -> Result<()> {
+    let client = Client::new(URL).await?;
+    let collection_name = "test_drop_collection_properties";
+    let schema = CollectionSchemaBuilder::new(collection_name, "")
+        .add_field(FieldSchema::new_primary_int64("id", "", true))
+        .add_field(FieldSchema::new_float_vector("administrator", "", 32))
+        .build()?;
+
+    if client.has_collection(collection_name).await? {
+        client.drop_collection(collection_name).await?;
+    }
+
+    run_with_collection_cleanup(&client, vec![collection_name.to_string()], || async {
+        client.create_collection(schema, None).await?;
+        client
+            .alter_collection_properties(
+                collection_name,
+                HashMap::from([("collection.ttl.second".to_string(), "10".to_string())]),
+            )
+            .await?;
+        client
+            .drop_collection_properties(collection_name, vec!["collection.ttl.second".to_string()])
+            .await?;
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test]
+async fn rename_collection() -> Result<()> {
+    let (client, schema) = create_test_collection(true).await?;
+
+    let original_name = schema.name().to_string();
+    let rename = format!("{}_{}", schema.name(), "rename");
+
+    run_with_collection_cleanup(&client, vec![original_name, rename.clone()], || async {
+        client
+            .rename_collection(schema.name(), rename.as_str(), None)
+            .await?;
+
+        let collection = client.describe_collection(rename.clone()).await?;
+        assert_eq!(collection.collection_name, rename);
+        Ok(())
+    })
+    .await
 }
 
 #[tokio::test]

@@ -14,6 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod alias;
 pub mod authentication;
 pub mod client;
 pub mod collection;
@@ -27,6 +28,7 @@ pub mod partition;
 pub mod query;
 pub mod resource_group;
 pub mod schema;
+pub mod utility;
 pub mod value;
 
 mod config;
