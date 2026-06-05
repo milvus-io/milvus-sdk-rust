@@ -43,6 +43,19 @@ async fn test_flush_collections() -> Result<()> {
 }
 
 #[tokio::test]
+async fn flush_all_and_get_state() -> Result<()> {
+    let (client, collection) = create_test_collection(true).await?;
+    let collection_name = collection.name().to_string();
+
+    run_with_collection_cleanup(&client, vec![collection_name], || async {
+        let flush_all_ts = client.flush_all().await?;
+        client.get_flush_all_state(flush_all_ts).await?;
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test]
 async fn manual_compaction_empty_collection() -> Result<()> {
     let collection_name = format!("manual_compaction_empty_{}", gen_random_name());
     let client = Client::new(URL).await?;

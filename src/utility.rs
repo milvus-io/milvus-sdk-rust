@@ -19,7 +19,8 @@ use crate::collection::{CompactionInfo, CompactionState};
 use crate::error::{Error, Result};
 use crate::proto::common::{MsgBase, MsgType};
 use crate::proto::milvus::{
-    ConnectRequest, FlushRequest, GetCompactionStateRequest, ManualCompactionRequest,
+    ConnectRequest, FlushAllRequest, FlushRequest, GetCompactionStateRequest,
+    GetFlushAllStateRequest, ManualCompactionRequest,
 };
 use crate::proto::{self};
 use crate::utils::status_to_result;
@@ -94,6 +95,38 @@ impl Client {
         status_to_result(&res.status)?;
 
         Ok(())
+    }
+
+    #[allow(deprecated)]
+    pub async fn flush_all(&self) -> Result<u64> {
+        let resp = self
+            .client
+            .clone()
+            .flush_all(FlushAllRequest {
+                base: Some(MsgBase::new(MsgType::FlushAll)),
+                ..Default::default()
+            })
+            .await?
+            .into_inner();
+
+        status_to_result(&resp.status)?;
+        Ok(resp.flush_all_ts)
+    }
+
+    #[allow(deprecated)]
+    pub async fn get_flush_all_state(&self, flush_all_ts: u64) -> Result<bool> {
+        let resp = self
+            .client
+            .clone()
+            .get_flush_all_state(GetFlushAllStateRequest {
+                flush_all_ts,
+                ..Default::default()
+            })
+            .await?
+            .into_inner();
+
+        status_to_result(&resp.status)?;
+        Ok(resp.flushed)
     }
 
     /// manual compaction
