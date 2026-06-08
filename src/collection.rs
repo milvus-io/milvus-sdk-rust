@@ -414,6 +414,32 @@ impl Client {
         Ok(res.stats.into_iter().map(|s| (s.key, s.value)).collect())
     }
 
+    pub(crate) async fn get_loading_progress<'a, S, I>(
+        &self,
+        collection_name: S,
+        partition_names: I,
+    ) -> Result<proto::milvus::GetLoadingProgressResponse>
+    where
+        S: Into<String>,
+        I: IntoIterator<Item = &'a String>,
+    {
+        let partition_names: Vec<String> = partition_names.into_iter().map(|x| x.into()).collect();
+        let resp = self
+            .client
+            .clone()
+            .get_loading_progress(proto::milvus::GetLoadingProgressRequest {
+                base: Some(MsgBase::new(MsgType::Undefined)),
+                db_name: "".to_string(),
+                collection_name: collection_name.into(),
+                partition_names,
+            })
+            .await?
+            .into_inner();
+
+        status_to_result(&resp.status)?;
+        Ok(resp)
+    }
+
     /// Loads a collection with the given name and options.
     ///
     /// # Arguments
@@ -453,15 +479,16 @@ impl Client {
         ))?;
 
         loop {
-            match self.get_load_state(&collection_name, None).await? {
-                proto::common::LoadState::NotExist => {
-                    return Err(SuperError::Unexpected("collection not found".to_owned()))
-                }
-                proto::common::LoadState::Loading => (),
-                proto::common::LoadState::Loaded => return Ok(()),
-                proto::common::LoadState::NotLoad => {
-                    return Err(SuperError::Unexpected("collection not loaded".to_owned()))
-                }
+            let progress = self
+                .get_loading_progress(&collection_name, std::iter::empty::<&String>())
+                .await?;
+            let progress = if options.refresh {
+                progress.refresh_progress
+            } else {
+                progress.progress
+            };
+            if progress >= 100 {
+                return Ok(());
             }
 
             tokio::time::sleep(Duration::from_millis(config::WAIT_LOAD_DURATION_MS)).await;
