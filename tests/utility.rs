@@ -123,7 +123,15 @@ async fn list_loaded_segments() -> Result<()> {
             .await?;
         client.load_collection(schema.name(), None).await?;
 
-        let segments = client.list_loaded_segments(schema.name()).await?;
+        let mut segments = Vec::new();
+        for _ in 0..150 {
+            segments = client.list_loaded_segments(schema.name()).await?;
+            if !segments.is_empty() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        }
+        let segments = segments;
         assert!(!segments.is_empty());
         Ok(())
     })
