@@ -20,7 +20,8 @@ use crate::error::{Error, Result};
 use crate::proto::common::{MsgBase, MsgType};
 use crate::proto::milvus::{
     ConnectRequest, FlushAllRequest, FlushRequest, GetCompactionStateRequest,
-    GetFlushAllStateRequest, ManualCompactionRequest,
+    GetFlushAllStateRequest, GetPersistentSegmentInfoRequest, GetQuerySegmentInfoRequest,
+    ManualCompactionRequest,
 };
 use crate::proto::{self};
 use crate::utils::status_to_result;
@@ -127,6 +128,50 @@ impl Client {
 
         status_to_result(&resp.status)?;
         Ok(resp.flushed)
+    }
+
+    pub async fn list_persistent_segments<S>(
+        &self,
+        collection_name: S,
+    ) -> Result<Vec<proto::milvus::PersistentSegmentInfo>>
+    where
+        S: Into<String>,
+    {
+        let resp = self
+            .client
+            .clone()
+            .get_persistent_segment_info(GetPersistentSegmentInfoRequest {
+                collection_name: collection_name.into(),
+                db_name: "".to_string(),
+                ..Default::default()
+            })
+            .await?
+            .into_inner();
+
+        status_to_result(&resp.status)?;
+        Ok(resp.infos)
+    }
+
+    pub async fn list_loaded_segments<S>(
+        &self,
+        collection_name: S,
+    ) -> Result<Vec<proto::milvus::QuerySegmentInfo>>
+    where
+        S: Into<String>,
+    {
+        let resp = self
+            .client
+            .clone()
+            .get_query_segment_info(GetQuerySegmentInfoRequest {
+                collection_name: collection_name.into(),
+                db_name: "".to_string(),
+                ..Default::default()
+            })
+            .await?
+            .into_inner();
+
+        status_to_result(&resp.status)?;
+        Ok(resp.infos)
     }
 
     /// manual compaction

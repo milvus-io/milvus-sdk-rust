@@ -181,42 +181,6 @@ impl Client {
         Ok(res.stats.into_iter().map(|s| (s.key, s.value)).collect())
     }
 
-    /// Gets the loading progress for specified partitions.
-    ///
-    /// # Arguments
-    ///
-    /// * `collection_name` - The name of the collection.
-    /// * `partition_names` - An iterator of partition names to check progress for.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `Result` containing the loading progress percentage (0-100).
-    async fn get_loading_progress<'a, S, I>(
-        &self,
-        collection_name: S,
-        partition_names: I,
-    ) -> Result<i64>
-    where
-        S: Into<String>,
-        I: IntoIterator<Item = &'a String>,
-    {
-        let partition_names: Vec<String> = partition_names.into_iter().map(|x| x.into()).collect();
-        let resp = self
-            .client
-            .clone()
-            .get_loading_progress(crate::proto::milvus::GetLoadingProgressRequest {
-                base: Some(MsgBase::new(MsgType::LoadPartitions)),
-                db_name: "".to_string(),
-                collection_name: collection_name.into(),
-                partition_names: partition_names,
-            })
-            .await?
-            .into_inner();
-
-        status_to_result(&resp.status)?;
-        Ok(resp.progress)
-    }
-
     /// Loads partitions into memory with configurable options.
     ///
     /// This method loads the specified partitions into memory and waits for the loading
@@ -263,7 +227,12 @@ impl Client {
         ))?;
 
         loop {
-            if self.get_loading_progress(collection_name, &names).await? >= 100 {
+            if self
+                .get_loading_progress(collection_name, &names)
+                .await?
+                .progress
+                >= 100
+            {
                 return Ok(());
             }
 
