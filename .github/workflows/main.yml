@@ -45,14 +45,11 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Setup Milvus
-        run: docker compose -f ./docker-compose.yml up -d && sleep 15s
-
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
       - name: Run coverage
-        run: RUST_BACKTRACE=1 cargo llvm-cov --workspace --lcov --output-path lcov.info --ignore-filename-regex 'src/proto/.*'
+        run: CODE_COV=true ./scripts/run_tests.sh
 
       - name: Upload coverage to Codecov
         if: github.repository == 'milvus-io/milvus-sdk-rust'
