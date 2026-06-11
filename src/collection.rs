@@ -19,8 +19,9 @@ use crate::data::FieldColumn;
 use crate::error::{Error as SuperError, Result};
 use crate::proto::milvus::{
     AlterCollectionFieldRequest, AlterCollectionRequest, CreateCollectionRequest,
-    DropCollectionRequest, GetCompactionStateResponse, HasCollectionRequest, LoadCollectionRequest,
-    ManualCompactionResponse, ReleaseCollectionRequest, ShowCollectionsRequest,
+    DropCollectionRequest, GetCompactionStateResponse, GetReplicasRequest, HasCollectionRequest,
+    LoadCollectionRequest, ManualCompactionResponse, ReleaseCollectionRequest,
+    ShowCollectionsRequest,
 };
 use crate::proto::schema::DataType;
 use crate::schema::{CollectionSchema, CollectionSchemaBuilder};
@@ -493,6 +494,42 @@ impl Client {
 
             tokio::time::sleep(Duration::from_millis(config::WAIT_LOAD_DURATION_MS)).await;
         }
+    }
+
+    /// Describes the replicas of a collection.
+    ///
+    /// # Arguments
+    ///
+    /// * `collection_name` - The name of the collection.
+    /// * `db_name` - The database name. Use an empty string to use the current/default database.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the collection replicas reported by Milvus.
+    pub async fn describe_replicas<S1, S2>(
+        &self,
+        collection_name: S1,
+        db_name: S2,
+    ) -> Result<Vec<proto::milvus::ReplicaInfo>>
+    where
+        S1: Into<String>,
+        S2: Into<String>,
+    {
+        let resp = self
+            .client
+            .clone()
+            .get_replicas(GetReplicasRequest {
+                base: Some(MsgBase::new(MsgType::GetReplicas)),
+                collection_id: 0,
+                with_shard_nodes: true,
+                collection_name: collection_name.into(),
+                db_name: db_name.into(),
+            })
+            .await?
+            .into_inner();
+
+        status_to_result(&resp.status)?;
+        Ok(resp.replicas)
     }
 
     /// Retrieves the load state of a collection.
