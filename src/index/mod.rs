@@ -10,6 +10,8 @@ use std::{collections::HashMap, str::FromStr};
 
 #[derive(Debug, Clone, Copy, EnumString, Display)]
 pub enum IndexType {
+    #[strum(serialize = "INVALID")]
+    INVALID,
     #[strum(serialize = "FLAT")]
     Flat,
     #[strum(serialize = "BIN_FLAT")]
@@ -22,26 +24,14 @@ pub enum IndexType {
     IvfPQ,
     #[strum(serialize = "IVF_SQ8")]
     IvfSQ8,
-    #[strum(serialize = "IVF_SQ8_HYBRID")]
-    IvfSQ8H,
-    #[strum(serialize = "NSG")]
-    NSG,
     #[strum(serialize = "HNSW")]
     HNSW,
-    #[strum(serialize = "RHNSW_FLAT")]
-    RHNSWFlat,
-    #[strum(serialize = "RHNSW_PQ")]
-    RHNSWPQ,
-    #[strum(serialize = "RHNSW_SQ")]
-    RHNSWSQ,
-    #[strum(serialize = "IVF_HNSW")]
-    IvfHNSW,
-    #[strum(serialize = "ANNOY")]
-    ANNOY,
-    #[strum(serialize = "NGT_PANNG")]
-    NGTPANNG,
-    #[strum(serialize = "NGT_ONNG")]
-    NGTONNG,
+    #[strum(serialize = "HNSW_SQ")]
+    HNSWSQ,
+    #[strum(serialize = "HNSW_PQ")]
+    HNSWPQ,
+    #[strum(serialize = "HNSW_PRQ")]
+    HNSWPRQ,
     #[strum(serialize = "Trie")]
     Trie,
     #[strum(serialize = "BITMAP")]
@@ -58,23 +48,45 @@ pub enum IndexType {
     AutoIndex,
     #[strum(serialize = "DISKANN")]
     DiskANN,
+    #[strum(serialize = "SCANN")]
+    Scann,
+    #[strum(serialize = "IVF_RABITQ")]
+    IvfRabitQ,
+    #[strum(serialize = "AISAQ")]
+    Aisaq,
     #[strum(serialize = "GPU_IVF_FLAT")]
     GpuIvfFlat,
     #[strum(serialize = "GPU_IVF_PQ")]
     GpuIvfPQ,
+    #[strum(serialize = "GPU_BRUTE_FORCE")]
+    GpuBruteForce,
+    #[strum(serialize = "GPU_CAGRA")]
+    GpuCagra,
+    #[strum(serialize = "MINHASH_LSH")]
+    MinhashLsh,
+    #[strum(serialize = "NGRAM")]
+    Ngram,
+    #[strum(serialize = "STL_SORT")]
+    StlSort,
 }
 
 #[derive(Debug, Clone, Copy, EnumString, Display)]
 pub enum MetricType {
+    #[strum(serialize = "INVALID")]
+    INVALID,
     L2,
     IP,
     COSINE,
     HAMMING,
     JACCARD,
-    TANIMOTO,
-    SUBSTRUCTURE,
-    SUPERSTRUCTURE,
+    MHJACCARD,
     BM25,
+    #[strum(serialize = "MAX_SIM", serialize = "MAX_SIM_COSINE")]
+    MAX_SIM_COSINE,
+    MAX_SIM_IP,
+    MAX_SIM_L2,
+    MAX_SIM_JACCARD,
+    MAX_SIM_HAMMING,
 }
 
 #[derive(Debug, Clone)]
@@ -178,11 +190,11 @@ impl From<IndexDescription> for IndexInfo {
         let index_type = params
             .remove("index_type")
             .and_then(|s| IndexType::from_str(&s).ok())
-            .unwrap_or(IndexType::Flat);
+            .unwrap_or(IndexType::INVALID);
         let metric_type = params
             .remove("metric_type")
             .and_then(|s| MetricType::from_str(&s).ok())
-            .unwrap_or(MetricType::L2);
+            .unwrap_or(MetricType::INVALID);
         let extra_params = params
             .get("params")
             .and_then(|s| serde_json::from_str(s).ok())
@@ -202,4 +214,58 @@ impl From<IndexDescription> for IndexInfo {
             state: description.state(),
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{IndexType, MetricType};
+    use std::str::FromStr;
+
+    #[test]
+    fn index_type_round_trip_for_supported_variants() {
+        let cases = [
+            (IndexType::INVALID, "INVALID"),
+            (IndexType::HNSWSQ, "HNSW_SQ"),
+            (IndexType::HNSWPQ, "HNSW_PQ"),
+            (IndexType::HNSWPRQ, "HNSW_PRQ"),
+            (IndexType::Scann, "SCANN"),
+            (IndexType::IvfRabitQ, "IVF_RABITQ"),
+            (IndexType::Aisaq, "AISAQ"),
+            (IndexType::GpuBruteForce, "GPU_BRUTE_FORCE"),
+            (IndexType::GpuCagra, "GPU_CAGRA"),
+            (IndexType::MinhashLsh, "MINHASH_LSH"),
+            (IndexType::Ngram, "NGRAM"),
+            (IndexType::StlSort, "STL_SORT"),
+        ];
+
+        for (variant, expected) in cases {
+            assert_eq!(variant.to_string(), expected);
+            assert_eq!(IndexType::from_str(expected).unwrap().to_string(), expected);
+        }
+    }
+
+    #[test]
+    fn metric_type_round_trip_for_supported_variants() {
+        let cases = [
+            (MetricType::INVALID, "INVALID"),
+            (MetricType::MHJACCARD, "MHJACCARD"),
+            (MetricType::MAX_SIM_COSINE, "MAX_SIM_COSINE"),
+            (MetricType::MAX_SIM_IP, "MAX_SIM_IP"),
+            (MetricType::MAX_SIM_L2, "MAX_SIM_L2"),
+            (MetricType::MAX_SIM_JACCARD, "MAX_SIM_JACCARD"),
+            (MetricType::MAX_SIM_HAMMING, "MAX_SIM_HAMMING"),
+        ];
+
+        for (variant, expected) in cases {
+            assert_eq!(variant.to_string(), expected);
+            assert_eq!(MetricType::from_str(expected).unwrap().to_string(), expected);
+        }
+
+        assert_eq!(
+            MetricType::from_str("MAX_SIM").unwrap().to_string(),
+            MetricType::MAX_SIM_COSINE.to_string()
+        );
+        assert_eq!(MetricType::MAX_SIM_COSINE.to_string(), "MAX_SIM_COSINE");
+    }
+
 }
