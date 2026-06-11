@@ -568,7 +568,10 @@ impl QueryIterator {
                 guarantee_timestamp: 0,
                 query_params: init_ts_params,
                 not_return_all_meta: false,
-                consistency_level: self.options.consistency_level.unwrap_or(0),
+                consistency_level: self
+                    .options
+                    .consistency_level
+                    .unwrap_or(self.consistency_level as i32),
                 use_default_consistency: self.options.consistency_level.is_none(),
                 expr_template_values: self.options.expr_template_values.clone(),
                 namespace: self.options.namespace.clone(),
@@ -594,6 +597,7 @@ impl QueryIterator {
                 .read(true)
                 .write(true)
                 .create(true)
+                .truncate(false)
                 .open(cp_file_path)
             {
                 self.cp_file_handler = Some(file);
@@ -604,7 +608,7 @@ impl QueryIterator {
                     let reader = BufReader::new(file);
                     let lines: Vec<String> = reader
                         .lines()
-                        .map(|line| line.map_err(|e| Error::Io(e)))
+                        .map(|line| line.map_err(Error::Io))
                         .collect::<Result<Vec<String>>>()?;
 
                     if lines.len() >= 2 {
@@ -723,7 +727,10 @@ impl QueryIterator {
                 guarantee_timestamp: self.session_ts,
                 query_params: seek_params,
                 not_return_all_meta: false,
-                consistency_level: self.options.consistency_level.unwrap_or(0),
+                consistency_level: self
+                    .options
+                    .consistency_level
+                    .unwrap_or(self.consistency_level as i32),
                 use_default_consistency: self.options.consistency_level.is_none(),
                 expr_template_values: self.options.expr_template_values.clone(),
                 namespace: self.options.namespace.clone(),
@@ -967,7 +974,10 @@ impl QueryIterator {
                     guarantee_timestamp: self.session_ts,
                     query_params,
                     not_return_all_meta: false,
-                    consistency_level: self.options.consistency_level.unwrap_or(0),
+                    consistency_level: self
+                        .options
+                        .consistency_level
+                        .unwrap_or(self.consistency_level as i32),
                     use_default_consistency: self.options.consistency_level.is_none(),
                     expr_template_values: self.options.expr_template_values.clone(),
                     namespace: self.options.namespace.clone(),
@@ -987,7 +997,7 @@ impl QueryIterator {
             if results.is_empty() {
                 self.has_more = false;
             } else {
-                let actual_returned = results.iter().map(|r| r.len() as usize).sum::<usize>();
+                let actual_returned = results.iter().map(|r| r.len()).sum::<usize>();
                 if actual_returned < remaining_limit {
                     self.has_more = false;
                 }
@@ -1241,6 +1251,7 @@ impl SearchIterator {
                 .read(true)
                 .write(true)
                 .create(true)
+                .truncate(false)
                 .open(cp_file_path)
             {
                 self.cp_file_handler = Some(file);
@@ -1251,7 +1262,7 @@ impl SearchIterator {
                     let reader = BufReader::new(file);
                     let lines: Vec<String> = reader
                         .lines()
-                        .map(|line| line.map_err(|e| Error::Io(e)))
+                        .map(|line| line.map_err(Error::Io))
                         .collect::<Result<Vec<String>>>()?;
 
                     if lines.len() >= 2 {
@@ -1430,7 +1441,10 @@ impl SearchIterator {
                 travel_timestamp: 0,
                 guarantee_timestamp: self.session_ts,
                 not_return_all_meta: false,
-                consistency_level: self.options.consistency_level.unwrap_or(0),
+                consistency_level: self
+                    .options
+                    .consistency_level
+                    .unwrap_or(self.consistency_level as i32),
                 use_default_consistency: self.options.consistency_level.is_none(),
                 #[allow(deprecated)]
                 search_by_primary_keys: false,
@@ -1456,10 +1470,8 @@ impl SearchIterator {
                 self.iterator_token = Some(iter_v2_results.token);
             }
             self.last_bound = Some(iter_v2_results.last_bound.to_string());
-        } else {
-            if self.iterator_token.is_none() {
-                self.iterator_token = Some(format!("token_{}", self.session_ts));
-            }
+        } else if self.iterator_token.is_none() {
+            self.iterator_token = Some(format!("token_{}", self.session_ts));
         }
 
         let mut result = Vec::new();
