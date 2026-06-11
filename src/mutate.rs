@@ -327,6 +327,7 @@ impl Client {
                 schema_timestamp: 0,
                 partial_update: options.partial_update,
                 namespace: options.namespace,
+                field_ops: Vec::new(),
             })
             .await?
             .into_inner();

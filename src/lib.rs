@@ -18,6 +18,7 @@ pub mod alias;
 pub mod authentication;
 pub mod client;
 pub mod collection;
+pub mod cdc;
 pub mod data;
 pub mod database;
 pub mod error;

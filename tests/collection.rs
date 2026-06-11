@@ -231,6 +231,20 @@ async fn rename_collection() -> Result<()> {
 }
 
 #[tokio::test]
+async fn describe_replicas() -> Result<()> {
+    let (client, schema) = create_test_collection(true).await?;
+    let collection_name = schema.name().to_string();
+
+    run_with_collection_cleanup(&client, vec![collection_name.clone()], || async {
+        let replicas = client.describe_replicas(&collection_name, "").await?;
+        assert!(!replicas.is_empty());
+        assert!(replicas.iter().all(|replica| replica.collection_id > 0));
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test]
 async fn collection_upsert() -> Result<()> {
     let collection_name = format!("collection_upsert_{}", gen_random_name());
     let client = Client::new(URL).await?;
@@ -256,6 +270,7 @@ async fn collection_upsert() -> Result<()> {
     client.drop_collection(schema.name()).await?;
     Ok(())
 }
+
 
 #[tokio::test]
 async fn collection_basic() -> Result<()> {
