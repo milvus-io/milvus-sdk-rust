@@ -1844,6 +1844,7 @@ fn get_place_holder_value(vectors: &Vec<Value>) -> Result<PlaceholderValue> {
         tag: "$0".to_string(),
         r#type: PlaceholderType::None as _,
         values: Vec::new(),
+        element_level: false,
     };
     // if no vectors, return an empty one
     if vectors.len() == 0 {

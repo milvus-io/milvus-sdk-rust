@@ -83,5 +83,9 @@ name = "mutate_delete"
 path = "tests/testsoutsideoftestsuite/mutate_delete.rs"
 
 [[test]]
+name = "cdc"
+path = "tests/cdc.rs"
+
+[[test]]
 name = "aggressive_hpc_testing"
 path = "tests/aggressivehpctesting/mod.rs"
