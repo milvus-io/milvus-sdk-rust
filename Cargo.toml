@@ -35,57 +35,133 @@ protoc-bin-vendored = "=3.2.0"
 rand = "0.8.5"
 
 [[test]]
+name = "alias"
+path = "tests/v1/alias.rs"
+
+[[test]]
+name = "client"
+path = "tests/v1/client.rs"
+
+[[test]]
+name = "collection"
+path = "tests/v1/collection.rs"
+
+[[test]]
+name = "database"
+path = "tests/v1/database.rs"
+
+[[test]]
+name = "index"
+path = "tests/v1/index.rs"
+
+[[test]]
+name = "iterator"
+path = "tests/v1/iterator.rs"
+
+[[test]]
+name = "milvus26"
+path = "tests/v1/milvus26.rs"
+
+[[test]]
+name = "partition"
+path = "tests/v1/partition.rs"
+
+[[test]]
+name = "query"
+path = "tests/v1/query.rs"
+
+[[test]]
+name = "rbac"
+path = "tests/v1/rbac.rs"
+
+[[test]]
+name = "resource_group"
+path = "tests/v1/resource_group.rs"
+
+[[test]]
+name = "utility"
+path = "tests/v1/utility.rs"
+
+[[test]]
 name = "client_keepalive"
-path = "tests/testsoutsideoftestsuite/client_keepalive.rs"
+path = "tests/v1/testsoutsideoftestsuite/client_keepalive.rs"
 
 [[test]]
 name = "client_with_timeout"
-path = "tests/testsoutsideoftestsuite/client_with_timeout.rs"
+path = "tests/v1/testsoutsideoftestsuite/client_with_timeout.rs"
 
 [[test]]
 name = "client_search"
-path = "tests/testsoutsideoftestsuite/client_search.rs"
+path = "tests/v1/testsoutsideoftestsuite/client_search.rs"
 
 [[test]]
 name = "collection_list_collections"
-path = "tests/testsoutsideoftestsuite/collection_list_collections.rs"
+path = "tests/v1/testsoutsideoftestsuite/collection_list_collections.rs"
 
 [[test]]
 name = "collection_get_collection_stats"
-path = "tests/testsoutsideoftestsuite/collection_get_collection_stats.rs"
+path = "tests/v1/testsoutsideoftestsuite/collection_get_collection_stats.rs"
 
 [[test]]
 name = "collection_release_collection"
-path = "tests/testsoutsideoftestsuite/collection_release_collection.rs"
-
-[[test]]
-name = "partition_create_partition"
-path = "tests/testsoutsideoftestsuite/partition_create_partition.rs"
-
-[[test]]
-name = "partition_drop_partition"
-path = "tests/testsoutsideoftestsuite/partition_drop_partition.rs"
-
-[[test]]
-name = "partition_list_partitions"
-path = "tests/testsoutsideoftestsuite/partition_list_partitions.rs"
-
-[[test]]
-name = "partition_has_partition"
-path = "tests/testsoutsideoftestsuite/partition_has_partition.rs"
-
-[[test]]
-name = "partition_get_partition_stats"
-path = "tests/testsoutsideoftestsuite/partition_get_partition_stats.rs"
+path = "tests/v1/testsoutsideoftestsuite/collection_release_collection.rs"
 
 [[test]]
 name = "mutate_delete"
-path = "tests/testsoutsideoftestsuite/mutate_delete.rs"
+path = "tests/v1/testsoutsideoftestsuite/mutate_delete.rs"
 
 [[test]]
 name = "cdc"
-path = "tests/cdc.rs"
+path = "tests/v1/cdc.rs"
 
 [[test]]
 name = "aggressive_hpc_testing"
-path = "tests/aggressivehpctesting/mod.rs"
+path = "tests/v1/aggressivehpctesting/mod.rs"
+
+[[example]]
+name = "authentication"
+path = "examples/v1/authentication.rs"
+
+[[example]]
+name = "cdc"
+path = "examples/v1/cdc.rs"
+
+[[example]]
+name = "collection"
+path = "examples/v1/collection.rs"
+
+[[example]]
+name = "database"
+path = "examples/v1/database.rs"
+
+[[example]]
+name = "full_text_match"
+path = "examples/v1/full_text_match.rs"
+
+[[example]]
+name = "index_example"
+path = "examples/v1/index_example.rs"
+
+[[example]]
+name = "int8_vector"
+path = "examples/v1/int8_vector.rs"
+
+[[example]]
+name = "iterator"
+path = "examples/v1/iterator.rs"
+
+[[example]]
+name = "query_search"
+path = "examples/v1/query_search.rs"
+
+[[example]]
+name = "resource_groups"
+path = "examples/v1/resource_groups.rs"
+
+[[example]]
+name = "timestampz"
+path = "examples/v1/timestampz.rs"
+
+[[example]]
+name = "upsert"
+path = "examples/v1/upsert.rs"
