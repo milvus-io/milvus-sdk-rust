@@ -71,6 +71,7 @@ pub enum Error {
     ParseInt(#[from] std::num::ParseIntError),
 }
 
+#[allow(deprecated)]
 impl From<Status> for Error {
     fn from(s: Status) -> Self {
         Error::Server(

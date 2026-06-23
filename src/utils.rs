@@ -19,6 +19,7 @@ use crate::{
     proto::common::{ErrorCode, Status},
 };
 
+#[allow(deprecated)]
 pub fn status_to_result(status: &Option<Status>) -> Result<(), Error> {
     let status = status
         .clone()

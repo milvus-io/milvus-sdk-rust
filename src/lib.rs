@@ -14,26 +14,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod alias;
-pub mod authentication;
-pub mod client;
-pub mod collection;
-pub mod cdc;
-pub mod data;
-pub mod database;
 pub mod error;
-pub mod iterator;
-pub mod mutate;
-pub mod options;
-pub mod partition;
-pub mod query;
-pub mod resource_group;
-pub mod schema;
-pub mod utility;
-pub mod value;
+pub mod proto;
+pub mod v1;
 
 mod config;
-pub mod index;
-pub mod proto;
-pub mod types;
 mod utils;
+
+pub use v1::alias;
+pub use v1::authentication;
+pub use v1::cdc;
+pub use v1::client;
+pub use v1::collection;
+pub use v1::data;
+pub use v1::database;
+pub use v1::index;
+pub use v1::iterator;
+pub use v1::mutate;
+pub use v1::options;
+pub use v1::partition;
+pub use v1::query;
+pub use v1::resource_group;
+pub use v1::schema;
+pub use v1::types;
+pub use v1::utility;
+pub use v1::value;
