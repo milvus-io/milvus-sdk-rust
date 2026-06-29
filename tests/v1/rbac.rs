@@ -1,11 +1,16 @@
 use milvus::client::ClientBuilder;
-use milvus::error::Result;
+use milvus::error::{Error, Result};
 
 mod common;
 use common::*;
 
+fn is_unimplemented(error: &Error) -> bool {
+    matches!(error, Error::Grpc(status) if status.code() == tonic::Code::Unimplemented)
+}
+
 #[tokio::test]
 async fn rbac_user_role_privilege_and_group_lifecycle() -> Result<()> {
+
     let client = ClientBuilder::new(URL)
         .username("root")
         .password("Milvus")
@@ -30,6 +35,14 @@ async fn rbac_user_role_privilege_and_group_lifecycle() -> Result<()> {
             .await?;
 
         client.create_role(role.clone()).await?;
+        if let Err(error) = client
+            .alter_role(role.clone(), "updated role description".to_string())
+            .await
+        {
+            if !is_unimplemented(&error) {
+                return Err(error);
+            }
+        }
         let roles = client.list_roles().await?;
         assert!(roles.contains(&role));
 

@@ -91,6 +91,7 @@ impl Client {
                 password: general_purpose::STANDARD.encode(password.into().as_bytes()),
                 created_utc_timestamps: 0, // Server will set the actual timestamp
                 modified_utc_timestamps: 0, // Server will set the actual timestamp
+                description: None,
             })
             .await?
             .into_inner();
@@ -258,6 +259,7 @@ impl Client {
                 base: Some(MsgBase::new(MsgType::CreateRole)),
                 entity: Some(proto::milvus::RoleEntity {
                     name: role_name.into(),
+                    description: String::new(),
                 }),
             })
             .await?
@@ -442,6 +444,7 @@ impl Client {
             entity: Some(crate::proto::milvus::GrantEntity {
                 role: Some(crate::proto::milvus::RoleEntity {
                     name: role_name.clone(),
+                    description: String::new(),
                 }),
                 object: None,                // None means get all objects for this role
                 object_name: "".to_string(), // Empty string means get all object names
@@ -753,6 +756,7 @@ impl Client {
                 entity: Some(proto::milvus::GrantEntity {
                     role: Some(proto::milvus::RoleEntity {
                         name: role_name.into(),
+                        description: String::new(),
                     }),
                     object: Some(proto::milvus::ObjectEntity {
                         name: object_type.into(),
@@ -819,6 +823,7 @@ impl Client {
                 base: Some(MsgBase::new(MsgType::OperatePrivilegeV2)),
                 role: Some(proto::milvus::RoleEntity {
                     name: role_name.into(),
+                    description: String::new(),
                 }),
                 collection_name: collection_name.into(),
                 db_name: db_name.map(|d| d.into()).unwrap_or_default(),
@@ -933,6 +938,7 @@ impl Client {
                 entity: Some(proto::milvus::GrantEntity {
                     role: Some(proto::milvus::RoleEntity {
                         name: role_name.into(),
+                        description: String::new(),
                     }),
                     object: Some(proto::milvus::ObjectEntity {
                         name: object_type.into(),
@@ -999,6 +1005,7 @@ impl Client {
                 base: Some(MsgBase::new(MsgType::OperatePrivilegeV2)),
                 role: Some(proto::milvus::RoleEntity {
                     name: role_name.into(),
+                    description: String::new(),
                 }),
                 grantor: Some(proto::milvus::GrantorEntity {
                     user: None,
@@ -1009,6 +1016,33 @@ impl Client {
                 r#type: proto::milvus::OperatePrivilegeType::Grant as i32,
                 db_name: db_name.map(|d| d.into()).unwrap_or_default(),
                 collection_name: collection_name.into(),
+            })
+            .await?
+            .into_inner();
+        status_to_result(&Some(res))?;
+        Ok(())
+    }
+
+    /// Updates a user's metadata.
+    ///
+    /// This method updates user metadata such as description without changing the password.
+    ///
+    /// # Arguments
+    ///
+    /// * `user_name` - The username of the user to update
+    /// * `description` - The new user description
+    pub async fn update_user<S: Into<String>>(&self, user_name: S, description: S) -> Result<()> {
+        let res = self
+            .client
+            .clone()
+            .update_credential(proto::milvus::UpdateCredentialRequest {
+                base: Some(MsgBase::new(MsgType::UpdateCredential)),
+                username: user_name.into(),
+                old_password: String::new(),
+                new_password: String::new(),
+                created_utc_timestamps: 0,
+                modified_utc_timestamps: 0,
+                description: Some(description.into()),
             })
             .await?
             .into_inner();
@@ -1066,6 +1100,30 @@ impl Client {
                 new_password: general_purpose::STANDARD.encode(new_password.into().as_bytes()),
                 created_utc_timestamps: 0, // Server will set the actual timestamp
                 modified_utc_timestamps: 0, // Server will set the actual timestamp
+                description: None,
+            })
+            .await?
+            .into_inner();
+        status_to_result(&Some(res))?;
+        Ok(())
+    }
+
+    /// Updates a role's description.
+    ///
+    /// This method updates role metadata without changing its grants or memberships.
+    ///
+    /// # Arguments
+    ///
+    /// * `role_name` - The role to update
+    /// * `description` - The new role description
+    pub async fn alter_role<S: Into<String>>(&self, role_name: S, description: S) -> Result<()> {
+        let res = self
+            .client
+            .clone()
+            .alter_role(proto::milvus::AlterRoleRequest {
+                base: Some(MsgBase::new(MsgType::AlterRole)),
+                role_name: role_name.into(),
+                description: description.into(),
             })
             .await?
             .into_inner();

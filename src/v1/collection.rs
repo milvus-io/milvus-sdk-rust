@@ -370,6 +370,37 @@ impl From<GetCompactionStateResponse> for CompactionState {
     }
 }
 
+#[derive(Debug)]
+pub struct CompactionPlan {
+    pub sources: Vec<i64>,
+    pub target: i64,
+}
+
+impl From<proto::milvus::CompactionMergeInfo> for CompactionPlan {
+    fn from(value: proto::milvus::CompactionMergeInfo) -> Self {
+        Self {
+            sources: value.sources,
+            target: value.target,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct CompactionPlans {
+    pub state: crate::proto::common::CompactionState,
+    pub plans: Vec<CompactionPlan>,
+}
+
+impl From<proto::milvus::GetCompactionPlansResponse> for CompactionPlans {
+    fn from(value: proto::milvus::GetCompactionPlansResponse) -> Self {
+        Self {
+            state: crate::proto::common::CompactionState::try_from(value.state)
+                .unwrap_or(crate::proto::common::CompactionState::UndefiedState),
+            plans: value.merge_infos.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
 //type ConcurrentHashMap<K, V> = tokio::sync::RwLock<std::collections::HashMap<K, V>>;
 
 impl Client {

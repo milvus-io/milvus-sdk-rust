@@ -15,17 +15,85 @@
 // limitations under the License.
 
 use crate::v1::client::{Client, ServerVersion};
-use crate::v1::collection::{CompactionInfo, CompactionState};
+use crate::v1::collection::{CompactionInfo, CompactionPlans, CompactionState};
 use crate::error::{Error, Result};
-use crate::proto::common::{MsgBase, MsgType};
+use crate::proto::common::{MsgBase, MsgType, SegmentLevel, SegmentState};
 use crate::proto::milvus::{
-    ConnectRequest, FlushAllRequest, FlushRequest, GetCompactionStateRequest,
-    GetFlushAllStateRequest, GetPersistentSegmentInfoRequest, GetQuerySegmentInfoRequest,
-    ManualCompactionRequest,
+    ConnectRequest, FlushAllRequest, FlushRequest, GetCompactionPlansRequest,
+    GetCompactionStateRequest, GetFlushAllStateRequest, GetPersistentSegmentInfoRequest,
+    GetQuerySegmentInfoRequest, ManualCompactionRequest,
+    PersistentSegmentInfo as ProtoPersistentSegmentInfo,
+    QuerySegmentInfo as ProtoQuerySegmentInfo,
 };
 use crate::proto::{self};
 use crate::utils::status_to_result;
 use std::collections::HashMap;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PersistentSegmentInfo {
+    pub segment_id: i64,
+    pub collection_id: i64,
+    pub partition_id: i64,
+    pub num_rows: i64,
+    pub state: SegmentState,
+    pub level: SegmentLevel,
+    pub is_sorted: bool,
+    pub storage_version: i64,
+}
+
+impl From<ProtoPersistentSegmentInfo> for PersistentSegmentInfo {
+    fn from(value: ProtoPersistentSegmentInfo) -> Self {
+        Self {
+            segment_id: value.segment_id,
+            collection_id: value.collection_id,
+            partition_id: value.partition_id,
+            num_rows: value.num_rows,
+            state: SegmentState::try_from(value.state).unwrap_or(SegmentState::None),
+            level: SegmentLevel::try_from(value.level).unwrap_or(SegmentLevel::Legacy),
+            is_sorted: value.is_sorted,
+            storage_version: value.storage_version,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QuerySegmentInfo {
+    pub segment_id: i64,
+    pub collection_id: i64,
+    pub partition_id: i64,
+    pub mem_size: i64,
+    pub num_rows: i64,
+    pub index_name: String,
+    pub index_id: i64,
+    #[deprecated]
+    pub node_id: i64,
+    pub state: SegmentState,
+    pub node_ids: Vec<i64>,
+    pub level: SegmentLevel,
+    pub is_sorted: bool,
+    pub storage_version: i64,
+}
+
+#[allow(deprecated)]
+impl From<ProtoQuerySegmentInfo> for QuerySegmentInfo {
+    fn from(value: ProtoQuerySegmentInfo) -> Self {
+        Self {
+            segment_id: value.segment_id,
+            collection_id: value.collection_id,
+            partition_id: value.partition_id,
+            mem_size: value.mem_size,
+            num_rows: value.num_rows,
+            index_name: value.index_name,
+            index_id: value.index_id,
+            node_id: value.node_id,
+            state: SegmentState::try_from(value.state).unwrap_or(SegmentState::None),
+            node_ids: value.node_ids,
+            level: SegmentLevel::try_from(value.level).unwrap_or(SegmentLevel::Legacy),
+            is_sorted: value.is_sorted,
+            storage_version: value.storage_version,
+        }
+    }
+}
 
 impl Client {
     pub async fn flush_collections<C>(&self, collections: C) -> Result<HashMap<String, Vec<i64>>>
@@ -133,7 +201,7 @@ impl Client {
     pub async fn list_persistent_segments<S>(
         &self,
         collection_name: S,
-    ) -> Result<Vec<proto::milvus::PersistentSegmentInfo>>
+    ) -> Result<Vec<PersistentSegmentInfo>>
     where
         S: Into<String>,
     {
@@ -149,13 +217,13 @@ impl Client {
             .into_inner();
 
         status_to_result(&resp.status)?;
-        Ok(resp.infos)
+        Ok(resp.infos.into_iter().map(Into::into).collect())
     }
 
     pub async fn list_loaded_segments<S>(
         &self,
         collection_name: S,
-    ) -> Result<Vec<proto::milvus::QuerySegmentInfo>>
+    ) -> Result<Vec<QuerySegmentInfo>>
     where
         S: Into<String>,
     {
@@ -171,7 +239,7 @@ impl Client {
             .into_inner();
 
         status_to_result(&resp.status)?;
-        Ok(resp.infos)
+        Ok(resp.infos.into_iter().map(Into::into).collect())
     }
 
     /// manual compaction
@@ -225,6 +293,17 @@ impl Client {
             .client
             .clone()
             .get_compaction_state(GetCompactionStateRequest { compaction_id })
+            .await?
+            .into_inner();
+        status_to_result(&resp.status)?;
+        Ok(resp.into())
+    }
+
+    pub async fn get_compaction_plans(&self, compaction_id: i64) -> Result<CompactionPlans> {
+        let resp = self
+            .client
+            .clone()
+            .get_compaction_state_with_plans(GetCompactionPlansRequest { compaction_id })
             .await?
             .into_inner();
         status_to_result(&resp.status)?;
