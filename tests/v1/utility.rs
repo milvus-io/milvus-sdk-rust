@@ -187,6 +187,23 @@ async fn test_get_compaction_state() -> Result<()> {
 }
 
 #[tokio::test]
+async fn test_get_compaction_plans() -> Result<()> {
+    let (client, collection) = create_test_collection(true).await?;
+    let collection_name = collection.name().to_string();
+
+    run_with_collection_cleanup(&client, vec![collection_name], || async {
+        let compaction_info = client.manual_compaction(collection.name(), None).await?;
+        let compaction_plans = client.get_compaction_plans(compaction_info.id).await?;
+        assert_ne!(
+            compaction_plans.state,
+            milvus::proto::common::CompactionState::UndefiedState
+        );
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test]
 async fn run_analyzer_returns_tokens() -> Result<()> {
     let client = Client::new(URL).await?;
     let results = client
