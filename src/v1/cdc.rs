@@ -16,17 +16,16 @@
 
 //! Change Data Capture (CDC) APIs for Milvus Rust SDK.
 
-use crate::v1::client::Client;
-use crate::error::Result;
 use crate::proto::common::{
     MessageId as ProtoMessageId, ReplicateCheckpoint as ProtoReplicateCheckpoint,
     ReplicateConfiguration as ProtoReplicateConfiguration, WalName,
 };
 use crate::proto::milvus::{
-    GetReplicateConfigurationRequest, GetReplicateInfoRequest,
-    UpdateReplicateConfigurationRequest,
+    GetReplicateConfigurationRequest, GetReplicateInfoRequest, UpdateReplicateConfigurationRequest,
 };
-use crate::utils::status_to_result;
+use crate::v1::client::Client;
+use crate::v1::error::status_to_result;
+use crate::v1::error::Result;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ReplicateCheckpoint {

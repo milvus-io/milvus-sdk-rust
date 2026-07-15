@@ -1,10 +1,26 @@
+// Licensed to the LF AI & Data foundation under one
+// or more contributor license agreements. See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership. The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License. You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use milvus::client::{Client, ConsistencyLevel};
 use milvus::data::FieldColumn;
 use milvus::database::CreateDbOptions;
 use milvus::error::Result;
 use milvus::index::{IndexParams, IndexType, MetricType};
-use milvus::proto::common::KeyValuePair;
 use milvus::options::CreateCollectionOptions;
+use milvus::proto::common::KeyValuePair;
 use milvus::query::{
     AnnSearchRequest, GetOptions, HybridSearchOptions, IdType, QueryOptions, RrfRanker,
     SearchOptions, WeightedRanker,
@@ -13,8 +29,7 @@ use milvus::schema::{CollectionSchema, CollectionSchemaBuilder, FieldSchema};
 use milvus::value::Value;
 use std::collections::HashMap;
 
-mod common;
-use common::*;
+use super::common::*;
 
 const DIM: i64 = 8;
 const ROW_COUNT: i64 = 80;
@@ -155,6 +170,65 @@ async fn query_search_hybrid_search_and_get() -> Result<()> {
     .await
 }
 
+#[tokio::test]
+async fn count_api() -> Result<()> {
+    let entity_count: i64 = 300;
+    let (client, schema) =
+        create_empty_test_collection_custom(false, DEFAULT_DIM, DEFAULT_VEC_FIELD).await?;
+    let collection_name = schema.name().to_string();
+
+    run_with_collection_cleanup(&client, vec![collection_name.clone()], || async {
+        // Insert deterministic sequential IDs so the filtered count can be asserted exactly.
+        let ids: Vec<i64> = (0..entity_count).collect();
+        let feature_data = gen_random_f32_vector_custom(entity_count, DEFAULT_DIM);
+        let id_column = FieldColumn::new(schema.get_field("id").unwrap(), ids);
+        let feature_column =
+            FieldColumn::new(schema.get_field(DEFAULT_VEC_FIELD).unwrap(), feature_data);
+        client
+            .insert(&collection_name, vec![id_column, feature_column], None)
+            .await?;
+        client.flush(&collection_name).await?;
+        client
+            .create_index(
+                &collection_name,
+                DEFAULT_VEC_FIELD,
+                IndexParams::new(
+                    DEFAULT_INDEX_NAME.to_string(),
+                    IndexType::IvfFlat,
+                    MetricType::L2,
+                    HashMap::new(),
+                ),
+            )
+            .await?;
+        client.load_collection(&collection_name, None).await?;
+
+        // Wait for asynchronous loading before issuing aggregate queries.
+        for _ in 0..20 {
+            if client.get_load_state(&collection_name, None).await?
+                == milvus::proto::common::LoadState::Loaded
+            {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        }
+
+        let whole = client.count(&collection_name).await?;
+        assert_eq!(whole, entity_count, "whole-collection count");
+
+        let filtered = client
+            .count_with_expr(
+                &collection_name,
+                "id < 150",
+                &milvus::query::QueryOptions::new(),
+            )
+            .await?;
+        assert_eq!(filtered, 150, "filtered count matches strict subset");
+
+        Ok(())
+    })
+    .await
+}
+
 async fn cleanup_consistency_case(
     query_client: &mut Client,
     db_name: &str,
@@ -163,7 +237,11 @@ async fn cleanup_consistency_case(
     if db_name != "default" {
         query_client.using_database(db_name).await?;
     }
-    if query_client.has_collection(collection_name).await.unwrap_or(false) {
+    if query_client
+        .has_collection(collection_name)
+        .await
+        .unwrap_or(false)
+    {
         query_client.drop_collection(collection_name).await?;
     }
     if db_name != "default" {
@@ -200,7 +278,9 @@ async fn create_consistency_collection(
     query_client
         .create_collection(
             schema.clone(),
-            Some(CreateCollectionOptions::with_consistency_level(consistency_level)),
+            Some(CreateCollectionOptions::with_consistency_level(
+                consistency_level,
+            )),
         )
         .await?;
     query_client
@@ -226,6 +306,7 @@ async fn run_consistency_visibility_case(
     consistency_level: ConsistencyLevel,
 ) -> Result<()> {
     let collection_name = format!("test_consistency_{}", gen_random_name());
+    let mut cleanup = CollectionCleanup::in_database(db_name, [&collection_name]);
     let schema =
         create_consistency_collection(query_client, db_name, &collection_name, consistency_level)
             .await?;
@@ -302,6 +383,7 @@ async fn run_consistency_visibility_case(
     }
 
     cleanup_consistency_case(query_client, db_name, &collection_name).await?;
+    cleanup.disarm();
     Ok(())
 }
 
@@ -335,4 +417,69 @@ async fn consistency_level_visibility_parity() -> Result<()> {
     }
 
     test_result
+}
+
+#[tokio::test]
+async fn search_with_cosine_metric() -> Result<()> {
+    let collection_name = format!("test_cosine_{}", gen_random_name());
+    let client = Client::new(URL).await?;
+    let mut cleanup = CollectionCleanup::new([&collection_name]);
+    let dim: i64 = 16;
+
+    let schema = CollectionSchemaBuilder::new(&collection_name, "cosine test")
+        .add_field(FieldSchema::new_primary_int64("id", "", true))
+        .add_field(FieldSchema::new_float_vector("embedding", "", dim))
+        .build()?;
+
+    client
+        .create_collection(
+            schema.clone(),
+            Some(CreateCollectionOptions::with_consistency_level(
+                ConsistencyLevel::Strong,
+            )),
+        )
+        .await?;
+
+    // Insert data
+    let embed_data = gen_random_f32_vector_custom(100, dim);
+    let embed_col = FieldColumn::new(schema.get_field("embedding").unwrap(), embed_data);
+    client
+        .insert(&collection_name, vec![embed_col], None)
+        .await?;
+    client.flush(&collection_name).await?;
+
+    // Create index with COSINE metric
+    let index_params = IndexParams::new(
+        "cosine_idx".to_owned(),
+        IndexType::HNSW,
+        MetricType::COSINE,
+        HashMap::from([
+            ("M".to_owned(), "16".to_owned()),
+            ("efConstruction".to_owned(), "64".to_owned()),
+        ]),
+    );
+    client
+        .create_index(&collection_name, "embedding", index_params)
+        .await?;
+
+    client.load_collection(&collection_name, None).await?;
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+
+    // Search with COSINE
+    let query_vec = gen_random_f32_vector_custom(1, dim);
+    let option = SearchOptions::with_limit(5)
+        .output_fields(vec!["id".to_owned()])
+        .add_param("ef", "64");
+
+    let result = client
+        .search(&collection_name, vec![query_vec.into()], Some(option))
+        .await?;
+
+    assert!(!result.is_empty());
+    assert!(result[0].size > 0);
+
+    client.drop_collection(&collection_name).await?;
+    cleanup.disarm();
+    Ok(())
 }

@@ -1,3 +1,19 @@
+// Licensed to the LF AI & Data foundation under one
+// or more contributor license agreements. See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership. The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License. You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use futures::FutureExt;
 use milvus::client::*;
 use milvus::data::FieldColumn;
@@ -8,6 +24,71 @@ use milvus::schema::{CollectionSchema, CollectionSchemaBuilder, FieldSchema};
 use rand::Rng;
 use std::future::Future;
 use std::panic::{catch_unwind, resume_unwind, AssertUnwindSafe};
+use std::time::Duration;
+
+pub struct CollectionCleanup {
+    collections: Vec<(String, String)>,
+    armed: bool,
+}
+
+impl CollectionCleanup {
+    pub fn new(collection_names: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        Self::in_database("default", collection_names)
+    }
+
+    pub fn in_database(
+        database_name: impl Into<String>,
+        collection_names: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        let database_name = database_name.into();
+        Self {
+            collections: collection_names
+                .into_iter()
+                .map(|name| (database_name.clone(), name.into()))
+                .collect(),
+            armed: true,
+        }
+    }
+
+    pub fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for CollectionCleanup {
+    fn drop(&mut self) {
+        if !self.armed || self.collections.is_empty() {
+            return;
+        }
+        let collections = std::mem::take(&mut self.collections);
+        let cleanup = std::thread::Builder::new().spawn(move || {
+            let Ok(runtime) = tokio::runtime::Runtime::new() else {
+                return;
+            };
+            runtime.block_on(async move {
+                let Ok(mut client) = ClientBuilder::new(URL)
+                    .timeout(Duration::from_secs(60))
+                    .build()
+                    .await
+                else {
+                    return;
+                };
+                for (database_name, collection_name) in collections.into_iter().rev() {
+                    let _ = client.using_database(&database_name).await;
+                    if let Ok((_, _, aliases)) = client.list_aliases(&collection_name).await {
+                        for alias in aliases {
+                            let _ = client.drop_alias(alias).await;
+                        }
+                    }
+                    let _ = client.drop_collection(&collection_name).await;
+                }
+            });
+        });
+        if let Ok(cleanup) = cleanup {
+            let _ = cleanup.join();
+        }
+    }
+}
 
 pub const DEFAULT_DIM: i64 = 128;
 pub const DEFAULT_VEC_FIELD: &str = "feature";
@@ -24,6 +105,7 @@ where
     F: FnOnce() -> Fut,
     Fut: Future<Output = Result<()>>,
 {
+    let mut fallback_cleanup = CollectionCleanup::new(collection_names.clone());
     let body_result = match catch_unwind(AssertUnwindSafe(body)) {
         Ok(future) => AssertUnwindSafe(future).catch_unwind().await,
         Err(payload) => Err(payload),
@@ -56,6 +138,10 @@ where
                 }
             }
         }
+    }
+
+    if cleanup_error.is_none() {
+        fallback_cleanup.disarm();
     }
 
     match body_result {
@@ -91,6 +177,7 @@ pub async fn create_empty_test_collection_custom(
     let collection_name = gen_random_name();
     let collection_name = format!("{}_{}", "test_collection", collection_name);
     let client = Client::new(URL).await?;
+    let mut cleanup = CollectionCleanup::new([&collection_name]);
     let schema = CollectionSchemaBuilder::new(&collection_name, "")
         .add_field(FieldSchema::new_primary_int64("id", "", autoid))
         .add_field(FieldSchema::new_float_vector(
@@ -110,6 +197,7 @@ pub async fn create_empty_test_collection_custom(
             )),
         )
         .await?;
+    cleanup.disarm();
     Ok((client, schema))
 }
 
@@ -128,6 +216,7 @@ pub async fn create_test_collection_custom(
 ) -> Result<(Client, CollectionSchema)> {
     let (client, schema) =
         create_empty_test_collection_custom(autoid, dimension, vector_field_name).await?;
+    let mut cleanup = CollectionCleanup::new([schema.name()]);
 
     let feature_data = gen_random_f32_vector_custom(entity_count, dimension);
     let feature_column =
@@ -141,23 +230,28 @@ pub async fn create_test_collection_custom(
         vec![id_column, feature_column]
     };
 
-    client.insert(schema.name(), columns, None).await?;
-    client.flush(schema.name()).await?;
+    let setup = async {
+        client.insert(schema.name(), columns, None).await?;
+        client.flush(schema.name()).await?;
 
-    client
-        .create_index(
-            schema.name(),
-            vector_field_name,
-            milvus::index::IndexParams::new(
-                DEFAULT_INDEX_NAME.to_string(),
-                IndexType::IvfFlat,
-                milvus::index::MetricType::L2,
-                std::collections::HashMap::new(),
-            ),
-        )
-        .await?;
+        client
+            .create_index(
+                schema.name(),
+                vector_field_name,
+                milvus::index::IndexParams::new(
+                    DEFAULT_INDEX_NAME.to_string(),
+                    IndexType::IvfFlat,
+                    milvus::index::MetricType::L2,
+                    std::collections::HashMap::new(),
+                ),
+            )
+            .await?;
 
-    client.load_collection(schema.name(), None).await?;
+        client.load_collection(schema.name(), None).await
+    }
+    .await;
+    setup?;
+    cleanup.disarm();
     Ok((client, schema))
 }
 

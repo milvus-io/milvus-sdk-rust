@@ -1,13 +1,29 @@
-use milvus::client::Client;
+// Licensed to the LF AI & Data foundation under one
+// or more contributor license agreements. See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership. The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License. You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use milvus::client::{Client, ConsistencyLevel};
 use milvus::data::FieldColumn;
 use milvus::error::Result;
 use milvus::index::{IndexParams, IndexType, MetricType};
+use milvus::options::CreateCollectionOptions;
 use milvus::proto::common::KeyValuePair;
 use milvus::schema::{CollectionSchemaBuilder, FieldSchema};
 use std::collections::HashMap;
 
-mod common;
-use common::*;
+use super::common::*;
 
 #[tokio::test]
 async fn index_management_lifecycle() -> Result<()> {
@@ -109,4 +125,41 @@ async fn index_management_lifecycle() -> Result<()> {
         Ok(())
     })
     .await
+}
+
+#[tokio::test]
+async fn index_type_inverted() -> Result<()> {
+    let collection_name = format!("test_inverted_{}", gen_random_name());
+    let client = Client::new(URL).await?;
+    let mut cleanup = CollectionCleanup::new([&collection_name]);
+
+    let schema = CollectionSchemaBuilder::new(&collection_name, "inverted index test")
+        .add_field(FieldSchema::new_primary_int64("id", "", true))
+        .add_field(FieldSchema::new_float_vector("embedding", "", 4))
+        .add_field(FieldSchema::new_varchar("category", "", 128))
+        .build()?;
+
+    client
+        .create_collection(
+            schema.clone(),
+            Some(CreateCollectionOptions::with_consistency_level(
+                ConsistencyLevel::Strong,
+            )),
+        )
+        .await?;
+
+    // Create INVERTED index on varchar field
+    let index_params = IndexParams::new(
+        "category_idx".to_owned(),
+        IndexType::Inverted,
+        MetricType::L2, // metric type not used for scalar index
+        HashMap::new(),
+    );
+    client
+        .create_index(&collection_name, "category", index_params)
+        .await?;
+
+    client.drop_collection(&collection_name).await?;
+    cleanup.disarm();
+    Ok(())
 }

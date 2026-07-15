@@ -1,3 +1,19 @@
+// Licensed to the LF AI & Data foundation under one
+// or more contributor license agreements. See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership. The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License. You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! Query module for Milvus Rust SDK
 //!
 //! This module provides comprehensive query functionality for interacting with Milvus collections,
@@ -38,17 +54,17 @@ use std::collections::HashMap;
 use prost::bytes::BytesMut;
 use prost::Message;
 
-use crate::v1::client::{Client, ConsistencyLevel};
-use crate::v1::collection::{Collection, SearchResult};
-use crate::v1::data::{slice_field_columns, FieldColumn};
-use crate::error::Error as SuperError;
 use crate::proto::common::{
     DslType, KeyValuePair, MsgBase, MsgType, PlaceholderGroup, PlaceholderType, PlaceholderValue,
 };
 use crate::proto::milvus::{QueryRequest, SearchRequest};
 use crate::proto::schema::DataType;
+use crate::v1::client::{Client, ConsistencyLevel};
+use crate::v1::collection::{Collection, SearchResult};
+use crate::v1::data::{slice_field_columns, FieldColumn};
+use crate::v1::error::status_to_result;
+use crate::v1::error::Error as SuperError;
 use crate::v1::types::Field;
-use crate::utils::status_to_result;
 use crate::v1::value::{Value, ValueVec};
 use crate::{error::*, proto};
 
@@ -1213,7 +1229,10 @@ impl Client {
         let collection_name = collection_name.into();
         let collection = self
             .collection_cache
-            .get(crate::v1::collection::current_db_name(self), &collection_name)
+            .get(
+                crate::v1::collection::current_db_name(self),
+                &collection_name,
+            )
             .await?;
 
         let res = self
@@ -1227,15 +1246,16 @@ impl Client {
                 output_fields: options.output_fields.clone(),
                 partition_names: options.partition_names.clone(),
                 travel_timestamp: 0,
-                guarantee_timestamp: crate::v1::collection::CollectionCache::guarantee_timestamp_for_request(
-                    self,
-                    &collection_name,
-                    &collection,
-                    options.guarantee_timestamp,
-                    options.consistency_level,
-                    options.consistency_level.is_none(),
-                )
-                .await,
+                guarantee_timestamp:
+                    crate::v1::collection::CollectionCache::guarantee_timestamp_for_request(
+                        self,
+                        &collection_name,
+                        &collection,
+                        options.guarantee_timestamp,
+                        options.consistency_level,
+                        options.consistency_level.is_none(),
+                    )
+                    .await,
                 query_params: options.query_params.clone(),
                 not_return_all_meta: false,
                 consistency_level: options.consistency_level.unwrap_or_default(),
@@ -1412,7 +1432,10 @@ impl Client {
         let collection_name = collection_name.into();
         let collection = self
             .collection_cache
-            .get(crate::v1::collection::current_db_name(self), &collection_name)
+            .get(
+                crate::v1::collection::current_db_name(self),
+                &collection_name,
+            )
             .await?;
         let res = self
             .client
@@ -1438,15 +1461,16 @@ impl Client {
                     .collect(),
                 search_params,
                 travel_timestamp: 0,
-                guarantee_timestamp: crate::v1::collection::CollectionCache::guarantee_timestamp_for_request(
-                    self,
-                    &collection_name,
-                    &collection,
-                    0,
-                    options.consistency_level,
-                    use_default_consistency,
-                )
-                .await,
+                guarantee_timestamp:
+                    crate::v1::collection::CollectionCache::guarantee_timestamp_for_request(
+                        self,
+                        &collection_name,
+                        &collection,
+                        0,
+                        options.consistency_level,
+                        use_default_consistency,
+                    )
+                    .await,
                 not_return_all_meta: false,
                 consistency_level: options.consistency_level.unwrap_or_default(),
                 use_default_consistency,
@@ -1575,7 +1599,10 @@ impl Client {
         let collection_name = collection_name.into();
         let collection = self
             .collection_cache
-            .get(crate::v1::collection::current_db_name(self), &collection_name)
+            .get(
+                crate::v1::collection::current_db_name(self),
+                &collection_name,
+            )
             .await?;
 
         // Convert AnnSearchRequests to SearchRequests
@@ -1645,14 +1672,15 @@ impl Client {
                 output_fields: options.output_fields.clone(),
                 search_params: search_params.clone(),
                 travel_timestamp: 0,
-                guarantee_timestamp: crate::v1::collection::CollectionCache::guarantee_timestamp_for_subrequest(
-                    self,
-                    &collection_name,
-                    &collection,
-                    &search_params,
-                    use_default_consistency,
-                )
-                .await,
+                guarantee_timestamp:
+                    crate::v1::collection::CollectionCache::guarantee_timestamp_for_subrequest(
+                        self,
+                        &collection_name,
+                        &collection,
+                        &search_params,
+                        use_default_consistency,
+                    )
+                    .await,
                 nq: req.data.len() as i64,
                 not_return_all_meta: false,
                 consistency_level: {
@@ -1689,15 +1717,16 @@ impl Client {
             requests: search_requests,
             rank_params,
             travel_timestamp: 0,
-            guarantee_timestamp: crate::v1::collection::CollectionCache::guarantee_timestamp_for_request(
-                self,
-                &collection_name,
-                &collection,
-                0,
-                options.consistency_level,
-                use_default_consistency,
-            )
-            .await,
+            guarantee_timestamp:
+                crate::v1::collection::CollectionCache::guarantee_timestamp_for_request(
+                    self,
+                    &collection_name,
+                    &collection,
+                    0,
+                    options.consistency_level,
+                    use_default_consistency,
+                )
+                .await,
             not_return_all_meta: false,
             output_fields: options.output_fields,
             consistency_level: options.consistency_level.unwrap_or_default(),
@@ -1886,7 +1915,10 @@ impl Client {
 
         let collection = self
             .collection_cache
-            .get(crate::v1::collection::current_db_name(self), &collection_name)
+            .get(
+                crate::v1::collection::current_db_name(self),
+                &collection_name,
+            )
             .await?;
         let expr = self.pack_pks_expr(&collection, ids)?;
         let option = options.unwrap_or_default();
@@ -1991,9 +2023,7 @@ fn get_place_holder_value(vectors: &Vec<Value>) -> Result<PlaceholderValue> {
             (Value::SparseFloat(d), Value::SparseFloat(_)) => {
                 place_holder.values.extend(d.contents.iter().cloned())
             }
-            (Value::String(d), Value::String(_)) => {
-                place_holder.values.push(d.as_bytes().to_vec())
-            }
+            (Value::String(d), Value::String(_)) => place_holder.values.push(d.as_bytes().to_vec()),
             _ => {
                 return Err(SuperError::from(crate::v1::collection::Error::IllegalType(
                     "place holder".to_string(),

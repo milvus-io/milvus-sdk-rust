@@ -15,11 +15,10 @@
 // limitations under the License.
 
 pub mod error;
+#[doc(hidden)]
 pub mod proto;
 pub mod v1;
-
-mod config;
-mod utils;
+pub mod v2;
 
 pub use v1::alias;
 pub use v1::authentication;

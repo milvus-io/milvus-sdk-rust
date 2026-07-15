@@ -21,8 +21,7 @@ use milvus::index::{IndexParams, IndexType, MetricType};
 use milvus::schema::{CollectionSchemaBuilder, FieldSchema};
 use std::collections::HashMap;
 
-mod common;
-use common::*;
+use super::common::*;
 
 #[tokio::test]
 async fn get_server_version() -> Result<()> {
@@ -52,9 +51,13 @@ async fn test_flush_collections() -> Result<()> {
         let feature_data = gen_random_f32_vector_custom(ENTITYNUM, DEFAULT_DIM);
         let feature_column =
             FieldColumn::new(schema.get_field(DEFAULT_VEC_FIELD).unwrap(), feature_data);
-        client.insert(schema.name(), vec![feature_column], None).await?;
+        client
+            .insert(schema.name(), vec![feature_column], None)
+            .await?;
 
-        client.flush_collections(vec![collection_name.as_str()]).await?;
+        client
+            .flush_collections(vec![collection_name.as_str()])
+            .await?;
         Ok(())
     })
     .await

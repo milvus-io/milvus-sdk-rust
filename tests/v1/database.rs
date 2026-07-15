@@ -1,10 +1,25 @@
+// Licensed to the LF AI & Data foundation under one
+// or more contributor license agreements. See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership. The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License. You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use milvus::client::Client;
 use milvus::database::CreateDbOptions;
 use milvus::error::Result;
 use milvus::schema::{CollectionSchemaBuilder, FieldSchema};
 
-mod common;
-use common::*;
+use super::common::*;
 
 #[tokio::test]
 async fn database_lifecycle_and_context_switching() -> Result<()> {
@@ -13,6 +28,8 @@ async fn database_lifecycle_and_context_switching() -> Result<()> {
     let db_b = format!("test_db_b_{}", gen_random_name());
     let collection_a = format!("test_collection_a_{}", gen_random_name());
     let collection_b = format!("test_collection_b_{}", gen_random_name());
+    let mut cleanup_a = CollectionCleanup::in_database(&db_a, [&collection_a]);
+    let mut cleanup_b = CollectionCleanup::in_database(&db_b, [&collection_b]);
 
     let test_result: Result<()> = async {
         let db_options = CreateDbOptions::new().replica_number(1).max_collections(3);
@@ -104,6 +121,11 @@ async fn database_lifecycle_and_context_switching() -> Result<()> {
         if cleanup_error.is_none() {
             cleanup_error = Some(error);
         }
+    }
+
+    if cleanup_error.is_none() {
+        cleanup_a.disarm();
+        cleanup_b.disarm();
     }
 
     test_result?;
