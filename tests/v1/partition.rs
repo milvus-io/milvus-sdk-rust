@@ -16,18 +16,19 @@
 
 use milvus::error::Result;
 
-mod common;
-use common::*;
+use super::common::*;
 
 fn partition_test_name() -> String {
     "test_partition".to_string()
 }
 
-async fn create_partition_only_collection() -> Result<(milvus::client::Client, milvus::schema::CollectionSchema)> {
+async fn create_partition_only_collection(
+) -> Result<(milvus::client::Client, milvus::schema::CollectionSchema)> {
     create_empty_test_collection(true).await
 }
 
-async fn create_loaded_partition_collection() -> Result<(milvus::client::Client, milvus::schema::CollectionSchema)> {
+async fn create_loaded_partition_collection(
+) -> Result<(milvus::client::Client, milvus::schema::CollectionSchema)> {
     create_test_collection(true).await
 }
 
@@ -128,7 +129,10 @@ where
     let (client, schema) = create_partition_only_collection().await?;
     let cleanup_client = client.clone();
     let collection_name = schema.name().to_string();
-    run_with_collection_cleanup(&cleanup_client, vec![collection_name], || body(client, schema)).await
+    run_with_collection_cleanup(&cleanup_client, vec![collection_name], || {
+        body(client, schema)
+    })
+    .await
 }
 
 async fn with_loaded_partition_test_collection<F, Fut>(body: F) -> Result<()>
@@ -139,7 +143,10 @@ where
     let (client, schema) = create_loaded_partition_collection().await?;
     let cleanup_client = client.clone();
     let collection_name = schema.name().to_string();
-    run_with_collection_cleanup(&cleanup_client, vec![collection_name], || body(client, schema)).await
+    run_with_collection_cleanup(&cleanup_client, vec![collection_name], || {
+        body(client, schema)
+    })
+    .await
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -208,7 +215,8 @@ async fn test_list_partitions() -> Result<()> {
         let partition_name = partition_test_name();
         create_partition_with_retry(&client, collection.name(), &partition_name).await?;
 
-        let partitions = wait_for_partition_listed(&client, collection.name(), &partition_name).await?;
+        let partitions =
+            wait_for_partition_listed(&client, collection.name(), &partition_name).await?;
         assert!(partitions.contains(&partition_name));
         Ok(())
     })

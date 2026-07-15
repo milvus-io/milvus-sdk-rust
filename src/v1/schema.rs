@@ -16,9 +16,9 @@
 
 use std::collections::HashMap;
 
-use crate::error;
-use crate::error::Result;
 use crate::proto::schema::FieldState;
+use crate::v1::error;
+use crate::v1::error::Result;
 use prost::alloc::vec::Vec;
 use prost::encoding::bool;
 use thiserror::Error as ThisError;
@@ -103,7 +103,7 @@ pub trait Schema {
 }
 
 pub trait FromDataFields: Sized {
-    fn from_data_fields(fileds: Vec<FieldData>) -> Option<Self>;
+    fn from_data_fields(fields: Vec<FieldData>) -> Option<Self>;
 }
 
 // pub trait Column<'a>: IntoFieldData + FromDataFields {

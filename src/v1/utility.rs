@@ -14,19 +14,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::v1::client::{Client, ServerVersion};
-use crate::v1::collection::{CompactionInfo, CompactionPlans, CompactionState};
-use crate::error::{Error, Result};
 use crate::proto::common::{MsgBase, MsgType, SegmentLevel, SegmentState};
 use crate::proto::milvus::{
     ConnectRequest, FlushAllRequest, FlushRequest, GetCompactionPlansRequest,
     GetCompactionStateRequest, GetFlushAllStateRequest, GetPersistentSegmentInfoRequest,
     GetQuerySegmentInfoRequest, ManualCompactionRequest,
-    PersistentSegmentInfo as ProtoPersistentSegmentInfo,
-    QuerySegmentInfo as ProtoQuerySegmentInfo,
+    PersistentSegmentInfo as ProtoPersistentSegmentInfo, QuerySegmentInfo as ProtoQuerySegmentInfo,
 };
 use crate::proto::{self};
-use crate::utils::status_to_result;
+use crate::v1::client::{Client, ServerVersion};
+use crate::v1::collection::{CompactionInfo, CompactionPlans, CompactionState};
+use crate::v1::error::status_to_result;
+use crate::v1::error::{Error, Result};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -220,10 +219,7 @@ impl Client {
         Ok(resp.infos.into_iter().map(Into::into).collect())
     }
 
-    pub async fn list_loaded_segments<S>(
-        &self,
-        collection_name: S,
-    ) -> Result<Vec<QuerySegmentInfo>>
+    pub async fn list_loaded_segments<S>(&self, collection_name: S) -> Result<Vec<QuerySegmentInfo>>
     where
         S: Into<String>,
     {
@@ -263,7 +259,10 @@ impl Client {
         let collection_name = collection_name.into();
         let collection = self
             .collection_cache
-            .get(crate::v1::collection::current_db_name(self), &collection_name)
+            .get(
+                crate::v1::collection::current_db_name(self),
+                &collection_name,
+            )
             .await?;
         let major_compaction = is_clustering.unwrap_or(false);
 

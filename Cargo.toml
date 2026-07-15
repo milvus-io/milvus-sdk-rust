@@ -1,7 +1,7 @@
 [package]
 name = "milvus-sdk-rust"
 description = "The official Milvus Rust SDK"
-version = "0.1.0"
+version = "2.6.0"
 edition = "2021"
 license-file = "LICENSE"
 
@@ -24,6 +24,9 @@ base64 = "0.22.1"
 dashmap = "5.5.3"
 futures = "0.3.31"
 lazy_static = "1.4"
+lru = "0.12"
+parking_lot = "0.12"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
 [build-dependencies]
 tonic-build = { version = "0.13", default-features = false, features = [
@@ -32,136 +35,198 @@ tonic-build = { version = "0.13", default-features = false, features = [
 protoc-bin-vendored = "=3.2.0"
 
 [dev-dependencies]
+chrono = { version = "0.4", default-features = false, features = ["std"] }
 rand = "0.8.5"
+tokio-stream = { version = "0.1", features = ["net"] }
 
 [[test]]
-name = "alias"
-path = "tests/v1/alias.rs"
+name = "v1_st"
+path = "tests/v1/mod.rs"
 
 [[test]]
-name = "client"
-path = "tests/v1/client.rs"
+name = "v2_ut"
+path = "tests/v2/ut/mod.rs"
 
 [[test]]
-name = "collection"
-path = "tests/v1/collection.rs"
-
-[[test]]
-name = "database"
-path = "tests/v1/database.rs"
-
-[[test]]
-name = "index"
-path = "tests/v1/index.rs"
-
-[[test]]
-name = "iterator"
-path = "tests/v1/iterator.rs"
-
-[[test]]
-name = "milvus26"
-path = "tests/v1/milvus26.rs"
-
-[[test]]
-name = "partition"
-path = "tests/v1/partition.rs"
-
-[[test]]
-name = "query"
-path = "tests/v1/query.rs"
-
-[[test]]
-name = "rbac"
-path = "tests/v1/rbac.rs"
-
-[[test]]
-name = "resource_group"
-path = "tests/v1/resource_group.rs"
-
-[[test]]
-name = "utility"
-path = "tests/v1/utility.rs"
-
-[[test]]
-name = "client_keepalive"
-path = "tests/v1/testsoutsideoftestsuite/client_keepalive.rs"
-
-[[test]]
-name = "client_with_timeout"
-path = "tests/v1/testsoutsideoftestsuite/client_with_timeout.rs"
-
-[[test]]
-name = "client_search"
-path = "tests/v1/testsoutsideoftestsuite/client_search.rs"
-
-[[test]]
-name = "collection_list_collections"
-path = "tests/v1/testsoutsideoftestsuite/collection_list_collections.rs"
-
-[[test]]
-name = "collection_get_collection_stats"
-path = "tests/v1/testsoutsideoftestsuite/collection_get_collection_stats.rs"
-
-[[test]]
-name = "collection_release_collection"
-path = "tests/v1/testsoutsideoftestsuite/collection_release_collection.rs"
-
-[[test]]
-name = "mutate_delete"
-path = "tests/v1/testsoutsideoftestsuite/mutate_delete.rs"
-
-[[test]]
-name = "cdc"
-path = "tests/v1/cdc.rs"
-
-[[test]]
-name = "aggressive_hpc_testing"
-path = "tests/v1/aggressivehpctesting/mod.rs"
+name = "v2_st"
+path = "tests/v2/st/mod.rs"
 
 [[example]]
-name = "authentication"
-path = "examples/v1/authentication.rs"
+name = "v1_rbac"
+path = "examples/v1/rbac.rs"
 
 [[example]]
-name = "cdc"
+name = "v1_cdc"
 path = "examples/v1/cdc.rs"
 
 [[example]]
-name = "collection"
+name = "v1_collection"
 path = "examples/v1/collection.rs"
 
 [[example]]
-name = "database"
+name = "v1_database"
 path = "examples/v1/database.rs"
 
 [[example]]
-name = "full_text_match"
+name = "v1_full_text_match"
 path = "examples/v1/full_text_match.rs"
 
 [[example]]
-name = "index_example"
+name = "v1_index_example"
 path = "examples/v1/index_example.rs"
 
 [[example]]
-name = "int8_vector"
+name = "v1_int8_vector"
 path = "examples/v1/int8_vector.rs"
 
 [[example]]
-name = "iterator"
+name = "v1_iterator"
 path = "examples/v1/iterator.rs"
 
 [[example]]
-name = "query_search"
+name = "v1_query_search"
 path = "examples/v1/query_search.rs"
 
 [[example]]
-name = "resource_groups"
+name = "v1_resource_groups"
 path = "examples/v1/resource_groups.rs"
 
 [[example]]
-name = "timestampz"
+name = "v1_timestampz"
 path = "examples/v1/timestampz.rs"
 
 [[example]]
-name = "upsert"
+name = "v1_upsert"
 path = "examples/v1/upsert.rs"
+
+[[example]]
+name = "v2_add_field"
+path = "examples/v2/add_field.rs"
+
+[[example]]
+name = "v2_array"
+path = "examples/v2/array.rs"
+
+[[example]]
+name = "v2_cdc"
+path = "examples/v2/cdc.rs"
+
+[[example]]
+name = "v2_db"
+path = "examples/v2/db.rs"
+
+[[example]]
+name = "v2_default_value"
+path = "examples/v2/default_value.rs"
+
+[[example]]
+name = "v2_dml"
+path = "examples/v2/dml.rs"
+
+[[example]]
+name = "v2_dynamic_field"
+path = "examples/v2/dynamic_field.rs"
+
+[[example]]
+name = "v2_filter_template"
+path = "examples/v2/filter_template.rs"
+
+[[example]]
+name = "v2_full_text_match"
+path = "examples/v2/full_text_match.rs"
+
+[[example]]
+name = "v2_general"
+path = "examples/v2/general.rs"
+
+[[example]]
+name = "v2_geometry_field"
+path = "examples/v2/geometry_field.rs"
+
+[[example]]
+name = "v2_group_by"
+path = "examples/v2/group_by.rs"
+
+[[example]]
+name = "v2_highlighter"
+path = "examples/v2/highlighter.rs"
+
+[[example]]
+name = "v2_hybrid_search"
+path = "examples/v2/hybrid_search.rs"
+
+[[example]]
+name = "v2_iterator_query"
+path = "examples/v2/iterator_query.rs"
+
+[[example]]
+name = "v2_iterator_search"
+path = "examples/v2/iterator_search.rs"
+
+[[example]]
+name = "v2_json"
+path = "examples/v2/json.rs"
+
+[[example]]
+name = "v2_multi_analyzer"
+path = "examples/v2/multi_analyzer.rs"
+
+[[example]]
+name = "v2_nullable_field"
+path = "examples/v2/nullable_field.rs"
+
+[[example]]
+name = "v2_nullable_vector"
+path = "examples/v2/nullable_vector.rs"
+
+[[example]]
+name = "v2_optimize"
+path = "examples/v2/optimize.rs"
+
+[[example]]
+name = "v2_partition_key"
+path = "examples/v2/partition_key.rs"
+
+[[example]]
+name = "v2_rbac"
+path = "examples/v2/rbac.rs"
+
+[[example]]
+name = "v2_rerank_function"
+path = "examples/v2/rerank_function.rs"
+
+[[example]]
+name = "v2_run_analyzer"
+path = "examples/v2/run_analyzer.rs"
+
+[[example]]
+name = "v2_simple"
+path = "examples/v2/simple.rs"
+
+[[example]]
+name = "v2_struct_field"
+path = "examples/v2/struct_field.rs"
+
+[[example]]
+name = "v2_text_match"
+path = "examples/v2/text_match.rs"
+
+[[example]]
+name = "v2_timestamptz_field"
+path = "examples/v2/timestamptz_field.rs"
+
+[[example]]
+name = "v2_vector_binary"
+path = "examples/v2/vector_binary.rs"
+
+[[example]]
+name = "v2_vector_fp16"
+path = "examples/v2/vector_fp16.rs"
+
+[[example]]
+name = "v2_vector_int8"
+path = "examples/v2/vector_int8.rs"
+
+[[example]]
+name = "v2_vector_sparse"
+path = "examples/v2/vector_sparse.rs"

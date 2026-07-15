@@ -5,7 +5,9 @@ on:
     paths:
       - 'src/**'
       - 'tests/**'
+      - 'scripts/**'
       - 'milvus-proto/**'
+      - 'Cargo.toml'
       - 'build.rs'
       - '.github/**'
       - 'docker-compose.yml'
@@ -15,7 +17,9 @@ on:
     paths:
       - 'src/**'
       - 'tests/**'
+      - 'scripts/**'
       - 'milvus-proto/**'
+      - 'Cargo.toml'
       - 'build.rs'
       - '.github/**'
       - 'docker-compose.yml'
@@ -29,7 +33,7 @@ jobs:
   ut-linux:
     name: UT on Ubuntu-${{ matrix.ubuntu }}
     # The type of runner that the job will run on
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-${{ matrix.ubuntu }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -45,8 +49,8 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Install dependencies
+        run: ./scripts/install_deps.sh
 
       - name: Run coverage
         run: CODE_COV=true ./scripts/run_tests.sh
@@ -56,7 +60,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./lcov.info
+          files: ./code_coverage/lcov.info
           flags: ubuntu-${{ matrix.ubuntu }}-unittests
 
   ut-macos:

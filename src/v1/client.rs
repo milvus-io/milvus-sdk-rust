@@ -14,11 +14,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::v1::collection::CollectionCache;
-use crate::config::RPC_TIMEOUT;
-use crate::error::{Error, Result};
 pub use crate::proto::common::ConsistencyLevel;
 use crate::proto::milvus::milvus_service_client::MilvusServiceClient;
+use crate::v1::collection::CollectionCache;
+use crate::v1::config::RPC_TIMEOUT;
+use crate::v1::error::{Error, Result};
 use base64::engine::general_purpose;
 use base64::Engine;
 use std::convert::TryInto;

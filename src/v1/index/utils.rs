@@ -1,3 +1,19 @@
+// Licensed to the LF AI & Data foundation under one
+// or more contributor license agreements. See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership. The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License. You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! Index utilities for Milvus.
 //!
 //! This module provides utilities for creating, describing, dropping, and altering indexes in Milvus.
@@ -10,14 +26,15 @@
 //! use milvus_sdk_rust::v1::index::utils;
 //! ```
 //!
-use crate::v1::collection::Error;
-use crate::error::{Error as SuperError, Result};
-use crate::v1::index::IndexInfo;
+use crate::proto;
 use crate::proto::common::{IndexState, KeyValuePair, MsgBase, MsgType};
 use crate::proto::milvus::{CreateIndexRequest, DescribeIndexRequest, DropIndexRequest};
-use crate::utils::status_to_result;
+use crate::v1::collection::Error;
+use crate::v1::config;
+use crate::v1::error::status_to_result;
+use crate::v1::error::{Error as SuperError, Result};
+use crate::v1::index::IndexInfo;
 use crate::{v1::client::Client, v1::index::IndexParams};
-use crate::{config, proto};
 use std::time::Duration;
 
 impl Client {

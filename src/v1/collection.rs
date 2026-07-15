@@ -14,9 +14,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::config;
-use crate::v1::data::FieldColumn;
-use crate::error::{Error as SuperError, Result};
 use crate::proto::milvus::{
     AlterCollectionFieldRequest, AlterCollectionRequest, CreateCollectionRequest,
     DropCollectionRequest, GetCompactionStateResponse, GetReplicasRequest, HasCollectionRequest,
@@ -25,17 +22,20 @@ use crate::proto::milvus::{
 };
 use crate::proto::schema::DataType;
 use crate::schema::{CollectionSchema, CollectionSchemaBuilder};
+use crate::v1::config;
+use crate::v1::data::FieldColumn;
+use crate::v1::error::status_to_result;
+use crate::v1::error::{Error as SuperError, Result};
 use crate::v1::types::*;
-use crate::utils::status_to_result;
 use crate::v1::value::Value;
 use crate::{
-    v1::client::{Client, CombinedInterceptor},
-    v1::options::{CreateCollectionOptions, GetLoadStateOptions, LoadOptions},
     proto::{
         self,
         common::{ConsistencyLevel, MsgBase, MsgType},
         milvus::{milvus_service_client::MilvusServiceClient, DescribeCollectionRequest},
     },
+    v1::client::{Client, CombinedInterceptor},
+    v1::options::{CreateCollectionOptions, GetLoadStateOptions, LoadOptions},
 };
 use prost::bytes::BytesMut;
 use prost::Message;
@@ -158,7 +158,6 @@ pub(crate) fn request_uses_default_consistency(
 }
 
 impl CollectionCache {
-
     pub fn new(
         client: MilvusServiceClient<InterceptedService<Channel, CombinedInterceptor>>,
     ) -> Self {
@@ -894,11 +893,11 @@ impl Client {
     /// # Arguments
     ///
     /// * `collection_name` - The name of a collection
-    /// * `properties` - A HashMap containing the properties need to be alter
+    /// * `properties` - A HashMap containing the properties to alter
     ///
     /// # Returns
     ///
-    /// Retrun a `Result` indicating success or failure.
+    /// Return a `Result` indicating success or failure.
     pub async fn alter_collection_properties<S>(
         &self,
         collection_name: S,
@@ -936,7 +935,7 @@ impl Client {
     /// # Arguments
     ///
     /// * `collection_name` - The name of the collection.
-    /// * `delet_keys` - The keys of the properties to be deleted.
+    /// * `delete_keys` - The keys of the properties to be deleted.
     ///
     /// # Returns
     ///
@@ -944,7 +943,7 @@ impl Client {
     pub async fn drop_collection_properties<S>(
         &self,
         collection_name: S,
-        delet_keys: Vec<String>,
+        delete_keys: Vec<String>,
     ) -> Result<()>
     where
         S: Into<String>,
@@ -958,7 +957,7 @@ impl Client {
                 collection_name: collection_name.into(),
                 collection_id: 0,
                 properties: Vec::new(),
-                delete_keys: delet_keys,
+                delete_keys,
             })
             .await?
             .into_inner();
