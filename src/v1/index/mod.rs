@@ -68,6 +68,10 @@ pub enum IndexType {
     Ngram,
     #[strum(serialize = "STL_SORT")]
     StlSort,
+    // Appended at the tail: the enum has no explicit discriminants, so a new
+    // variant inserted mid-list would shift every one after it.
+    #[strum(serialize = "FMINDEX")]
+    FmIndex,
 }
 
 #[allow(non_camel_case_types)]
@@ -236,6 +240,7 @@ mod tests {
             (IndexType::GpuCagra, "GPU_CAGRA"),
             (IndexType::MinhashLsh, "MINHASH_LSH"),
             (IndexType::Ngram, "NGRAM"),
+            (IndexType::FmIndex, "FMINDEX"),
             (IndexType::StlSort, "STL_SORT"),
         ];
 
