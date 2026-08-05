@@ -180,6 +180,43 @@ async fn truncate_collection() -> Result<()> {
 }
 
 #[tokio::test]
+async fn count_api() -> Result<()> {
+    let entity_count: i64 = 300;
+    let (client, schema) = create_test_collection_with_data(false, entity_count).await?;
+    let collection_name = schema.name().to_string();
+
+    run_with_collection_cleanup(&client, vec![collection_name.clone()], || async {
+        // load_collection is async; wait until the collection is actually loaded
+        // before counting, otherwise the query RPC rejects it as not loaded.
+        for _ in 0..20 {
+            if client.get_load_state(&collection_name, None).await?
+                == milvus::proto::common::LoadState::Loaded
+            {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        }
+
+        // Actual entity count should equal the number of inserted rows
+        let whole = client.count(&collection_name).await?;
+        assert_eq!(whole, entity_count, "whole-collection count");
+
+        // count_with_expr with an always-true filter matches every row
+        let filtered = client
+            .count_with_expr(
+                &collection_name,
+                "id >= 0 || id < 0",
+                &milvus::query::QueryOptions::new(),
+            )
+            .await?;
+        assert_eq!(filtered, entity_count, "filtered count matches all rows");
+
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test]
 async fn batch_describe_collections() -> Result<()> {
     let (client, schema1) = create_test_collection(true).await?;
     let (_, schema2) = create_test_collection(true).await?;
