@@ -49,7 +49,7 @@ use crate::proto::milvus::{QueryRequest, SearchRequest};
 use crate::proto::schema::DataType;
 use crate::v1::types::Field;
 use crate::utils::status_to_result;
-use crate::v1::value::Value;
+use crate::v1::value::{Value, ValueVec};
 use crate::{error::*, proto};
 
 /// Represents an ANN (Approximate Nearest Neighbor) search request
@@ -358,6 +358,39 @@ impl BaseRanker for RrfRanker {
 ///
 /// Type alias for SearchOptions used in hybrid search operations
 pub type HybridSearchOptions = SearchOptions;
+
+/// Special output field that makes the server compute an entity count
+/// aggregate instead of returning rows.
+const COUNT_FIELD: &str = "count(*)";
+
+/// Extracts the `count(*)` aggregate value from a query result.
+///
+/// The server returns the count as a single integer-backed column, so the value
+/// is read as the first element of a `ValueVec::Long`. A missing column, wrong
+/// value type, or empty aggregate is a malformed response and is surfaced as an
+/// error rather than silently reporting a wrong count.
+fn parse_count(results: &[FieldColumn]) -> Result<i64> {
+    let col = results.first().ok_or_else(|| {
+        SuperError::Unexpected("count(*) column missing in query result".to_string())
+    })?;
+    match &col.value {
+        ValueVec::Long(values) => {
+            let count = values.first().ok_or_else(|| {
+                SuperError::Unexpected("count(*) aggregate returned no value".to_string())
+            })?;
+            Ok(*count)
+        }
+        _ => Err(SuperError::Unexpected(
+            "count(*) column has unexpected value type".to_string(),
+        )),
+    }
+}
+
+/// Query parameter keys that enable pagination or iteration, which Milvus does
+/// not allow on `count(*)` aggregate queries.
+fn is_pagination_param(key: &str) -> bool {
+    matches!(key, "limit" | "offset" | "iterator") || key.starts_with("iter_")
+}
 
 /// QueryOptions for client.query()
 ///
@@ -1216,6 +1249,77 @@ impl Client {
         status_to_result(&res.status)?;
 
         Ok(res.fields_data.into_iter().map(Into::into).collect())
+    }
+
+    /// Returns the number of entities in a collection.
+    ///
+    /// This is the whole-collection count, computed server-side via the
+    /// `count(*)` aggregate through the Query RPC.
+    ///
+    /// # Arguments
+    ///
+    /// * `collection_name` - Name of the collection to count
+    ///
+    /// # Returns
+    ///
+    /// The number of entities in the collection.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let count = client.count("my_collection").await?;
+    /// ```
+    pub async fn count<S>(&self, collection_name: S) -> Result<i64>
+    where
+        S: Into<String>,
+    {
+        self.count_with_expr(collection_name, "", &QueryOptions::new())
+            .await
+    }
+
+    /// Returns the number of entities in a collection matching an expression.
+    ///
+    /// Uses the `count(*)` aggregate through the Query RPC, honoring the given
+    /// options (e.g. `partition_names`, `consistency_level`,
+    /// `guarantee_timestamp`, `namespace`).
+    ///
+    /// Pagination/iterator query parameters (e.g. `limit`, `offset`) are
+    /// ignored, since Milvus rejects `count(*)` queries combined with
+    /// pagination.
+    ///
+    /// # Arguments
+    ///
+    /// * `collection_name` - Name of the collection to count
+    /// * `expr` - Filter expression, use `""` to count every entity
+    /// * `options` - Query options applied when computing the count
+    ///
+    /// # Returns
+    ///
+    /// The number of entities matching `expr`.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use milvus_sdk_rust::v1::query::QueryOptions;
+    ///
+    /// let count = client
+    ///     .count_with_expr("my_collection", "age >= 18", &QueryOptions::new())
+    ///     .await?;
+    /// ```
+    pub async fn count_with_expr<S>(
+        &self,
+        collection_name: S,
+        expr: &str,
+        options: &QueryOptions,
+    ) -> Result<i64>
+    where
+        S: Into<String>,
+    {
+        let mut opts = options.clone();
+        opts.output_fields = vec![COUNT_FIELD.to_string()];
+        opts.query_params.retain(|kv| !is_pagination_param(&kv.key));
+        let results = self.query(collection_name, expr, &opts).await?;
+        parse_count(&results)
     }
 
     /// Performs a vector search operation on a collection

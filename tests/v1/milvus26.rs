@@ -180,6 +180,71 @@ async fn truncate_collection() -> Result<()> {
 }
 
 #[tokio::test]
+async fn count_api() -> Result<()> {
+    let entity_count: i64 = 300;
+    let (client, schema) =
+        create_empty_test_collection_custom(false, DEFAULT_DIM, DEFAULT_VEC_FIELD).await?;
+    let collection_name = schema.name().to_string();
+
+    run_with_collection_cleanup(&client, vec![collection_name.clone()], || async {
+        // Insert with deterministic sequential IDs so a strict-subset filter
+        // can be asserted precisely.
+        let ids: Vec<i64> = (0..entity_count).collect();
+        let feature_data = gen_random_f32_vector_custom(entity_count, DEFAULT_DIM);
+        let id_column = FieldColumn::new(schema.get_field("id").unwrap(), ids);
+        let feature_column = FieldColumn::new(
+            schema.get_field(DEFAULT_VEC_FIELD).unwrap(),
+            feature_data,
+        );
+        client
+            .insert(&collection_name, vec![id_column, feature_column], None)
+            .await?;
+        client.flush(&collection_name).await?;
+        client
+            .create_index(
+                &collection_name,
+                DEFAULT_VEC_FIELD,
+                IndexParams::new(
+                    DEFAULT_INDEX_NAME.to_string(),
+                    IndexType::IvfFlat,
+                    MetricType::L2,
+                    HashMap::new(),
+                ),
+            )
+            .await?;
+        client.load_collection(&collection_name, None).await?;
+
+        // load_collection is async; wait until the collection is actually loaded
+        // before counting, otherwise the query RPC rejects it as not loaded.
+        for _ in 0..20 {
+            if client.get_load_state(&collection_name, None).await?
+                == milvus::proto::common::LoadState::Loaded
+            {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        }
+
+        // Actual entity count should equal the number of inserted rows
+        let whole = client.count(&collection_name).await?;
+        assert_eq!(whole, entity_count, "whole-collection count");
+
+        // Strict subset filter with deterministic IDs: only ids [0, 150) match.
+        let filtered = client
+            .count_with_expr(
+                &collection_name,
+                "id < 150",
+                &milvus::query::QueryOptions::new(),
+            )
+            .await?;
+        assert_eq!(filtered, 150, "filtered count matches strict subset");
+
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test]
 async fn batch_describe_collections() -> Result<()> {
     let (client, schema1) = create_test_collection(true).await?;
     let (_, schema2) = create_test_collection(true).await?;
