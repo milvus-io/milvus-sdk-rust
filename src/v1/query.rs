@@ -366,16 +366,30 @@ const COUNT_FIELD: &str = "count(*)";
 /// Extracts the `count(*)` aggregate value from a query result.
 ///
 /// The server returns the count as a single integer-backed column, so the value
-/// is read as the first element of a `ValueVec::Long`. Any unexpected shape or
-/// empty result degrades to `0` instead of panicking.
-fn parse_count(results: &[FieldColumn]) -> i64 {
-    results
-        .first()
-        .and_then(|col| match &col.value {
-            ValueVec::Long(values) => values.first().copied(),
-            _ => None,
-        })
-        .unwrap_or(0)
+/// is read as the first element of a `ValueVec::Long`. A missing column, wrong
+/// value type, or empty aggregate is a malformed response and is surfaced as an
+/// error rather than silently reporting a wrong count.
+fn parse_count(results: &[FieldColumn]) -> Result<i64> {
+    let col = results.first().ok_or_else(|| {
+        SuperError::Unexpected("count(*) column missing in query result".to_string())
+    })?;
+    match &col.value {
+        ValueVec::Long(values) => {
+            let count = values.first().ok_or_else(|| {
+                SuperError::Unexpected("count(*) aggregate returned no value".to_string())
+            })?;
+            Ok(*count)
+        }
+        _ => Err(SuperError::Unexpected(
+            "count(*) column has unexpected value type".to_string(),
+        )),
+    }
+}
+
+/// Query parameter keys that enable pagination or iteration, which Milvus does
+/// not allow on `count(*)` aggregate queries.
+fn is_pagination_param(key: &str) -> bool {
+    matches!(key, "limit" | "offset" | "iterator") || key.starts_with("iter_")
 }
 
 /// QueryOptions for client.query()
@@ -1269,6 +1283,10 @@ impl Client {
     /// options (e.g. `partition_names`, `consistency_level`,
     /// `guarantee_timestamp`, `namespace`).
     ///
+    /// Pagination/iterator query parameters (e.g. `limit`, `offset`) are
+    /// ignored, since Milvus rejects `count(*)` queries combined with
+    /// pagination.
+    ///
     /// # Arguments
     ///
     /// * `collection_name` - Name of the collection to count
@@ -1299,8 +1317,9 @@ impl Client {
     {
         let mut opts = options.clone();
         opts.output_fields = vec![COUNT_FIELD.to_string()];
+        opts.query_params.retain(|kv| !is_pagination_param(&kv.key));
         let results = self.query(collection_name, expr, &opts).await?;
-        Ok(parse_count(&results))
+        parse_count(&results)
     }
 
     /// Performs a vector search operation on a collection
