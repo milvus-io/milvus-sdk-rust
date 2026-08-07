@@ -23,3 +23,11 @@ src/proto/*.rs
 
 # docker container data
 /volumes/
+
+# Code coverage report
+/code_coverage/
+
+# Generated rustdoc output; keep hand-written guides under version control
+/doc/*
+!/doc/guide/
+!/doc/guide/**

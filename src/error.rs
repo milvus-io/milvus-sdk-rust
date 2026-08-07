@@ -13,72 +13,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-// For custom error handling
-// TODO
+//! Compatibility re-export of the V1 error API.
+//!
+//! New ClientV2 applications should use [`crate::v2::error`].
 
-use crate::collection::Error as CollectionError;
-use crate::proto::common::{ErrorCode, Status};
-use crate::schema::Error as SchemaError;
-use std::result;
-use thiserror::Error;
-use tonic::transport::Error as CommError;
-use tonic::Status as GrpcError;
-
-#[derive(Debug, Error)]
-pub enum Error {
-    #[error("{0:?}")]
-    Communication(#[from] CommError),
-
-    #[error("{0:?}")]
-    Collection(#[from] CollectionError),
-
-    #[error("{0:?}")]
-    Grpc(#[from] GrpcError),
-
-    #[error("{0:?}")]
-    Schema(#[from] SchemaError),
-
-    #[error("{0:?} {1:?}")]
-    Server(ErrorCode, String),
-
-    #[error("{0:?}")]
-    ProstEncode(#[from] prost::EncodeError),
-
-    #[error("{0:?}")]
-    ProstDecode(#[from] prost::DecodeError),
-
-    #[error("Conversion error")]
-    Conversion,
-    #[error("{0:?}")]
-    SerdeJsonErr(#[from] serde_json::Error),
-
-    #[error("parameter {0:?} with invalid value {1:?}")]
-    InvalidParameter(String, String),
-
-    #[error("{0:?}")]
-    Other(#[from] anyhow::Error),
-
-    #[error("{0}")]
-    Unexpected(String),
-
-    #[error("{0}")]
-    Param(String),
-
-    #[error("{0:?}")]
-    Io(#[from] std::io::Error),
-
-    #[error("{0:?}")]
-    ParseInt(#[from] std::num::ParseIntError),
-}
-
-#[allow(deprecated)]
-impl From<Status> for Error {
-    fn from(s: Status) -> Self {
-        Error::Server(
-            ErrorCode::try_from(s.error_code).unwrap_or(ErrorCode::UnexpectedError),
-            s.reason,
-        )
-    }
-}
-
-pub type Result<T> = result::Result<T, Error>;
+pub use crate::v1::error::{Error, Result};

@@ -14,25 +14,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-    error::Error,
-    proto::common::{ErrorCode, Status},
-};
+//! Shared SDK-owned domain types used by the V2 client.
 
-#[allow(deprecated)]
-pub fn status_to_result(status: &Option<Status>) -> Result<(), Error> {
-    let status = status
-        .clone()
-        .ok_or(Error::Unexpected("no status".to_owned()))?;
+mod cdc;
+mod collection;
+mod common;
+mod dml;
+mod dql;
+mod index;
+mod partition;
+mod rbac;
+mod resource_group;
+mod utility;
 
-    match ErrorCode::try_from(status.error_code) {
-        Ok(i) => match i {
-            ErrorCode::Success => Ok(()),
-            _ => Err(Error::from(status)),
-        },
-        Err(_) => Err(Error::Unexpected(format!(
-            "unknown error code {}",
-            status.error_code
-        ))),
-    }
-}
+pub use cdc::*;
+pub use collection::*;
+pub use common::*;
+pub use dml::*;
+pub use dql::*;
+pub use index::*;
+pub use partition::*;
+pub use rbac::*;
+pub use resource_group::*;
+pub use utility::*;

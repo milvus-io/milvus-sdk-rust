@@ -1,16 +1,32 @@
+// Licensed to the LF AI & Data foundation under one
+// or more contributor license agreements. See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership. The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License. You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Seek, SeekFrom, Write};
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use crate::v1::client::{Client, ConsistencyLevel};
-use crate::v1::data::{slice_field_columns, FieldColumn};
-use crate::error::*;
 use crate::proto::common::{KeyValuePair, MsgBase, MsgType};
 use crate::proto::milvus::{QueryCursor, QueryRequest};
 use crate::proto::schema::DataType;
-use crate::utils::status_to_result;
+use crate::v1::client::{Client, ConsistencyLevel};
+use crate::v1::data::{slice_field_columns, FieldColumn};
+use crate::v1::error::status_to_result;
+use crate::v1::error::*;
 use crate::v1::value::{Value, ValueVec};
 
 // Constants
@@ -369,7 +385,10 @@ impl Client {
         let collection_name = collection_name.into();
         let collection = self
             .collection_cache
-            .get(crate::v1::collection::current_db_name(self), &collection_name)
+            .get(
+                crate::v1::collection::current_db_name(self),
+                &collection_name,
+            )
             .await?;
 
         Ok(QueryIterator::new(
@@ -406,7 +425,10 @@ impl Client {
         let collection_name = collection_name.into();
         let collection = self
             .collection_cache
-            .get(crate::v1::collection::current_db_name(self), &collection_name)
+            .get(
+                crate::v1::collection::current_db_name(self),
+                &collection_name,
+            )
             .await?;
 
         Ok(SearchIterator::new(
@@ -689,11 +711,11 @@ impl QueryIterator {
                 let batch_size = std::cmp::min(MAX_BATCH_SIZE, current_offset as usize);
                 let next_expr = self.build_next_expr();
 
-                let seeked_count = self.seek_offset_by_batch(batch_size, &next_expr).await?;
-                if seeked_count == 0 {
+                let advanced_count = self.seek_offset_by_batch(batch_size, &next_expr).await?;
+                if advanced_count == 0 {
                     break;
                 }
-                current_offset -= seeked_count as i64;
+                current_offset -= advanced_count as i64;
             }
         }
 
@@ -1330,7 +1352,9 @@ impl SearchIterator {
     }
 
     /// Get the next batch of search results
-    pub async fn next(&mut self) -> Result<Option<Vec<crate::v1::collection::SearchResult<'static>>>> {
+    pub async fn next(
+        &mut self,
+    ) -> Result<Option<Vec<crate::v1::collection::SearchResult<'static>>>> {
         if !self.has_more {
             return Ok(None);
         }

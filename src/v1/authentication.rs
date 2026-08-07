@@ -1,3 +1,19 @@
+// Licensed to the LF AI & Data foundation under one
+// or more contributor license agreements. See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership. The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License. You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! # Milvus Authentication Module
 //!
 //! This module provides comprehensive authentication and authorization functionality for the Milvus client.
@@ -43,12 +59,12 @@
 //! }
 //! ```
 
-use crate::v1::client::Client;
-use crate::error::Result;
 use crate::proto;
 use crate::proto::common::{MsgBase, MsgType};
 use crate::proto::milvus::DeleteCredentialRequest;
-use crate::utils::status_to_result;
+use crate::v1::client::Client;
+use crate::v1::error::status_to_result;
+use crate::v1::error::Result;
 use base64::engine::general_purpose;
 use base64::Engine;
 use serde_json;

@@ -1,3 +1,19 @@
+// Licensed to the LF AI & Data foundation under one
+// or more contributor license agreements. See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership. The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License. You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use milvus::client::Client;
 use milvus::data::FieldColumn;
 use milvus::error::Error;
@@ -10,14 +26,18 @@ use rand::Rng;
 use std::collections::HashMap;
 
 const URL: &str = "http://localhost:19530";
-const COLLECTION_NAME: &str = "rust_sdk_example_timestampz_v1";
+const COLLECTION_NAME: &str = "RUST_V1_TIMESTAMPZ";
 const ID_FIELD: &str = "id";
 const VECTOR_FIELD: &str = "vector";
 const TIMESTAMPTZ_FIELD: &str = "tsz";
 const DIM: i64 = 128;
 
 async fn cleanup(client: &Client) {
-    if client.has_collection(COLLECTION_NAME).await.unwrap_or(false) {
+    if client
+        .has_collection(COLLECTION_NAME)
+        .await
+        .unwrap_or(false)
+    {
         let _ = client.drop_collection(COLLECTION_NAME).await;
     }
 }
@@ -35,7 +55,10 @@ async fn main() -> Result<(), Error> {
     let schema = CollectionSchemaBuilder::new(COLLECTION_NAME, "timestamptz example")
         .add_field(FieldSchema::new_primary_int64(ID_FIELD, "", false))
         .add_field(FieldSchema::new_float_vector(VECTOR_FIELD, "", DIM))
-        .add_field(FieldSchema::new_timestamptz(TIMESTAMPTZ_FIELD, "timestamp with timezone"))
+        .add_field(FieldSchema::new_timestamptz(
+            TIMESTAMPTZ_FIELD,
+            "timestamp with timezone",
+        ))
         .build()?;
 
     client
