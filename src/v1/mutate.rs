@@ -373,6 +373,7 @@ impl Client {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use crate::proto::common::{ErrorCode, Status};
     use crate::proto::milvus::MutationResult;

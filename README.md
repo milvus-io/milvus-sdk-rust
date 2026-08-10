@@ -271,7 +271,8 @@ Each tutorial contains its own prerequisites, configuration, and run instruction
 
 - Rust toolchain with Cargo
 - Initialized `milvus-proto` submodule
-- Docker with Docker Compose for server-backed tests
+- Linux server-backed tests: Python 3 and access to a running Docker daemon
+- macOS compile and non-server tests: Homebrew; Docker is not required
 
 The protobuf compiler is provided through Cargo, so a system-installed `protoc` is not
 required.
@@ -288,9 +289,13 @@ On supported Linux distributions and macOS, install the build and coverage tools
 ./scripts/install_deps.sh
 ```
 
-The script installs the Rust toolchain, formatting and linting components, `cargo-llvm-cov`,
-and the LCOV tools, including `lcov` and `genhtml`. Docker with the Compose plugin must be
-installed separately for server-backed tests.
+The script installs the Rust toolchain and formatting/linting components, and attempts to install
+the optional coverage tools `cargo-llvm-cov` and the `lcov` package that provides `genhtml`. If an
+optional coverage installation fails, the script warns and continues; coverage commands will then
+report the missing tool. Set `SKIP_COVERAGE_TOOLS=true` to omit these optional tools. On Linux the
+script also installs Python 3 and Docker when needed, starts the Docker service when possible, and
+verifies that the current user can access the daemon. On macOS it uses Homebrew and prepares the
+compile and non-server test environment.
 
 ### Build
 
@@ -331,11 +336,26 @@ cargo test -- --test-threads=4
 
 If timeouts still occur, use a lower value such as `--test-threads=2`.
 
-The repository test script starts Milvus through Docker Compose, waits for it to become
-healthy, runs the test suite, and shuts the containers down afterward:
+`scripts/run_tests.sh` uses two threads for system tests by default. Override this only when the
+Milvus test host has enough resources:
+
+```shell
+SYSTEM_TEST_THREADS=4 ./scripts/run_tests.sh
+```
+
+On Linux, the repository test script first runs the library, V2 unit, and documentation tests.
+After those pass, `tests/v2/st/milvus_container.py` starts one standalone Milvus container with
+embedded etcd, local storage, and the default standalone WAL. It waits for Milvus to become ready,
+runs the V1 and V2 system tests, and removes the container afterward:
 
 ```shell
 ./scripts/run_tests.sh
+```
+
+To compile all targets and run only tests that do not require Milvus, use:
+
+```shell
+./scripts/run_tests.sh --no-server
 ```
 
 To generate LCOV and HTML coverage reports, install

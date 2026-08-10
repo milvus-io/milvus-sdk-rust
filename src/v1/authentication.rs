@@ -35,8 +35,8 @@
 //!
 //! ## Usage Example
 //!
-//! ```rust,ignore
-//! use milvus_sdk::Client;
+//! ```rust,no_run
+//! use milvus::client::Client;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -93,9 +93,13 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = Client::new("http://localhost:19530").await?;
     /// client.create_user("john_doe", "secure_password123").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn create_user<S: Into<String>>(&self, user_name: S, password: S) -> Result<()> {
         let res = self
@@ -136,9 +140,13 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = Client::new("http://localhost:19530").await?;
     /// client.drop_user("john_doe").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn drop_user<S: Into<String>>(&self, user_name: S) -> Result<()> {
         let res = self
@@ -169,10 +177,14 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = Client::new("http://localhost:19530").await?;
     /// let users = client.list_users().await?;
     /// println!("Users: {:?}", users);
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn list_users(&self) -> Result<Vec<String>> {
         let res = self
@@ -210,10 +222,14 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = Client::new("http://localhost:19530").await?;
     /// let user_info = client.describe_user("john_doe").await?;
     /// println!("User roles: {:?}", user_info);
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn describe_user<S: Into<String>>(
         &self,
@@ -263,9 +279,13 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = Client::new("http://localhost:19530").await?;
     /// client.create_role("admin").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn create_role<S: Into<String>>(&self, role_name: S) -> Result<()> {
         let res = self
@@ -307,9 +327,13 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = Client::new("http://localhost:19530").await?;
     /// client.drop_role("old_role", false).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn drop_role<S: Into<String>>(&self, role_name: S, force_drop: bool) -> Result<()> {
         let res = self
@@ -349,9 +373,13 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = Client::new("http://localhost:19530").await?;
     /// client.grant_role("john_doe", "admin").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn grant_role<S: Into<String>>(&self, user_name: S, role_name: S) -> Result<()> {
         let res = self
@@ -384,10 +412,14 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = Client::new("http://localhost:19530").await?;
     /// let roles = client.list_roles().await?;
     /// println!("Roles: {:?}", roles);
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn list_roles(&self) -> Result<Vec<String>> {
         let res = self
@@ -431,11 +463,13 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// use std::collections::HashMap;
     ///
     /// let client = Client::new("http://localhost:19530").await?;
-    /// let role_info = client.describe_role("admin", None).await?;
+    /// let role_info = client.describe_role("admin").await?;
     ///
     /// println!("Role: {}", role_info["role"]);
     /// if let Some(privileges) = role_info.get("privileges") {
@@ -445,6 +479,8 @@ impl Client {
     ///         }
     ///     }
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn describe_role(
         &self,
@@ -535,9 +571,13 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = Client::new("http://localhost:19530").await?;
     /// client.revoke_role("john_doe", "admin").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn revoke_role<S: Into<String>>(&self, user_name: S, role_name: S) -> Result<()> {
         let res = self
@@ -575,9 +615,13 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = Client::new("http://localhost:19530").await?;
     /// client.create_privilege_group("read_only").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn create_privilege_group<S: Into<String>>(&self, group_name: S) -> Result<()> {
         let res = self
@@ -615,10 +659,14 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = Client::new("http://localhost:19530").await?;
     /// let privileges = vec!["Load".to_string(), "Get".to_string()];
     /// client.add_privilege_to_group("read_only", privileges).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn add_privilege_to_group<S: Into<String>>(
         &self,
@@ -660,12 +708,16 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = Client::new("http://localhost:19530").await?;
     /// let groups = client.list_privilege_groups().await?;
     /// for (group_name, privileges) in groups {
     ///     println!("Group: {}, Privileges: {:?}", group_name, privileges);
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn list_privilege_groups(&self) -> Result<HashMap<String, Vec<String>>> {
         let res = self
@@ -707,9 +759,13 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = Client::new("http://localhost:19530").await?;
     /// client.drop_privilege_group("old_group").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn drop_privilege_group<S: Into<String>>(&self, group_name: S) -> Result<()> {
         let res = self
@@ -752,9 +808,13 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = Client::new("http://localhost:19530").await?;
     /// client.revoke_privilege("admin", "Collection", "Load", "my_collection", None).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn revoke_privilege<S: Into<String>>(
         &self,
@@ -821,9 +881,13 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = Client::new("http://localhost:19530").await?;
     /// client.revoke_privilege_v2("admin", "Load", "my_collection", None).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn revoke_privilege_v2<S: Into<String>>(
         &self,
@@ -879,10 +943,14 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = Client::new("http://localhost:19530").await?;
     /// let privileges = vec!["Load".to_string()];
     /// client.revoke_privilege_from_group("read_only", privileges).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn revoke_privilege_from_group<S: Into<String>>(
         &self,
@@ -934,9 +1002,13 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = Client::new("http://localhost:19530").await?;
     /// client.grant_privilege("admin", "Load", "Collection", "my_collection", None).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn grant_privilege<S: Into<String>>(
         &self,
@@ -1003,9 +1075,13 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = Client::new("http://localhost:19530").await?;
     /// client.grant_privilege_v2("admin", "Load", "my_collection", None).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn grant_privilege_v2<S: Into<String>>(
         &self,
@@ -1096,9 +1172,13 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = Client::new("http://localhost:19530").await?;
     /// client.update_password("john_doe", "old_password", "new_secure_password").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn update_password<S: Into<String>>(
         &self,

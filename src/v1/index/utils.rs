@@ -22,8 +22,8 @@
 //!
 //! # Examples
 //!
-//! ```rust,ignore
-//! use milvus_sdk_rust::v1::index::utils;
+//! ```rust,no_run
+//! use milvus::v1::index::utils;
 //! ```
 //!
 use crate::proto;

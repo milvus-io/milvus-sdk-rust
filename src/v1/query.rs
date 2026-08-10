@@ -29,24 +29,37 @@
 //!
 //! ## Examples
 //!
-//! ```rust,ignore
-//! use milvus_sdk_rust::v1::client::Client;
-//! use milvus_sdk_rust::v1::query::{SearchOptions, QueryOptions, AnnSearchRequest, WeightedRanker};
-//! use milvus_sdk_rust::v1::value::Value;
+//! ```rust,no_run
+//! use milvus::v1::client::Client;
+//! use milvus::v1::query::{AnnSearchRequest, SearchOptions, WeightedRanker};
+//! use milvus::v1::value::Value;
+//! use milvus::proto::common::KeyValuePair;
 //!
-//! // Vector search
-//! let options = SearchOptions::new()
-//!     .limit(10)
-//!     .output_fields(vec!["id".to_string(), "vector".to_string()]);
+//! #[tokio::main]
+//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     let client = Client::new("http://localhost:19530").await?;
+//!     let vector = Value::FloatArray(vec![0.1, 0.2, 0.3].into());
+//!     let options = SearchOptions::new()
+//!         .limit(10)
+//!         .output_fields(vec!["id".to_string(), "vector".to_string()]);
 //!
-//! let results = client.search("my_collection", vec![vector_data], Some(options)).await?;
+//!     let _results = client
+//!         .search("my_collection", vec![vector.clone()], Some(options))
+//!         .await?;
 //!
-//! // Hybrid search
-//! let req1 = AnnSearchRequest::new(vec![vector1], "field1".to_string(), params1, 10);
-//! let req2 = AnnSearchRequest::new(vec![vector2], "field2".to_string(), params2, 10);
-//! let ranker = WeightedRanker::new(vec![0.7, 0.3]);
+//!     let params = vec![KeyValuePair {
+//!         key: "metric_type".to_string(),
+//!         value: "L2".to_string(),
+//!     }];
+//!     let req1 = AnnSearchRequest::new(vec![vector.clone()], "field1".to_string(), params.clone(), 10);
+//!     let req2 = AnnSearchRequest::new(vec![vector], "field2".to_string(), params, 10);
+//!     let ranker = WeightedRanker::new(vec![0.7, 0.3]);
 //!
-//! let results = client.hybrid_search("my_collection", vec![req1, req2], Box::new(ranker), None).await?;
+//!     let _results = client
+//!         .hybrid_search("my_collection", vec![req1, req2], Box::new(ranker), None)
+//!         .await?;
+//!     Ok(())
+//! }
 //! ```
 
 use std::collections::HashMap;
@@ -76,12 +89,12 @@ use crate::{error::*, proto};
 ///
 /// # Example
 ///
-/// ```rust,ignore
-/// use milvus_sdk_rust::v1::query::AnnSearchRequest;
-/// use milvus_sdk_rust::v1::value::Value;
-/// use milvus_sdk_rust::proto::common::KeyValuePair;
+/// ```rust,no_run
+/// use milvus::v1::query::AnnSearchRequest;
+/// use milvus::v1::value::Value;
+/// use milvus::proto::common::KeyValuePair;
 ///
-/// let vector_data = Value::FloatArray(vec![0.1, 0.2, 0.3]);
+/// let vector_data = Value::FloatArray(vec![0.1, 0.2, 0.3].into());
 /// let search_params = vec![
 ///     KeyValuePair {
 ///         key: "metric_type".to_string(),
@@ -278,8 +291,8 @@ pub trait BaseRanker: Send + Sync {
 ///
 /// ## Example
 ///
-/// ```rust,ignore
-/// use milvus_sdk_rust::v1::query::WeightedRanker;
+/// ```rust,no_run
+/// use milvus::v1::query::WeightedRanker;
 ///
 /// // Give 70% weight to first search, 30% to second search
 /// let ranker = WeightedRanker::new(vec![0.7, 0.3]);
@@ -329,8 +342,8 @@ impl BaseRanker for WeightedRanker {
 ///
 /// ## Example
 ///
-/// ```rust,ignore
-/// use milvus_sdk_rust::v1::query::RrfRanker;
+/// ```rust,no_run
+/// use milvus::v1::query::RrfRanker;
 ///
 /// // Create RRF ranker with k=60 (typical value)
 /// let ranker = RrfRanker::new(60.0);
@@ -415,8 +428,8 @@ fn is_pagination_param(key: &str) -> bool {
 ///
 /// ## Example
 ///
-/// ```rust,ignore
-/// use milvus_sdk_rust::v1::query::QueryOptions;
+/// ```rust,no_run
+/// use milvus::v1::query::QueryOptions;
 ///
 /// let options = QueryOptions::new()
 ///     .output_fields(vec!["id".to_string(), "title".to_string()])
@@ -874,8 +887,8 @@ impl QueryOptions {
 ///
 /// ## Example
 ///
-/// ```rust,ignore
-/// use milvus_sdk_rust::v1::query::SearchOptions;
+/// ```rust,no_run
+/// use milvus::v1::query::SearchOptions;
 ///
 /// let options = SearchOptions::new()
 ///     .limit(10)
@@ -1208,14 +1221,19 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
-    /// use milvus_sdk_rust::v1::query::QueryOptions;
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = Client::new("http://localhost:19530").await?;
+    /// use milvus::v1::query::QueryOptions;
     ///
     /// let options = QueryOptions::new()
     ///     .output_fields(vec!["id".to_string(), "title".to_string()])
     ///     .limit(100);
     ///
     /// let results = client.query("my_collection", "age > 18", &options).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn query<S>(
         &self,
@@ -1286,8 +1304,13 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = Client::new("http://localhost:19530").await?;
     /// let count = client.count("my_collection").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn count<S>(&self, collection_name: S) -> Result<i64>
     where
@@ -1319,12 +1342,17 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
-    /// use milvus_sdk_rust::v1::query::QueryOptions;
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = Client::new("http://localhost:19530").await?;
+    /// use milvus::v1::query::QueryOptions;
     ///
     /// let count = client
     ///     .count_with_expr("my_collection", "age >= 18", &QueryOptions::new())
     ///     .await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn count_with_expr<S>(
         &self,
@@ -1359,17 +1387,22 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
-    /// use milvus_sdk_rust::v1::query::SearchOptions;
-    /// use milvus_sdk_rust::v1::value::Value;
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = Client::new("http://localhost:19530").await?;
+    /// use milvus::v1::query::SearchOptions;
+    /// use milvus::v1::value::Value;
     ///
-    /// let vector_data = Value::FloatArray(vec![0.1, 0.2, 0.3]);
+    /// let vector_data = Value::FloatArray(vec![0.1, 0.2, 0.3].into());
     /// let options = SearchOptions::new()
     ///     .limit(10)
     ///     .output_fields(vec!["id".to_string(), "vector".to_string()])
     ///     .add_param("metric_type", "L2");
     ///
     /// let results = client.search("my_collection", vec![vector_data], Some(options)).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn search<S>(
         &self,
@@ -1560,30 +1593,35 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
-    /// use milvus_sdk_rust::v1::query::{AnnSearchRequest, WeightedRanker, SearchOptions};
-    /// use milvus_sdk_rust::v1::value::Value;
-    /// use milvus_sdk_rust::proto::common::KeyValuePair;
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = Client::new("http://localhost:19530").await?;
+    /// use milvus::v1::query::{AnnSearchRequest, WeightedRanker, SearchOptions};
+    /// use milvus::v1::value::Value;
+    /// use milvus::proto::common::KeyValuePair;
     ///
-    /// let vector1 = Value::FloatArray(vec![0.1, 0.2, 0.3]);
-    /// let vector2 = Value::FloatArray(vec![0.4, 0.5, 0.6]);
+    /// let vector1 = Value::FloatArray(vec![0.1, 0.2, 0.3].into());
+    /// let vector2 = Value::FloatArray(vec![0.4, 0.5, 0.6].into());
     ///
     /// let req1 = AnnSearchRequest::new(
     ///     vec![vector1],
     ///     "field1".to_string(),
-    ///     KeyValuePair { key: "metric_type".to_string(), value: "L2".to_string() },
+    ///     vec![KeyValuePair { key: "metric_type".to_string(), value: "L2".to_string() }],
     ///     10
     /// );
     ///
     /// let req2 = AnnSearchRequest::new(
     ///     vec![vector2],
     ///     "field2".to_string(),
-    ///     KeyValuePair { key: "metric_type".to_string(), value: "IP".to_string() },
+    ///     vec![KeyValuePair { key: "metric_type".to_string(), value: "IP".to_string() }],
     ///     10
     /// );
     ///
     /// let ranker = WeightedRanker::new(vec![0.7, 0.3]);
     /// let results = client.hybrid_search("my_collection", vec![req1, req2], Box::new(ranker), None).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn hybrid_search<S>(
         &self,
@@ -1876,8 +1914,11 @@ impl Client {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
-    /// use milvus_sdk_rust::v1::query::{GetOptions, IdType};
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = Client::new("http://localhost:19530").await?;
+    /// use milvus::v1::query::{GetOptions, IdType};
     ///
     /// // Get by integer IDs
     /// let int_ids = IdType::Int64(vec![1, 2, 3]);
@@ -1887,6 +1928,8 @@ impl Client {
     /// let string_ids = IdType::VarChar(vec!["id1".to_string(), "id2".to_string()]);
     /// let options = GetOptions::new().output_fields(vec!["id".to_string(), "title".to_string()]);
     /// let results = client.get("my_collection", string_ids, Some(options)).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn get<S>(
         &self,

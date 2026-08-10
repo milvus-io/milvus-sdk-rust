@@ -106,7 +106,7 @@ The aggressive testing plan has been executed in full. All three phases were com
 ### Phase 1: High-Concurrency CRUD and Indexing
 *   **Result:** **PASS** (with modifications)
 *   **Summary:** This test initially failed due to a combination of environment and server-side issues. 
-    1.  **Rate-Limiting:** The Milvus server's default rate limits were too low for the high-concurrency inserts, causing `RateLimit` errors. This was resolved by providing a custom server configuration (`configs/user.yaml`) via the Docker container.
+    1.  **Rate-Limiting:** The Milvus server's default rate limits were too low for the high-concurrency inserts, causing `RateLimit` errors. The limits were disabled for that explicit high-load run; the standard test suite uses the default server configuration.
     2.  **Environment Instability:** The `etcd` container proved unstable under load. The issue was circumvented by using Milvus's stable embedded `etcd` instance.
     3.  **gRPC Timeouts:** The high load caused client-side gRPC timeouts. This was fixed by implementing a `timeout()` method on the `ClientBuilder` and setting a longer timeout for the tests.
     4.  **Server-Side Bottleneck:** The most significant finding was silent data loss when performing high-concurrency inserts into **multiple unique partitions**. The test passed consistently only when all tasks wrote directly to the collection. This points to a performance bottleneck or bug in Milvus v2.5.15's handling of this specific workload, which developers using the SDK should be aware of.
