@@ -1,0 +1,118 @@
+name: Publish release to crates.io
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: read
+
+# crates.io releases are immutable. Do not publish two release tags at the same time,
+# and do not cancel a workflow after it has started uploading the crate.
+concurrency:
+  group: crates-io-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish crate
+    if: github.repository == 'milvus-io/milvus-sdk-rust'
+    runs-on: ubuntu-latest
+    environment: crates-io
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Validate release tag and crate version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="${GITHUB_REF_NAME}"
+          if [[ ! "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release tag: ${tag}. Expected vX.Y.Z."
+            exit 1
+          fi
+
+          tag_version="${tag#v}"
+          crate_version="$(cargo metadata --no-deps --format-version 1 | python3 -c '
+          import json
+          import sys
+
+          metadata = json.load(sys.stdin)
+          package = next(
+              package
+              for package in metadata["packages"]
+              if package["name"] == "milvus-sdk-rust"
+          )
+          print(package["version"])
+          ')"
+
+          if [[ "${tag_version}" != "${crate_version}" ]]; then
+            echo "Release tag version ${tag_version} does not match Cargo package version ${crate_version}."
+            exit 1
+          fi
+
+          echo "Publishing milvus-sdk-rust ${crate_version} from tag ${tag}."
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run library tests
+        run: cargo test --lib
+
+      - name: Run V2 unit tests
+        run: cargo test --test v2_ut
+
+      - name: Validate crate package
+        run: cargo publish --dry-run
+
+      - name: Publish to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish
+
+  release:
+    name: Create GitHub release
+    needs: publish
+    if: needs.publish.result == 'success' && github.repository == 'milvus-io/milvus-sdk-rust'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+
+    steps:
+      - name: Prepare release metadata
+        id: release-info
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          version="${RELEASE_TAG#v}"
+          release_date="$(date -u +%F)"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "release_date=${release_date}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ github.ref_name }}
+          name: milvus-sdk-rust-${{ steps.release-info.outputs.version }}
+          body: |
+            Release date: ${{ steps.release-info.outputs.release_date }}
+            crates.io: https://crates.io/crates/milvus-sdk-rust/${{ steps.release-info.outputs.version }}
+          draft: false
+          allowUpdates: true
+          omitNameDuringUpdate: true
+          omitBodyDuringUpdate: true
+          token: ${{ secrets.GITHUB_TOKEN }}

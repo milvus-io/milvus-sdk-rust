@@ -1,4 +1,4 @@
-## Milvus Rust SDK Function Usage Manual (v0.1.0 | Compatible with Milvus 2.5.15)
+## Milvus Rust SDK V1 API Guide (v0.1.0 | Compatible with Milvus 2.5.15)
 
 This document lists each function's capabilities, runnable usage examples (with detailed explanations and expected outputs) by functional modules to help you get started quickly. Examples default to using local Milvus - please start the service first when necessary and ensure the port and authentication configuration match.
 
@@ -942,5 +942,5 @@ The following builder methods are typically used in chain within the same code s
 ---
 
 For more context or end-to-end examples, please refer to the repository's built-in examples and tests:
-- Examples: `examples/collection.rs`, `examples/index_example.rs`, `examples/query_search.rs`, `examples/iterator.rs`, `examples/authentication.rs`, `examples/database.rs`, `examples/resource_groups.rs`
-- Tests: `tests/collection.rs`, `tests/partition.rs`, `tests/client.rs`, `tests/aggressivehpctesting/*` 
+- Examples: `examples/v1/collection.rs`, `examples/v1/index_example.rs`, `examples/v1/query_search.rs`, `examples/v1/iterator.rs`, `examples/v1/rbac.rs`, `examples/v1/database.rs`, `examples/v1/resource_groups.rs`
+- Tests: `tests/v1/collection.rs`, `tests/v1/partition.rs`, `tests/v1/client.rs`, `tests/v1/aggressivehpctesting/*`

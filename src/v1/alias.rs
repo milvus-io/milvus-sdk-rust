@@ -14,14 +14,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::v1::client::Client;
-use crate::error::Result;
 use crate::proto::common::{MsgBase, MsgType};
 use crate::proto::milvus::{
     AlterAliasRequest, CreateAliasRequest, DescribeAliasRequest, DropAliasRequest,
     ListAliasesRequest,
 };
-use crate::utils::status_to_result;
+use crate::v1::client::Client;
+use crate::v1::error::status_to_result;
+use crate::v1::error::Result;
 
 impl Client {
     /// Creates an alias for a collection.
