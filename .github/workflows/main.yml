@@ -5,24 +5,26 @@ on:
     paths:
       - 'src/**'
       - 'tests/**'
+      - 'examples/**'
+      - 'tutorial/**'
       - 'scripts/**'
       - 'milvus-proto/**'
       - 'Cargo.toml'
       - 'build.rs'
       - '.github/**'
-      - 'docker-compose.yml'
       
   # Triggers the workflow on push or pull request events but only for the master branch
   pull_request:
     paths:
       - 'src/**'
       - 'tests/**'
+      - 'examples/**'
+      - 'tutorial/**'
       - 'scripts/**'
       - 'milvus-proto/**'
       - 'Cargo.toml'
       - 'build.rs'
       - '.github/**'
-      - 'docker-compose.yml'
 
 
 concurrency:
@@ -34,7 +36,7 @@ jobs:
     name: UT on Ubuntu-${{ matrix.ubuntu }}
     # The type of runner that the job will run on
     runs-on: ubuntu-${{ matrix.ubuntu }}
-    timeout-minutes: 30
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -52,6 +54,9 @@ jobs:
       - name: Install dependencies
         run: ./scripts/install_deps.sh
 
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
       - name: Run coverage
         run: CODE_COV=true ./scripts/run_tests.sh
 
@@ -64,9 +69,9 @@ jobs:
           flags: ubuntu-${{ matrix.ubuntu }}-unittests
 
   ut-macos:
-    name: Compile on macOS 15
+    name: UT on MacOS 15
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v3
         with:
@@ -74,7 +79,10 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      # GitHub-hosted macOS runners do not provide Docker for the Milvus integration-test stack.
-      # Compile test binaries on macOS, but run Milvus-backed integration tests on Linux.
-      - name: Compile Tests
-        run: cargo test --no-run
+      - name: Install dependencies
+        run: SKIP_COVERAGE_TOOLS=true ./scripts/install_deps.sh
+
+      # GitHub-hosted macOS runners cannot run the Milvus container because nested
+      # virtualization is unavailable. Linux runs the server-backed suite.
+      - name: Run non-server tests
+        run: ./scripts/run_tests.sh --no-server

@@ -16,17 +16,10 @@
 
 use super::common::*;
 use milvus::{
-    client::*,
-    collection::*,
-    data::FieldColumn,
-    error::Result,
-    index::{IndexParams, IndexType, MetricType},
-    mutate::InsertOptions,
-    query::SearchOptions,
-    schema::CollectionSchema,
+    client::*, data::FieldColumn, error::Result, query::SearchOptions, schema::CollectionSchema,
     value::Value,
 };
-use std::{borrow::Cow, collections::HashMap};
+use std::borrow::Cow;
 
 fn gen_f32_data(size: i64) -> Vec<f32> {
     let mut data = Vec::<f32>::with_capacity(size as usize);

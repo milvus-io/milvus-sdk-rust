@@ -18,57 +18,161 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-COMPOSE_FILE="$ROOT_DIR/docker-compose.yml"
+MILVUS_CONTAINER_SCRIPT="$ROOT_DIR/tests/v2/st/milvus_container.py"
 COVERAGE_DIR="$ROOT_DIR/code_coverage"
 LCOV_FILE="$COVERAGE_DIR/lcov.info"
-HEALTH_URL="http://localhost:9091/healthz"
-TIMEOUT_SECONDS=300
-POLL_INTERVAL=1
 CODE_COV="${CODE_COV:-false}"
+MILVUS_IMAGE="${MILVUS_IMAGE:-milvusdb/milvus:v2.6.20}"
+MILVUS_CONTAINER_ID=""
+RUN_SERVER_TESTS=true
+SYSTEM_TEST_THREADS="${SYSTEM_TEST_THREADS:-2}"
 export RUST_BACKTRACE="${RUST_BACKTRACE:-1}"
 
-if [[ "$CODE_COV" == "true" ]] && ! command -v genhtml >/dev/null 2>&1; then
-  echo "genhtml is required to generate the HTML coverage report; install the lcov package" >&2
+if [[ "${1:-}" == "--no-server" ]]; then
+  RUN_SERVER_TESTS=false
+  shift
+fi
+
+if [[ "$RUN_SERVER_TESTS" == "false" && "$CODE_COV" == "true" ]]; then
+  echo "CODE_COV=true is not supported with --no-server" >&2
   exit 1
 fi
 
-cleanup() {
-  docker compose -f "$COMPOSE_FILE" down || true
-}
-
-wait_for_milvus() {
-  local started=$SECONDS
-  local deadline=$((SECONDS + TIMEOUT_SECONDS))
-  echo "Waiting for Milvus to become healthy at $HEALTH_URL..."
-  while (( SECONDS < deadline )); do
-    if curl -fsS --max-time 2 "$HEALTH_URL" >/dev/null 2>&1; then
-      echo "Milvus is healthy."
-      return 0
-    fi
-    local elapsed=$((SECONDS - started))
-    if (( elapsed > 0 && elapsed % 10 == 0 )); then
-      echo "Milvus is still starting (${elapsed}s elapsed)..."
-    fi
-    sleep "$POLL_INTERVAL"
-  done
-
-  echo "Timed out waiting for Milvus health endpoint: $HEALTH_URL" >&2
-  return 1
-}
-
-trap cleanup EXIT INT TERM
-
-docker compose -f "$COMPOSE_FILE" up -d
-wait_for_milvus
-
-cd "$ROOT_DIR"
-
 if [[ "$CODE_COV" == "true" ]]; then
-  mkdir -p "$COVERAGE_DIR"
-  cargo llvm-cov --workspace --lcov --output-path "$LCOV_FILE" --ignore-filename-regex 'src/proto/.*' "$@" -- --test-threads=4
+  if ! command -v cargo-llvm-cov >/dev/null 2>&1; then
+    echo "cargo-llvm-cov is required when CODE_COV=true; install it with 'cargo install cargo-llvm-cov --locked'" >&2
+    exit 1
+  fi
+  if ! command -v genhtml >/dev/null 2>&1; then
+    echo "genhtml is required to generate the HTML coverage report; install the lcov package" >&2
+    exit 1
+  fi
+fi
+
+cleanup_resources() {
+  local status="$1"
+  if [[ -n "$MILVUS_CONTAINER_ID" ]]; then
+    if [[ "$status" -ne 0 ]]; then
+      python3 "$MILVUS_CONTAINER_SCRIPT" logs "$MILVUS_CONTAINER_ID" || true
+    fi
+    python3 "$MILVUS_CONTAINER_SCRIPT" stop "$MILVUS_CONTAINER_ID" || true
+    MILVUS_CONTAINER_ID=""
+  fi
+}
+
+handle_exit() {
+  local status=$?
+  trap - EXIT INT TERM
+  cleanup_resources "$status"
+  exit "$status"
+}
+
+handle_signal() {
+  local status="$1"
+  trap - EXIT INT TERM
+  cleanup_resources "$status"
+  exit "$status"
+}
+
+check_tutorials() {
+  local manifest
+  echo "==> Checking tutorial crates"
+  for manifest in "$ROOT_DIR"/tutorial/*/Cargo.toml; do
+    CARGO_TARGET_DIR="$ROOT_DIR/target/tutorials" \
+      cargo check --manifest-path "$manifest" --all-targets \
+        --config "patch.crates-io.milvus-sdk-rust.path='$ROOT_DIR'"
+  done
+}
+
+run_non_server_tests() {
+  echo "==> Running compile checks and non-server tests"
+  cd "$ROOT_DIR"
+  cargo check --all-targets
+  check_tutorials
+  cargo test --lib -- --test-threads=4
+  cargo test --test v2_ut -- --test-threads=4
+  cargo test --doc
+}
+
+run_non_server_coverage_tests() {
+  echo "==> Running compile checks and non-server coverage tests"
+  cd "$ROOT_DIR"
+  cargo check --all-targets
+  check_tutorials
+  cargo llvm-cov clean --workspace
+  cargo llvm-cov --workspace --no-report --lib -- --test-threads=4
+  cargo llvm-cov --workspace --no-report --test v2_ut -- --test-threads=4
+  cargo test --doc
+}
+
+require_linux_server_support() {
+  if [[ "$(uname -s)" != "Linux" ]]; then
+    echo "Server-backed tests are supported by this script on Linux only; use --no-server on this platform" >&2
+    exit 1
+  fi
+
+  command -v python3 >/dev/null 2>&1 || {
+    echo "python3 is required to launch the Milvus test container" >&2
+    exit 1
+  }
+}
+
+start_milvus() {
+  echo "==> Starting Milvus for server-backed tests"
+  trap handle_exit EXIT
+  trap 'handle_signal 130' INT
+  trap 'handle_signal 143' TERM
+  MILVUS_CONTAINER_ID="$(
+    python3 "$MILVUS_CONTAINER_SCRIPT" start \
+      --image "$MILVUS_IMAGE"
+  )"
+}
+
+run_server_tests() {
+  echo "==> Running V1 and V2 server-backed tests"
+  cd "$ROOT_DIR"
+  cargo test --test v1_st -- --test-threads="$SYSTEM_TEST_THREADS"
+  cargo test --test v2_st -- --test-threads="$SYSTEM_TEST_THREADS"
+}
+
+run_server_coverage_tests() {
+  echo "==> Running V1 and V2 server-backed coverage tests"
+  cd "$ROOT_DIR"
+  cargo llvm-cov --workspace --no-report --test v1_st -- --test-threads="$SYSTEM_TEST_THREADS"
+  cargo llvm-cov --workspace --no-report --test v2_st -- --test-threads="$SYSTEM_TEST_THREADS"
+  cargo llvm-cov report --lcov --output-path "$LCOV_FILE" --ignore-filename-regex 'src/proto/.*'
   genhtml "$LCOV_FILE" --output-directory "$COVERAGE_DIR"
+}
+
+if [[ "$RUN_SERVER_TESTS" == "false" ]]; then
+  if [[ "$#" -ne 0 ]]; then
+    echo "--no-server does not accept an additional command" >&2
+    exit 1
+  fi
+  run_non_server_tests
+  exit 0
+fi
+
+if [[ "$#" -eq 0 && "$CODE_COV" == "true" ]]; then
+  mkdir -p "$COVERAGE_DIR"
+  run_non_server_coverage_tests
+  require_linux_server_support
+  start_milvus
+  run_server_coverage_tests
 elif [[ "$#" -eq 0 ]]; then
-  cargo test -- --test-threads=4
+  run_non_server_tests
+  require_linux_server_support
+  start_milvus
+  run_server_tests
 else
-  "$@"
+  require_linux_server_support
+  start_milvus
+  cd "$ROOT_DIR"
+  if [[ "$CODE_COV" == "true" ]]; then
+    mkdir -p "$COVERAGE_DIR"
+    cargo llvm-cov --workspace --lcov --output-path "$LCOV_FILE" --ignore-filename-regex 'src/proto/.*' "$@" -- --test-threads="$SYSTEM_TEST_THREADS"
+    genhtml "$LCOV_FILE" --output-directory "$COVERAGE_DIR"
+  else
+    "$@"
+  fi
 fi

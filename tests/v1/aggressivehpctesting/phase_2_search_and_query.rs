@@ -18,11 +18,10 @@ use super::super::common::*;
 use futures::future::join_all;
 use milvus::{
     client::*,
-    collection::*,
     data::FieldColumn,
     error::Result,
     index::{IndexParams, IndexType, MetricType},
-    mutate::{DeleteOptions, InsertOptions},
+    mutate::DeleteOptions,
     query::{QueryOptions, SearchOptions},
     schema::{CollectionSchemaBuilder, FieldSchema},
     value::ValueVec,

@@ -22,14 +22,14 @@
 //!
 //! # Examples
 //!
-//! ```rust,ignore
+//! ```rust,no_run
 //! use milvus::v1::client::Client;
 //! use milvus::v1::resource_group::CreateRgOptions;
 //! use std::collections::HashMap;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     let client = Client::new("localhost:19530").await?;
+//!     let client = Client::new("http://localhost:19530").await?;
 //!     
 //!     // Create a resource group with custom limits
 //!     let options = CreateRgOptions::new()
@@ -64,7 +64,7 @@ use crate::{error::*, proto};
 ///
 /// # Examples
 ///
-/// ```rust,ignore
+/// ```rust,no_run
 /// use milvus::v1::resource_group::CreateRgOptions;
 ///
 /// let options = CreateRgOptions::new()
@@ -225,7 +225,10 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = Client::new("http://localhost:19530").await?;
     /// use milvus::v1::resource_group::CreateRgOptions;
     ///
     /// // Create resource group with default settings
@@ -237,6 +240,8 @@ impl Client {
     ///     .requests(2);
     ///     
     /// client.create_resource_group("my_rg", Some(options)).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn create_resource_group<S: Into<String>>(
         &self,
@@ -275,12 +280,17 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = Client::new("http://localhost:19530").await?;
     /// if let Some(rg_info) = client.describe_resource_group("my_rg").await? {
     ///     println!("Resource group: {:?}", rg_info);
     /// } else {
     ///     println!("Resource group doesn't exist!");
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn describe_resource_group<S: Into<String>>(
         &self,
@@ -314,8 +324,13 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = Client::new("http://localhost:19530").await?;
     /// client.drop_resource_group("my_rg").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Warning
@@ -346,9 +361,14 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = Client::new("http://localhost:19530").await?;
     /// let groups = client.list_resource_groups().await?;
     /// println!("Available resource groups: {:?}", groups);
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn list_resource_groups(&self) -> Result<Vec<String>> {
         let res = self
@@ -381,9 +401,14 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = Client::new("http://localhost:19530").await?;
     /// // Transfer 2 replicas from source_rg to target_rg for my_collection
     /// client.transfer_replica("source_rg", "target_rg", "my_collection", 2).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn transfer_replica<S: Into<String>>(
         &self,
@@ -426,9 +451,14 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = Client::new("http://localhost:19530").await?;
     /// // Transfer 3 nodes from source_rg to target_rg
     /// client.transfer_node("source_rg", "target_rg", 3).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn transfer_node<S: Into<String>>(
         &self,
@@ -468,7 +498,10 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = Client::new("http://localhost:19530").await?;
     /// use std::collections::HashMap;
     /// use milvus::v1::resource_group::UpdateRgOptions;
     ///
@@ -477,6 +510,8 @@ impl Client {
     /// configs.insert("rg2".to_string(), UpdateRgOptions::new().limits(10).requests(3));
     ///
     /// client.update_resource_groups(configs).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn update_resource_groups<S: Into<String>>(
         &self,

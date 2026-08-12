@@ -3326,7 +3326,8 @@ mod constructor_value_tests {
             Some("http://localhost:8080")
         );
         assert_eq!(
-            value.get_params()
+            value
+                .get_params()
                 .get("max_client_batch_size")
                 .map(String::as_str),
             Some("16")

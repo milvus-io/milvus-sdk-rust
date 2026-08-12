@@ -22,13 +22,13 @@
 //!
 //! # Examples
 //!
-//! ```rust,ignore
+//! ```rust,no_run
 //! use milvus::v1::client::Client;
 //! use milvus::v1::database::CreateDbOptions;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     let client = Client::new("localhost:19530").await?;
+//!     let mut client = Client::new("http://localhost:19530").await?;
 //!     
 //!     // Create a database with custom properties
 //!     let options = CreateDbOptions::new()
@@ -63,7 +63,7 @@ use crate::{error::*, proto};
 ///
 /// # Examples
 ///
-/// ```rust,ignore
+/// ```rust,no_run
 /// use milvus::v1::database::CreateDbOptions;
 ///
 /// let options = CreateDbOptions::new()
@@ -237,7 +237,10 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let mut client = Client::new("http://localhost:19530").await?;
     /// use milvus::v1::database::CreateDbOptions;
     ///
     /// let options = CreateDbOptions::new()
@@ -245,6 +248,8 @@ impl Client {
     ///     .diskquota_mb(2048);
     ///     
     /// client.alter_database_properties("my_database", options).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn alter_database_properties<S: Into<String>>(
         &self,
@@ -290,13 +295,18 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let mut client = Client::new("http://localhost:19530").await?;
     /// let property_keys = vec![
     ///     "database.replica.number".to_string(),
     ///     "database.diskQuota.mb".to_string(),
     /// ];
     ///
     /// client.drop_database_properties("my_database", property_keys).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn drop_database_properties<S: Into<String>>(
         &self,
@@ -343,7 +353,10 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let mut client = Client::new("http://localhost:19530").await?;
     /// use milvus::v1::database::CreateDbOptions;
     ///
     /// // Create database with default settings
@@ -356,6 +369,8 @@ impl Client {
     ///     .max_collections(100);
     ///     
     /// client.create_database("my_database", Some(options)).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn create_database<S: Into<String>>(
         &self,
@@ -397,11 +412,16 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let mut client = Client::new("http://localhost:19530").await?;
     /// let db_info = client.describe_database("my_database").await?;
     /// println!("Database ID: {}", db_info.db_id);
     /// println!("Created at: {}", db_info.created_timestamp);
     /// println!("Properties: {:?}", db_info.properties);
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn describe_database<S: Into<String>>(
         &self,
@@ -443,8 +463,13 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let mut client = Client::new("http://localhost:19530").await?;
     /// client.drop_database("my_database").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Warning
@@ -480,9 +505,14 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let mut client = Client::new("http://localhost:19530").await?;
     /// let databases = client.list_databases().await?;
     /// println!("Available databases: {:?}", databases);
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn list_databases(&self) -> Result<Vec<String>> {
         let res = self
@@ -514,12 +544,17 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```rust,ignore
+    /// ```rust,no_run
+    /// use milvus::client::Client;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let mut client = Client::new("http://localhost:19530").await?;
     /// // Switch to a different database
     /// client.using_database("my_database").await?;
     ///
     /// // Now all operations will be performed in "my_database"
     /// let collections = client.list_collections().await?;
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Note

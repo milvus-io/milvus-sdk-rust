@@ -64,6 +64,14 @@ jobs:
             exit 1
           fi
 
+          for manifest in tutorial/*/Cargo.toml; do
+            tutorial_version="$(sed -n 's/^milvus-sdk-rust = "=\([^"]*\)"$/\1/p' "${manifest}")"
+            if [[ "${tutorial_version}" != "${crate_version}" ]]; then
+              echo "${manifest} pins milvus-sdk-rust ${tutorial_version:-<missing>}, expected ${crate_version}."
+              exit 1
+            fi
+          done
+
           echo "Publishing milvus-sdk-rust ${crate_version} from tag ${tag}."
 
       - name: Check formatting
@@ -116,3 +124,44 @@ jobs:
           omitNameDuringUpdate: true
           omitBodyDuringUpdate: true
           token: ${{ secrets.GITHUB_TOKEN }}
+
+  run-tutorial:
+    name: Run tutorials
+    needs: release
+    if: needs.release.result == 'success' && github.repository == 'milvus-io/milvus-sdk-rust'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache tutorial build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-tutorials
+
+      - name: Wait for crates.io propagation
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          manifest="tutorial/1_database/Cargo.toml"
+          for attempt in $(seq 1 20); do
+            if CARGO_TARGET_DIR="${GITHUB_WORKSPACE}/target/tutorials" \
+              cargo check --manifest-path "${manifest}" --all-targets; then
+              exit 0
+            fi
+            if [[ "${attempt}" -eq 20 ]]; then
+              echo "The published crate did not become available to Cargo in time." >&2
+              exit 1
+            fi
+            echo "Waiting for crates.io propagation (attempt ${attempt}/20)..."
+            sleep 15
+          done
+
+      - name: Run tutorials
+        run: ./scripts/run_tutorials.sh

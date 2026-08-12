@@ -18,9 +18,14 @@
 set -euo pipefail
 
 SUDO=()
+SKIP_COVERAGE_TOOLS="${SKIP_COVERAGE_TOOLS:-false}"
 
 log() {
   printf '==> %s\n' "$*"
+}
+
+warn() {
+  printf 'Warning: %s\n' "$*" >&2
 }
 
 configure_sudo() {
@@ -38,23 +43,68 @@ configure_sudo() {
 }
 
 install_linux_packages() {
+  local packages=()
   configure_sudo
 
   if command -v apt-get >/dev/null 2>&1; then
-    log "Installing build and coverage packages with apt-get"
+    log "Installing build packages with apt-get"
+    packages=(build-essential ca-certificates curl git libssl-dev pkg-config python3)
+    if [[ "$SKIP_COVERAGE_TOOLS" != "true" ]]; then
+      packages+=(lcov)
+    fi
     "${SUDO[@]}" apt-get update
-    "${SUDO[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y \
-      build-essential ca-certificates curl git lcov libssl-dev pkg-config
+    "${SUDO[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y "${packages[@]}"
   elif command -v dnf >/dev/null 2>&1; then
-    log "Installing build and coverage packages with dnf"
-    "${SUDO[@]}" dnf install -y \
-      ca-certificates curl gcc gcc-c++ git lcov make openssl-devel pkgconf-pkg-config
+    log "Installing build packages with dnf"
+    packages=(ca-certificates curl gcc gcc-c++ git make openssl-devel pkgconf-pkg-config python3)
+    if [[ "$SKIP_COVERAGE_TOOLS" != "true" ]]; then
+      packages+=(lcov)
+    fi
+    "${SUDO[@]}" dnf install -y "${packages[@]}"
   elif command -v yum >/dev/null 2>&1; then
-    log "Installing build and coverage packages with yum"
-    "${SUDO[@]}" yum install -y \
-      ca-certificates curl gcc gcc-c++ git lcov make openssl-devel pkgconfig
+    log "Installing build packages with yum"
+    packages=(ca-certificates curl gcc gcc-c++ git make openssl-devel pkgconfig python3)
+    if [[ "$SKIP_COVERAGE_TOOLS" != "true" ]]; then
+      packages+=(lcov)
+    fi
+    "${SUDO[@]}" yum install -y "${packages[@]}"
   else
-    echo "Unsupported Linux package manager. Install curl, git, lcov, genhtml, a C/C++ compiler, pkg-config, and OpenSSL development headers manually." >&2
+    echo "Unsupported Linux package manager. Install curl, git, a C/C++ compiler, pkg-config, and OpenSSL development headers manually." >&2
+    exit 1
+  fi
+}
+
+install_linux_docker() {
+  if command -v docker >/dev/null 2>&1; then
+    log "Docker CLI is already installed"
+  elif command -v apt-get >/dev/null 2>&1; then
+    log "Installing Docker with apt-get"
+    "${SUDO[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y docker.io
+  elif command -v dnf >/dev/null 2>&1; then
+    log "Installing Docker with dnf"
+    "${SUDO[@]}" dnf install -y docker
+  elif command -v yum >/dev/null 2>&1; then
+    log "Installing Docker with yum"
+    "${SUDO[@]}" yum install -y docker
+  else
+    echo "Docker is required for Linux server-backed tests, but it could not be installed automatically." >&2
+    exit 1
+  fi
+
+  if docker info >/dev/null 2>&1; then
+    return
+  fi
+
+  if command -v systemctl >/dev/null 2>&1; then
+    log "Starting the Docker service"
+    "${SUDO[@]}" systemctl start docker || true
+  elif command -v service >/dev/null 2>&1; then
+    log "Starting the Docker service"
+    "${SUDO[@]}" service docker start || true
+  fi
+
+  if ! docker info >/dev/null 2>&1; then
+    echo "Docker is installed, but the current user cannot access a running Docker daemon. Start Docker and ensure this user has permission to use it." >&2
     exit 1
   fi
 }
@@ -65,8 +115,29 @@ install_macos_packages() {
     exit 1
   fi
 
-  log "Installing build and coverage packages with Homebrew"
-  brew install lcov openssl@3 pkg-config
+  log "Checking build packages with Homebrew"
+  local build_formulae=()
+
+  if ! brew list --versions openssl@3 >/dev/null 2>&1; then
+    build_formulae+=(openssl@3)
+  fi
+
+  if ((${#build_formulae[@]} > 0)); then
+    brew install "${build_formulae[@]}"
+  else
+    log "Homebrew build packages are already available"
+  fi
+
+  if [[ "$SKIP_COVERAGE_TOOLS" == "true" ]]; then
+    log "Skipping optional coverage tools"
+  elif command -v genhtml >/dev/null 2>&1; then
+    log "genhtml is already available; skipping Homebrew lcov package install"
+  else
+    log "Installing coverage tools with Homebrew"
+    if ! brew install lcov; then
+      warn "Could not install the lcov package with Homebrew; HTML coverage reports will be unavailable until genhtml is installed"
+    fi
+  fi
 }
 
 install_system_packages() {
@@ -90,16 +161,21 @@ install_rust() {
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     # shellcheck disable=SC1091
     source "$HOME/.cargo/env"
+  elif ! command -v cargo >/dev/null 2>&1 && [[ -f "$HOME/.cargo/env" ]]; then
+    # shellcheck disable=SC1091
+    source "$HOME/.cargo/env"
   fi
 
-  log "Installing Rust formatting, linting, and coverage components"
+  log "Installing Rust formatting and linting components"
   rustup toolchain install stable
   rustup default stable
   rustup component add rustfmt clippy llvm-tools-preview
 
-  if ! cargo llvm-cov --version >/dev/null 2>&1; then
+  if [[ "$SKIP_COVERAGE_TOOLS" != "true" ]] && ! cargo llvm-cov --version >/dev/null 2>&1; then
     log "Installing cargo-llvm-cov"
-    cargo install cargo-llvm-cov --locked
+    if ! cargo install cargo-llvm-cov --locked; then
+      warn "Could not install cargo-llvm-cov; coverage reports will be unavailable"
+    fi
   fi
 }
 
@@ -107,7 +183,7 @@ verify_required_tools() {
   local missing=0
   local tool
 
-  for tool in cargo rustc rustfmt cargo-clippy lcov genhtml; do
+  for tool in cargo rustc rustfmt cargo-clippy; do
     if command -v "$tool" >/dev/null 2>&1; then
       printf 'Found %-12s %s\n' "$tool" "$(command -v "$tool")"
     else
@@ -117,8 +193,13 @@ verify_required_tools() {
   done
 
   if ! cargo llvm-cov --version >/dev/null 2>&1; then
-    echo "Missing cargo-llvm-cov" >&2
-    missing=1
+    warn "Missing cargo-llvm-cov; CODE_COV=true coverage reports will be unavailable"
+  fi
+
+  if command -v genhtml >/dev/null 2>&1; then
+    printf 'Found %-12s %s\n' "genhtml" "$(command -v genhtml)"
+  else
+    warn "Missing genhtml; CODE_COV=true HTML coverage reports will be unavailable"
   fi
 
   if [[ "$missing" -ne 0 ]]; then
@@ -126,15 +207,33 @@ verify_required_tools() {
     exit 1
   fi
 
-  if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
-    printf 'Found %-12s %s\n' "docker" "$(command -v docker)"
+  if [[ "$(uname -s)" == "Linux" ]]; then
+    if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+      printf 'Found %-12s %s\n' "docker" "$(command -v docker)"
+    else
+      echo "Docker is required for Linux server-backed tests." >&2
+      missing=1
+    fi
   else
-    echo "Warning: Docker with the Compose plugin is required by scripts/run_tests.sh and server-backed tests." >&2
+    log "Docker is not required for macOS compile and non-server tests"
+  fi
+
+  if [[ "$(uname -s)" == "Linux" ]] && ! command -v python3 >/dev/null 2>&1; then
+    echo "Missing python3, which is required by the Linux Milvus test launcher." >&2
+    missing=1
+  fi
+
+  if [[ "$missing" -ne 0 ]]; then
+    echo "One or more required tools could not be installed." >&2
+    exit 1
   fi
 }
 
 install_system_packages
 install_rust
+if [[ "$(uname -s)" == "Linux" ]]; then
+  install_linux_docker
+fi
 verify_required_tools
 
 log "Milvus Rust SDK dependencies are installed"
