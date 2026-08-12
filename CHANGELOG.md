@@ -1,6 +1,6 @@
 # Changelog
 
-## milvus-sdk-rust 2.6.0 (2026-08-07)
+## milvus-sdk-rust 2.6.0 (2026-08-12)
 
 ### Feature
 
@@ -52,7 +52,12 @@
 - Add typed V2 validation, conversion, server, timeout, cancellation, malformed-response, and
   retry-exhaustion errors
 - Expand V2 examples, README usage guidance, crate publishing automation, and mock/system coverage
-- Add standalone tutorials for databases, collections, schemas, indexes, DML, DQL, and bulk import
+- Add a beginner quick-start tutorial, focused collection/schema/index/DML/DQL tutorials, and
+  advanced database and RBAC administration tutorials
+- Improve V1 rustdoc examples so authentication, database, query, index, and resource-group
+  examples compile with the published crate paths and valid Milvus URLs
+- Replace Docker Compose test setup with a signal-safe standalone Milvus launcher, add macOS
+  non-server validation, and verify published-crate tutorials after release
 
 
 ## milvus-sdk-rust 0.1.0 (2023-05-23)

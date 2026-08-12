@@ -149,7 +149,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          manifest="tutorial/1_database/Cargo.toml"
+          manifest="tutorial/1_quickstart/Cargo.toml"
           for attempt in $(seq 1 20); do
             if CARGO_TARGET_DIR="${GITHUB_WORKSPACE}/target/tutorials" \
               cargo check --manifest-path "${manifest}" --all-targets; then

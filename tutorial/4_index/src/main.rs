@@ -27,7 +27,10 @@ async fn main() -> Result<()> {
     let uri = std::env::var("MILVUS_URI").unwrap_or_else(|_| "http://localhost:19530".to_owned());
     let token = std::env::var("MILVUS_TOKEN").unwrap_or_else(|_| "root:Milvus".to_owned());
     let collection = tutorial_collection_name();
+    // ClientV2::new connects to `uri` and authenticates with `token` for index administration.
+    println!("Calling ClientV2::new: connect to Milvus");
     let client = ClientV2::new(&ConnectConfig::new().uri(uri).token(token)).await?;
+    println!("ClientV2::new completed");
 
     let tutorial_result = demonstrate_indexes(&client, &collection).await;
     let cleanup_result = cleanup_collection(&client, &collection).await;
@@ -62,6 +65,9 @@ async fn demonstrate_indexes(client: &ClientV2, collection: &str) -> Result<()> 
         );
 
     println!("Creating collection {collection:?} without indexes");
+    // create_collection creates the fields that the indexes will target. No index is supplied here
+    // because this tutorial demonstrates create_index separately.
+    println!("Calling create_collection: create {collection:?} without indexes");
     client
         .create_collection(
             CreateCollectionRequest::builder()
@@ -70,8 +76,12 @@ async fn demonstrate_indexes(client: &ClientV2, collection: &str) -> Result<()> 
                 .build()?,
         )
         .await?;
+    println!("create_collection completed");
 
     println!("Creating one vector index and two scalar indexes");
+    // create_index builds all supplied index definitions. Each IndexParam identifies a field,
+    // index name/type, and any metric or build parameters; `sync` waits for completion.
+    println!("Calling create_index: build vector and scalar indexes");
     client
         .create_index(
             CreateIndexRequest::builder()
@@ -100,9 +110,12 @@ async fn demonstrate_indexes(client: &ClientV2, collection: &str) -> Result<()> 
                 .build()?,
         )
         .await?;
+    println!("create_index completed");
 
     print_indexes(client, collection, "Created indexes").await?;
 
+    // describe_index returns detailed metadata for the selected field and index name.
+    println!("Calling describe_index: inspect {VECTOR_INDEX:?}");
     let response = client
         .describe_index(
             DescribeIndexRequest::builder()
@@ -112,6 +125,7 @@ async fn demonstrate_indexes(client: &ClientV2, collection: &str) -> Result<()> 
                 .build()?,
         )
         .await?;
+    println!("describe_index completed");
     for index in response.indexes() {
         println!(
             "Vector index detail: name={:?}, type={:?}, metric={:?}, state={:?}, params={:?}",
@@ -124,6 +138,8 @@ async fn demonstrate_indexes(client: &ClientV2, collection: &str) -> Result<()> 
     }
 
     println!("Dropping scalar index {PRICE_INDEX:?}");
+    // drop_index removes only the named index; it does not delete its field or collection data.
+    println!("Calling drop_index: remove {PRICE_INDEX:?}");
     client
         .drop_index(
             DropIndexRequest::builder()
@@ -132,10 +148,13 @@ async fn demonstrate_indexes(client: &ClientV2, collection: &str) -> Result<()> 
                 .build()?,
         )
         .await?;
+    println!("drop_index completed");
     print_indexes(client, collection, "Indexes after dropping price index").await
 }
 
 async fn print_indexes(client: &ClientV2, collection: &str, heading: &str) -> Result<()> {
+    // list_indexes returns every index defined on the selected collection.
+    println!("Calling list_indexes: list indexes on {collection:?}");
     let response = client
         .list_indexes(
             ListIndexesRequest::builder()
@@ -143,6 +162,7 @@ async fn print_indexes(client: &ClientV2, collection: &str, heading: &str) -> Re
                 .build()?,
         )
         .await?;
+    println!("list_indexes completed");
     println!("\n{heading}:");
     for index in response.indexes() {
         println!(
@@ -158,6 +178,8 @@ async fn print_indexes(client: &ClientV2, collection: &str, heading: &str) -> Re
 }
 
 async fn cleanup_collection(client: &ClientV2, collection: &str) -> Result<()> {
+    // has_collection avoids issuing a drop request when cleanup has already occurred.
+    println!("Calling has_collection: check {collection:?}");
     let exists = client
         .has_collection(
             HasCollectionRequest::builder()
@@ -166,8 +188,11 @@ async fn cleanup_collection(client: &ClientV2, collection: &str) -> Result<()> {
         )
         .await?
         .exists();
+    println!("has_collection completed");
     if exists {
         println!("\nDropping tutorial collection {collection:?}");
+        // drop_collection removes the tutorial collection and any remaining indexes.
+        println!("Calling drop_collection: remove {collection:?}");
         client
             .drop_collection(
                 DropCollectionRequest::builder()
@@ -175,6 +200,7 @@ async fn cleanup_collection(client: &ClientV2, collection: &str) -> Result<()> {
                     .build()?,
             )
             .await?;
+        println!("drop_collection completed");
     }
     Ok(())
 }

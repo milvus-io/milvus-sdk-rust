@@ -30,7 +30,11 @@ async fn main() -> Result<()> {
     let renamed_collection = format!("{collection}_renamed");
 
     let config = ConnectConfig::new().uri(uri).token(token);
+    // ClientV2::new connects to `uri` and authenticates with `token`; the same client is reused
+    // for the complete collection lifecycle.
+    println!("Calling ClientV2::new: connect to Milvus");
     let client = ClientV2::new(&config).await?;
+    println!("ClientV2::new completed");
 
     print_collections(&client, "Collections before the tutorial").await?;
 
@@ -81,6 +85,9 @@ async fn demonstrate_collection_interfaces(
         .metric_type(MetricType::Cosine);
 
     println!("\nCreating collection {collection:?}");
+    // create_collection creates the named collection. `schema` declares its fields, `index_param`
+    // creates the vector index, and `consistency_level` sets the default read consistency.
+    println!("Calling create_collection: create {collection:?}");
     client
         .create_collection(
             CreateCollectionRequest::builder()
@@ -92,7 +99,10 @@ async fn demonstrate_collection_interfaces(
                 .build()?,
         )
         .await?;
+    println!("create_collection completed");
 
+    // has_collection reports whether `collection_name` exists in the selected database.
+    println!("Calling has_collection: check {collection:?}");
     let exists = client
         .has_collection(
             HasCollectionRequest::builder()
@@ -100,11 +110,15 @@ async fn demonstrate_collection_interfaces(
                 .build()?,
         )
         .await?;
+    println!("has_collection completed");
     println!("Collection exists: {}", exists.exists());
 
     describe_collection(client, collection).await?;
 
     println!("\nSetting {TTL_SECONDS}=3600");
+    // alter_collection_properties adds or replaces key/value settings on the collection. This
+    // property asks Milvus to expire entities after 3,600 seconds.
+    println!("Calling alter_collection_properties: set {TTL_SECONDS}=3600");
     client
         .alter_collection_properties(
             AlterCollectionPropertiesRequest::builder()
@@ -113,9 +127,12 @@ async fn demonstrate_collection_interfaces(
                 .build()?,
         )
         .await?;
+    println!("alter_collection_properties completed");
     describe_property(client, collection).await?;
 
     println!("Removing {TTL_SECONDS}");
+    // drop_collection_properties removes the named property key without changing other settings.
+    println!("Calling drop_collection_properties: remove {TTL_SECONDS}");
     client
         .drop_collection_properties(
             DropCollectionPropertiesRequest::builder()
@@ -124,9 +141,13 @@ async fn demonstrate_collection_interfaces(
                 .build()?,
         )
         .await?;
+    println!("drop_collection_properties completed");
     describe_property(client, collection).await?;
 
     println!("\nLoading the collection");
+    // load_collection prepares collection data and indexes for queries. `sync(true)` waits for
+    // readiness, and `timeout_ms` limits that wait to 60 seconds.
+    println!("Calling load_collection: load {collection:?}");
     client
         .load_collection(
             LoadCollectionRequest::builder()
@@ -136,6 +157,9 @@ async fn demonstrate_collection_interfaces(
                 .build()?,
         )
         .await?;
+    println!("load_collection completed");
+    // get_load_state returns the current load state and progress for `collection_name`.
+    println!("Calling get_load_state: inspect {collection:?}");
     let load_state = client
         .get_load_state(
             GetLoadStateRequest::builder()
@@ -143,12 +167,15 @@ async fn demonstrate_collection_interfaces(
                 .build()?,
         )
         .await?;
+    println!("get_load_state completed");
     println!(
         "Load state: {:?}, progress={}%%",
         load_state.state(),
         load_state.progress()
     );
 
+    // get_collection_stats returns server statistics such as `row_count` for this collection.
+    println!("Calling get_collection_stats: inspect {collection:?}");
     let stats = client
         .get_collection_stats(
             GetCollectionStatsRequest::builder()
@@ -156,6 +183,7 @@ async fn demonstrate_collection_interfaces(
                 .build()?,
         )
         .await?;
+    println!("get_collection_stats completed");
     println!(
         "Row count: {}",
         stats
@@ -165,6 +193,8 @@ async fn demonstrate_collection_interfaces(
     );
 
     println!("\nReleasing the collection");
+    // release_collection removes the collection from serving memory without deleting its data.
+    println!("Calling release_collection: release {collection:?}");
     client
         .release_collection(
             ReleaseCollectionRequest::builder()
@@ -172,8 +202,11 @@ async fn demonstrate_collection_interfaces(
                 .build()?,
         )
         .await?;
+    println!("release_collection completed");
 
     println!("Renaming {collection:?} to {renamed_collection:?}");
+    // rename_collection moves the collection from `collection_name` to `new_collection_name`.
+    println!("Calling rename_collection: rename to {renamed_collection:?}");
     client
         .rename_collection(
             RenameCollectionRequest::builder()
@@ -182,12 +215,15 @@ async fn demonstrate_collection_interfaces(
                 .build()?,
         )
         .await?;
+    println!("rename_collection completed");
 
     let old_exists = has_collection(client, collection).await?;
     let new_exists = has_collection(client, renamed_collection).await?;
     println!("After rename: old name exists={old_exists}, new name exists={new_exists}");
 
     println!("Truncating {renamed_collection:?}");
+    // truncate_collection deletes all entities but preserves the schema and indexes.
+    println!("Calling truncate_collection: remove all entities from {renamed_collection:?}");
     client
         .truncate_collection(
             TruncateCollectionRequest::builder()
@@ -195,6 +231,7 @@ async fn demonstrate_collection_interfaces(
                 .build()?,
         )
         .await?;
+    println!("truncate_collection completed");
     println!("Truncate removes all entities but preserves the collection schema and indexes.");
 
     print_collections(client, "Collections before cleanup").await?;
@@ -202,6 +239,8 @@ async fn demonstrate_collection_interfaces(
 }
 
 async fn describe_collection(client: &ClientV2, collection: &str) -> Result<()> {
+    // describe_collection fetches schema and metadata for the selected collection name.
+    println!("Calling describe_collection: inspect {collection:?}");
     let response = client
         .describe_collection(
             DescribeCollectionRequest::builder()
@@ -209,6 +248,7 @@ async fn describe_collection(client: &ClientV2, collection: &str) -> Result<()> 
                 .build()?,
         )
         .await?;
+    println!("describe_collection completed");
     let description = response.description();
     println!(
         "Description: name={:?}, id={}, primary_field={:?}, vector_fields={:?}",
@@ -221,6 +261,8 @@ async fn describe_collection(client: &ClientV2, collection: &str) -> Result<()> 
 }
 
 async fn describe_property(client: &ClientV2, collection: &str) -> Result<()> {
+    // describe_collection also exposes the current collection property map.
+    println!("Calling describe_collection: inspect properties for {collection:?}");
     let response = client
         .describe_collection(
             DescribeCollectionRequest::builder()
@@ -228,6 +270,7 @@ async fn describe_property(client: &ClientV2, collection: &str) -> Result<()> {
                 .build()?,
         )
         .await?;
+    println!("describe_collection completed");
     println!(
         "Property value: {}",
         response
@@ -240,14 +283,18 @@ async fn describe_property(client: &ClientV2, collection: &str) -> Result<()> {
 }
 
 async fn has_collection(client: &ClientV2, collection: &str) -> Result<bool> {
-    Ok(client
+    // has_collection is used before cleanup so a missing resource is not dropped twice.
+    println!("Calling has_collection: check {collection:?}");
+    let exists = client
         .has_collection(
             HasCollectionRequest::builder()
                 .collection_name(collection)
                 .build()?,
         )
         .await?
-        .exists())
+        .exists();
+    println!("has_collection completed");
+    Ok(exists)
 }
 
 async fn cleanup_collections<'a>(
@@ -258,15 +305,27 @@ async fn cleanup_collections<'a>(
         if !has_collection(client, collection).await? {
             continue;
         }
-        // Releasing an already released collection is harmless for tutorial cleanup.
-        let _ = client
+        // release_collection is best-effort cleanup; releasing an already released collection is
+        // harmless and makes the later drop independent of serving state.
+        println!("Calling release_collection: cleanup {collection:?}");
+        let release_result = client
             .release_collection(
                 ReleaseCollectionRequest::builder()
                     .collection_name(collection)
                     .build()?,
             )
             .await;
+        println!(
+            "release_collection completed: {}",
+            if release_result.is_ok() {
+                "ok"
+            } else {
+                "ignored error"
+            }
+        );
         println!("\nDropping tutorial collection {collection:?}");
+        // drop_collection permanently removes the named collection, including data and indexes.
+        println!("Calling drop_collection: remove {collection:?}");
         client
             .drop_collection(
                 DropCollectionRequest::builder()
@@ -274,14 +333,18 @@ async fn cleanup_collections<'a>(
                     .build()?,
             )
             .await?;
+        println!("drop_collection completed");
     }
     Ok(())
 }
 
 async fn print_collections(client: &ClientV2, heading: &str) -> Result<()> {
+    // list_collections returns all collection names visible in the client's selected database.
+    println!("Calling list_collections: list the selected database");
     let response = client
         .list_collections(ListCollectionsRequest::builder().build()?)
         .await?;
+    println!("list_collections completed");
     let names = if response.collection_names().is_empty() {
         "<none>".to_owned()
     } else {

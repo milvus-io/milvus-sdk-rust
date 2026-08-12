@@ -53,3 +53,16 @@ cargo run --manifest-path tutorial/2_collection/Cargo.toml
 Each RPC accepts a validated request object constructed with `Request::builder()...build()?`.
 The example uses synchronous loading with a bounded timeout so it waits until the collection is
 ready without waiting indefinitely.
+
+## Expected output
+
+Resource names vary, but the output shows each lifecycle call and result:
+
+```text
+Calling create_collection: create "rust_sdk_collection_tutorial_..."
+create_collection completed
+Collection exists: true
+Load state: Loaded, progress=100%
+Calling rename_collection: rename to "..._renamed"
+rename_collection completed
+```
