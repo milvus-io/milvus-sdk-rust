@@ -26,3 +26,18 @@ cargo run --manifest-path tutorial/6_dql/Cargo.toml
 
 The iterator examples deliberately use small batch and total limits so their pagination is easy
 to observe.
+
+## Expected output
+
+Scores and ordering depend on the server, but the operation sequence should include:
+
+```text
+Calling query: filter rows where category == 1
+query completed
+Calling search: find nearest dense vectors
+search completed
+Calling hybrid_search: combine dense and sparse searches
+hybrid_search completed
+Calling QueryIterator::next: request the next page
+QueryIterator::next completed
+```

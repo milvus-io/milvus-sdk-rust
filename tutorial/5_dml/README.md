@@ -24,3 +24,16 @@ cargo run --manifest-path tutorial/5_dml/Cargo.toml
 ```
 
 The program creates, loads, mutates, verifies, and drops a uniquely named collection.
+
+## Expected output
+
+```text
+Calling insert: write two row-oriented entities
+insert completed
+Inserted 2 rows with row input
+Calling upsert: partially update entity id=3
+upsert completed
+Calling delete: remove entity id=1
+delete completed
+Remaining rows:
+```

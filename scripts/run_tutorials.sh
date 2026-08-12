@@ -74,7 +74,16 @@ MILVUS_CONTAINER_ID="$(
 )"
 
 cd "$ROOT_DIR"
-for manifest in tutorial/{1_database,2_collection,3_schema,4_index,5_dml,6_dql}/Cargo.toml; do
+echo "==> Running beginner tutorials (1_quickstart through 6_dql)"
+for manifest in tutorial/*/Cargo.toml; do
+  tutorial_name="${manifest#tutorial/}"
+  tutorial_name="${tutorial_name%/Cargo.toml}"
+  if [[ "$tutorial_name" == 7_database ]]; then
+    echo "==> Running advanced tutorials (database administration and RBAC)"
+  fi
+  if [[ "$tutorial_name" == 8_rbac ]]; then
+    echo "==> RBAC note: the default tutorial server does not enable authorization; RBAC calls may run, but permission-denial behavior is not validated."
+  fi
   echo "==> Running ${manifest%/Cargo.toml}"
   CARGO_TARGET_DIR="$TUTORIAL_TARGET_DIR" cargo run --manifest-path "$manifest"
 done

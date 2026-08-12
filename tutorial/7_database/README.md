@@ -1,4 +1,4 @@
-# Tutorial 1: Manage databases
+# Tutorial 7: Manage databases (advanced)
 
 This tutorial is a separate Cargo project that downloads `milvus-sdk-rust` version `2.6.0`
 from crates.io. It demonstrates how to:
@@ -28,7 +28,7 @@ The tutorial uses these environment variables:
 From the SDK repository root:
 
 ```bash
-cargo run --manifest-path tutorial/1_database/Cargo.toml
+cargo run --manifest-path tutorial/7_database/Cargo.toml
 ```
 
 Or from this directory:
@@ -44,9 +44,22 @@ The program creates a uniquely named database and drops it before exiting normal
 ```bash
 MILVUS_URI="https://your-milvus-endpoint" \
 MILVUS_TOKEN="your-token" \
-cargo run --manifest-path tutorial/1_database/Cargo.toml
+cargo run --manifest-path tutorial/7_database/Cargo.toml
 ```
 
 Each RPC accepts a validated request object constructed with `Request::builder()...build()?`.
 Responses expose read-only accessors such as `database_names()`, `database_name()`, and
 `properties()`.
+
+## Expected output
+
+```text
+Calling create_database: create "RUST_V2_DATABASE_..."
+create_database completed
+Calling alter_database_properties: set database.replica.number=1
+alter_database_properties completed
+Calling use_database: select "RUST_V2_DATABASE_..."
+use_database completed
+Calling drop_database: remove "RUST_V2_DATABASE_..."
+drop_database completed
+```

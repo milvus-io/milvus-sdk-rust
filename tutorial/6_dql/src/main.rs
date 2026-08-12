@@ -26,7 +26,10 @@ async fn main() -> Result<()> {
     let uri = std::env::var("MILVUS_URI").unwrap_or_else(|_| "http://localhost:19530".to_owned());
     let token = std::env::var("MILVUS_TOKEN").unwrap_or_else(|_| "root:Milvus".to_owned());
     let collection = tutorial_collection_name();
+    // ClientV2::new connects to the endpoint and authenticates all query/search operations.
+    println!("Calling ClientV2::new: connect to Milvus");
     let client = ClientV2::new(&ConnectConfig::new().uri(uri).token(token)).await?;
+    println!("ClientV2::new completed");
 
     let tutorial_result = demonstrate_dql(&client, &collection).await;
     let cleanup_result = cleanup_collection(&client, &collection).await;
@@ -77,6 +80,9 @@ async fn create_load_and_insert(client: &ClientV2, collection: &str) -> Result<(
                 .name("sparse")
                 .data_type(DataType::SparseFloatVector),
         );
+    // create_collection creates the query target and both indexes. Each IndexParam selects its
+    // vector field, index implementation, and similarity metric.
+    println!("Calling create_collection: create dense and sparse search fields");
     client
         .create_collection(
             CreateCollectionRequest::builder()
@@ -95,6 +101,10 @@ async fn create_load_and_insert(client: &ClientV2, collection: &str) -> Result<(
                 .build()?,
         )
         .await?;
+    println!("create_collection completed");
+    // load_collection prepares the collection for DQL. `sync(true)` waits for readiness and
+    // `timeout_ms` bounds that wait.
+    println!("Calling load_collection: load {collection:?}");
     client
         .load_collection(
             LoadCollectionRequest::builder()
@@ -104,6 +114,7 @@ async fn create_load_and_insert(client: &ClientV2, collection: &str) -> Result<(
                 .build()?,
         )
         .await?;
+    println!("load_collection completed");
 
     let rows = (0..12)
         .map(|id| {
@@ -116,6 +127,8 @@ async fn create_load_and_insert(client: &ClientV2, collection: &str) -> Result<(
             })
         })
         .collect::<Vec<_>>();
+    // insert seeds the tutorial data. `rows` contains JSON entities matching the declared schema.
+    println!("Calling insert: seed the query and search dataset");
     let response = client
         .insert(
             InsertRequest::builder()
@@ -124,12 +137,16 @@ async fn create_load_and_insert(client: &ClientV2, collection: &str) -> Result<(
                 .build()?,
         )
         .await?;
+    println!("insert completed");
     println!("Inserted {} tutorial rows", response.insert_count());
     Ok(())
 }
 
 async fn run_query(client: &ClientV2, collection: &str) -> Result<()> {
     println!("\nquery: category == 1");
+    // query performs scalar filtering. `filter` selects category 1, `output_fields` chooses returned
+    // columns, `limit` caps rows, and Strong consistency includes the recent insert.
+    println!("Calling query: filter rows where category == 1");
     let response = client
         .query(
             QueryRequest::builder()
@@ -141,11 +158,15 @@ async fn run_query(client: &ClientV2, collection: &str) -> Result<()> {
                 .build()?,
         )
         .await?;
+    println!("query completed");
     print_query_rows(response.results())
 }
 
 async fn run_search(client: &ClientV2, collection: &str) -> Result<()> {
     println!("\nsearch: nearest neighbors in the dense field");
+    // search performs nearest-neighbor search on `dense`. `vectors` supplies the query embedding,
+    // `filter` constrains candidates, `output_fields` selects metadata, and `limit` caps matches.
+    println!("Calling search: find nearest dense vectors");
     let response = client
         .search(
             SearchRequest::builder()
@@ -159,6 +180,7 @@ async fn run_search(client: &ClientV2, collection: &str) -> Result<()> {
                 .build()?,
         )
         .await?;
+    println!("search completed");
     print_search_rows(response.results())
 }
 
@@ -174,6 +196,9 @@ async fn run_hybrid_search(client: &ClientV2, collection: &str) -> Result<()> {
         .vectors(SearchVectors::SparseFloat(vec![sparse_vector(2)]))
         .limit(6)
         .build()?;
+    // hybrid_search combines the dense and sparse sub-searches. `weights` controls their relative
+    // contribution, `output_fields` selects metadata, and `limit` caps reranked matches.
+    println!("Calling hybrid_search: combine dense and sparse searches");
     let response = client
         .hybrid_search(
             HybridSearchRequest::builder()
@@ -186,6 +211,7 @@ async fn run_hybrid_search(client: &ClientV2, collection: &str) -> Result<()> {
                 .build()?,
         )
         .await?;
+    println!("hybrid_search completed");
     print_search_rows(response.results())
 }
 
@@ -197,6 +223,9 @@ async fn run_query_iterator(client: &ClientV2, collection: &str) -> Result<()> {
         .output_fields(["id", "title", "category"])
         .consistency_level(ConsistencyLevel::Strong)
         .build()?;
+    // query_iterator paginates a QueryRequest. `batch_size` controls rows per page and `limit`
+    // controls the total number of rows returned across all pages.
+    println!("Calling query_iterator: read query results in pages");
     let mut iterator = client
         .query_iterator(
             QueryIteratorRequest::builder()
@@ -206,8 +235,13 @@ async fn run_query_iterator(client: &ClientV2, collection: &str) -> Result<()> {
                 .build()?,
         )
         .await?;
+    println!("query_iterator created");
     let mut page_number = 0;
-    while let Some(page) = iterator.next().await? {
+    loop {
+        println!("Calling QueryIterator::next: request the next page");
+        let page = iterator.next().await?;
+        println!("QueryIterator::next completed");
+        let Some(page) = page else { break };
         page_number += 1;
         println!("  page {page_number}");
         print_query_rows(page.results())?;
@@ -225,6 +259,9 @@ async fn run_search_iterator(client: &ClientV2, collection: &str) -> Result<()> 
         .limit(3)
         .consistency_level(ConsistencyLevel::Strong)
         .build()?;
+    // search_iterator paginates a SearchRequest while preserving one search session. `batch_size`
+    // controls page size and `limit` controls the total matches delivered.
+    println!("Calling search_iterator: read search results in pages");
     let mut iterator = client
         .search_iterator(
             SearchIteratorRequest::builder()
@@ -234,8 +271,13 @@ async fn run_search_iterator(client: &ClientV2, collection: &str) -> Result<()> 
                 .build()?,
         )
         .await?;
+    println!("search_iterator created");
     let mut page_number = 0;
-    while let Some(page) = iterator.next().await? {
+    loop {
+        println!("Calling SearchIterator::next: request the next page");
+        let page = iterator.next().await?;
+        println!("SearchIterator::next completed");
+        let Some(page) = page else { break };
         page_number += 1;
         println!("  page {page_number}");
         print_search_rows(page.results())?;
@@ -285,6 +327,8 @@ fn sparse_vector(id: i64) -> SparseVector {
 }
 
 async fn cleanup_collection(client: &ClientV2, collection: &str) -> Result<()> {
+    // has_collection checks whether cleanup is necessary.
+    println!("Calling has_collection: check {collection:?}");
     let exists = client
         .has_collection(
             HasCollectionRequest::builder()
@@ -293,14 +337,27 @@ async fn cleanup_collection(client: &ClientV2, collection: &str) -> Result<()> {
         )
         .await?
         .exists();
+    println!("has_collection completed");
     if exists {
-        let _ = client
+        // release_collection removes the tutorial collection from serving memory before deletion.
+        println!("Calling release_collection: cleanup {collection:?}");
+        let release_result = client
             .release_collection(
                 ReleaseCollectionRequest::builder()
                     .collection_name(collection)
                     .build()?,
             )
             .await;
+        println!(
+            "release_collection completed: {}",
+            if release_result.is_ok() {
+                "ok"
+            } else {
+                "ignored error"
+            }
+        );
+        // drop_collection permanently removes the tutorial collection and its indexes.
+        println!("Calling drop_collection: remove {collection:?}");
         client
             .drop_collection(
                 DropCollectionRequest::builder()
@@ -308,6 +365,7 @@ async fn cleanup_collection(client: &ClientV2, collection: &str) -> Result<()> {
                     .build()?,
             )
             .await?;
+        println!("drop_collection completed");
     }
     Ok(())
 }

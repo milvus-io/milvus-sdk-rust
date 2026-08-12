@@ -25,7 +25,10 @@ async fn main() -> Result<()> {
     let uri = std::env::var("MILVUS_URI").unwrap_or_else(|_| "http://localhost:19530".to_owned());
     let token = std::env::var("MILVUS_TOKEN").unwrap_or_else(|_| "root:Milvus".to_owned());
     let collection = tutorial_collection_name();
+    // ClientV2::new connects to the Milvus endpoint and authenticates all following DML requests.
+    println!("Calling ClientV2::new: connect to Milvus");
     let client = ClientV2::new(&ConnectConfig::new().uri(uri).token(token)).await?;
+    println!("ClientV2::new completed");
 
     let tutorial_result = demonstrate_dml(&client, &collection).await;
     let cleanup_result = cleanup_collection(&client, &collection).await;
@@ -39,6 +42,9 @@ async fn main() -> Result<()> {
 async fn demonstrate_dml(client: &ClientV2, collection: &str) -> Result<()> {
     create_and_load_collection(client, collection).await?;
 
+    // insert writes row-oriented JSON entities. `collection_name` selects the destination and each
+    // `row` must follow its schema; the response reports how many entities were accepted.
+    println!("Calling insert: write two row-oriented entities");
     let inserted = client
         .insert(
             InsertRequest::builder()
@@ -58,8 +64,12 @@ async fn demonstrate_dml(client: &ClientV2, collection: &str) -> Result<()> {
                 .build()?,
         )
         .await?;
+    println!("insert completed");
     println!("Inserted {} rows with row input", inserted.insert_count());
 
+    // insert also accepts column-oriented FieldData. Every column names a schema field and all
+    // columns must contain the same non-zero number of values.
+    println!("Calling insert: write two column-oriented entities");
     let inserted = client
         .insert(
             InsertRequest::builder()
@@ -79,11 +89,15 @@ async fn demonstrate_dml(client: &ClientV2, collection: &str) -> Result<()> {
                 .build()?,
         )
         .await?;
+    println!("insert completed");
     println!(
         "Inserted {} rows with column input",
         inserted.insert_count()
     );
 
+    // upsert replaces an existing entity or inserts it when the primary key is absent. The nested
+    // InsertRequest supplies the collection and complete replacement row.
+    println!("Calling upsert: fully replace entity id=2");
     let upserted = client
         .upsert(
             UpsertRequest::builder()
@@ -101,8 +115,12 @@ async fn demonstrate_dml(client: &ClientV2, collection: &str) -> Result<()> {
                 .build()?,
         )
         .await?;
+    println!("upsert completed");
     println!("Fully upserted {} row", upserted.upsert_count());
 
+    // upsert with `partial_update(true)` changes only supplied non-primary fields. The primary key
+    // still identifies which entity to update.
+    println!("Calling upsert: partially update entity id=3");
     let upserted = client
         .upsert(
             UpsertRequest::builder()
@@ -116,8 +134,11 @@ async fn demonstrate_dml(client: &ClientV2, collection: &str) -> Result<()> {
                 .build()?,
         )
         .await?;
+    println!("upsert completed");
     println!("Partially upserted {} row", upserted.upsert_count());
 
+    // delete with `ids` removes entities by primary key from the selected collection.
+    println!("Calling delete: remove entity id=1");
     let deleted = client
         .delete(
             DeleteRequest::builder()
@@ -126,8 +147,11 @@ async fn demonstrate_dml(client: &ClientV2, collection: &str) -> Result<()> {
                 .build()?,
         )
         .await?;
+    println!("delete completed");
     println!("Deleted {} row by primary key", deleted.delete_count());
 
+    // delete with `filter` removes all entities matching the Milvus boolean expression.
+    println!("Calling delete: remove entities matching id >= 4");
     let deleted = client
         .delete(
             DeleteRequest::builder()
@@ -136,6 +160,7 @@ async fn demonstrate_dml(client: &ClientV2, collection: &str) -> Result<()> {
                 .build()?,
         )
         .await?;
+    println!("delete completed");
     println!("Deleted {} row by filter", deleted.delete_count());
 
     print_remaining_rows(client, collection).await
@@ -163,6 +188,9 @@ async fn create_and_load_collection(client: &ClientV2, collection: &str) -> Resu
                 .data_type(DataType::FloatVector)
                 .dimension(DIMENSION as u32),
         );
+    // create_collection creates the DML target. `schema` defines valid input fields and
+    // `index_param` makes the vector field searchable.
+    println!("Calling create_collection: create {collection:?}");
     client
         .create_collection(
             CreateCollectionRequest::builder()
@@ -177,6 +205,10 @@ async fn create_and_load_collection(client: &ClientV2, collection: &str) -> Resu
                 .build()?,
         )
         .await?;
+    println!("create_collection completed");
+    // load_collection prepares the collection for the verification query. `sync(true)` waits until
+    // serving is ready, bounded by `timeout_ms`.
+    println!("Calling load_collection: load {collection:?}");
     client
         .load_collection(
             LoadCollectionRequest::builder()
@@ -185,10 +217,15 @@ async fn create_and_load_collection(client: &ClientV2, collection: &str) -> Resu
                 .timeout_ms(60_000)
                 .build()?,
         )
-        .await
+        .await?;
+    println!("load_collection completed");
+    Ok(())
 }
 
 async fn print_remaining_rows(client: &ClientV2, collection: &str) -> Result<()> {
+    // query reads the remaining entities. `filter` selects rows, `output_fields` chooses returned
+    // columns, and Strong consistency makes the preceding mutations visible.
+    println!("Calling query: verify remaining rows");
     let response = client
         .query(
             QueryRequest::builder()
@@ -199,6 +236,7 @@ async fn print_remaining_rows(client: &ClientV2, collection: &str) -> Result<()>
                 .build()?,
         )
         .await?;
+    println!("query completed");
     println!("\nRemaining rows:");
     for row in response.results().rows()? {
         println!(
@@ -212,6 +250,8 @@ async fn print_remaining_rows(client: &ClientV2, collection: &str) -> Result<()>
 }
 
 async fn cleanup_collection(client: &ClientV2, collection: &str) -> Result<()> {
+    // has_collection checks whether cleanup is necessary.
+    println!("Calling has_collection: check {collection:?}");
     let exists = client
         .has_collection(
             HasCollectionRequest::builder()
@@ -220,14 +260,27 @@ async fn cleanup_collection(client: &ClientV2, collection: &str) -> Result<()> {
         )
         .await?
         .exists();
+    println!("has_collection completed");
     if exists {
-        let _ = client
+        // release_collection is best-effort cleanup that removes the collection from serving memory.
+        println!("Calling release_collection: cleanup {collection:?}");
+        let release_result = client
             .release_collection(
                 ReleaseCollectionRequest::builder()
                     .collection_name(collection)
                     .build()?,
             )
             .await;
+        println!(
+            "release_collection completed: {}",
+            if release_result.is_ok() {
+                "ok"
+            } else {
+                "ignored error"
+            }
+        );
+        // drop_collection permanently removes the tutorial collection and its remaining data.
+        println!("Calling drop_collection: remove {collection:?}");
         client
             .drop_collection(
                 DropCollectionRequest::builder()
@@ -235,6 +288,7 @@ async fn cleanup_collection(client: &ClientV2, collection: &str) -> Result<()> {
                     .build()?,
             )
             .await?;
+        println!("drop_collection completed");
     }
     Ok(())
 }

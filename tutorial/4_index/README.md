@@ -38,3 +38,17 @@ cargo run --manifest-path tutorial/4_index/Cargo.toml
 
 The program uses synchronous index creation with a 60-second overall wait limit and cleans up
 the collection before exiting normally.
+
+## Expected output
+
+The exact index state may vary briefly, but a successful run includes:
+
+```text
+Calling create_index: build vector and scalar indexes
+create_index completed
+Created indexes:
+Calling describe_index: inspect "embedding_hnsw_idx"
+describe_index completed
+Calling drop_index: remove "price_sort_idx"
+drop_index completed
+```

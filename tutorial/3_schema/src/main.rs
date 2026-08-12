@@ -29,7 +29,10 @@ async fn main() -> Result<()> {
     ];
 
     let config = ConnectConfig::new().uri(uri).token(token);
+    // ClientV2::new connects to the configured endpoint and authenticates the schema operations.
+    println!("Calling ClientV2::new: connect to Milvus");
     let client = ClientV2::new(&config).await?;
+    println!("ClientV2::new completed");
 
     // Capture the tutorial result so cleanup still runs if a later operation fails.
     let tutorial_result = demonstrate_schemas(&client, &collections).await;
@@ -234,6 +237,9 @@ async fn create_and_describe(
     schema: CollectionSchema,
 ) -> Result<()> {
     println!("\n{heading}\nCreating {collection:?}");
+    // create_collection persists the supplied `schema` under `collection_name`; `description`
+    // attaches human-readable collection metadata.
+    println!("Calling create_collection: create {collection:?}");
     client
         .create_collection(
             CreateCollectionRequest::builder()
@@ -243,7 +249,11 @@ async fn create_and_describe(
                 .build()?,
         )
         .await?;
+    println!("create_collection completed");
 
+    // describe_collection reads the schema back from Milvus so the tutorial can inspect the
+    // server's representation of every field and struct sub-field.
+    println!("Calling describe_collection: read back {collection:?}");
     let response = client
         .describe_collection(
             DescribeCollectionRequest::builder()
@@ -251,6 +261,7 @@ async fn create_and_describe(
                 .build()?,
         )
         .await?;
+    println!("describe_collection completed");
     let schema = response.description().get_schema();
 
     for field in schema.get_fields() {
@@ -307,6 +318,8 @@ fn element_description(field: &FieldSchema) -> String {
 
 async fn cleanup_collections(client: &ClientV2, collections: &[String]) -> Result<()> {
     for collection in collections {
+        // has_collection checks whether this tutorial resource exists before cleanup.
+        println!("Calling has_collection: check {collection:?}");
         let exists = client
             .has_collection(
                 HasCollectionRequest::builder()
@@ -315,10 +328,13 @@ async fn cleanup_collections(client: &ClientV2, collections: &[String]) -> Resul
             )
             .await?
             .exists();
+        println!("has_collection completed");
         if !exists {
             continue;
         }
         println!("\nDropping tutorial collection {collection:?}");
+        // drop_collection permanently removes this schema-only tutorial collection.
+        println!("Calling drop_collection: remove {collection:?}");
         client
             .drop_collection(
                 DropCollectionRequest::builder()
@@ -326,6 +342,7 @@ async fn cleanup_collections(client: &ClientV2, collections: &[String]) -> Resul
                     .build()?,
             )
             .await?;
+        println!("drop_collection completed");
     }
     Ok(())
 }

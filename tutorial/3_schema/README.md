@@ -83,3 +83,16 @@ MILVUS_URI="https://your-milvus-endpoint" \
 MILVUS_TOKEN="your-token" \
 cargo run --manifest-path tutorial/3_schema/Cargo.toml
 ```
+
+## Expected output
+
+The tutorial prints each created collection followed by its fields, types, and relevant settings:
+
+```text
+Calling create_collection: create "RUST_V2_SCHEMA_..._SCALAR"
+create_collection completed
+Calling describe_collection: read back "RUST_V2_SCHEMA_..._SCALAR"
+describe_collection completed
+  field=id                 type=Int64 primary_key
+  field=varchar_value      type=VarChar
+```

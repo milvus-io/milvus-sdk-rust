@@ -1,5 +1,5 @@
 [package]
-name = "milvus-import-data-tutorial"
+name = "milvus-rbac-tutorial"
 version = "0.1.0"
 edition = "2021"
 publish = false
@@ -7,4 +7,4 @@ license = "Apache-2.0"
 
 [dependencies]
 milvus-sdk-rust = "=2.6.0"
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
