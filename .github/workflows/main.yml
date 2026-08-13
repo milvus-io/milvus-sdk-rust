@@ -1,20 +1,10 @@
 name: Unittest
 
 on:
-  push:
-    paths:
-      - 'src/**'
-      - 'tests/**'
-      - 'examples/**'
-      - 'tutorial/**'
-      - 'scripts/**'
-      - 'milvus-proto/**'
-      - 'Cargo.toml'
-      - 'build.rs'
-      - '.github/**'
-      
-  # Triggers the workflow on push or pull request events but only for the master branch
   pull_request:
+    branches:
+      - main
+      - '[0-9]+.[0-9]+'
     paths:
       - 'src/**'
       - 'tests/**'
