@@ -41,6 +41,7 @@ impl CreateAliasRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> CreateAliasRequestBuilder {
         CreateAliasRequestBuilder {
             value: Self::empty(),
@@ -52,14 +53,17 @@ impl CreateAliasRequest {
         CreateAliasRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the alias.
     pub fn alias(&self) -> &str {
         &self.alias
     }
@@ -84,21 +88,25 @@ pub struct CreateAliasRequestBuilder {
 }
 
 impl CreateAliasRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the alias and returns the updated value.
     pub fn alias(mut self, value: impl Into<String>) -> Self {
         self.value.alias = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<CreateAliasRequest> {
         required("collection_name", &self.value.collection_name)?;
         required("alias", &self.value.alias)?;
@@ -127,6 +135,7 @@ impl AlterAliasRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> AlterAliasRequestBuilder {
         AlterAliasRequestBuilder {
             value: Self::empty(),
@@ -138,14 +147,17 @@ impl AlterAliasRequest {
         AlterAliasRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the alias.
     pub fn alias(&self) -> &str {
         &self.alias
     }
@@ -170,21 +182,25 @@ pub struct AlterAliasRequestBuilder {
 }
 
 impl AlterAliasRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the alias and returns the updated value.
     pub fn alias(mut self, value: impl Into<String>) -> Self {
         self.value.alias = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<AlterAliasRequest> {
         required("collection_name", &self.value.collection_name)?;
         required("alias", &self.value.alias)?;
@@ -211,6 +227,7 @@ impl DropAliasRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> DropAliasRequestBuilder {
         DropAliasRequestBuilder {
             value: Self::empty(),
@@ -222,10 +239,12 @@ impl DropAliasRequest {
         DropAliasRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the alias.
     pub fn alias(&self) -> &str {
         &self.alias
     }
@@ -249,16 +268,19 @@ pub struct DropAliasRequestBuilder {
 }
 
 impl DropAliasRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the alias and returns the updated value.
     pub fn alias(mut self, value: impl Into<String>) -> Self {
         self.value.alias = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<DropAliasRequest> {
         required("alias", &self.value.alias)?;
         Ok(self.value)
@@ -284,6 +306,7 @@ impl DescribeAliasRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> DescribeAliasRequestBuilder {
         DescribeAliasRequestBuilder {
             value: Self::empty(),
@@ -295,10 +318,12 @@ impl DescribeAliasRequest {
         DescribeAliasRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the alias.
     pub fn alias(&self) -> &str {
         &self.alias
     }
@@ -322,16 +347,19 @@ pub struct DescribeAliasRequestBuilder {
 }
 
 impl DescribeAliasRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the alias and returns the updated value.
     pub fn alias(mut self, value: impl Into<String>) -> Self {
         self.value.alias = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<DescribeAliasRequest> {
         required("alias", &self.value.alias)?;
         Ok(self.value)
@@ -357,6 +385,7 @@ impl ListAliasesRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> ListAliasesRequestBuilder {
         ListAliasesRequestBuilder {
             value: Self::empty(),
@@ -368,10 +397,12 @@ impl ListAliasesRequest {
         ListAliasesRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
@@ -395,16 +426,19 @@ pub struct ListAliasesRequestBuilder {
 }
 
 impl ListAliasesRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<ListAliasesRequest> {
         Ok(self.value)
     }

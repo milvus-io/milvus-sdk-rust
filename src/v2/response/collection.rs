@@ -59,6 +59,7 @@ impl DescribeCollectionResponse {
         }
     }
 
+    /// Returns the description.
     pub fn description(&self) -> &CollectionDesc {
         &self.description
     }
@@ -89,11 +90,13 @@ pub(crate) struct DescribeCollectionResponseBuilder {
 
 #[cfg(test)]
 impl DescribeCollectionResponseBuilder {
+    /// Sets the description and returns the updated value.
     pub fn description(mut self, value: CollectionDesc) -> Self {
         self.value.description = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> DescribeCollectionResponse {
         self.value
     }
@@ -132,6 +135,7 @@ impl BatchDescribeCollectionsResponse {
         }
     }
 
+    /// Returns the descriptions.
     pub fn descriptions(&self) -> &[CollectionDesc] {
         &self.descriptions
     }
@@ -176,11 +180,13 @@ pub(crate) struct BatchDescribeCollectionsResponseBuilder {
 
 #[cfg(test)]
 impl BatchDescribeCollectionsResponseBuilder {
+    /// Sets the descriptions and returns the updated value.
     pub fn descriptions(mut self, value: Vec<CollectionDesc>) -> Self {
         self.value.descriptions = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> BatchDescribeCollectionsResponse {
         self.value
     }
@@ -219,6 +225,7 @@ impl DescribeReplicasResponse {
         }
     }
 
+    /// Returns the replicas.
     pub fn replicas(&self) -> &[ReplicaInfo] {
         &self.replicas
     }
@@ -270,11 +277,13 @@ pub(crate) struct DescribeReplicasResponseBuilder {
 
 #[cfg(test)]
 impl DescribeReplicasResponseBuilder {
+    /// Sets the replicas and returns the updated value.
     pub fn replicas(mut self, value: Vec<ReplicaInfo>) -> Self {
         self.value.replicas = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> DescribeReplicasResponse {
         self.value
     }
@@ -313,6 +322,7 @@ impl GetCollectionStatsResponse {
         }
     }
 
+    /// Returns the statistics.
     pub fn statistics(&self) -> &HashMap<String, String> {
         &self.statistics
     }
@@ -343,11 +353,13 @@ pub(crate) struct GetCollectionStatsResponseBuilder {
 
 #[cfg(test)]
 impl GetCollectionStatsResponseBuilder {
+    /// Sets the statistics and returns the updated value.
     pub fn statistics(mut self, value: HashMap<String, String>) -> Self {
         self.value.statistics = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> GetCollectionStatsResponse {
         self.value
     }
@@ -388,10 +400,12 @@ impl GetLoadStateResponse {
         }
     }
 
+    /// Returns the state.
     pub fn state(&self) -> LoadState {
         self.state
     }
 
+    /// Returns the progress.
     pub fn progress(&self) -> i64 {
         self.progress
     }
@@ -423,16 +437,19 @@ pub(crate) struct GetLoadStateResponseBuilder {
 
 #[cfg(test)]
 impl GetLoadStateResponseBuilder {
+    /// Sets the state and returns the updated value.
     pub fn state(mut self, value: LoadState) -> Self {
         self.value.state = value;
         self
     }
 
+    /// Sets the progress and returns the updated value.
     pub fn progress(mut self, value: i64) -> Self {
         self.value.progress = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> GetLoadStateResponse {
         self.value
     }
@@ -473,10 +490,12 @@ impl ListCollectionsResponse {
         }
     }
 
+    /// Returns the collection names.
     pub fn collection_names(&self) -> &[String] {
         &self.collection_names
     }
 
+    /// Returns the collections.
     pub fn collections(&self) -> &[CollectionInfo] {
         &self.collections
     }
@@ -558,16 +577,19 @@ pub(crate) struct ListCollectionsResponseBuilder {
 
 #[cfg(test)]
 impl ListCollectionsResponseBuilder {
+    /// Sets the collection names and returns the updated value.
     pub fn collection_names(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.collection_names = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the collections and returns the updated value.
     pub fn collections(mut self, value: Vec<CollectionInfo>) -> Self {
         self.value.collections = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> ListCollectionsResponse {
         self.value
     }
@@ -602,6 +624,7 @@ impl HasCollectionResponse {
         }
     }
 
+    /// Returns the exists.
     pub fn exists(&self) -> bool {
         self.0
     }
@@ -626,11 +649,13 @@ pub(crate) struct HasCollectionResponseBuilder {
 
 #[cfg(test)]
 impl HasCollectionResponseBuilder {
+    /// Sets the has and returns the updated value.
     pub fn has(mut self, value: bool) -> Self {
         self.value.0 = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> HasCollectionResponse {
         self.value
     }

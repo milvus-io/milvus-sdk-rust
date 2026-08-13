@@ -52,6 +52,7 @@ impl ListDatabasesResponse {
         }
     }
 
+    /// Returns the database names.
     pub fn database_names(&self) -> &[String] {
         &self.database_names
     }
@@ -82,11 +83,13 @@ pub(crate) struct ListDatabasesResponseBuilder {
 
 #[cfg(test)]
 impl ListDatabasesResponseBuilder {
+    /// Sets the database names and returns the updated value.
     pub fn database_names(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.database_names = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> ListDatabasesResponse {
         self.value
     }
@@ -131,18 +134,22 @@ impl DescribeDatabaseResponse {
         }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &str {
         &self.database_name
     }
 
+    /// Returns the database id.
     pub fn database_id(&self) -> i64 {
         self.database_id
     }
 
+    /// Returns the created timestamp.
     pub fn created_timestamp(&self) -> u64 {
         self.created_timestamp
     }
 
+    /// Returns the properties.
     pub fn properties(&self) -> &HashMap<String, String> {
         &self.properties
     }
@@ -180,26 +187,31 @@ pub(crate) struct DescribeDatabaseResponseBuilder {
 
 #[cfg(test)]
 impl DescribeDatabaseResponseBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = value.into();
         self
     }
 
+    /// Sets the database id and returns the updated value.
     pub fn database_id(mut self, value: i64) -> Self {
         self.value.database_id = value;
         self
     }
 
+    /// Sets the created timestamp and returns the updated value.
     pub fn created_timestamp(mut self, value: u64) -> Self {
         self.value.created_timestamp = value;
         self
     }
 
+    /// Sets the properties and returns the updated value.
     pub fn properties(mut self, value: HashMap<String, String>) -> Self {
         self.value.properties = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> DescribeDatabaseResponse {
         self.value
     }

@@ -60,6 +60,7 @@ pub struct FieldPartialUpdateOp {
 }
 
 impl FieldPartialUpdateOp {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             field_name: String::new(),
@@ -67,30 +68,36 @@ impl FieldPartialUpdateOp {
         }
     }
 
+    /// Sets the field name and returns the updated value.
     pub fn field_name(mut self, value: impl Into<String>) -> Self {
         self.field_name = value.into();
         self
     }
 
+    /// Sets the field name and returns this value for further mutation.
     pub fn set_field_name(&mut self, value: impl Into<String>) -> &mut Self {
         self.field_name = value.into();
         self
     }
 
+    /// Returns the configured field name.
     pub fn get_field_name(&self) -> &str {
         &self.field_name
     }
 
+    /// Sets the op type and returns the updated value.
     pub fn op_type(mut self, value: FieldPartialUpdateOpType) -> Self {
         self.op_type = value;
         self
     }
 
+    /// Sets the op type and returns this value for further mutation.
     pub fn set_op_type(&mut self, value: FieldPartialUpdateOpType) -> &mut Self {
         self.op_type = value;
         self
     }
 
+    /// Returns the configured op type.
     pub fn get_op_type(&self) -> FieldPartialUpdateOpType {
         self.op_type
     }

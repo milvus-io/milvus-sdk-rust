@@ -16,8 +16,23 @@
 
 //! V2 request objects, grouped by Milvus functional area.
 //!
-//! Public requests are SDK domain objects. Generated protobuf messages are
-//! created only by crate-private conversion methods in each area module.
+//! Build requests with the associated `RequestType::builder()` function, set the fields needed by
+//! the operation, and finish with `build()?`. Validation happens before an RPC is sent.
+//!
+//! ```
+//! # use milvus::v2::prelude::*;
+//! let request = QueryRequest::builder()
+//!     .collection_name("books")
+//!     .filter("id > 0")
+//!     .output_fields(["title"])
+//!     .limit(10)
+//!     .build()?;
+//! # Ok::<(), milvus::v2::error::Error>(())
+//! ```
+//!
+//! Public requests are SDK domain objects. Generated protobuf messages are created only by
+//! crate-private conversion methods in each area module. Use [`crate::v2::response`] for the
+//! corresponding output types.
 
 pub mod alias;
 pub mod cdc;

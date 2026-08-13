@@ -23,7 +23,17 @@ MILVUS_GRPC_PORT="${MILVUS_GRPC_PORT:-29530}"
 MILVUS_HEALTH_PORT="${MILVUS_HEALTH_PORT:-29091}"
 TUTORIAL_TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT_DIR/target/tutorials}"
 MILVUS_CONTAINER_ID=""
+USE_LOCAL_SDK=false
 export MILVUS_URI="${MILVUS_URI:-http://localhost:$MILVUS_GRPC_PORT}"
+
+if [[ "${1:-}" == "--local-sdk" ]]; then
+  USE_LOCAL_SDK=true
+  shift
+fi
+if [[ "$#" -ne 0 ]]; then
+  echo "Usage: $0 [--local-sdk]" >&2
+  exit 1
+fi
 
 cleanup_resources() {
   local status="$1"
@@ -85,5 +95,11 @@ for manifest in tutorial/*/Cargo.toml; do
     echo "==> RBAC note: the default tutorial server does not enable authorization; RBAC calls may run, but permission-denial behavior is not validated."
   fi
   echo "==> Running ${manifest%/Cargo.toml}"
-  CARGO_TARGET_DIR="$TUTORIAL_TARGET_DIR" cargo run --manifest-path "$manifest"
+  if [[ "$USE_LOCAL_SDK" == "true" ]]; then
+    CARGO_TARGET_DIR="$TUTORIAL_TARGET_DIR" \
+      cargo run --manifest-path "$manifest" \
+        --config "patch.crates-io.milvus-sdk-rust.path='$ROOT_DIR'"
+  else
+    CARGO_TARGET_DIR="$TUTORIAL_TARGET_DIR" cargo run --manifest-path "$manifest"
+  fi
 done

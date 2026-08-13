@@ -44,6 +44,7 @@ impl UpdateReplicateConfigurationRequest {
 }
 
 impl UpdateReplicateConfigurationRequest {
+    /// Creates a builder for this request.
     pub fn builder() -> UpdateReplicateConfigurationRequestBuilder {
         UpdateReplicateConfigurationRequestBuilder {
             value: Self::empty(),
@@ -55,10 +56,12 @@ impl UpdateReplicateConfigurationRequest {
         UpdateReplicateConfigurationRequestBuilder { value: self }
     }
 
+    /// Returns the configuration.
     pub fn configuration(&self) -> &ReplicateConfiguration {
         &self.configuration
     }
 
+    /// Returns whether the request should force promote.
     pub fn should_force_promote(&self) -> bool {
         self.force_promote
     }
@@ -81,16 +84,19 @@ pub struct UpdateReplicateConfigurationRequestBuilder {
 }
 
 impl UpdateReplicateConfigurationRequestBuilder {
+    /// Sets the configuration and returns the updated value.
     pub fn configuration(mut self, value: ReplicateConfiguration) -> Self {
         self.value.configuration = value;
         self
     }
 
+    /// Sets the force promote and returns the updated value.
     pub fn force_promote(mut self, value: bool) -> Self {
         self.value.force_promote = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<UpdateReplicateConfigurationRequest> {
         Ok(self.value)
     }
@@ -105,6 +111,7 @@ impl UpdateReplicateConfigurationRequestBuilder {
 pub struct GetReplicateConfigurationRequest;
 
 impl GetReplicateConfigurationRequest {
+    /// Creates a builder for this request.
     pub fn builder() -> GetReplicateConfigurationRequestBuilder {
         GetReplicateConfigurationRequestBuilder
     }
@@ -127,6 +134,7 @@ impl GetReplicateConfigurationRequest {
 pub struct GetReplicateConfigurationRequestBuilder;
 
 impl GetReplicateConfigurationRequestBuilder {
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<GetReplicateConfigurationRequest> {
         Ok(GetReplicateConfigurationRequest)
     }
@@ -151,6 +159,7 @@ impl GetReplicateInfoRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> GetReplicateInfoRequestBuilder {
         GetReplicateInfoRequestBuilder {
             value: Self::empty(),
@@ -162,10 +171,12 @@ impl GetReplicateInfoRequest {
         GetReplicateInfoRequestBuilder { value: self }
     }
 
+    /// Returns the source cluster id.
     pub fn source_cluster_id(&self) -> &str {
         &self.source_cluster_id
     }
 
+    /// Returns the target physical channel.
     pub fn target_physical_channel(&self) -> &str {
         &self.target_physical_channel
     }
@@ -188,16 +199,19 @@ pub struct GetReplicateInfoRequestBuilder {
 }
 
 impl GetReplicateInfoRequestBuilder {
+    /// Sets the source cluster id and returns the updated value.
     pub fn source_cluster_id(mut self, value: impl Into<String>) -> Self {
         self.value.source_cluster_id = value.into();
         self
     }
 
+    /// Sets the target physical channel and returns the updated value.
     pub fn target_physical_channel(mut self, value: impl Into<String>) -> Self {
         self.value.target_physical_channel = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<GetReplicateInfoRequest> {
         required("source_cluster_id", &self.value.source_cluster_id)?;
         required(
@@ -235,6 +249,7 @@ impl DumpMessagesRequest {
 }
 
 impl DumpMessagesRequest {
+    /// Creates a builder for this request.
     pub fn builder() -> DumpMessagesRequestBuilder {
         DumpMessagesRequestBuilder {
             value: Self::empty(),
@@ -246,22 +261,27 @@ impl DumpMessagesRequest {
         DumpMessagesRequestBuilder { value: self }
     }
 
+    /// Returns the physical channel.
     pub fn physical_channel(&self) -> &str {
         &self.physical_channel
     }
 
+    /// Returns the start message id.
     pub fn start_message_id(&self) -> &ReplicateMessageId {
         &self.start_message_id
     }
 
+    /// Returns the start time tick.
     pub fn start_time_tick(&self) -> u64 {
         self.start_time_tick
     }
 
+    /// Returns the end time tick.
     pub fn end_time_tick(&self) -> u64 {
         self.end_time_tick
     }
 
+    /// Returns whether the request should include start message.
     pub fn should_include_start_message(&self) -> bool {
         self.include_start_message
     }
@@ -290,31 +310,37 @@ pub struct DumpMessagesRequestBuilder {
 }
 
 impl DumpMessagesRequestBuilder {
+    /// Sets the physical channel and returns the updated value.
     pub fn physical_channel(mut self, value: impl Into<String>) -> Self {
         self.value.physical_channel = value.into();
         self
     }
 
+    /// Sets the start message id and returns the updated value.
     pub fn start_message_id(mut self, value: ReplicateMessageId) -> Self {
         self.value.start_message_id = value;
         self
     }
 
+    /// Sets the start time tick and returns the updated value.
     pub fn start_time_tick(mut self, value: u64) -> Self {
         self.value.start_time_tick = value;
         self
     }
 
+    /// Sets the end time tick and returns the updated value.
     pub fn end_time_tick(mut self, value: u64) -> Self {
         self.value.end_time_tick = value;
         self
     }
 
+    /// Sets the include start message and returns the updated value.
     pub fn include_start_message(mut self, value: bool) -> Self {
         self.value.include_start_message = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<DumpMessagesRequest> {
         required("physical_channel", &self.value.physical_channel)?;
         required("start_message_id.id", self.value.start_message_id.get_id())?;

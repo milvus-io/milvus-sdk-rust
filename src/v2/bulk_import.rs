@@ -69,13 +69,26 @@ const MAX_ERROR_BODY_CHARS: usize = 1_024;
 #[non_exhaustive]
 pub enum BulkImportError {
     #[error("bulk-import HTTP transport failed: {0}")]
+    /// The HTTP client could not send or receive the request.
     Transport(String),
 
     #[error("bulk-import HTTP request returned status {status}: {body}")]
-    HttpStatus { status: u16, body: String },
+    /// The HTTP endpoint rejected the request.
+    HttpStatus {
+        /// HTTP response status code.
+        status: u16,
+        /// Bounded response body returned by the endpoint.
+        body: String,
+    },
 
     #[error("bulk-import server error (code={code}, message={message})")]
-    Server { code: i64, message: String },
+    /// The endpoint returned a Milvus server-level error envelope.
+    Server {
+        /// Milvus server error code.
+        code: i64,
+        /// Human-readable server error message.
+        message: String,
+    },
 }
 
 impl BulkImportError {
@@ -133,6 +146,7 @@ impl fmt::Debug for BulkImportConfig {
 }
 
 impl BulkImportConfig {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             url: String::new(),
@@ -146,30 +160,36 @@ impl BulkImportConfig {
         }
     }
 
+    /// Sets the url and returns the updated value.
     pub fn url(mut self, value: impl Into<String>) -> Self {
         self.url = value.into();
         self
     }
 
+    /// Sets the url and returns this value for further mutation.
     pub fn set_url(&mut self, value: impl Into<String>) -> &mut Self {
         self.url = value.into();
         self
     }
 
+    /// Returns the configured url.
     pub fn get_url(&self) -> &str {
         &self.url
     }
 
+    /// Sets the api key and returns the updated value.
     pub fn api_key(mut self, value: impl Into<String>) -> Self {
         self.api_key = value.into();
         self
     }
 
+    /// Sets the api key and returns this value for further mutation.
     pub fn set_api_key(&mut self, value: impl Into<String>) -> &mut Self {
         self.api_key = value.into();
         self
     }
 
+    /// Returns the configured api key.
     pub fn get_api_key(&self) -> &str {
         &self.api_key
     }
@@ -182,11 +202,13 @@ impl BulkImportConfig {
         self
     }
 
+    /// Sets the timeout and returns this value for further mutation.
     pub fn set_timeout(&mut self, value: Duration) -> &mut Self {
         self.timeout = value;
         self
     }
 
+    /// Returns the configured timeout.
     pub fn get_timeout(&self) -> Duration {
         self.timeout
     }
@@ -197,11 +219,13 @@ impl BulkImportConfig {
         self
     }
 
+    /// Sets the verify tls and returns this value for further mutation.
     pub fn set_verify_tls(&mut self, value: bool) -> &mut Self {
         self.verify_tls = value;
         self
     }
 
+    /// Returns the configured verify tls.
     pub fn get_verify_tls(&self) -> bool {
         self.verify_tls
     }
@@ -214,11 +238,13 @@ impl BulkImportConfig {
         self
     }
 
+    /// Sets the ca certificate path and returns this value for further mutation.
     pub fn set_ca_certificate_path(&mut self, value: impl Into<PathBuf>) -> &mut Self {
         self.ca_certificate_path = Some(value.into());
         self
     }
 
+    /// Returns the configured ca certificate path.
     pub fn get_ca_certificate_path(&self) -> Option<&PathBuf> {
         self.ca_certificate_path.as_ref()
     }
@@ -231,11 +257,13 @@ impl BulkImportConfig {
         self
     }
 
+    /// Sets the client identity path and returns this value for further mutation.
     pub fn set_client_identity_path(&mut self, value: impl Into<PathBuf>) -> &mut Self {
         self.client_identity_path = Some(value.into());
         self
     }
 
+    /// Returns the configured client identity path.
     pub fn get_client_identity_path(&self) -> Option<&PathBuf> {
         self.client_identity_path.as_ref()
     }
@@ -246,11 +274,13 @@ impl BulkImportConfig {
         self
     }
 
+    /// Sets the client certificate path and returns this value for further mutation.
     pub fn set_client_certificate_path(&mut self, value: impl Into<PathBuf>) -> &mut Self {
         self.client_certificate_path = Some(value.into());
         self
     }
 
+    /// Returns the configured client certificate path.
     pub fn get_client_certificate_path(&self) -> Option<&PathBuf> {
         self.client_certificate_path.as_ref()
     }
@@ -261,11 +291,13 @@ impl BulkImportConfig {
         self
     }
 
+    /// Sets the client private key path and returns this value for further mutation.
     pub fn set_client_private_key_path(&mut self, value: impl Into<PathBuf>) -> &mut Self {
         self.client_private_key_path = Some(value.into());
         self
     }
 
+    /// Returns the configured client private key path.
     pub fn get_client_private_key_path(&self) -> Option<&PathBuf> {
         self.client_private_key_path.as_ref()
     }
@@ -496,28 +528,34 @@ impl fmt::Debug for BulkImportRequest {
 }
 
 impl BulkImportRequest {
+    /// Creates a builder for this request.
     pub fn builder() -> BulkImportRequestBuilder {
         BulkImportRequestBuilder {
             value: Self::empty(),
         }
     }
 
+    /// Converts this request into a builder while preserving its values.
     pub fn into_builder(self) -> BulkImportRequestBuilder {
         BulkImportRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &str {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the partition name.
     pub fn partition_name(&self) -> &str {
         &self.partition_name
     }
 
+    /// Returns the files.
     pub fn files(&self) -> &[Vec<String>] {
         &self.files
     }
@@ -529,42 +567,52 @@ impl BulkImportRequest {
         &self.object_url
     }
 
+    /// Returns the object urls.
     pub fn object_urls(&self) -> &[Vec<String>] {
         &self.object_urls
     }
 
+    /// Returns the cluster id.
     pub fn cluster_id(&self) -> &str {
         &self.cluster_id
     }
 
+    /// Returns the project id.
     pub fn project_id(&self) -> &str {
         &self.project_id
     }
 
+    /// Returns the region id.
     pub fn region_id(&self) -> &str {
         &self.region_id
     }
 
+    /// Returns the access key.
     pub fn access_key(&self) -> &str {
         &self.access_key
     }
 
+    /// Returns the secret key.
     pub fn secret_key(&self) -> &str {
         &self.secret_key
     }
 
+    /// Returns the token.
     pub fn token(&self) -> &str {
         &self.token
     }
 
+    /// Returns the volume name.
     pub fn volume_name(&self) -> &str {
         &self.volume_name
     }
 
+    /// Returns the data paths.
     pub fn data_paths(&self) -> &[Vec<String>] {
         &self.data_paths
     }
 
+    /// Returns the options.
     pub fn options(&self) -> &HashMap<String, Value> {
         &self.options
     }
@@ -625,16 +673,19 @@ pub struct BulkImportRequestBuilder {
 }
 
 impl BulkImportRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = value.into();
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the partition name and returns the updated value.
     pub fn partition_name(mut self, value: impl Into<String>) -> Self {
         self.value.partition_name = value.into();
         self
@@ -677,6 +728,7 @@ impl BulkImportRequestBuilder {
         self
     }
 
+    /// Sets the object urls and returns the updated value.
     pub fn object_urls<I, G, S>(mut self, values: I) -> Self
     where
         I: IntoIterator<Item = G>,
@@ -687,6 +739,7 @@ impl BulkImportRequestBuilder {
         self
     }
 
+    /// Sets the object url group and returns the updated value.
     pub fn object_url_group<I, S>(mut self, values: I) -> Self
     where
         I: IntoIterator<Item = S>,
@@ -698,41 +751,49 @@ impl BulkImportRequestBuilder {
         self
     }
 
+    /// Sets the cluster id and returns the updated value.
     pub fn cluster_id(mut self, value: impl Into<String>) -> Self {
         self.value.cluster_id = value.into();
         self
     }
 
+    /// Sets the project id and returns the updated value.
     pub fn project_id(mut self, value: impl Into<String>) -> Self {
         self.value.project_id = value.into();
         self
     }
 
+    /// Sets the region id and returns the updated value.
     pub fn region_id(mut self, value: impl Into<String>) -> Self {
         self.value.region_id = value.into();
         self
     }
 
+    /// Sets the access key and returns the updated value.
     pub fn access_key(mut self, value: impl Into<String>) -> Self {
         self.value.access_key = value.into();
         self
     }
 
+    /// Sets the secret key and returns the updated value.
     pub fn secret_key(mut self, value: impl Into<String>) -> Self {
         self.value.secret_key = value.into();
         self
     }
 
+    /// Sets the token and returns the updated value.
     pub fn token(mut self, value: impl Into<String>) -> Self {
         self.value.token = value.into();
         self
     }
 
+    /// Sets the volume name and returns the updated value.
     pub fn volume_name(mut self, value: impl Into<String>) -> Self {
         self.value.volume_name = value.into();
         self
     }
 
+    /// Sets the data paths and returns the updated value.
     pub fn data_paths<I, G, S>(mut self, values: I) -> Self
     where
         I: IntoIterator<Item = G>,
@@ -743,6 +804,7 @@ impl BulkImportRequestBuilder {
         self
     }
 
+    /// Sets the data path group and returns the updated value.
     pub fn data_path_group<I, S>(mut self, values: I) -> Self
     where
         I: IntoIterator<Item = S>,
@@ -754,16 +816,19 @@ impl BulkImportRequestBuilder {
         self
     }
 
+    /// Sets the options and returns the updated value.
     pub fn options(mut self, value: HashMap<String, Value>) -> Self {
         self.value.options = value;
         self
     }
 
+    /// Sets the option and returns the updated value.
     pub fn option(mut self, key: impl Into<String>, value: impl Into<Value>) -> Self {
         self.value.options.insert(key.into(), value.into());
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<BulkImportRequest> {
         required("collection_name", &self.value.collection_name)?;
         validate_cloud_target(
@@ -830,40 +895,49 @@ pub struct ListImportJobsRequest {
 }
 
 impl ListImportJobsRequest {
+    /// Creates a builder for this request.
     pub fn builder() -> ListImportJobsRequestBuilder {
         ListImportJobsRequestBuilder {
             value: Self::empty(),
         }
     }
 
+    /// Converts this request into a builder while preserving its values.
     pub fn into_builder(self) -> ListImportJobsRequestBuilder {
         ListImportJobsRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &str {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the cluster id.
     pub fn cluster_id(&self) -> &str {
         &self.cluster_id
     }
 
+    /// Returns the project id.
     pub fn project_id(&self) -> &str {
         &self.project_id
     }
 
+    /// Returns the region id.
     pub fn region_id(&self) -> &str {
         &self.region_id
     }
 
+    /// Returns the page size.
     pub fn page_size(&self) -> u32 {
         self.page_size
     }
 
+    /// Returns the current page.
     pub fn current_page(&self) -> u32 {
         self.current_page
     }
@@ -903,41 +977,49 @@ pub struct ListImportJobsRequestBuilder {
 }
 
 impl ListImportJobsRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = value.into();
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the cluster id and returns the updated value.
     pub fn cluster_id(mut self, value: impl Into<String>) -> Self {
         self.value.cluster_id = value.into();
         self
     }
 
+    /// Sets the project id and returns the updated value.
     pub fn project_id(mut self, value: impl Into<String>) -> Self {
         self.value.project_id = value.into();
         self
     }
 
+    /// Sets the region id and returns the updated value.
     pub fn region_id(mut self, value: impl Into<String>) -> Self {
         self.value.region_id = value.into();
         self
     }
 
+    /// Sets the page size and returns the updated value.
     pub fn page_size(mut self, value: u32) -> Self {
         self.value.page_size = value;
         self
     }
 
+    /// Sets the current page and returns the updated value.
     pub fn current_page(mut self, value: u32) -> Self {
         self.value.current_page = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<ListImportJobsRequest> {
         validate_cloud_target(
             &self.value.cluster_id,
@@ -975,32 +1057,39 @@ pub struct GetImportProgressRequest {
 }
 
 impl GetImportProgressRequest {
+    /// Creates a builder for this request.
     pub fn builder() -> GetImportProgressRequestBuilder {
         GetImportProgressRequestBuilder {
             value: Self::empty(),
         }
     }
 
+    /// Converts this request into a builder while preserving its values.
     pub fn into_builder(self) -> GetImportProgressRequestBuilder {
         GetImportProgressRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &str {
         &self.database_name
     }
 
+    /// Returns the job id.
     pub fn job_id(&self) -> &str {
         &self.job_id
     }
 
+    /// Returns the cluster id.
     pub fn cluster_id(&self) -> &str {
         &self.cluster_id
     }
 
+    /// Returns the project id.
     pub fn project_id(&self) -> &str {
         &self.project_id
     }
 
+    /// Returns the region id.
     pub fn region_id(&self) -> &str {
         &self.region_id
     }
@@ -1035,31 +1124,37 @@ pub struct GetImportProgressRequestBuilder {
 }
 
 impl GetImportProgressRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = value.into();
         self
     }
 
+    /// Sets the job id and returns the updated value.
     pub fn job_id(mut self, value: impl Into<String>) -> Self {
         self.value.job_id = value.into();
         self
     }
 
+    /// Sets the cluster id and returns the updated value.
     pub fn cluster_id(mut self, value: impl Into<String>) -> Self {
         self.value.cluster_id = value.into();
         self
     }
 
+    /// Sets the project id and returns the updated value.
     pub fn project_id(mut self, value: impl Into<String>) -> Self {
         self.value.project_id = value.into();
         self
     }
 
+    /// Sets the region id and returns the updated value.
     pub fn region_id(mut self, value: impl Into<String>) -> Self {
         self.value.region_id = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<GetImportProgressRequest> {
         required("job_id", &self.value.job_id)?;
         validate_cloud_target(
@@ -1084,10 +1179,12 @@ pub struct BulkImportResponse {
 }
 
 impl BulkImportResponse {
+    /// Returns the code.
     pub fn code(&self) -> i64 {
         self.code
     }
 
+    /// Returns the message.
     pub fn message(&self) -> &str {
         &self.message
     }

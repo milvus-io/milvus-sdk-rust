@@ -22,7 +22,7 @@ use crate::v2::error::Result;
 use crate::v2::{request, response};
 
 impl ClientV2 {
-    /// Create a partition in a collection.
+    /// Creates a named partition in an existing collection.
     pub async fn create_partition(
         &self,
         request: request::partition::CreatePartitionRequest,
@@ -37,7 +37,7 @@ impl ClientV2 {
         self.status(status)
     }
 
-    /// Drop a partition, with its index and segments.
+    /// Drops a partition and its associated index and segment data.
     pub async fn drop_partition(
         &self,
         request: request::partition::DropPartitionRequest,
@@ -52,7 +52,7 @@ impl ClientV2 {
         self.status(status)
     }
 
-    /// Check existence of a partition.
+    /// Checks whether a named partition exists.
     pub async fn has_partition(
         &self,
         request: request::partition::HasPartitionRequest,
@@ -63,7 +63,7 @@ impl ClientV2 {
         Ok(response::partition::HasPartitionResponse(response.value))
     }
 
-    /// List partitions of a collection.
+    /// Lists partitions defined for a collection.
     pub async fn list_partitions(
         &self,
         request: request::partition::ListPartitionsRequest,
@@ -74,7 +74,10 @@ impl ClientV2 {
         response::partition::ListPartitionsResponse::from_proto(response)
     }
 
-    /// Load specific partitions data of one collection into query nodes.
+    /// Loads selected partitions into query-node memory.
+    ///
+    /// A synchronous request polls load state until completion; an asynchronous request returns
+    /// once the server accepts the load operation.
     pub async fn load_partitions(
         &self,
         mut request: request::partition::LoadPartitionsRequest,
@@ -109,7 +112,7 @@ impl ClientV2 {
         .await
     }
 
-    /// Release specific partitions data of one collection into query nodes.
+    /// Releases selected partitions from query-node memory without dropping their data.
     pub async fn release_partitions(
         &self,
         request: request::partition::ReleasePartitionsRequest,
@@ -124,7 +127,7 @@ impl ClientV2 {
         self.status(status)
     }
 
-    /// Returns statistics for a partition.
+    /// Returns server-reported statistics for a partition, including its row count.
     pub async fn get_partition_stats(
         &self,
         request: request::partition::GetPartitionStatsRequest,

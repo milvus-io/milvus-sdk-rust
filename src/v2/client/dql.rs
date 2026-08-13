@@ -22,7 +22,12 @@ use crate::v2::error::{Error, Result};
 use crate::v2::{request, response};
 
 impl ClientV2 {
-    /// Query with a set of criteria, and results in a list of records that match the query exactly.
+    /// Queries entities that match a filter expression or a typed primary-key selection.
+    ///
+    /// Output fields and consistency are controlled by the request. Session consistency uses the
+    /// endpoint/database/collection timestamp recorded by successful DML; other consistency levels
+    /// use the corresponding Milvus guarantee semantics. The response owns decoded rows, while
+    /// its row iterator provides a borrowing traversal for allocation-sensitive callers.
     pub async fn query(
         &self,
         request: request::dql::QueryRequest,
@@ -43,7 +48,11 @@ impl ClientV2 {
         response::dql::QueryResponse::from_proto(response)
     }
 
-    /// Query with primary keys, and results in a list of records.
+    /// Retrieves entities by their primary-key values.
+    ///
+    /// The client resolves the collection's primary-key field from its schema, so callers provide
+    /// IDs rather than a protobuf field name. The request cannot combine IDs with a filter; use
+    /// [`ClientV2::query`] for expression-based selection.
     pub async fn get(
         &self,
         request: request::dql::GetRequest,
@@ -60,7 +69,11 @@ impl ClientV2 {
         response::dql::QueryResponse::from_proto(response)
     }
 
-    /// Search a collection based on the given parameters and return results.
+    /// Searches vector fields and returns ranked hits for each query vector.
+    ///
+    /// The collection must have a compatible vector index or be loaded according to the server's
+    /// search requirements. Search consistency follows the request and the shared DML timestamp
+    /// cache; decoded hits expose IDs, scores, and requested output fields.
     pub async fn search(
         &self,
         request: request::dql::SearchRequest,
@@ -76,7 +89,10 @@ impl ClientV2 {
         response::dql::SearchResponse::from_proto(response)
     }
 
-    /// Hybrid search a collection based on the given parameters and return results.
+    /// Executes multiple vector searches and combines them with the requested reranking strategy.
+    ///
+    /// Each child search must use compatible collection fields and query-vector dimensions. The
+    /// returned response preserves one result set per query vector after server-side reranking.
     pub async fn hybrid_search(
         &self,
         request: request::dql::HybridSearchRequest,

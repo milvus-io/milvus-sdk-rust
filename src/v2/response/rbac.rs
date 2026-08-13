@@ -53,6 +53,7 @@ impl ListUsersResponse {
         }
     }
 
+    /// Returns the usernames.
     pub fn usernames(&self) -> &[String] {
         &self.usernames
     }
@@ -83,11 +84,13 @@ pub(crate) struct ListUsersResponseBuilder {
 
 #[cfg(test)]
 impl ListUsersResponseBuilder {
+    /// Sets the usernames and returns the updated value.
     pub fn usernames(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.usernames = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> ListUsersResponse {
         self.value
     }
@@ -126,6 +129,7 @@ impl ListRolesResponse {
         }
     }
 
+    /// Returns the role names.
     pub fn role_names(&self) -> &[String] {
         &self.role_names
     }
@@ -164,11 +168,13 @@ pub(crate) struct ListRolesResponseBuilder {
 
 #[cfg(test)]
 impl ListRolesResponseBuilder {
+    /// Sets the role names and returns the updated value.
     pub fn role_names(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.role_names = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> ListRolesResponse {
         self.value
     }
@@ -209,6 +215,7 @@ impl DescribeRoleResponse {
         }
     }
 
+    /// Returns the description.
     pub fn description(&self) -> &RoleDescription {
         &self.description
     }
@@ -282,11 +289,13 @@ pub(crate) struct DescribeRoleResponseBuilder {
 
 #[cfg(test)]
 impl DescribeRoleResponseBuilder {
+    /// Sets the description and returns the updated value.
     pub fn description(mut self, value: RoleDescription) -> Self {
         self.value.description = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> DescribeRoleResponse {
         self.value
     }
@@ -323,6 +332,7 @@ impl DescribeUserResponse {
         }
     }
 
+    /// Returns the users.
     pub fn users(&self) -> &[UserDescription] {
         &self.users
     }
@@ -366,11 +376,13 @@ pub(crate) struct DescribeUserResponseBuilder {
 
 #[cfg(test)]
 impl DescribeUserResponseBuilder {
+    /// Sets the users and returns the updated value.
     pub fn users(mut self, value: Vec<UserDescription>) -> Self {
         self.value.users = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> DescribeUserResponse {
         self.value
     }
@@ -407,6 +419,7 @@ impl ListPrivilegeGroupsResponse {
         }
     }
 
+    /// Returns the groups.
     pub fn groups(&self) -> &[PrivilegeGroupInfo] {
         &self.groups
     }
@@ -444,11 +457,13 @@ pub(crate) struct ListPrivilegeGroupsResponseBuilder {
 
 #[cfg(test)]
 impl ListPrivilegeGroupsResponseBuilder {
+    /// Sets the groups and returns the updated value.
     pub fn groups(mut self, value: Vec<PrivilegeGroupInfo>) -> Self {
         self.value.groups = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> ListPrivilegeGroupsResponse {
         self.value
     }

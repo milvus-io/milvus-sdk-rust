@@ -71,15 +71,19 @@ impl ServerError {
 #[non_exhaustive]
 pub enum ConversionError {
     #[error("failed to encode protobuf data: {0}")]
+    /// Represents the ProtobufEncode case.
     ProtobufEncode(#[source] prost::EncodeError),
 
     #[error("failed to decode protobuf data: {0}")]
+    /// Represents the ProtobufDecode case.
     ProtobufDecode(#[source] prost::DecodeError),
 
     #[error("JSON conversion failed: {0}")]
+    /// Represents the Json case.
     Json(#[source] Arc<serde_json::Error>),
 
     #[error("{0}")]
+    /// Represents the Value case.
     Value(String),
 }
 
@@ -122,37 +126,49 @@ impl ValidationError {
 #[non_exhaustive]
 pub enum Error {
     #[error("gRPC error: {0}")]
+    /// Represents the Grpc case.
     Grpc(#[from] GrpcError),
 
     #[error(transparent)]
+    /// Represents the Server case.
     Server(#[from] ServerError),
 
     #[error(transparent)]
+    /// Represents the Conversion case.
     Conversion(#[from] ConversionError),
 
     #[error(transparent)]
+    /// Represents the Validation case.
     Validation(#[from] ValidationError),
 
     #[error(transparent)]
+    /// Represents the BulkImport case.
     BulkImport(#[from] BulkImportError),
 
     #[error("operation timed out: {0}")]
+    /// Represents the Timeout case.
     Timeout(String),
 
     #[error("malformed server response: {0}")]
+    /// Represents the MalformedResponse case.
     MalformedResponse(String),
 
     #[error("operation cancelled: {0}")]
+    /// Represents the Cancelled case.
     Cancelled(String),
 
     #[error("RPC retry exhausted after {attempts} attempts: {source}")]
+    /// Represents the RetryExhausted case.
     RetryExhausted {
+        /// Number of transport or server attempts that were made.
         attempts: u32,
         #[source]
+        /// Final error that prevented another retry.
         source: Box<Error>,
     },
 
     #[error("{0}")]
+    /// Represents the Unexpected case.
     Unexpected(String),
 }
 
@@ -191,6 +207,7 @@ impl From<Status> for Error {
     }
 }
 
+/// Public type alias for Result.
 pub type Result<T> = result::Result<T, Error>;
 
 #[allow(deprecated)]

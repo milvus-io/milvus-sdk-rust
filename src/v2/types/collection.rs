@@ -32,10 +32,15 @@ const MAX_ARRAY_CAPACITY: u32 = 4_096;
 #[non_exhaustive]
 pub enum LoadState {
     #[default]
+    /// Represents the NotExist case.
     NotExist,
+    /// Represents the NotLoad case.
     NotLoad,
+    /// Represents the Loading case.
     Loading,
+    /// Represents the Loaded case.
     Loaded,
+    /// Represents the Unknown case.
     Unknown,
 }
 
@@ -58,13 +63,21 @@ impl LoadState {
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum DefaultValue {
+    /// Represents the Bool case.
     Bool(bool),
+    /// Represents the Int32 case.
     Int32(i32),
+    /// Represents the Int64 case.
     Int64(i64),
+    /// Represents the Float case.
     Float(f32),
+    /// Represents the Double case.
     Double(f64),
+    /// Represents the String case.
     String(String),
+    /// Represents the Bytes case.
     Bytes(Vec<u8>),
+    /// Represents the TimestampTz case.
     TimestampTz(i64),
 }
 
@@ -144,6 +157,7 @@ pub struct FieldSchema {
 }
 
 impl FieldSchema {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             name: String::new(),
@@ -161,146 +175,177 @@ impl FieldSchema {
         }
     }
 
+    /// Sets the name and returns the updated value.
     pub fn name(mut self, value: impl Into<String>) -> Self {
         self.name = value.into();
         self
     }
 
+    /// Sets the name and returns this value for further mutation.
     pub fn set_name(&mut self, value: impl Into<String>) -> &mut Self {
         self.name = value.into();
         self
     }
 
+    /// Returns the configured name.
     pub fn get_name(&self) -> &str {
         &self.name
     }
 
+    /// Sets the description and returns the updated value.
     pub fn description(mut self, value: impl Into<String>) -> Self {
         self.description = value.into();
         self
     }
 
+    /// Sets the description and returns this value for further mutation.
     pub fn set_description(&mut self, value: impl Into<String>) -> &mut Self {
         self.description = value.into();
         self
     }
 
+    /// Returns the configured description.
     pub fn get_description(&self) -> &str {
         &self.description
     }
 
+    /// Sets the data type and returns the updated value.
     pub fn data_type(mut self, value: DataType) -> Self {
         self.data_type = value;
         self
     }
 
+    /// Sets the data type and returns this value for further mutation.
     pub fn set_data_type(&mut self, value: DataType) -> &mut Self {
         self.data_type = value;
         self
     }
 
+    /// Returns the configured data type.
     pub fn get_data_type(&self) -> DataType {
         self.data_type
     }
 
+    /// Sets the element type and returns the updated value.
     pub fn element_type(mut self, value: DataType) -> Self {
         self.element_type = Some(value);
         self
     }
 
+    /// Sets the element type and returns this value for further mutation.
     pub fn set_element_type(&mut self, value: DataType) -> &mut Self {
         self.element_type = Some(value);
         self
     }
 
+    /// Returns the configured element type.
     pub fn get_element_type(&self) -> Option<DataType> {
         self.element_type
     }
 
+    /// Sets the primary key and returns the updated value.
     pub fn primary_key(mut self, value: bool) -> Self {
         self.is_primary_key = value;
         self
     }
 
+    /// Sets the primary key and returns this value for further mutation.
     pub fn set_primary_key(&mut self, value: bool) -> &mut Self {
         self.is_primary_key = value;
         self
     }
 
+    /// Returns whether primary key.
     pub fn is_primary_key(&self) -> bool {
         self.is_primary_key
     }
 
+    /// Sets the auto id and returns the updated value.
     pub fn auto_id(mut self, value: bool) -> Self {
         self.auto_id = value;
         self
     }
 
+    /// Sets the auto id and returns this value for further mutation.
     pub fn set_auto_id(&mut self, value: bool) -> &mut Self {
         self.auto_id = value;
         self
     }
 
+    /// Returns whether auto id.
     pub fn is_auto_id(&self) -> bool {
         self.auto_id
     }
 
+    /// Sets the partition key and returns the updated value.
     pub fn partition_key(mut self, enabled: bool) -> Self {
         self.is_partition_key = enabled;
         self
     }
 
+    /// Sets the partition key and returns this value for further mutation.
     pub fn set_partition_key(&mut self, enabled: bool) -> &mut Self {
         self.is_partition_key = enabled;
         self
     }
 
+    /// Returns whether partition key.
     pub fn is_partition_key(&self) -> bool {
         self.is_partition_key
     }
 
+    /// Sets the clustering key and returns the updated value.
     pub fn clustering_key(mut self, enabled: bool) -> Self {
         self.is_clustering_key = enabled;
         self
     }
 
+    /// Sets the clustering key and returns this value for further mutation.
     pub fn set_clustering_key(&mut self, enabled: bool) -> &mut Self {
         self.is_clustering_key = enabled;
         self
     }
 
+    /// Returns whether clustering key.
     pub fn is_clustering_key(&self) -> bool {
         self.is_clustering_key
     }
 
+    /// Sets the nullable and returns the updated value.
     pub fn nullable(mut self, enabled: bool) -> Self {
         self.nullable = enabled;
         self
     }
 
+    /// Sets the nullable and returns this value for further mutation.
     pub fn set_nullable(&mut self, enabled: bool) -> &mut Self {
         self.nullable = enabled;
         self
     }
 
+    /// Returns whether nullable.
     pub fn is_nullable(&self) -> bool {
         self.nullable
     }
 
+    /// Sets the default value and returns the updated value.
     pub fn default_value(mut self, value: DefaultValue) -> Self {
         self.default_value = Some(value);
         self
     }
 
+    /// Sets the default value and returns this value for further mutation.
     pub fn set_default_value(&mut self, value: DefaultValue) -> &mut Self {
         self.default_value = Some(value);
         self
     }
 
+    /// Returns the configured default value.
     pub fn get_default_value(&self) -> &Option<DefaultValue> {
         &self.default_value
     }
 
+    /// Sets the type params and returns the updated value.
     pub fn type_params(mut self, value: HashMap<String, String>) -> Self {
         for (key, value) in value {
             self.type_params.entry(key).or_insert(value);
@@ -308,6 +353,7 @@ impl FieldSchema {
         self
     }
 
+    /// Sets the type params and returns this value for further mutation.
     pub fn set_type_params(&mut self, value: HashMap<String, String>) -> &mut Self {
         for (key, value) in value {
             self.type_params.entry(key).or_insert(value);
@@ -315,24 +361,29 @@ impl FieldSchema {
         self
     }
 
+    /// Returns the configured type params.
     pub fn get_type_params(&self) -> &HashMap<String, String> {
         &self.type_params
     }
 
+    /// Sets the index params and returns the updated value.
     pub fn index_params(mut self, value: HashMap<String, String>) -> Self {
         self.index_params = value;
         self
     }
 
+    /// Sets the index params and returns this value for further mutation.
     pub fn set_index_params(&mut self, value: HashMap<String, String>) -> &mut Self {
         self.index_params = value;
         self
     }
 
+    /// Returns the configured index params.
     pub fn get_index_params(&self) -> &HashMap<String, String> {
         &self.index_params
     }
 
+    /// Sets the dimension and returns the updated value.
     pub fn dimension(mut self, dimension: u32) -> Self {
         if dimension > 0 {
             self.type_params.insert("dim".into(), dimension.to_string());
@@ -340,6 +391,7 @@ impl FieldSchema {
         self
     }
 
+    /// Sets the dimension and returns this value for further mutation.
     pub fn set_dimension(&mut self, dimension: u32) -> &mut Self {
         if dimension > 0 {
             self.type_params.insert("dim".into(), dimension.to_string());
@@ -347,6 +399,7 @@ impl FieldSchema {
         self
     }
 
+    /// Returns the configured dimension.
     pub fn get_dimension(&self) -> u32 {
         self.type_params
             .get("dim")
@@ -354,36 +407,42 @@ impl FieldSchema {
             .unwrap_or_default()
     }
 
+    /// Sets the max length and returns the updated value.
     pub fn max_length(mut self, max_length: u32) -> Self {
         self.type_params
             .insert("max_length".into(), max_length.to_string());
         self
     }
 
+    /// Sets the max length and returns this value for further mutation.
     pub fn set_max_length(&mut self, max_length: u32) -> &mut Self {
         self.type_params
             .insert("max_length".into(), max_length.to_string());
         self
     }
 
+    /// Returns the configured max length.
     pub fn get_max_length(&self) -> u32 {
         self.type_params
             .get("max_length")
             .map_or(65_535, |value| value.parse().unwrap_or_default())
     }
 
+    /// Sets the max capacity and returns the updated value.
     pub fn max_capacity(mut self, max_capacity: u32) -> Self {
         self.type_params
             .insert("max_capacity".into(), max_capacity.to_string());
         self
     }
 
+    /// Sets the max capacity and returns this value for further mutation.
     pub fn set_max_capacity(&mut self, max_capacity: u32) -> &mut Self {
         self.type_params
             .insert("max_capacity".into(), max_capacity.to_string());
         self
     }
 
+    /// Returns the configured max capacity.
     pub fn get_max_capacity(&self) -> u32 {
         self.type_params
             .get("max_capacity")
@@ -391,79 +450,93 @@ impl FieldSchema {
             .unwrap_or_default()
     }
 
+    /// Sets the enable analyzer and returns the updated value.
     pub fn enable_analyzer(mut self, enabled: bool) -> Self {
         self.type_params
             .insert("enable_analyzer".into(), enabled.to_string());
         self
     }
 
+    /// Sets the enable analyzer and returns this value for further mutation.
     pub fn set_enable_analyzer(&mut self, enabled: bool) -> &mut Self {
         self.type_params
             .insert("enable_analyzer".into(), enabled.to_string());
         self
     }
 
+    /// Returns whether analyzer enabled.
     pub fn is_analyzer_enabled(&self) -> bool {
         self.type_params
             .get("enable_analyzer")
             .is_some_and(|value| value == "true")
     }
 
+    /// Sets the enable match and returns the updated value.
     pub fn enable_match(mut self, enabled: bool) -> Self {
         self.type_params
             .insert("enable_match".into(), enabled.to_string());
         self
     }
 
+    /// Sets the enable match and returns this value for further mutation.
     pub fn set_enable_match(&mut self, enabled: bool) -> &mut Self {
         self.type_params
             .insert("enable_match".into(), enabled.to_string());
         self
     }
 
+    /// Returns whether match enabled.
     pub fn is_match_enabled(&self) -> bool {
         self.type_params
             .get("enable_match")
             .is_some_and(|value| value == "true")
     }
 
+    /// Sets the analyzer params and returns the updated value.
     pub fn analyzer_params(mut self, value: serde_json::Value) -> Self {
         self.type_params
             .insert("analyzer_params".into(), value.to_string());
         self
     }
 
+    /// Sets the analyzer params and returns this value for further mutation.
     pub fn set_analyzer_params(&mut self, value: serde_json::Value) -> &mut Self {
         self.type_params
             .insert("analyzer_params".into(), value.to_string());
         self
     }
 
+    /// Returns the configured analyzer params.
     pub fn get_analyzer_params(&self) -> Result<serde_json::Value> {
         self.get_json_type_param("analyzer_params")
     }
 
+    /// Sets the multi analyzer params and returns the updated value.
     pub fn multi_analyzer_params(mut self, value: serde_json::Value) -> Self {
         self.type_params
             .insert("multi_analyzer_params".into(), value.to_string());
         self
     }
 
+    /// Sets the multi analyzer params and returns this value for further mutation.
     pub fn set_multi_analyzer_params(&mut self, value: serde_json::Value) -> &mut Self {
         self.type_params
             .insert("multi_analyzer_params".into(), value.to_string());
         self
     }
 
+    /// Returns the configured multi analyzer params.
     pub fn get_multi_analyzer_params(&self) -> Result<serde_json::Value> {
         self.get_json_type_param("multi_analyzer_params")
     }
 
+    /// Sets the type param and returns the updated value.
     pub fn type_param(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.type_params.entry(key.into()).or_insert(value.into());
         self
     }
 
+    /// Sets the index param and returns the updated value.
     pub fn index_param(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.index_params.insert(key.into(), value.into());
         self
@@ -660,6 +733,7 @@ pub struct StructFieldSchema {
 }
 
 impl StructFieldSchema {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             name: String::new(),
@@ -669,62 +743,75 @@ impl StructFieldSchema {
         }
     }
 
+    /// Sets the name and returns the updated value.
     pub fn name(mut self, value: impl Into<String>) -> Self {
         self.name = value.into();
         self
     }
 
+    /// Sets the name and returns this value for further mutation.
     pub fn set_name(&mut self, value: impl Into<String>) -> &mut Self {
         self.name = value.into();
         self
     }
 
+    /// Returns the configured name.
     pub fn get_name(&self) -> &str {
         &self.name
     }
 
+    /// Sets the description and returns the updated value.
     pub fn description(mut self, value: impl Into<String>) -> Self {
         self.description = value.into();
         self
     }
 
+    /// Sets the description and returns this value for further mutation.
     pub fn set_description(&mut self, value: impl Into<String>) -> &mut Self {
         self.description = value.into();
         self
     }
 
+    /// Returns the configured description.
     pub fn get_description(&self) -> &str {
         &self.description
     }
 
+    /// Sets the max capacity and returns the updated value.
     pub fn max_capacity(mut self, value: u32) -> Self {
         self.max_capacity = value;
         self
     }
 
+    /// Sets the max capacity and returns this value for further mutation.
     pub fn set_max_capacity(&mut self, value: u32) -> &mut Self {
         self.max_capacity = value;
         self
     }
 
+    /// Returns the configured max capacity.
     pub fn get_max_capacity(&self) -> u32 {
         self.max_capacity
     }
 
+    /// Sets the fields and returns the updated value.
     pub fn fields(mut self, value: Vec<FieldSchema>) -> Self {
         self.fields = value;
         self
     }
 
+    /// Sets the fields and returns this value for further mutation.
     pub fn set_fields(&mut self, value: Vec<FieldSchema>) -> &mut Self {
         self.fields = value;
         self
     }
 
+    /// Returns the configured fields.
     pub fn get_fields(&self) -> &[FieldSchema] {
         &self.fields
     }
 
+    /// Adds one add field to the existing values.
     pub fn add_field(mut self, field: FieldSchema) -> Self {
         self.fields.push(field);
         self
@@ -957,6 +1044,7 @@ pub struct CollectionSchema {
 }
 
 impl CollectionSchema {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             description: String::new(),
@@ -968,105 +1056,127 @@ impl CollectionSchema {
         }
     }
 
+    /// Sets the description and returns the updated value.
     pub fn description(mut self, value: impl Into<String>) -> Self {
         self.description = value.into();
         self
     }
 
+    /// Sets the description and returns this value for further mutation.
     pub fn set_description(&mut self, value: impl Into<String>) -> &mut Self {
         self.description = value.into();
         self
     }
 
+    /// Returns the configured description.
     pub fn get_description(&self) -> &str {
         &self.description
     }
 
+    /// Sets the enable dynamic field and returns the updated value.
     pub fn enable_dynamic_field(mut self, enabled: bool) -> Self {
         self.enable_dynamic_field = enabled;
         self
     }
 
+    /// Sets the enable dynamic field and returns this value for further mutation.
     pub fn set_enable_dynamic_field(&mut self, enabled: bool) -> &mut Self {
         self.enable_dynamic_field = enabled;
         self
     }
 
+    /// Returns whether dynamic field enabled.
     pub fn is_dynamic_field_enabled(&self) -> bool {
         self.enable_dynamic_field
     }
 
+    /// Sets the fields and returns the updated value.
     pub fn fields(mut self, value: Vec<FieldSchema>) -> Self {
         self.fields = value;
         self
     }
 
+    /// Sets the fields and returns this value for further mutation.
     pub fn set_fields(&mut self, value: Vec<FieldSchema>) -> &mut Self {
         self.fields = value;
         self
     }
 
+    /// Returns the configured fields.
     pub fn get_fields(&self) -> &[FieldSchema] {
         &self.fields
     }
 
+    /// Sets the struct fields and returns the updated value.
     pub fn struct_fields(mut self, value: Vec<StructFieldSchema>) -> Self {
         self.struct_fields = value;
         self
     }
 
+    /// Sets the struct fields and returns this value for further mutation.
     pub fn set_struct_fields(&mut self, value: Vec<StructFieldSchema>) -> &mut Self {
         self.struct_fields = value;
         self
     }
 
+    /// Returns the configured struct fields.
     pub fn get_struct_fields(&self) -> &[StructFieldSchema] {
         &self.struct_fields
     }
 
+    /// Sets the functions and returns the updated value.
     pub fn functions(mut self, value: Vec<Function>) -> Self {
         self.functions = value;
         self
     }
 
+    /// Sets the functions and returns this value for further mutation.
     pub fn set_functions(&mut self, value: Vec<Function>) -> &mut Self {
         self.functions = value;
         self
     }
 
+    /// Returns the configured functions.
     pub fn get_functions(&self) -> &[Function] {
         &self.functions
     }
 
+    /// Sets the properties and returns the updated value.
     pub fn properties(mut self, value: HashMap<String, String>) -> Self {
         self.properties = value;
         self
     }
 
+    /// Sets the properties and returns this value for further mutation.
     pub fn set_properties(&mut self, value: HashMap<String, String>) -> &mut Self {
         self.properties = value;
         self
     }
 
+    /// Returns the configured properties.
     pub fn get_properties(&self) -> &HashMap<String, String> {
         &self.properties
     }
 
+    /// Adds one add field to the existing values.
     pub fn add_field(mut self, field: FieldSchema) -> Self {
         self.fields.push(field);
         self
     }
 
+    /// Adds one add struct field to the existing values.
     pub fn add_struct_field(mut self, field: StructFieldSchema) -> Self {
         self.struct_fields.push(field);
         self
     }
 
+    /// Adds one add function to the existing values.
     pub fn add_function(mut self, function: impl Into<Function>) -> Self {
         self.functions.push(function.into());
         self
     }
 
+    /// Sets the property and returns the updated value.
     pub fn property(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.properties.insert(key.into(), value.into());
         self
@@ -1176,6 +1286,7 @@ pub struct CollectionDesc {
 }
 
 impl CollectionDesc {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             database_name: String::new(),
@@ -1199,67 +1310,81 @@ impl CollectionDesc {
         }
     }
 
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.database_name = value.into();
         self
     }
 
+    /// Sets the database name and returns this value for further mutation.
     pub fn set_database_name(&mut self, value: impl Into<String>) -> &mut Self {
         self.database_name = value.into();
         self
     }
 
+    /// Returns the configured database name.
     pub fn get_database_name(&self) -> &str {
         &self.database_name
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.collection_name = value.into();
         self
     }
 
+    /// Sets the collection name and returns this value for further mutation.
     pub fn set_collection_name(&mut self, value: impl Into<String>) -> &mut Self {
         self.collection_name = value.into();
         self
     }
 
+    /// Returns the configured collection name.
     pub fn get_collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Sets the description and returns the updated value.
     pub fn description(mut self, value: impl Into<String>) -> Self {
         self.description = value.into();
         self
     }
 
+    /// Sets the description and returns this value for further mutation.
     pub fn set_description(&mut self, value: impl Into<String>) -> &mut Self {
         self.description = value.into();
         self
     }
 
+    /// Returns the configured description.
     pub fn get_description(&self) -> &str {
         &self.description
     }
 
+    /// Sets the num partitions and returns the updated value.
     pub fn num_partitions(mut self, value: i64) -> Self {
         self.num_partitions = value;
         self
     }
 
+    /// Sets the num partitions and returns this value for further mutation.
     pub fn set_num_partitions(&mut self, value: i64) -> &mut Self {
         self.num_partitions = value;
         self
     }
 
+    /// Returns the configured num partitions.
     pub fn get_num_partitions(&self) -> i64 {
         self.num_partitions
     }
 
+    /// Sets the field names and returns the updated value.
     pub fn field_names(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.field_names = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the field names and returns this value for further mutation.
     pub fn set_field_names(
         &mut self,
         values: impl IntoIterator<Item = impl Into<String>>,
@@ -1268,10 +1393,12 @@ impl CollectionDesc {
         self
     }
 
+    /// Returns the configured field names.
     pub fn get_field_names(&self) -> &[String] {
         &self.field_names
     }
 
+    /// Performs the vector field names operation.
     pub fn vector_field_names(
         mut self,
         values: impl IntoIterator<Item = impl Into<String>>,
@@ -1280,6 +1407,7 @@ impl CollectionDesc {
         self
     }
 
+    /// Sets the vector field names and returns this value for further mutation.
     pub fn set_vector_field_names(
         &mut self,
         values: impl IntoIterator<Item = impl Into<String>>,
@@ -1288,99 +1416,120 @@ impl CollectionDesc {
         self
     }
 
+    /// Returns the configured vector field names.
     pub fn get_vector_field_names(&self) -> &[String] {
         &self.vector_field_names
     }
 
+    /// Sets the primary field name and returns the updated value.
     pub fn primary_field_name(mut self, value: impl Into<String>) -> Self {
         self.primary_field_name = value.into();
         self
     }
 
+    /// Sets the primary field name and returns this value for further mutation.
     pub fn set_primary_field_name(&mut self, value: impl Into<String>) -> &mut Self {
         self.primary_field_name = value.into();
         self
     }
 
+    /// Returns the configured primary field name.
     pub fn get_primary_field_name(&self) -> &str {
         &self.primary_field_name
     }
 
+    /// Sets the enable dynamic field and returns the updated value.
     pub fn enable_dynamic_field(mut self, value: bool) -> Self {
         self.enable_dynamic_field = value;
         self
     }
 
+    /// Sets the enable dynamic field and returns this value for further mutation.
     pub fn set_enable_dynamic_field(&mut self, value: bool) -> &mut Self {
         self.enable_dynamic_field = value;
         self
     }
 
+    /// Returns whether dynamic field enabled.
     pub fn is_dynamic_field_enabled(&self) -> bool {
         self.enable_dynamic_field
     }
 
+    /// Sets the auto id and returns the updated value.
     pub fn auto_id(mut self, value: bool) -> Self {
         self.auto_id = value;
         self
     }
 
+    /// Sets the auto id and returns this value for further mutation.
     pub fn set_auto_id(&mut self, value: bool) -> &mut Self {
         self.auto_id = value;
         self
     }
 
+    /// Returns the configured auto id.
     pub fn get_auto_id(&self) -> bool {
         self.auto_id
     }
 
+    /// Sets the num shards and returns the updated value.
     pub fn num_shards(mut self, value: i64) -> Self {
         self.num_shards = value;
         self
     }
 
+    /// Sets the num shards and returns this value for further mutation.
     pub fn set_num_shards(&mut self, value: i64) -> &mut Self {
         self.num_shards = value;
         self
     }
 
+    /// Returns the configured num shards.
     pub fn get_num_shards(&self) -> i64 {
         self.num_shards
     }
 
+    /// Sets the schema and returns the updated value.
     pub fn schema(mut self, value: CollectionSchema) -> Self {
         self.schema = value;
         self
     }
 
+    /// Sets the schema and returns this value for further mutation.
     pub fn set_schema(&mut self, value: CollectionSchema) -> &mut Self {
         self.schema = value;
         self
     }
 
+    /// Returns the configured schema.
     pub fn get_schema(&self) -> &CollectionSchema {
         &self.schema
     }
 
+    /// Sets the collection id and returns the updated value.
     pub fn collection_id(mut self, value: i64) -> Self {
         self.collection_id = value;
         self
     }
 
+    /// Sets the collection id and returns this value for further mutation.
     pub fn set_collection_id(&mut self, value: i64) -> &mut Self {
         self.collection_id = value;
         self
     }
 
+    /// Returns the configured collection id.
     pub fn get_collection_id(&self) -> i64 {
         self.collection_id
     }
 
+    /// Sets the aliases and returns the updated value.
     pub fn aliases(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.aliases = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the aliases and returns this value for further mutation.
     pub fn set_aliases(
         &mut self,
         values: impl IntoIterator<Item = impl Into<String>>,
@@ -1389,90 +1538,109 @@ impl CollectionDesc {
         self
     }
 
+    /// Returns the configured aliases.
     pub fn get_aliases(&self) -> &[String] {
         &self.aliases
     }
 
+    /// Sets the created time and returns the updated value.
     pub fn created_time(mut self, value: u64) -> Self {
         self.created_time = value;
         self
     }
 
+    /// Sets the created time and returns this value for further mutation.
     pub fn set_created_time(&mut self, value: u64) -> &mut Self {
         self.created_time = value;
         self
     }
 
+    /// Returns the configured created time.
     pub fn get_created_time(&self) -> u64 {
         self.created_time
     }
 
+    /// Sets the created utc time and returns the updated value.
     pub fn created_utc_time(mut self, value: u64) -> Self {
         self.created_utc_time = value;
         self
     }
 
+    /// Sets the created utc time and returns this value for further mutation.
     pub fn set_created_utc_time(&mut self, value: u64) -> &mut Self {
         self.created_utc_time = value;
         self
     }
 
+    /// Returns the configured created utc time.
     pub fn get_created_utc_time(&self) -> u64 {
         self.created_utc_time
     }
 
+    /// Sets the update time and returns the updated value.
     pub fn update_time(mut self, value: u64) -> Self {
         self.update_time = value;
         self
     }
 
+    /// Sets the update time and returns this value for further mutation.
     pub fn set_update_time(&mut self, value: u64) -> &mut Self {
         self.update_time = value;
         self
     }
 
+    /// Returns the configured update time.
     pub fn get_update_time(&self) -> u64 {
         self.update_time
     }
 
+    /// Sets the consistency level and returns the updated value.
     pub fn consistency_level(mut self, value: ConsistencyLevel) -> Self {
         self.consistency_level = value;
         self
     }
 
+    /// Sets the consistency level and returns this value for further mutation.
     pub fn set_consistency_level(&mut self, value: ConsistencyLevel) -> &mut Self {
         self.consistency_level = value;
         self
     }
 
+    /// Returns the configured consistency level.
     pub fn get_consistency_level(&self) -> ConsistencyLevel {
         self.consistency_level
     }
 
+    /// Sets the properties and returns the updated value.
     pub fn properties(mut self, value: HashMap<String, String>) -> Self {
         self.properties = value;
         self
     }
 
+    /// Sets the properties and returns this value for further mutation.
     pub fn set_properties(&mut self, value: HashMap<String, String>) -> &mut Self {
         self.properties = value;
         self
     }
 
+    /// Returns the configured properties.
     pub fn get_properties(&self) -> &HashMap<String, String> {
         &self.properties
     }
 
+    /// Adds one add field name to the existing values.
     pub fn add_field_name(mut self, value: impl Into<String>) -> Self {
         self.field_names.push(value.into());
         self
     }
 
+    /// Adds one add vector field name to the existing values.
     pub fn add_vector_field_name(mut self, value: impl Into<String>) -> Self {
         self.vector_field_names.push(value.into());
         self
     }
 
+    /// Adds one add alias to the existing values.
     pub fn add_alias(mut self, value: impl Into<String>) -> Self {
         self.aliases.push(value.into());
         self
@@ -1565,6 +1733,7 @@ pub struct ShardReplica {
 }
 
 impl ShardReplica {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             leader_id: 0,
@@ -1574,62 +1743,75 @@ impl ShardReplica {
         }
     }
 
+    /// Sets the leader id and returns the updated value.
     pub fn leader_id(mut self, value: i64) -> Self {
         self.leader_id = value;
         self
     }
 
+    /// Sets the leader id and returns this value for further mutation.
     pub fn set_leader_id(&mut self, value: i64) -> &mut Self {
         self.leader_id = value;
         self
     }
 
+    /// Returns the configured leader id.
     pub fn get_leader_id(&self) -> i64 {
         self.leader_id
     }
 
+    /// Sets the leader address and returns the updated value.
     pub fn leader_address(mut self, value: impl Into<String>) -> Self {
         self.leader_address = value.into();
         self
     }
 
+    /// Sets the leader address and returns this value for further mutation.
     pub fn set_leader_address(&mut self, value: impl Into<String>) -> &mut Self {
         self.leader_address = value.into();
         self
     }
 
+    /// Returns the configured leader address.
     pub fn get_leader_address(&self) -> &str {
         &self.leader_address
     }
 
+    /// Sets the channel name and returns the updated value.
     pub fn channel_name(mut self, value: impl Into<String>) -> Self {
         self.channel_name = value.into();
         self
     }
 
+    /// Sets the channel name and returns this value for further mutation.
     pub fn set_channel_name(&mut self, value: impl Into<String>) -> &mut Self {
         self.channel_name = value.into();
         self
     }
 
+    /// Returns the configured channel name.
     pub fn get_channel_name(&self) -> &str {
         &self.channel_name
     }
 
+    /// Sets the node ids and returns the updated value.
     pub fn node_ids(mut self, value: Vec<i64>) -> Self {
         self.node_ids = value;
         self
     }
 
+    /// Sets the node ids and returns this value for further mutation.
     pub fn set_node_ids(&mut self, value: Vec<i64>) -> &mut Self {
         self.node_ids = value;
         self
     }
 
+    /// Returns the configured node ids.
     pub fn get_node_ids(&self) -> &[i64] {
         &self.node_ids
     }
 
+    /// Adds one add node id to the existing values.
     pub fn add_node_id(mut self, value: i64) -> Self {
         self.node_ids.push(value);
         self
@@ -1653,6 +1835,7 @@ pub struct ReplicaInfo {
 }
 
 impl ReplicaInfo {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             replica_id: 0,
@@ -1665,114 +1848,138 @@ impl ReplicaInfo {
         }
     }
 
+    /// Sets the replica id and returns the updated value.
     pub fn replica_id(mut self, value: i64) -> Self {
         self.replica_id = value;
         self
     }
 
+    /// Sets the replica id and returns this value for further mutation.
     pub fn set_replica_id(&mut self, value: i64) -> &mut Self {
         self.replica_id = value;
         self
     }
 
+    /// Returns the configured replica id.
     pub fn get_replica_id(&self) -> i64 {
         self.replica_id
     }
 
+    /// Sets the collection id and returns the updated value.
     pub fn collection_id(mut self, value: i64) -> Self {
         self.collection_id = value;
         self
     }
 
+    /// Sets the collection id and returns this value for further mutation.
     pub fn set_collection_id(&mut self, value: i64) -> &mut Self {
         self.collection_id = value;
         self
     }
 
+    /// Returns the configured collection id.
     pub fn get_collection_id(&self) -> i64 {
         self.collection_id
     }
 
+    /// Sets the partition ids and returns the updated value.
     pub fn partition_ids(mut self, value: Vec<i64>) -> Self {
         self.partition_ids = value;
         self
     }
 
+    /// Sets the partition ids and returns this value for further mutation.
     pub fn set_partition_ids(&mut self, value: Vec<i64>) -> &mut Self {
         self.partition_ids = value;
         self
     }
 
+    /// Returns the configured partition ids.
     pub fn get_partition_ids(&self) -> &[i64] {
         &self.partition_ids
     }
 
+    /// Sets the shards and returns the updated value.
     pub fn shards(mut self, value: Vec<ShardReplica>) -> Self {
         self.shards = value;
         self
     }
 
+    /// Sets the shards and returns this value for further mutation.
     pub fn set_shards(&mut self, value: Vec<ShardReplica>) -> &mut Self {
         self.shards = value;
         self
     }
 
+    /// Returns the configured shards.
     pub fn get_shards(&self) -> &[ShardReplica] {
         &self.shards
     }
 
+    /// Sets the node ids and returns the updated value.
     pub fn node_ids(mut self, value: Vec<i64>) -> Self {
         self.node_ids = value;
         self
     }
 
+    /// Sets the node ids and returns this value for further mutation.
     pub fn set_node_ids(&mut self, value: Vec<i64>) -> &mut Self {
         self.node_ids = value;
         self
     }
 
+    /// Returns the configured node ids.
     pub fn get_node_ids(&self) -> &[i64] {
         &self.node_ids
     }
 
+    /// Sets the resource group and returns the updated value.
     pub fn resource_group(mut self, value: impl Into<String>) -> Self {
         self.resource_group = value.into();
         self
     }
 
+    /// Sets the resource group and returns this value for further mutation.
     pub fn set_resource_group(&mut self, value: impl Into<String>) -> &mut Self {
         self.resource_group = value.into();
         self
     }
 
+    /// Returns the configured resource group.
     pub fn get_resource_group(&self) -> &str {
         &self.resource_group
     }
 
+    /// Sets the outbound nodes and returns the updated value.
     pub fn outbound_nodes(mut self, value: HashMap<String, i32>) -> Self {
         self.outbound_nodes = value;
         self
     }
 
+    /// Sets the outbound nodes and returns this value for further mutation.
     pub fn set_outbound_nodes(&mut self, value: HashMap<String, i32>) -> &mut Self {
         self.outbound_nodes = value;
         self
     }
 
+    /// Returns the configured outbound nodes.
     pub fn get_outbound_nodes(&self) -> &HashMap<String, i32> {
         &self.outbound_nodes
     }
 
+    /// Adds one add partition id to the existing values.
     pub fn add_partition_id(mut self, value: i64) -> Self {
         self.partition_ids.push(value);
         self
     }
 
+    /// Adds one add shard to the existing values.
     pub fn add_shard(mut self, value: ShardReplica) -> Self {
         self.shards.push(value);
         self
     }
 
+    /// Adds one add node id to the existing values.
     pub fn add_node_id(mut self, value: i64) -> Self {
         self.node_ids.push(value);
         self
@@ -1795,6 +2002,7 @@ pub struct CollectionInfo {
 }
 
 impl CollectionInfo {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             name: String::new(),
@@ -1806,67 +2014,81 @@ impl CollectionInfo {
         }
     }
 
+    /// Sets the name and returns the updated value.
     pub fn name(mut self, value: impl Into<String>) -> Self {
         self.name = value.into();
         self
     }
 
+    /// Sets the name and returns this value for further mutation.
     pub fn set_name(&mut self, value: impl Into<String>) -> &mut Self {
         self.name = value.into();
         self
     }
 
+    /// Returns the configured name.
     pub fn get_name(&self) -> &str {
         &self.name
     }
 
+    /// Sets the id and returns the updated value.
     pub fn id(mut self, value: i64) -> Self {
         self.id = value;
         self
     }
 
+    /// Sets the id and returns this value for further mutation.
     pub fn set_id(&mut self, value: i64) -> &mut Self {
         self.id = value;
         self
     }
 
+    /// Returns the configured id.
     pub fn get_id(&self) -> i64 {
         self.id
     }
 
+    /// Sets the created timestamp and returns the updated value.
     pub fn created_timestamp(mut self, value: u64) -> Self {
         self.created_timestamp = value;
         self
     }
 
+    /// Sets the created timestamp and returns this value for further mutation.
     pub fn set_created_timestamp(&mut self, value: u64) -> &mut Self {
         self.created_timestamp = value;
         self
     }
 
+    /// Returns the configured created timestamp.
     pub fn get_created_timestamp(&self) -> u64 {
         self.created_timestamp
     }
 
+    /// Sets the created utc timestamp and returns the updated value.
     pub fn created_utc_timestamp(mut self, value: u64) -> Self {
         self.created_utc_timestamp = value;
         self
     }
 
+    /// Sets the created utc timestamp and returns this value for further mutation.
     pub fn set_created_utc_timestamp(&mut self, value: u64) -> &mut Self {
         self.created_utc_timestamp = value;
         self
     }
 
+    /// Returns the configured created utc timestamp.
     pub fn get_created_utc_timestamp(&self) -> u64 {
         self.created_utc_timestamp
     }
 
+    /// Sets the query service available and returns the updated value.
     pub fn query_service_available(mut self, value: bool) -> Self {
         self.query_service_available = Some(value);
         self
     }
 
+    /// Sets the query service available and returns this value for further mutation.
     pub fn set_query_service_available(&mut self, value: bool) -> &mut Self {
         self.query_service_available = Some(value);
         self
@@ -1877,11 +2099,13 @@ impl CollectionInfo {
         self.query_service_available
     }
 
+    /// Sets the shard count and returns the updated value.
     pub fn shard_count(mut self, value: i32) -> Self {
         self.shard_count = Some(value);
         self
     }
 
+    /// Sets the shard count and returns this value for further mutation.
     pub fn set_shard_count(&mut self, value: i32) -> &mut Self {
         self.shard_count = Some(value);
         self

@@ -55,6 +55,7 @@ impl GetPartitionStatsResponse {
         }
     }
 
+    /// Returns the statistics.
     pub fn statistics(&self) -> &HashMap<String, String> {
         &self.statistics
     }
@@ -85,11 +86,13 @@ pub(crate) struct GetPartitionStatsResponseBuilder {
 
 #[cfg(test)]
 impl GetPartitionStatsResponseBuilder {
+    /// Sets the statistics and returns the updated value.
     pub fn statistics(mut self, value: HashMap<String, String>) -> Self {
         self.value.statistics = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> GetPartitionStatsResponse {
         self.value
     }
@@ -130,10 +133,12 @@ impl ListPartitionsResponse {
         }
     }
 
+    /// Returns the partition names.
     pub fn partition_names(&self) -> &[String] {
         &self.partition_names
     }
 
+    /// Returns the partitions.
     pub fn partitions(&self) -> &[PartitionInfo] {
         &self.partitions
     }
@@ -199,16 +204,19 @@ pub(crate) struct ListPartitionsResponseBuilder {
 
 #[cfg(test)]
 impl ListPartitionsResponseBuilder {
+    /// Sets the partition names and returns the updated value.
     pub fn partition_names(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.partition_names = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the partitions and returns the updated value.
     pub fn partitions(mut self, value: Vec<PartitionInfo>) -> Self {
         self.value.partitions = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> ListPartitionsResponse {
         self.value
     }
@@ -243,6 +251,7 @@ impl HasPartitionResponse {
         }
     }
 
+    /// Returns the exists.
     pub fn exists(&self) -> bool {
         self.0
     }
@@ -267,11 +276,13 @@ pub(crate) struct HasPartitionResponseBuilder {
 
 #[cfg(test)]
 impl HasPartitionResponseBuilder {
+    /// Sets the has and returns the updated value.
     pub fn has(mut self, value: bool) -> Self {
         self.value.0 = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> HasPartitionResponse {
         self.value
     }

@@ -30,6 +30,7 @@ pub struct PartitionInfo {
 }
 
 impl PartitionInfo {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             name: String::new(),
@@ -39,58 +40,70 @@ impl PartitionInfo {
         }
     }
 
+    /// Sets the name and returns the updated value.
     pub fn name(mut self, value: impl Into<String>) -> Self {
         self.name = value.into();
         self
     }
 
+    /// Sets the name and returns this value for further mutation.
     pub fn set_name(&mut self, value: impl Into<String>) -> &mut Self {
         self.name = value.into();
         self
     }
 
+    /// Returns the configured name.
     pub fn get_name(&self) -> &str {
         &self.name
     }
 
+    /// Sets the id and returns the updated value.
     pub fn id(mut self, value: i64) -> Self {
         self.id = value;
         self
     }
 
+    /// Sets the id and returns this value for further mutation.
     pub fn set_id(&mut self, value: i64) -> &mut Self {
         self.id = value;
         self
     }
 
+    /// Returns the configured id.
     pub fn get_id(&self) -> i64 {
         self.id
     }
 
+    /// Sets the created timestamp and returns the updated value.
     pub fn created_timestamp(mut self, value: u64) -> Self {
         self.created_timestamp = value;
         self
     }
 
+    /// Sets the created timestamp and returns this value for further mutation.
     pub fn set_created_timestamp(&mut self, value: u64) -> &mut Self {
         self.created_timestamp = value;
         self
     }
 
+    /// Returns the configured created timestamp.
     pub fn get_created_timestamp(&self) -> u64 {
         self.created_timestamp
     }
 
+    /// Sets the created utc timestamp and returns the updated value.
     pub fn created_utc_timestamp(mut self, value: u64) -> Self {
         self.created_utc_timestamp = value;
         self
     }
 
+    /// Sets the created utc timestamp and returns this value for further mutation.
     pub fn set_created_utc_timestamp(&mut self, value: u64) -> &mut Self {
         self.created_utc_timestamp = value;
         self
     }
 
+    /// Returns the configured created utc timestamp.
     pub fn get_created_utc_timestamp(&self) -> u64 {
         self.created_utc_timestamp
     }

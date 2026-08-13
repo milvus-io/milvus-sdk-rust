@@ -53,6 +53,7 @@ impl ListResourceGroupsResponse {
         }
     }
 
+    /// Returns the group names.
     pub fn group_names(&self) -> &[String] {
         &self.group_names
     }
@@ -83,11 +84,13 @@ pub(crate) struct ListResourceGroupsResponseBuilder {
 
 #[cfg(test)]
 impl ListResourceGroupsResponseBuilder {
+    /// Sets the group names and returns the updated value.
     pub fn group_names(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.group_names = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> ListResourceGroupsResponse {
         self.value
     }
@@ -128,6 +131,7 @@ impl DescribeResourceGroupResponse {
         }
     }
 
+    /// Returns the description.
     pub fn description(&self) -> &ResourceGroupDescription {
         &self.description
     }
@@ -180,11 +184,13 @@ pub(crate) struct DescribeResourceGroupResponseBuilder {
 
 #[cfg(test)]
 impl DescribeResourceGroupResponseBuilder {
+    /// Sets the description and returns the updated value.
     pub fn description(mut self, value: ResourceGroupDescription) -> Self {
         self.value.description = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> DescribeResourceGroupResponse {
         self.value
     }

@@ -22,7 +22,7 @@ use crate::v2::error::Result;
 use crate::v2::{request, response};
 
 impl ClientV2 {
-    /// Create a resource group. A resource group to physically isolate certain query nodes from others.
+    /// Creates a resource group used to isolate query-node resources.
     pub async fn create_resource_group(
         &self,
         request: request::resource_group::CreateResourceGroupRequest,
@@ -36,7 +36,7 @@ impl ClientV2 {
         self.status(status)
     }
 
-    /// Drop a resource group.
+    /// Drops a resource group after its resources are no longer assigned to it.
     pub async fn drop_resource_group(
         &self,
         request: request::resource_group::DropResourceGroupRequest,
@@ -46,7 +46,7 @@ impl ClientV2 {
         self.status(status)
     }
 
-    /// Update resource groups.
+    /// Updates the properties or node allocation of resource groups.
     pub async fn update_resource_groups(
         &self,
         request: request::resource_group::UpdateResourceGroupsRequest,
@@ -60,7 +60,7 @@ impl ClientV2 {
         self.status(status)
     }
 
-    /// Transfer query nodes to another resource groups.
+    /// Transfers query nodes between resource groups.
     pub async fn transfer_node(
         &self,
         request: request::resource_group::TransferNodeRequest,
@@ -70,7 +70,7 @@ impl ClientV2 {
         self.status(status)
     }
 
-    /// Transfer replicas of a collection from a resource group to another.
+    /// Transfers collection replicas from one resource group to another.
     pub async fn transfer_replica(
         &self,
         request: request::resource_group::TransferReplicaRequest,
@@ -80,7 +80,7 @@ impl ClientV2 {
         self.status(status)
     }
 
-    /// List all the resource groups under the current database.
+    /// Lists resource groups visible in the current database.
     pub async fn list_resource_groups(
         &self,
         request: request::resource_group::ListResourceGroupsRequest,
@@ -90,7 +90,7 @@ impl ClientV2 {
         Ok(response::resource_group::ListResourceGroupsResponse::from_proto(response))
     }
 
-    /// Describe a resource group.
+    /// Retrieves a resource group's node and replica assignments.
     pub async fn describe_resource_group(
         &self,
         request: request::resource_group::DescribeResourceGroupRequest,

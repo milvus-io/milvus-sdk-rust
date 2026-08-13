@@ -66,34 +66,42 @@ impl DmlResponse {
         }
     }
 
+    /// Returns the ids.
     pub fn ids(&self) -> &Ids {
         &self.ids
     }
 
+    /// Returns the succeeded indices.
     pub fn succeeded_indices(&self) -> &[u32] {
         &self.succeeded_indices
     }
 
+    /// Returns the failed indices.
     pub fn failed_indices(&self) -> &[u32] {
         &self.failed_indices
     }
 
+    /// Returns whether acknowledged.
     pub fn is_acknowledged(&self) -> bool {
         self.acknowledged
     }
 
+    /// Returns the insert count.
     pub fn insert_count(&self) -> i64 {
         self.insert_count
     }
 
+    /// Returns the delete count.
     pub fn delete_count(&self) -> i64 {
         self.delete_count
     }
 
+    /// Returns the upsert count.
     pub fn upsert_count(&self) -> i64 {
         self.upsert_count
     }
 
+    /// Returns the timestamp.
     pub fn timestamp(&self) -> u64 {
         self.timestamp
     }
@@ -131,46 +139,55 @@ pub(crate) struct DmlResponseBuilder {
 
 #[cfg(test)]
 impl DmlResponseBuilder {
+    /// Sets the ids and returns the updated value.
     pub fn ids(mut self, value: Ids) -> Self {
         self.value.ids = value;
         self
     }
 
+    /// Sets the succeeded indices and returns the updated value.
     pub fn succeeded_indices(mut self, value: Vec<u32>) -> Self {
         self.value.succeeded_indices = value;
         self
     }
 
+    /// Sets the failed indices and returns the updated value.
     pub fn failed_indices(mut self, value: Vec<u32>) -> Self {
         self.value.failed_indices = value;
         self
     }
 
+    /// Sets the acknowledged and returns the updated value.
     pub fn acknowledged(mut self, value: bool) -> Self {
         self.value.acknowledged = value;
         self
     }
 
+    /// Sets the insert count and returns the updated value.
     pub fn insert_count(mut self, value: i64) -> Self {
         self.value.insert_count = value;
         self
     }
 
+    /// Sets the delete count and returns the updated value.
     pub fn delete_count(mut self, value: i64) -> Self {
         self.value.delete_count = value;
         self
     }
 
+    /// Sets the upsert count and returns the updated value.
     pub fn upsert_count(mut self, value: i64) -> Self {
         self.value.upsert_count = value;
         self
     }
 
+    /// Sets the timestamp and returns the updated value.
     pub fn timestamp(mut self, value: u64) -> Self {
         self.value.timestamp = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> DmlResponse {
         self.value
     }

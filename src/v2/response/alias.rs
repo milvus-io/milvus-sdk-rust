@@ -55,14 +55,17 @@ impl DescribeAliasResponse {
         }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &str {
         &self.database_name
     }
 
+    /// Returns the alias.
     pub fn alias(&self) -> &str {
         &self.alias
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
@@ -95,21 +98,25 @@ pub(crate) struct DescribeAliasResponseBuilder {
 
 #[cfg(test)]
 impl DescribeAliasResponseBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = value.into();
         self
     }
 
+    /// Sets the alias and returns the updated value.
     pub fn alias(mut self, value: impl Into<String>) -> Self {
         self.value.alias = value.into();
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> DescribeAliasResponse {
         self.value
     }
@@ -152,14 +159,17 @@ impl ListAliasesResponse {
         }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &str {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the aliases.
     pub fn aliases(&self) -> &[String] {
         &self.aliases
     }
@@ -192,21 +202,25 @@ pub(crate) struct ListAliasesResponseBuilder {
 
 #[cfg(test)]
 impl ListAliasesResponseBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = value.into();
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the aliases and returns the updated value.
     pub fn aliases(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.aliases = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> ListAliasesResponse {
         self.value
     }

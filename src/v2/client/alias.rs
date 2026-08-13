@@ -22,7 +22,9 @@ use crate::v2::error::Result;
 use crate::v2::{request, response};
 
 impl ClientV2 {
-    /// Create an alias for a collection. Alias can be used in search or query to replace the collection name.
+    /// Creates an alias that can be used in query and search requests in place of a collection name.
+    ///
+    /// The SDK also aligns schema and session-timestamp cache state with the aliased collection.
     pub async fn create_alias(&self, request: request::alias::CreateAliasRequest) -> Result<()> {
         let database = self.current_database();
         let raw = request.into_proto(&database);
@@ -36,7 +38,7 @@ impl ClientV2 {
         Ok(())
     }
 
-    /// Drop an alias.
+    /// Drops an alias without dropping the underlying collection.
     pub async fn drop_alias(&self, request: request::alias::DropAliasRequest) -> Result<()> {
         let database = self.current_database();
         let raw = request.into_proto(&database);
@@ -48,7 +50,7 @@ impl ClientV2 {
         Ok(())
     }
 
-    /// Change an alias from a collection to another.
+    /// Repoints an alias from its current collection to another collection.
     pub async fn alter_alias(&self, request: request::alias::AlterAliasRequest) -> Result<()> {
         let database = self.current_database();
         let raw = request.into_proto(&database);
@@ -62,7 +64,7 @@ impl ClientV2 {
         Ok(())
     }
 
-    /// Describe an alias.
+    /// Resolves an alias to its database and canonical collection name.
     pub async fn describe_alias(
         &self,
         request: request::alias::DescribeAliasRequest,
@@ -73,7 +75,7 @@ impl ClientV2 {
         Ok(response::alias::DescribeAliasResponse::from_proto(response))
     }
 
-    /// List all aliases of a collection.
+    /// Lists aliases associated with a collection in the selected database.
     pub async fn list_aliases(
         &self,
         request: request::alias::ListAliasesRequest,

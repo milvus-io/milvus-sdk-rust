@@ -620,6 +620,7 @@ impl QueryIterator {
                 .read(true)
                 .write(true)
                 .create(true)
+                .truncate(false)
                 .open(cp_file_path)
             {
                 self.cp_file_handler = Some(file);
@@ -1265,6 +1266,7 @@ impl SearchIterator {
                 .read(true)
                 .write(true)
                 .create(true)
+                .truncate(false)
                 .open(cp_file_path)
             {
                 self.cp_file_handler = Some(file);

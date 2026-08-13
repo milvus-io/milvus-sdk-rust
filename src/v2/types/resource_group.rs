@@ -34,6 +34,7 @@ pub struct ResourceGroupConfig {
 }
 
 impl ResourceGroupConfig {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             requested_nodes: 0,
@@ -72,39 +73,47 @@ impl ResourceGroupConfig {
 }
 
 impl ResourceGroupConfig {
+    /// Sets the requested nodes and returns the updated value.
     pub fn requested_nodes(mut self, value: i32) -> Self {
         self.requested_nodes = value;
         self
     }
 
+    /// Sets the requested nodes and returns this value for further mutation.
     pub fn set_requested_nodes(&mut self, value: i32) -> &mut Self {
         self.requested_nodes = value;
         self
     }
 
+    /// Returns the configured requested nodes.
     pub fn get_requested_nodes(&self) -> i32 {
         self.requested_nodes
     }
 
+    /// Sets the node limit and returns the updated value.
     pub fn node_limit(mut self, value: i32) -> Self {
         self.node_limit = value;
         self
     }
 
+    /// Sets the node limit and returns this value for further mutation.
     pub fn set_node_limit(&mut self, value: i32) -> &mut Self {
         self.node_limit = value;
         self
     }
 
+    /// Returns the configured node limit.
     pub fn get_node_limit(&self) -> i32 {
         self.node_limit
     }
 
+    /// Sets the transfer from and returns the updated value.
     pub fn transfer_from(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.transfer_from = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the transfer from and returns this value for further mutation.
     pub fn set_transfer_from(
         &mut self,
         values: impl IntoIterator<Item = impl Into<String>>,
@@ -113,15 +122,18 @@ impl ResourceGroupConfig {
         self
     }
 
+    /// Returns the configured transfer from.
     pub fn get_transfer_from(&self) -> &[String] {
         &self.transfer_from
     }
 
+    /// Sets the transfer to and returns the updated value.
     pub fn transfer_to(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.transfer_to = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the transfer to and returns this value for further mutation.
     pub fn set_transfer_to(
         &mut self,
         values: impl IntoIterator<Item = impl Into<String>>,
@@ -130,29 +142,35 @@ impl ResourceGroupConfig {
         self
     }
 
+    /// Returns the configured transfer to.
     pub fn get_transfer_to(&self) -> &[String] {
         &self.transfer_to
     }
 
+    /// Sets the node labels and returns the updated value.
     pub fn node_labels(mut self, value: HashMap<String, String>) -> Self {
         self.node_labels = value;
         self
     }
 
+    /// Sets the node labels and returns this value for further mutation.
     pub fn set_node_labels(&mut self, value: HashMap<String, String>) -> &mut Self {
         self.node_labels = value;
         self
     }
 
+    /// Returns the configured node labels.
     pub fn get_node_labels(&self) -> &HashMap<String, String> {
         &self.node_labels
     }
 
+    /// Adds one add transfer from to the existing values.
     pub fn add_transfer_from(mut self, value: impl Into<String>) -> Self {
         self.transfer_from.push(value.into());
         self
     }
 
+    /// Adds one add transfer to to the existing values.
     pub fn add_transfer_to(mut self, value: impl Into<String>) -> Self {
         self.transfer_to.push(value.into());
         self
@@ -204,6 +222,7 @@ pub struct ResourceGroupNode {
 }
 
 impl ResourceGroupNode {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             id: 0,
@@ -212,44 +231,53 @@ impl ResourceGroupNode {
         }
     }
 
+    /// Sets the id and returns the updated value.
     pub fn id(mut self, value: i64) -> Self {
         self.id = value;
         self
     }
 
+    /// Sets the id and returns this value for further mutation.
     pub fn set_id(&mut self, value: i64) -> &mut Self {
         self.id = value;
         self
     }
 
+    /// Returns the configured id.
     pub fn get_id(&self) -> i64 {
         self.id
     }
 
+    /// Sets the address and returns the updated value.
     pub fn address(mut self, value: impl Into<String>) -> Self {
         self.address = value.into();
         self
     }
 
+    /// Sets the address and returns this value for further mutation.
     pub fn set_address(&mut self, value: impl Into<String>) -> &mut Self {
         self.address = value.into();
         self
     }
 
+    /// Returns the configured address.
     pub fn get_address(&self) -> &str {
         &self.address
     }
 
+    /// Sets the hostname and returns the updated value.
     pub fn hostname(mut self, value: impl Into<String>) -> Self {
         self.hostname = value.into();
         self
     }
 
+    /// Sets the hostname and returns this value for further mutation.
     pub fn set_hostname(&mut self, value: impl Into<String>) -> &mut Self {
         self.hostname = value.into();
         self
     }
 
+    /// Returns the configured hostname.
     pub fn get_hostname(&self) -> &str {
         &self.hostname
     }
@@ -273,6 +301,7 @@ pub struct ResourceGroupDescription {
 }
 
 impl ResourceGroupDescription {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             name: String::new(),
@@ -286,118 +315,143 @@ impl ResourceGroupDescription {
         }
     }
 
+    /// Sets the name and returns the updated value.
     pub fn name(mut self, value: impl Into<String>) -> Self {
         self.name = value.into();
         self
     }
 
+    /// Sets the name and returns this value for further mutation.
     pub fn set_name(&mut self, value: impl Into<String>) -> &mut Self {
         self.name = value.into();
         self
     }
 
+    /// Returns the configured name.
     pub fn get_name(&self) -> &str {
         &self.name
     }
 
+    /// Sets the capacity and returns the updated value.
     pub fn capacity(mut self, value: i32) -> Self {
         self.capacity = value;
         self
     }
 
+    /// Sets the capacity and returns this value for further mutation.
     pub fn set_capacity(&mut self, value: i32) -> &mut Self {
         self.capacity = value;
         self
     }
 
+    /// Returns the configured capacity.
     pub fn get_capacity(&self) -> i32 {
         self.capacity
     }
 
+    /// Sets the available nodes and returns the updated value.
     pub fn available_nodes(mut self, value: i32) -> Self {
         self.available_nodes = value;
         self
     }
 
+    /// Sets the available nodes and returns this value for further mutation.
     pub fn set_available_nodes(&mut self, value: i32) -> &mut Self {
         self.available_nodes = value;
         self
     }
 
+    /// Returns the configured available nodes.
     pub fn get_available_nodes(&self) -> i32 {
         self.available_nodes
     }
 
+    /// Sets the loaded replicas and returns the updated value.
     pub fn loaded_replicas(mut self, value: HashMap<String, i32>) -> Self {
         self.loaded_replicas = value;
         self
     }
 
+    /// Sets the loaded replicas and returns this value for further mutation.
     pub fn set_loaded_replicas(&mut self, value: HashMap<String, i32>) -> &mut Self {
         self.loaded_replicas = value;
         self
     }
 
+    /// Returns the configured loaded replicas.
     pub fn get_loaded_replicas(&self) -> &HashMap<String, i32> {
         &self.loaded_replicas
     }
 
+    /// Sets the outgoing nodes and returns the updated value.
     pub fn outgoing_nodes(mut self, value: HashMap<String, i32>) -> Self {
         self.outgoing_nodes = value;
         self
     }
 
+    /// Sets the outgoing nodes and returns this value for further mutation.
     pub fn set_outgoing_nodes(&mut self, value: HashMap<String, i32>) -> &mut Self {
         self.outgoing_nodes = value;
         self
     }
 
+    /// Returns the configured outgoing nodes.
     pub fn get_outgoing_nodes(&self) -> &HashMap<String, i32> {
         &self.outgoing_nodes
     }
 
+    /// Sets the incoming nodes and returns the updated value.
     pub fn incoming_nodes(mut self, value: HashMap<String, i32>) -> Self {
         self.incoming_nodes = value;
         self
     }
 
+    /// Sets the incoming nodes and returns this value for further mutation.
     pub fn set_incoming_nodes(&mut self, value: HashMap<String, i32>) -> &mut Self {
         self.incoming_nodes = value;
         self
     }
 
+    /// Returns the configured incoming nodes.
     pub fn get_incoming_nodes(&self) -> &HashMap<String, i32> {
         &self.incoming_nodes
     }
 
+    /// Sets the config and returns the updated value.
     pub fn config(mut self, value: ResourceGroupConfig) -> Self {
         self.config = value;
         self
     }
 
+    /// Sets the config and returns this value for further mutation.
     pub fn set_config(&mut self, value: ResourceGroupConfig) -> &mut Self {
         self.config = value;
         self
     }
 
+    /// Returns the configured config.
     pub fn get_config(&self) -> &ResourceGroupConfig {
         &self.config
     }
 
+    /// Sets the nodes and returns the updated value.
     pub fn nodes(mut self, value: Vec<ResourceGroupNode>) -> Self {
         self.nodes = value;
         self
     }
 
+    /// Sets the nodes and returns this value for further mutation.
     pub fn set_nodes(&mut self, value: Vec<ResourceGroupNode>) -> &mut Self {
         self.nodes = value;
         self
     }
 
+    /// Returns the configured nodes.
     pub fn get_nodes(&self) -> &[ResourceGroupNode] {
         &self.nodes
     }
 
+    /// Adds one add node to the existing values.
     pub fn add_node(mut self, value: ResourceGroupNode) -> Self {
         self.nodes.push(value);
         self

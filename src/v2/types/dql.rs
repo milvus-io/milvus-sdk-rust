@@ -40,6 +40,7 @@ pub struct RRFRerank {
 }
 
 impl RRFRerank {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             function: Function::new()
@@ -49,20 +50,24 @@ impl RRFRerank {
         }
     }
 
+    /// Sets the function and returns the updated value.
     pub fn function(mut self, value: Function) -> Self {
         self.function = value;
         self
     }
 
+    /// Sets the function and returns this value for further mutation.
     pub fn set_function(&mut self, value: Function) -> &mut Self {
         self.function = value;
         self
     }
 
+    /// Returns the configured function.
     pub fn get_function(&self) -> &Function {
         &self.function
     }
 
+    /// Sets the k and returns the updated value.
     pub fn k(mut self, value: i64) -> Self {
         self.function.params.insert(
             "params".into(),
@@ -91,6 +96,7 @@ pub struct WeightedRerank {
 }
 
 impl WeightedRerank {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             function: Function::new()
@@ -100,6 +106,7 @@ impl WeightedRerank {
         }
     }
 
+    /// Sets the weights and returns the updated value.
     pub fn weights(mut self, value: Vec<f32>) -> Self {
         self.function.params.insert(
             "params".into(),
@@ -108,16 +115,19 @@ impl WeightedRerank {
         self
     }
 
+    /// Sets the function and returns the updated value.
     pub fn function(mut self, value: Function) -> Self {
         self.function = value;
         self
     }
 
+    /// Sets the function and returns this value for further mutation.
     pub fn set_function(&mut self, value: Function) -> &mut Self {
         self.function = value;
         self
     }
 
+    /// Returns the configured function.
     pub fn get_function(&self) -> &Function {
         &self.function
     }
@@ -142,31 +152,37 @@ pub struct BoostRerank {
 }
 
 impl BoostRerank {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             function: rerank_function("", "boost"),
         }
     }
 
+    /// Sets the name and returns the updated value.
     pub fn name(mut self, value: impl Into<String>) -> Self {
         self.function.name = value.into();
         self
     }
 
+    /// Sets the function and returns the updated value.
     pub fn function(mut self, value: Function) -> Self {
         self.function = value;
         self
     }
 
+    /// Sets the function and returns this value for further mutation.
     pub fn set_function(&mut self, value: Function) -> &mut Self {
         self.function = value;
         self
     }
 
+    /// Returns the configured function.
     pub fn get_function(&self) -> &Function {
         &self.function
     }
 
+    /// Sets the filter and returns the updated value.
     pub fn filter(mut self, value: impl Into<String>) -> Self {
         let value = value.into();
         if !value.is_empty() {
@@ -175,6 +191,7 @@ impl BoostRerank {
         self
     }
 
+    /// Sets the weight and returns the updated value.
     pub fn weight(mut self, value: f32) -> Self {
         if value > 0.0 {
             self.function
@@ -199,6 +216,7 @@ impl BoostRerank {
         );
     }
 
+    /// Sets the random score field and returns the updated value.
     pub fn random_score_field(mut self, value: impl Into<String>) -> Self {
         let mut random_score = self.random_score();
         random_score.insert("field".into(), serde_json::Value::String(value.into()));
@@ -206,6 +224,7 @@ impl BoostRerank {
         self
     }
 
+    /// Sets the random score seed and returns the updated value.
     pub fn random_score_seed(mut self, value: i64) -> Self {
         let mut random_score = self.random_score();
         random_score.insert("seed".into(), serde_json::Value::Number(value.into()));
@@ -233,31 +252,37 @@ pub struct DecayRerank {
 }
 
 impl DecayRerank {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             function: rerank_function("", "decay"),
         }
     }
 
+    /// Sets the name and returns the updated value.
     pub fn name(mut self, value: impl Into<String>) -> Self {
         self.function.name = value.into();
         self
     }
 
+    /// Sets the function and returns the updated value.
     pub fn function(mut self, value: Function) -> Self {
         self.function = value;
         self
     }
 
+    /// Sets the function and returns this value for further mutation.
     pub fn set_function(&mut self, value: Function) -> &mut Self {
         self.function = value;
         self
     }
 
+    /// Returns the configured function.
     pub fn get_function(&self) -> &Function {
         &self.function
     }
 
+    /// Sets the decay function and returns the updated value.
     pub fn decay_function(mut self, value: impl Into<String>) -> Self {
         let value = value.into();
         if !value.is_empty() {
@@ -266,6 +291,7 @@ impl DecayRerank {
         self
     }
 
+    /// Sets the origin and returns the updated value.
     pub fn origin(mut self, value: impl ToString) -> Self {
         self.function
             .params
@@ -273,6 +299,7 @@ impl DecayRerank {
         self
     }
 
+    /// Sets the offset and returns the updated value.
     pub fn offset(mut self, value: impl ToString) -> Self {
         self.function
             .params
@@ -280,6 +307,7 @@ impl DecayRerank {
         self
     }
 
+    /// Sets the scale and returns the updated value.
     pub fn scale(mut self, value: impl ToString) -> Self {
         self.function
             .params
@@ -287,6 +315,7 @@ impl DecayRerank {
         self
     }
 
+    /// Sets the decay and returns the updated value.
     pub fn decay(mut self, value: f32) -> Self {
         self.function
             .params
@@ -314,36 +343,43 @@ pub struct ModelRerank {
 }
 
 impl ModelRerank {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             function: rerank_function("", "model"),
         }
     }
 
+    /// Sets the name and returns the updated value.
     pub fn name(mut self, value: impl Into<String>) -> Self {
         self.function.name = value.into();
         self
     }
 
+    /// Sets the function and returns the updated value.
     pub fn function(mut self, value: Function) -> Self {
         self.function = value;
         self
     }
 
+    /// Sets the function and returns this value for further mutation.
     pub fn set_function(&mut self, value: Function) -> &mut Self {
         self.function = value;
         self
     }
 
+    /// Returns the configured function.
     pub fn get_function(&self) -> &Function {
         &self.function
     }
 
+    /// Sets the provider and returns the updated value.
     pub fn provider(mut self, value: impl Into<String>) -> Self {
         self.function.params.insert("provider".into(), value.into());
         self
     }
 
+    /// Sets the queries and returns the updated value.
     pub fn queries(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         let values = values.into_iter().map(Into::into).collect::<Vec<String>>();
         self.function
@@ -352,11 +388,13 @@ impl ModelRerank {
         self
     }
 
+    /// Sets the endpoint and returns the updated value.
     pub fn endpoint(mut self, value: impl Into<String>) -> Self {
         self.function.params.insert("endpoint".into(), value.into());
         self
     }
 
+    /// Sets the max client batch size and returns the updated value.
     pub fn max_client_batch_size(mut self, value: i64) -> Self {
         self.function
             .params
@@ -387,6 +425,7 @@ pub struct FunctionScore {
 }
 
 impl FunctionScore {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             functions: Vec::new(),
@@ -394,34 +433,41 @@ impl FunctionScore {
         }
     }
 
+    /// Sets the functions and returns the updated value.
     pub fn functions(mut self, value: Vec<Function>) -> Self {
         self.functions = value;
         self
     }
 
+    /// Sets the functions and returns this value for further mutation.
     pub fn set_functions(&mut self, value: Vec<Function>) -> &mut Self {
         self.functions = value;
         self
     }
 
+    /// Returns the configured functions.
     pub fn get_functions(&self) -> &[Function] {
         &self.functions
     }
 
+    /// Sets the params and returns the updated value.
     pub fn params(mut self, value: HashMap<String, serde_json::Value>) -> Self {
         self.params = value;
         self
     }
 
+    /// Sets the params and returns this value for further mutation.
     pub fn set_params(&mut self, value: HashMap<String, serde_json::Value>) -> &mut Self {
         self.params = value;
         self
     }
 
+    /// Returns the configured params.
     pub fn get_params(&self) -> &HashMap<String, serde_json::Value> {
         &self.params
     }
 
+    /// Adds one add function to the existing values.
     pub fn add_function(mut self, value: impl Into<Function>) -> Self {
         self.functions.push(value.into());
         self
@@ -456,13 +502,21 @@ impl FunctionScore {
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum SearchVectors {
+    /// Represents the Float case.
     Float(Vec<Vec<f32>>),
+    /// Represents the Binary case.
     Binary(Vec<Vec<u8>>),
+    /// Represents the Float16 case.
     Float16(Vec<Vec<u16>>),
+    /// Represents the BFloat16 case.
     BFloat16(Vec<Vec<u16>>),
+    /// Represents the SparseFloat case.
     SparseFloat(Vec<SparseVector>),
+    /// Represents the Int8 case.
     Int8(Vec<Vec<i8>>),
+    /// Represents the EmbeddedText case.
     EmbeddedText(Vec<String>),
+    /// Represents the EmbeddingLists case.
     EmbeddingLists(Vec<EmbeddingList>),
 }
 
@@ -483,26 +537,31 @@ pub struct EmbeddingList {
 }
 
 impl EmbeddingList {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             vectors: Vec::new(),
         }
     }
 
+    /// Sets the vectors and returns the updated value.
     pub fn vectors(mut self, value: Vec<Vec<f32>>) -> Self {
         self.vectors = value;
         self
     }
 
+    /// Sets the vectors and returns this value for further mutation.
     pub fn set_vectors(&mut self, value: Vec<Vec<f32>>) -> &mut Self {
         self.vectors = value;
         self
     }
 
+    /// Returns the configured vectors.
     pub fn get_vectors(&self) -> &[Vec<f32>] {
         &self.vectors
     }
 
+    /// Adds one add vector to the existing values.
     pub fn add_vector(mut self, value: Vec<f32>) -> Self {
         self.vectors.push(value);
         self
@@ -517,7 +576,9 @@ impl EmbeddingList {
 #[non_exhaustive]
 pub enum HighlightType {
     #[default]
+    /// Represents the Lexical case.
     Lexical,
+    /// Represents the Semantic case.
     Semantic,
 }
 
@@ -533,6 +594,7 @@ pub struct Highlighter {
 }
 
 impl Highlighter {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             highlight_type: HighlightType::Lexical,
@@ -540,30 +602,36 @@ impl Highlighter {
         }
     }
 
+    /// Sets the highlight type and returns the updated value.
     pub fn highlight_type(mut self, value: HighlightType) -> Self {
         self.highlight_type = value;
         self
     }
 
+    /// Sets the highlight type and returns this value for further mutation.
     pub fn set_highlight_type(&mut self, value: HighlightType) -> &mut Self {
         self.highlight_type = value;
         self
     }
 
+    /// Returns the configured highlight type.
     pub fn get_highlight_type(&self) -> HighlightType {
         self.highlight_type
     }
 
+    /// Sets the params and returns the updated value.
     pub fn params(mut self, value: HashMap<String, String>) -> Self {
         self.params = value;
         self
     }
 
+    /// Sets the params and returns this value for further mutation.
     pub fn set_params(&mut self, value: HashMap<String, String>) -> &mut Self {
         self.params = value;
         self
     }
 
+    /// Returns the configured params.
     pub fn get_params(&self) -> &HashMap<String, String> {
         &self.params
     }
@@ -695,6 +763,7 @@ pub struct HighlightQuery {
 }
 
 impl HighlightQuery {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             query_type: String::new(),
@@ -703,44 +772,53 @@ impl HighlightQuery {
         }
     }
 
+    /// Sets the query type and returns the updated value.
     pub fn query_type(mut self, value: impl Into<String>) -> Self {
         self.query_type = value.into();
         self
     }
 
+    /// Sets the query type and returns this value for further mutation.
     pub fn set_query_type(&mut self, value: impl Into<String>) -> &mut Self {
         self.query_type = value.into();
         self
     }
 
+    /// Returns the configured query type.
     pub fn get_query_type(&self) -> &str {
         &self.query_type
     }
 
+    /// Sets the field and returns the updated value.
     pub fn field(mut self, value: impl Into<String>) -> Self {
         self.field = value.into();
         self
     }
 
+    /// Sets the field and returns this value for further mutation.
     pub fn set_field(&mut self, value: impl Into<String>) -> &mut Self {
         self.field = value.into();
         self
     }
 
+    /// Returns the configured field.
     pub fn get_field(&self) -> &str {
         &self.field
     }
 
+    /// Sets the text and returns the updated value.
     pub fn text(mut self, value: impl Into<String>) -> Self {
         self.text = value.into();
         self
     }
 
+    /// Sets the text and returns this value for further mutation.
     pub fn set_text(&mut self, value: impl Into<String>) -> &mut Self {
         self.text = value.into();
         self
     }
 
+    /// Returns the configured text.
     pub fn get_text(&self) -> &str {
         &self.text
     }
@@ -763,6 +841,7 @@ pub struct LexicalHighlighter {
 }
 
 impl LexicalHighlighter {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             highlight_queries: Vec::new(),
@@ -775,39 +854,47 @@ impl LexicalHighlighter {
         }
     }
 
+    /// Sets the highlight queries and returns the updated value.
     pub fn highlight_queries(mut self, value: Vec<HighlightQuery>) -> Self {
         self.highlight_queries = value;
         self
     }
 
+    /// Sets the highlight queries and returns this value for further mutation.
     pub fn set_highlight_queries(&mut self, value: Vec<HighlightQuery>) -> &mut Self {
         self.highlight_queries = value;
         self
     }
 
+    /// Returns the configured highlight queries.
     pub fn get_highlight_queries(&self) -> &[HighlightQuery] {
         &self.highlight_queries
     }
 
+    /// Sets the highlight search text and returns the updated value.
     pub fn highlight_search_text(mut self, value: bool) -> Self {
         self.highlight_search_text = value;
         self
     }
 
+    /// Sets the highlight search text and returns this value for further mutation.
     pub fn set_highlight_search_text(&mut self, value: bool) -> &mut Self {
         self.highlight_search_text = value;
         self
     }
 
+    /// Returns the configured highlight search text.
     pub fn get_highlight_search_text(&self) -> bool {
         self.highlight_search_text
     }
 
+    /// Sets the pre tags and returns the updated value.
     pub fn pre_tags(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.pre_tags = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the pre tags and returns this value for further mutation.
     pub fn set_pre_tags(
         &mut self,
         values: impl IntoIterator<Item = impl Into<String>>,
@@ -816,15 +903,18 @@ impl LexicalHighlighter {
         self
     }
 
+    /// Returns the configured pre tags.
     pub fn get_pre_tags(&self) -> &[String] {
         &self.pre_tags
     }
 
+    /// Sets the post tags and returns the updated value.
     pub fn post_tags(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.post_tags = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the post tags and returns this value for further mutation.
     pub fn set_post_tags(
         &mut self,
         values: impl IntoIterator<Item = impl Into<String>>,
@@ -833,62 +923,75 @@ impl LexicalHighlighter {
         self
     }
 
+    /// Returns the configured post tags.
     pub fn get_post_tags(&self) -> &[String] {
         &self.post_tags
     }
 
+    /// Sets the fragment offset and returns the updated value.
     pub fn fragment_offset(mut self, value: i64) -> Self {
         self.fragment_offset = Some(value);
         self
     }
 
+    /// Sets the fragment offset and returns this value for further mutation.
     pub fn set_fragment_offset(&mut self, value: i64) -> &mut Self {
         self.fragment_offset = Some(value);
         self
     }
 
+    /// Returns the configured fragment offset.
     pub fn get_fragment_offset(&self) -> Option<i64> {
         self.fragment_offset
     }
 
+    /// Sets the fragment size and returns the updated value.
     pub fn fragment_size(mut self, value: i64) -> Self {
         self.fragment_size = Some(value);
         self
     }
 
+    /// Sets the fragment size and returns this value for further mutation.
     pub fn set_fragment_size(&mut self, value: i64) -> &mut Self {
         self.fragment_size = Some(value);
         self
     }
 
+    /// Returns the configured fragment size.
     pub fn get_fragment_size(&self) -> Option<i64> {
         self.fragment_size
     }
 
+    /// Sets the num of fragments and returns the updated value.
     pub fn num_of_fragments(mut self, value: i64) -> Self {
         self.num_of_fragments = Some(value);
         self
     }
 
+    /// Sets the num of fragments and returns this value for further mutation.
     pub fn set_num_of_fragments(&mut self, value: i64) -> &mut Self {
         self.num_of_fragments = Some(value);
         self
     }
 
+    /// Returns the configured num of fragments.
     pub fn get_num_of_fragments(&self) -> Option<i64> {
         self.num_of_fragments
     }
 
+    /// Adds one add highlight query to the existing values.
     pub fn add_highlight_query(mut self, value: HighlightQuery) -> Self {
         self.highlight_queries.push(value);
         self
     }
 
+    /// Adds one add pre tag to the existing values.
     pub fn add_pre_tag(mut self, value: impl Into<String>) -> Self {
         self.pre_tags.push(value.into());
         self
     }
 
+    /// Adds one add post tag to the existing values.
     pub fn add_post_tag(mut self, value: impl Into<String>) -> Self {
         self.post_tags.push(value.into());
         self
@@ -913,6 +1016,7 @@ pub struct SemanticHighlighter {
 }
 
 impl SemanticHighlighter {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             queries: Vec::new(),
@@ -926,11 +1030,13 @@ impl SemanticHighlighter {
         }
     }
 
+    /// Sets the queries and returns the updated value.
     pub fn queries(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.queries = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the queries and returns this value for further mutation.
     pub fn set_queries(
         &mut self,
         values: impl IntoIterator<Item = impl Into<String>>,
@@ -939,15 +1045,18 @@ impl SemanticHighlighter {
         self
     }
 
+    /// Returns the configured queries.
     pub fn get_queries(&self) -> &[String] {
         &self.queries
     }
 
+    /// Sets the input fields and returns the updated value.
     pub fn input_fields(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.input_fields = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the input fields and returns this value for further mutation.
     pub fn set_input_fields(
         &mut self,
         values: impl IntoIterator<Item = impl Into<String>>,
@@ -956,15 +1065,18 @@ impl SemanticHighlighter {
         self
     }
 
+    /// Returns the configured input fields.
     pub fn get_input_fields(&self) -> &[String] {
         &self.input_fields
     }
 
+    /// Sets the pre tags and returns the updated value.
     pub fn pre_tags(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.pre_tags = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the pre tags and returns this value for further mutation.
     pub fn set_pre_tags(
         &mut self,
         values: impl IntoIterator<Item = impl Into<String>>,
@@ -973,15 +1085,18 @@ impl SemanticHighlighter {
         self
     }
 
+    /// Returns the configured pre tags.
     pub fn get_pre_tags(&self) -> &[String] {
         &self.pre_tags
     }
 
+    /// Sets the post tags and returns the updated value.
     pub fn post_tags(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.post_tags = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the post tags and returns this value for further mutation.
     pub fn set_post_tags(
         &mut self,
         values: impl IntoIterator<Item = impl Into<String>>,
@@ -990,81 +1105,98 @@ impl SemanticHighlighter {
         self
     }
 
+    /// Returns the configured post tags.
     pub fn get_post_tags(&self) -> &[String] {
         &self.post_tags
     }
 
+    /// Sets the threshold and returns the updated value.
     pub fn threshold(mut self, value: f32) -> Self {
         self.threshold = Some(value);
         self
     }
 
+    /// Sets the threshold and returns this value for further mutation.
     pub fn set_threshold(&mut self, value: f32) -> &mut Self {
         self.threshold = Some(value);
         self
     }
 
+    /// Returns the configured threshold.
     pub fn get_threshold(&self) -> Option<f32> {
         self.threshold
     }
 
+    /// Sets the highlight only and returns the updated value.
     pub fn highlight_only(mut self, value: bool) -> Self {
         self.highlight_only = value;
         self
     }
 
+    /// Sets the highlight only and returns this value for further mutation.
     pub fn set_highlight_only(&mut self, value: bool) -> &mut Self {
         self.highlight_only = value;
         self
     }
 
+    /// Returns the configured highlight only.
     pub fn get_highlight_only(&self) -> bool {
         self.highlight_only
     }
 
+    /// Sets the model deployment id and returns the updated value.
     pub fn model_deployment_id(mut self, value: impl Into<String>) -> Self {
         self.model_deployment_id = value.into();
         self
     }
 
+    /// Sets the model deployment id and returns this value for further mutation.
     pub fn set_model_deployment_id(&mut self, value: impl Into<String>) -> &mut Self {
         self.model_deployment_id = value.into();
         self
     }
 
+    /// Returns the configured model deployment id.
     pub fn get_model_deployment_id(&self) -> &str {
         &self.model_deployment_id
     }
 
+    /// Sets the max client batch size and returns the updated value.
     pub fn max_client_batch_size(mut self, value: i64) -> Self {
         self.max_client_batch_size = Some(value);
         self
     }
 
+    /// Sets the max client batch size and returns this value for further mutation.
     pub fn set_max_client_batch_size(&mut self, value: i64) -> &mut Self {
         self.max_client_batch_size = Some(value);
         self
     }
 
+    /// Returns the configured max client batch size.
     pub fn get_max_client_batch_size(&self) -> Option<i64> {
         self.max_client_batch_size
     }
 
+    /// Adds one add query to the existing values.
     pub fn add_query(mut self, value: impl Into<String>) -> Self {
         self.queries.push(value.into());
         self
     }
 
+    /// Adds one add input field to the existing values.
     pub fn add_input_field(mut self, value: impl Into<String>) -> Self {
         self.input_fields.push(value.into());
         self
     }
 
+    /// Adds one add pre tag to the existing values.
     pub fn add_pre_tag(mut self, value: impl Into<String>) -> Self {
         self.pre_tags.push(value.into());
         self
     }
 
+    /// Adds one add post tag to the existing values.
     pub fn add_post_tag(mut self, value: impl Into<String>) -> Self {
         self.post_tags.push(value.into());
         self
@@ -1083,6 +1215,7 @@ pub struct QueryResults {
 }
 
 impl QueryResults {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             output_fields: Vec::new(),
@@ -1090,20 +1223,24 @@ impl QueryResults {
         }
     }
 
+    /// Sets the output fields and returns the updated value.
     pub fn output_fields(mut self, value: Vec<FieldData>) -> Self {
         self.output_fields = value;
         self
     }
 
+    /// Sets the output fields and returns this value for further mutation.
     pub fn set_output_fields(&mut self, value: Vec<FieldData>) -> &mut Self {
         self.output_fields = value;
         self
     }
 
+    /// Returns the configured output fields.
     pub fn get_output_fields(&self) -> &[FieldData] {
         &self.output_fields
     }
 
+    /// Performs the output field names operation.
     pub fn output_field_names(
         mut self,
         values: impl IntoIterator<Item = impl Into<String>>,
@@ -1112,6 +1249,7 @@ impl QueryResults {
         self
     }
 
+    /// Sets the output field names and returns this value for further mutation.
     pub fn set_output_field_names(
         &mut self,
         values: impl IntoIterator<Item = impl Into<String>>,
@@ -1120,19 +1258,23 @@ impl QueryResults {
         self
     }
 
+    /// Returns the configured output field names.
     pub fn get_output_field_names(&self) -> &[String] {
         &self.output_field_names
     }
 
+    /// Adds one add output field to the existing values.
     pub fn add_output_field(mut self, value: FieldData) -> Self {
         self.output_fields.push(value);
         self
     }
 
+    /// Returns the configured output field.
     pub fn get_output_field(&self, name: &str) -> Option<&FieldData> {
         self.output_fields.iter().find(|field| field.name() == name)
     }
 
+    /// Returns the configured row count.
     pub fn get_row_count(&self) -> u64 {
         if self.output_fields.len() == 1 && self.output_fields[0].name() == "count(*)" {
             if let FieldData::Int64 { values, .. } = self.output_fields[0].inner() {
@@ -1147,11 +1289,13 @@ impl QueryResults {
             .map_or(0, |field| field.len() as u64)
     }
 
+    /// Adds one add output field name to the existing values.
     pub fn add_output_field_name(mut self, value: impl Into<String>) -> Self {
         self.output_field_names.push(value.into());
         self
     }
 
+    /// Returns whether empty.
     pub fn is_empty(&self) -> bool {
         self.get_row_count() == 0
     }
@@ -1214,6 +1358,7 @@ pub struct HighlightResult {
 }
 
 impl HighlightResult {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             field_name: String::new(),
@@ -1222,25 +1367,30 @@ impl HighlightResult {
         }
     }
 
+    /// Sets the field name and returns the updated value.
     pub fn field_name(mut self, value: impl Into<String>) -> Self {
         self.field_name = value.into();
         self
     }
 
+    /// Sets the field name and returns this value for further mutation.
     pub fn set_field_name(&mut self, value: impl Into<String>) -> &mut Self {
         self.field_name = value.into();
         self
     }
 
+    /// Returns the configured field name.
     pub fn get_field_name(&self) -> &str {
         &self.field_name
     }
 
+    /// Sets the fragments and returns the updated value.
     pub fn fragments(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.fragments = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the fragments and returns this value for further mutation.
     pub fn set_fragments(
         &mut self,
         values: impl IntoIterator<Item = impl Into<String>>,
@@ -1249,29 +1399,35 @@ impl HighlightResult {
         self
     }
 
+    /// Returns the configured fragments.
     pub fn get_fragments(&self) -> &[String] {
         &self.fragments
     }
 
+    /// Sets the scores and returns the updated value.
     pub fn scores(mut self, value: Vec<f32>) -> Self {
         self.scores = value;
         self
     }
 
+    /// Sets the scores and returns this value for further mutation.
     pub fn set_scores(&mut self, value: Vec<f32>) -> &mut Self {
         self.scores = value;
         self
     }
 
+    /// Returns the configured scores.
     pub fn get_scores(&self) -> &[f32] {
         &self.scores
     }
 
+    /// Adds one add fragment to the existing values.
     pub fn add_fragment(mut self, value: impl Into<String>) -> Self {
         self.fragments.push(value.into());
         self
     }
 
+    /// Adds one add score to the existing values.
     pub fn add_score(mut self, value: f32) -> Self {
         self.scores.push(value);
         self
@@ -1296,6 +1452,7 @@ pub struct SingleResult {
 }
 
 impl SingleResult {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             ids: Ids::default(),
@@ -1309,30 +1466,36 @@ impl SingleResult {
         }
     }
 
+    /// Sets the ids and returns the updated value.
     pub fn ids(mut self, value: Ids) -> Self {
         self.ids = value;
         self
     }
 
+    /// Sets the ids and returns this value for further mutation.
     pub fn set_ids(&mut self, value: Ids) -> &mut Self {
         self.ids = value;
         self
     }
 
+    /// Returns the configured ids.
     pub fn get_ids(&self) -> &Ids {
         &self.ids
     }
 
+    /// Sets the scores and returns the updated value.
     pub fn scores(mut self, value: Vec<f32>) -> Self {
         self.scores = value;
         self
     }
 
+    /// Sets the scores and returns this value for further mutation.
     pub fn set_scores(&mut self, value: Vec<f32>) -> &mut Self {
         self.scores = value;
         self
     }
 
+    /// Returns the configured scores.
     pub fn get_scores(&self) -> &[f32] {
         &self.scores
     }
@@ -1345,15 +1508,18 @@ impl SingleResult {
         self
     }
 
+    /// Sets the element indices and returns this value for further mutation.
     pub fn set_element_indices(&mut self, value: Option<Vec<i64>>) -> &mut Self {
         self.element_indices = value;
         self
     }
 
+    /// Returns the configured element indices.
     pub fn get_element_indices(&self) -> Option<&[i64]> {
         self.element_indices.as_deref()
     }
 
+    /// Adds one add element index to the existing values.
     pub fn add_element_index(mut self, value: i64) -> Self {
         self.element_indices
             .get_or_insert_with(Vec::new)
@@ -1361,20 +1527,24 @@ impl SingleResult {
         self
     }
 
+    /// Sets the output fields and returns the updated value.
     pub fn output_fields(mut self, value: Vec<FieldData>) -> Self {
         self.output_fields = value;
         self
     }
 
+    /// Sets the output fields and returns this value for further mutation.
     pub fn set_output_fields(&mut self, value: Vec<FieldData>) -> &mut Self {
         self.output_fields = value;
         self
     }
 
+    /// Returns the configured output fields.
     pub fn get_output_fields(&self) -> &[FieldData] {
         &self.output_fields
     }
 
+    /// Performs the output field names operation.
     pub fn output_field_names(
         mut self,
         values: impl IntoIterator<Item = impl Into<String>>,
@@ -1383,6 +1553,7 @@ impl SingleResult {
         self
     }
 
+    /// Sets the output field names and returns this value for further mutation.
     pub fn set_output_field_names(
         &mut self,
         values: impl IntoIterator<Item = impl Into<String>>,
@@ -1391,43 +1562,52 @@ impl SingleResult {
         self
     }
 
+    /// Returns the configured output field names.
     pub fn get_output_field_names(&self) -> &[String] {
         &self.output_field_names
     }
 
+    /// Sets the primary field name and returns the updated value.
     pub fn primary_field_name(mut self, value: impl Into<String>) -> Self {
         self.primary_field_name = value.into();
         self
     }
 
+    /// Sets the primary field name and returns this value for further mutation.
     pub fn set_primary_field_name(&mut self, value: impl Into<String>) -> &mut Self {
         self.primary_field_name = value.into();
         self
     }
 
+    /// Returns the configured primary field name.
     pub fn get_primary_field_name(&self) -> &str {
         &self.primary_field_name
     }
 
+    /// Sets the score field name and returns the updated value.
     pub fn score_field_name(mut self, value: impl Into<String>) -> Self {
         self.score_field_name = value.into();
         self
     }
 
+    /// Sets the score field name and returns this value for further mutation.
     pub fn set_score_field_name(&mut self, value: impl Into<String>) -> &mut Self {
         self.score_field_name = value.into();
         self
     }
 
+    /// Returns the configured score field name.
     pub fn get_score_field_name(&self) -> &str {
         &self.score_field_name
     }
 
+    /// Sets the highlight results and returns the updated value.
     pub fn highlight_results(mut self, value: Vec<HashMap<String, HighlightResult>>) -> Self {
         self.highlight_results = value;
         self
     }
 
+    /// Sets the highlight results and returns this value for further mutation.
     pub fn set_highlight_results(
         &mut self,
         value: Vec<HashMap<String, HighlightResult>>,
@@ -1436,37 +1616,45 @@ impl SingleResult {
         self
     }
 
+    /// Returns the configured highlight results.
     pub fn get_highlight_results(&self) -> &[HashMap<String, HighlightResult>] {
         &self.highlight_results
     }
 
+    /// Returns the len.
     pub fn len(&self) -> usize {
         self.ids.len()
     }
 
+    /// Returns whether empty.
     pub fn is_empty(&self) -> bool {
         self.ids.is_empty()
     }
 
+    /// Adds one add score to the existing values.
     pub fn add_score(mut self, value: f32) -> Self {
         self.scores.push(value);
         self
     }
 
+    /// Adds one add output field to the existing values.
     pub fn add_output_field(mut self, value: FieldData) -> Self {
         self.output_fields.push(value);
         self
     }
 
+    /// Returns the configured output field.
     pub fn get_output_field(&self, name: &str) -> Option<&FieldData> {
         self.output_fields.iter().find(|field| field.name() == name)
     }
 
+    /// Adds one add output field name to the existing values.
     pub fn add_output_field_name(mut self, value: impl Into<String>) -> Self {
         self.output_field_names.push(value.into());
         self
     }
 
+    /// Adds one add highlight result to the existing values.
     pub fn add_highlight_result(mut self, value: HashMap<String, HighlightResult>) -> Self {
         self.highlight_results.push(value);
         self
@@ -2169,6 +2357,7 @@ pub struct SearchResults {
 }
 
 impl SearchResults {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             results: Vec::new(),
@@ -2176,16 +2365,19 @@ impl SearchResults {
         }
     }
 
+    /// Sets the results and returns the updated value.
     pub fn results(mut self, value: Vec<SingleResult>) -> Self {
         self.results = value;
         self
     }
 
+    /// Sets the results and returns this value for further mutation.
     pub fn set_results(&mut self, value: Vec<SingleResult>) -> &mut Self {
         self.results = value;
         self
     }
 
+    /// Returns the configured results.
     pub fn get_results(&self) -> &[SingleResult] {
         &self.results
     }
@@ -2195,33 +2387,40 @@ impl SearchResults {
         self.results.iter()
     }
 
+    /// Sets the recalls and returns the updated value.
     pub fn recalls(mut self, value: Vec<f32>) -> Self {
         self.recalls = value;
         self
     }
 
+    /// Sets the recalls and returns this value for further mutation.
     pub fn set_recalls(&mut self, value: Vec<f32>) -> &mut Self {
         self.recalls = value;
         self
     }
 
+    /// Returns the configured recalls.
     pub fn get_recalls(&self) -> &[f32] {
         &self.recalls
     }
 
+    /// Adds one add result to the existing values.
     pub fn add_result(mut self, value: SingleResult) -> Self {
         self.results.push(value);
         self
     }
 
+    /// Returns the len.
     pub fn len(&self) -> usize {
         self.results.len()
     }
 
+    /// Returns whether empty.
     pub fn is_empty(&self) -> bool {
         self.results.is_empty()
     }
 
+    /// Adds one add recall to the existing values.
     pub fn add_recall(mut self, value: f32) -> Self {
         self.recalls.push(value);
         self

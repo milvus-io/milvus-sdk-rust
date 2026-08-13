@@ -23,6 +23,9 @@ use crate::v2::{request, response};
 
 impl ClientV2 {
     /// Selects the database used by subsequent operations on this client and its clones.
+    ///
+    /// This changes client-side routing metadata; it does not create the database or verify that
+    /// it exists. Use [`ClientV2::describe_database`] or a database operation to validate it.
     pub fn use_database(&self, database: impl Into<String>) -> Result<()> {
         let database = normalize_database(database.into())?;
 
@@ -40,7 +43,7 @@ impl ClientV2 {
         }
     }
 
-    /// Create a new database.
+    /// Creates a database in the connected Milvus instance.
     pub async fn create_database(
         &self,
         request: request::database::CreateDatabaseRequest,
@@ -50,7 +53,7 @@ impl ClientV2 {
         self.status(status)
     }
 
-    /// Drop a database.
+    /// Drops a database and the resources owned by it according to server policy.
     pub async fn drop_database(
         &self,
         request: request::database::DropDatabaseRequest,
@@ -63,7 +66,7 @@ impl ClientV2 {
         Ok(())
     }
 
-    /// List all databases.
+    /// Lists databases visible to the authenticated user.
     pub async fn list_databases(
         &self,
         request: request::database::ListDatabasesRequest,
@@ -75,7 +78,7 @@ impl ClientV2 {
         ))
     }
 
-    /// Alter a database's properties.
+    /// Updates mutable properties of a database.
     pub async fn alter_database_properties(
         &self,
         request: request::database::AlterDatabasePropertiesRequest,
@@ -85,7 +88,7 @@ impl ClientV2 {
         self.status(status)
     }
 
-    /// Drop a database's properties.
+    /// Removes the requested mutable database properties.
     pub async fn drop_database_properties(
         &self,
         request: request::database::DropDatabasePropertiesRequest,
@@ -95,7 +98,7 @@ impl ClientV2 {
         self.status(status)
     }
 
-    /// Describe a database, including its properties.
+    /// Retrieves a database's metadata and properties.
     pub async fn describe_database(
         &self,
         request: request::database::DescribeDatabaseRequest,

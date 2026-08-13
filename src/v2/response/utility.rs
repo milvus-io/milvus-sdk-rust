@@ -57,22 +57,27 @@ impl GetServerVersionResponse {
         }
     }
 
+    /// Returns the version.
     pub fn version(&self) -> &str {
         &self.version
     }
 
+    /// Returns the build time.
     pub fn build_time(&self) -> Option<&str> {
         self.build_time.as_deref()
     }
 
+    /// Returns the git commit.
     pub fn git_commit(&self) -> Option<&str> {
         self.git_commit.as_deref()
     }
 
+    /// Returns the go version.
     pub fn go_version(&self) -> Option<&str> {
         self.go_version.as_deref()
     }
 
+    /// Returns the deploy mode.
     pub fn deploy_mode(&self) -> Option<&str> {
         self.deploy_mode.as_deref()
     }
@@ -115,31 +120,37 @@ pub(crate) struct GetServerVersionResponseBuilder {
 
 #[cfg(test)]
 impl GetServerVersionResponseBuilder {
+    /// Sets the version and returns the updated value.
     pub fn version(mut self, value: impl Into<String>) -> Self {
         self.value.version = value.into();
         self
     }
 
+    /// Sets the build time and returns the updated value.
     pub fn build_time(mut self, value: impl Into<String>) -> Self {
         self.value.build_time = Some(value.into());
         self
     }
 
+    /// Sets the git commit and returns the updated value.
     pub fn git_commit(mut self, value: impl Into<String>) -> Self {
         self.value.git_commit = Some(value.into());
         self
     }
 
+    /// Sets the go version and returns the updated value.
     pub fn go_version(mut self, value: impl Into<String>) -> Self {
         self.value.go_version = Some(value.into());
         self
     }
 
+    /// Sets the deploy mode and returns the updated value.
     pub fn deploy_mode(mut self, value: impl Into<String>) -> Self {
         self.value.deploy_mode = Some(value.into());
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> GetServerVersionResponse {
         self.value
     }
@@ -206,14 +217,17 @@ impl CheckHealthResponse {
         }
     }
 
+    /// Returns whether healthy.
     pub fn is_healthy(&self) -> bool {
         self.is_healthy
     }
 
+    /// Returns the reasons.
     pub fn reasons(&self) -> &[String] {
         &self.reasons
     }
 
+    /// Returns the quota states.
     pub fn quota_states(&self) -> &[String] {
         &self.quota_states
     }
@@ -254,21 +268,25 @@ pub(crate) struct CheckHealthResponseBuilder {
 
 #[cfg(test)]
 impl CheckHealthResponseBuilder {
+    /// Returns whether healthy.
     pub fn is_healthy(mut self, value: bool) -> Self {
         self.value.is_healthy = value;
         self
     }
 
+    /// Sets the reasons and returns the updated value.
     pub fn reasons(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.reasons = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the quota states and returns the updated value.
     pub fn quota_states(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.quota_states = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> CheckHealthResponse {
         self.value
     }
@@ -311,14 +329,17 @@ impl FlushResponse {
         }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &str {
         &self.database_name
     }
 
+    /// Returns the segment ids.
     pub fn segment_ids(&self) -> &HashMap<String, Vec<i64>> {
         &self.segment_ids
     }
 
+    /// Returns the flush timestamps.
     pub fn flush_timestamps(&self) -> &HashMap<String, u64> {
         &self.flush_timestamps
     }
@@ -355,21 +376,25 @@ pub(crate) struct FlushResponseBuilder {
 
 #[cfg(test)]
 impl FlushResponseBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = value.into();
         self
     }
 
+    /// Sets the segment ids and returns the updated value.
     pub fn segment_ids(mut self, value: HashMap<String, Vec<i64>>) -> Self {
         self.value.segment_ids = value;
         self
     }
 
+    /// Sets the flush timestamps and returns the updated value.
     pub fn flush_timestamps(mut self, value: HashMap<String, u64>) -> Self {
         self.value.flush_timestamps = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> FlushResponse {
         self.value
     }
@@ -408,6 +433,7 @@ impl FlushAllResponse {
         }
     }
 
+    /// Returns the flush all timestamp.
     pub fn flush_all_timestamp(&self) -> u64 {
         self.flush_all_timestamp
     }
@@ -440,11 +466,13 @@ pub(crate) struct FlushAllResponseBuilder {
 
 #[cfg(test)]
 impl FlushAllResponseBuilder {
+    /// Sets the flush all timestamp and returns the updated value.
     pub fn flush_all_timestamp(mut self, value: u64) -> Self {
         self.value.flush_all_timestamp = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> FlushAllResponse {
         self.value
     }
@@ -481,6 +509,7 @@ impl GetFlushAllStateResponse {
         }
     }
 
+    /// Returns whether flushed.
     pub fn is_flushed(&self) -> bool {
         self.flushed
     }
@@ -511,11 +540,13 @@ pub(crate) struct GetFlushAllStateResponseBuilder {
 
 #[cfg(test)]
 impl GetFlushAllStateResponseBuilder {
+    /// Sets the flushed and returns the updated value.
     pub fn flushed(mut self, value: bool) -> Self {
         self.value.flushed = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> GetFlushAllStateResponse {
         self.value
     }
@@ -554,6 +585,7 @@ impl ListPersistentSegmentsResponse {
         }
     }
 
+    /// Returns the segments.
     pub fn segments(&self) -> &[PersistentSegmentInfo] {
         &self.segments
     }
@@ -601,11 +633,13 @@ pub(crate) struct ListPersistentSegmentsResponseBuilder {
 
 #[cfg(test)]
 impl ListPersistentSegmentsResponseBuilder {
+    /// Sets the segments and returns the updated value.
     pub fn segments(mut self, value: Vec<PersistentSegmentInfo>) -> Self {
         self.value.segments = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> ListPersistentSegmentsResponse {
         self.value
     }
@@ -644,6 +678,7 @@ impl ListQuerySegmentsResponse {
         }
     }
 
+    /// Returns the segments.
     pub fn segments(&self) -> &[QuerySegmentInfo] {
         &self.segments
     }
@@ -695,11 +730,13 @@ pub(crate) struct ListQuerySegmentsResponseBuilder {
 
 #[cfg(test)]
 impl ListQuerySegmentsResponseBuilder {
+    /// Sets the segments and returns the updated value.
     pub fn segments(mut self, value: Vec<QuerySegmentInfo>) -> Self {
         self.value.segments = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> ListQuerySegmentsResponse {
         self.value
     }
@@ -740,10 +777,12 @@ impl CompactResponse {
         }
     }
 
+    /// Returns the compaction id.
     pub fn compaction_id(&self) -> i64 {
         self.compaction_id
     }
 
+    /// Returns the plan count.
     pub fn plan_count(&self) -> i64 {
         self.plan_count
     }
@@ -775,16 +814,19 @@ pub(crate) struct CompactResponseBuilder {
 
 #[cfg(test)]
 impl CompactResponseBuilder {
+    /// Sets the compaction id and returns the updated value.
     pub fn compaction_id(mut self, value: i64) -> Self {
         self.value.compaction_id = value;
         self
     }
 
+    /// Sets the plan count and returns the updated value.
     pub fn plan_count(mut self, value: i64) -> Self {
         self.value.plan_count = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> CompactResponse {
         self.value
     }
@@ -831,22 +873,27 @@ impl OptimizeResponse {
         }
     }
 
+    /// Returns the status text.
     pub fn status_text(&self) -> &str {
         &self.status_text
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the compaction id.
     pub fn compaction_id(&self) -> i64 {
         self.compaction_id
     }
 
+    /// Returns the target size.
     pub fn target_size(&self) -> &str {
         &self.target_size
     }
 
+    /// Returns the progress history.
     pub fn progress_history(&self) -> &[String] {
         &self.progress_history
     }
@@ -871,31 +918,37 @@ pub(crate) struct OptimizeResponseBuilder {
 
 #[cfg(test)]
 impl OptimizeResponseBuilder {
+    /// Sets the status text and returns the updated value.
     pub fn status_text(mut self, value: impl Into<String>) -> Self {
         self.value.status_text = value.into();
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the compaction id and returns the updated value.
     pub fn compaction_id(mut self, value: i64) -> Self {
         self.value.compaction_id = value;
         self
     }
 
+    /// Sets the target size and returns the updated value.
     pub fn target_size(mut self, value: impl Into<String>) -> Self {
         self.value.target_size = value.into();
         self
     }
 
+    /// Sets the progress history and returns the updated value.
     pub fn progress_history(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.progress_history = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> OptimizeResponse {
         self.value
     }
@@ -942,22 +995,27 @@ impl GetCompactionStateResponse {
         }
     }
 
+    /// Returns the state.
     pub fn state(&self) -> CompactionStateCode {
         self.state
     }
 
+    /// Returns the executing plans.
     pub fn executing_plans(&self) -> i64 {
         self.executing_plans
     }
 
+    /// Returns the timed out plans.
     pub fn timed_out_plans(&self) -> i64 {
         self.timed_out_plans
     }
 
+    /// Returns the completed plans.
     pub fn completed_plans(&self) -> i64 {
         self.completed_plans
     }
 
+    /// Returns the failed plans.
     pub fn failed_plans(&self) -> i64 {
         self.failed_plans
     }
@@ -992,31 +1050,37 @@ pub(crate) struct GetCompactionStateResponseBuilder {
 
 #[cfg(test)]
 impl GetCompactionStateResponseBuilder {
+    /// Sets the state and returns the updated value.
     pub fn state(mut self, value: CompactionStateCode) -> Self {
         self.value.state = value;
         self
     }
 
+    /// Sets the executing plans and returns the updated value.
     pub fn executing_plans(mut self, value: i64) -> Self {
         self.value.executing_plans = value;
         self
     }
 
+    /// Sets the timed out plans and returns the updated value.
     pub fn timed_out_plans(mut self, value: i64) -> Self {
         self.value.timed_out_plans = value;
         self
     }
 
+    /// Sets the completed plans and returns the updated value.
     pub fn completed_plans(mut self, value: i64) -> Self {
         self.value.completed_plans = value;
         self
     }
 
+    /// Sets the failed plans and returns the updated value.
     pub fn failed_plans(mut self, value: i64) -> Self {
         self.value.failed_plans = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> GetCompactionStateResponse {
         self.value
     }
@@ -1057,10 +1121,12 @@ impl GetCompactionPlansResponse {
         }
     }
 
+    /// Returns the state.
     pub fn state(&self) -> CompactionStateCode {
         self.state
     }
 
+    /// Returns the merges.
     pub fn merges(&self) -> &[CompactionMerge] {
         &self.merges
     }
@@ -1099,16 +1165,19 @@ pub(crate) struct GetCompactionPlansResponseBuilder {
 
 #[cfg(test)]
 impl GetCompactionPlansResponseBuilder {
+    /// Sets the state and returns the updated value.
     pub fn state(mut self, value: CompactionStateCode) -> Self {
         self.value.state = value;
         self
     }
 
+    /// Sets the merges and returns the updated value.
     pub fn merges(mut self, value: Vec<CompactionMerge>) -> Self {
         self.value.merges = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> GetCompactionPlansResponse {
         self.value
     }
@@ -1147,6 +1216,7 @@ impl RunAnalyzerResponse {
         }
     }
 
+    /// Returns the results.
     pub fn results(&self) -> &[AnalyzerResult] {
         &self.results
     }
@@ -1194,11 +1264,13 @@ pub(crate) struct RunAnalyzerResponseBuilder {
 
 #[cfg(test)]
 impl RunAnalyzerResponseBuilder {
+    /// Sets the results and returns the updated value.
     pub fn results(mut self, value: Vec<AnalyzerResult>) -> Self {
         self.value.results = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> RunAnalyzerResponse {
         self.value
     }

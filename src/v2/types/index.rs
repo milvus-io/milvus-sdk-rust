@@ -29,11 +29,17 @@ use std::collections::HashMap;
 #[non_exhaustive]
 pub enum IndexStateCode {
     #[default]
+    /// Represents the None case.
     None,
+    /// Represents the Unissued case.
     Unissued,
+    /// Represents the InProgress case.
     InProgress,
+    /// Represents the Finished case.
     Finished,
+    /// Represents the Failed case.
     Failed,
+    /// Represents the Retry case.
     Retry,
 }
 
@@ -58,34 +64,63 @@ impl IndexStateCode {
 #[non_exhaustive]
 pub enum IndexType {
     #[default]
+    /// Represents the Invalid case.
     Invalid,
+    /// Represents the Flat case.
     Flat,
+    /// Represents the IvfFlat case.
     IvfFlat,
+    /// Represents the IvfSq8 case.
     IvfSq8,
+    /// Represents the IvfPq case.
     IvfPq,
+    /// Represents the Hnsw case.
     Hnsw,
+    /// Represents the HnswSq case.
     HnswSq,
+    /// Represents the HnswPq case.
     HnswPq,
+    /// Represents the HnswPrq case.
     HnswPrq,
+    /// Represents the DiskAnn case.
     DiskAnn,
+    /// Represents the AutoIndex case.
     AutoIndex,
+    /// Represents the Scann case.
     Scann,
+    /// Represents the IvfRabitq case.
     IvfRabitq,
+    /// Represents the Aisaq case.
     Aisaq,
+    /// Represents the GpuIvfFlat case.
     GpuIvfFlat,
+    /// Represents the GpuIvfPq case.
     GpuIvfPq,
+    /// Represents the GpuBruteForce case.
     GpuBruteForce,
+    /// Represents the GpuCagra case.
     GpuCagra,
+    /// Represents the BinFlat case.
     BinFlat,
+    /// Represents the BinIvfFlat case.
     BinIvfFlat,
+    /// Represents the MinhashLsh case.
     MinhashLsh,
+    /// Represents the Trie case.
     Trie,
+    /// Represents the Ngram case.
     Ngram,
+    /// Represents the Rtree case.
     Rtree,
+    /// Represents the StlSort case.
     StlSort,
+    /// Represents the Inverted case.
     Inverted,
+    /// Represents the Bitmap case.
     Bitmap,
+    /// Represents the SparseInvertedIndex case.
     SparseInvertedIndex,
+    /// Represents the SparseWand case.
     SparseWand,
 }
 
@@ -175,6 +210,7 @@ pub struct IndexParam {
 }
 
 impl IndexParam {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             field_name: String::new(),
@@ -185,72 +221,87 @@ impl IndexParam {
         }
     }
 
+    /// Sets the field name and returns the updated value.
     pub fn field_name(mut self, value: impl Into<String>) -> Self {
         self.field_name = value.into();
         self
     }
 
+    /// Sets the field name and returns this value for further mutation.
     pub fn set_field_name(&mut self, value: impl Into<String>) -> &mut Self {
         self.field_name = value.into();
         self
     }
 
+    /// Returns the configured field name.
     pub fn get_field_name(&self) -> &str {
         &self.field_name
     }
 
+    /// Sets the index name and returns the updated value.
     pub fn index_name(mut self, value: impl Into<String>) -> Self {
         self.index_name = value.into();
         self
     }
 
+    /// Sets the index name and returns this value for further mutation.
     pub fn set_index_name(&mut self, value: impl Into<String>) -> &mut Self {
         self.index_name = value.into();
         self
     }
 
+    /// Returns the configured index name.
     pub fn get_index_name(&self) -> &str {
         &self.index_name
     }
 
+    /// Sets the index type and returns the updated value.
     pub fn index_type(mut self, value: IndexType) -> Self {
         self.index_type = value;
         self
     }
 
+    /// Sets the index type and returns this value for further mutation.
     pub fn set_index_type(&mut self, value: IndexType) -> &mut Self {
         self.index_type = value;
         self
     }
 
+    /// Returns the configured index type.
     pub fn get_index_type(&self) -> IndexType {
         self.index_type
     }
 
+    /// Sets the metric type and returns the updated value.
     pub fn metric_type(mut self, value: MetricType) -> Self {
         self.metric_type = Some(value);
         self
     }
 
+    /// Sets the metric type and returns this value for further mutation.
     pub fn set_metric_type(&mut self, value: MetricType) -> &mut Self {
         self.metric_type = Some(value);
         self
     }
 
+    /// Returns the configured metric type.
     pub fn get_metric_type(&self) -> Option<MetricType> {
         self.metric_type
     }
 
+    /// Sets the extra params and returns the updated value.
     pub fn extra_params(mut self, value: HashMap<String, String>) -> Self {
         self.extra_params = value;
         self
     }
 
+    /// Sets the extra params and returns this value for further mutation.
     pub fn set_extra_params(&mut self, value: HashMap<String, String>) -> &mut Self {
         self.extra_params = value;
         self
     }
 
+    /// Returns the configured extra params.
     pub fn get_extra_params(&self) -> &HashMap<String, String> {
         &self.extra_params
     }
@@ -311,6 +362,7 @@ pub struct IndexDesc {
 }
 
 impl IndexDesc {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             index_name: String::new(),
@@ -329,184 +381,223 @@ impl IndexDesc {
         }
     }
 
+    /// Sets the index name and returns the updated value.
     pub fn index_name(mut self, value: impl Into<String>) -> Self {
         self.index_name = value.into();
         self
     }
 
+    /// Sets the index name and returns this value for further mutation.
     pub fn set_index_name(&mut self, value: impl Into<String>) -> &mut Self {
         self.index_name = value.into();
         self
     }
 
+    /// Returns the configured index name.
     pub fn get_index_name(&self) -> &str {
         &self.index_name
     }
 
+    /// Sets the index id and returns the updated value.
     pub fn index_id(mut self, value: i64) -> Self {
         self.index_id = value;
         self
     }
 
+    /// Sets the index id and returns this value for further mutation.
     pub fn set_index_id(&mut self, value: i64) -> &mut Self {
         self.index_id = value;
         self
     }
 
+    /// Returns the configured index id.
     pub fn get_index_id(&self) -> i64 {
         self.index_id
     }
 
+    /// Sets the field name and returns the updated value.
     pub fn field_name(mut self, value: impl Into<String>) -> Self {
         self.field_name = value.into();
         self
     }
 
+    /// Sets the field name and returns this value for further mutation.
     pub fn set_field_name(&mut self, value: impl Into<String>) -> &mut Self {
         self.field_name = value.into();
         self
     }
 
+    /// Returns the configured field name.
     pub fn get_field_name(&self) -> &str {
         &self.field_name
     }
 
+    /// Sets the index type and returns the updated value.
     pub fn index_type(mut self, value: IndexType) -> Self {
         self.index_type = value;
         self
     }
 
+    /// Sets the index type and returns this value for further mutation.
     pub fn set_index_type(&mut self, value: IndexType) -> &mut Self {
         self.index_type = value;
         self
     }
 
+    /// Returns the configured index type.
     pub fn get_index_type(&self) -> IndexType {
         self.index_type
     }
 
+    /// Sets the metric type and returns the updated value.
     pub fn metric_type(mut self, value: MetricType) -> Self {
         self.metric_type = value;
         self
     }
 
+    /// Sets the metric type and returns this value for further mutation.
     pub fn set_metric_type(&mut self, value: MetricType) -> &mut Self {
         self.metric_type = value;
         self
     }
 
+    /// Returns the configured metric type.
     pub fn get_metric_type(&self) -> MetricType {
         self.metric_type
     }
 
+    /// Sets the extra params and returns the updated value.
     pub fn extra_params(mut self, value: HashMap<String, String>) -> Self {
         self.extra_params = value;
         self
     }
 
+    /// Sets the extra params and returns this value for further mutation.
     pub fn set_extra_params(&mut self, value: HashMap<String, String>) -> &mut Self {
         self.extra_params = value;
         self
     }
 
+    /// Returns the configured extra params.
     pub fn get_extra_params(&self) -> &HashMap<String, String> {
         &self.extra_params
     }
 
+    /// Sets the indexed rows and returns the updated value.
     pub fn indexed_rows(mut self, value: i64) -> Self {
         self.indexed_rows = value;
         self
     }
 
+    /// Sets the indexed rows and returns this value for further mutation.
     pub fn set_indexed_rows(&mut self, value: i64) -> &mut Self {
         self.indexed_rows = value;
         self
     }
 
+    /// Returns the configured indexed rows.
     pub fn get_indexed_rows(&self) -> i64 {
         self.indexed_rows
     }
 
+    /// Sets the total rows and returns the updated value.
     pub fn total_rows(mut self, value: i64) -> Self {
         self.total_rows = value;
         self
     }
 
+    /// Sets the total rows and returns this value for further mutation.
     pub fn set_total_rows(&mut self, value: i64) -> &mut Self {
         self.total_rows = value;
         self
     }
 
+    /// Returns the configured total rows.
     pub fn get_total_rows(&self) -> i64 {
         self.total_rows
     }
 
+    /// Sets the pending rows and returns the updated value.
     pub fn pending_rows(mut self, value: i64) -> Self {
         self.pending_rows = value;
         self
     }
 
+    /// Sets the pending rows and returns this value for further mutation.
     pub fn set_pending_rows(&mut self, value: i64) -> &mut Self {
         self.pending_rows = value;
         self
     }
 
+    /// Returns the configured pending rows.
     pub fn get_pending_rows(&self) -> i64 {
         self.pending_rows
     }
 
+    /// Sets the state and returns the updated value.
     pub fn state(mut self, value: IndexStateCode) -> Self {
         self.state = value;
         self
     }
 
+    /// Sets the state and returns this value for further mutation.
     pub fn set_state(&mut self, value: IndexStateCode) -> &mut Self {
         self.state = value;
         self
     }
 
+    /// Returns the configured state.
     pub fn get_state(&self) -> IndexStateCode {
         self.state
     }
 
+    /// Sets the failure reason and returns the updated value.
     pub fn failure_reason(mut self, value: impl Into<String>) -> Self {
         self.failure_reason = value.into();
         self
     }
 
+    /// Sets the failure reason and returns this value for further mutation.
     pub fn set_failure_reason(&mut self, value: impl Into<String>) -> &mut Self {
         self.failure_reason = value.into();
         self
     }
 
+    /// Returns the configured failure reason.
     pub fn get_failure_reason(&self) -> &str {
         &self.failure_reason
     }
 
+    /// Sets the min version and returns the updated value.
     pub fn min_version(mut self, value: i32) -> Self {
         self.min_version = value;
         self
     }
 
+    /// Sets the min version and returns this value for further mutation.
     pub fn set_min_version(&mut self, value: i32) -> &mut Self {
         self.min_version = value;
         self
     }
 
+    /// Returns the configured min version.
     pub fn get_min_version(&self) -> i32 {
         self.min_version
     }
 
+    /// Sets the max version and returns the updated value.
     pub fn max_version(mut self, value: i32) -> Self {
         self.max_version = value;
         self
     }
 
+    /// Sets the max version and returns this value for further mutation.
     pub fn set_max_version(&mut self, value: i32) -> &mut Self {
         self.max_version = value;
         self
     }
 
+    /// Returns the configured max version.
     pub fn get_max_version(&self) -> i32 {
         self.max_version
     }

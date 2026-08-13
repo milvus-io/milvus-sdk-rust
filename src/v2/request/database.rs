@@ -47,6 +47,7 @@ impl CreateDatabaseRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> CreateDatabaseRequestBuilder {
         CreateDatabaseRequestBuilder {
             value: Self::empty(),
@@ -58,10 +59,12 @@ impl CreateDatabaseRequest {
         CreateDatabaseRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &str {
         &self.database_name
     }
 
+    /// Returns the properties.
     pub fn properties(&self) -> &HashMap<String, String> {
         &self.properties
     }
@@ -85,16 +88,19 @@ pub struct CreateDatabaseRequestBuilder {
 }
 
 impl CreateDatabaseRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = value.into();
         self
     }
 
+    /// Sets the properties and returns the updated value.
     pub fn properties(mut self, value: HashMap<String, String>) -> Self {
         self.value.properties = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<CreateDatabaseRequest> {
         required("database_name", &self.value.database_name)?;
         Ok(self.value)
@@ -118,6 +124,7 @@ impl DropDatabaseRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> DropDatabaseRequestBuilder {
         DropDatabaseRequestBuilder {
             value: Self::empty(),
@@ -129,6 +136,7 @@ impl DropDatabaseRequest {
         DropDatabaseRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &str {
         &self.database_name
     }
@@ -151,11 +159,13 @@ pub struct DropDatabaseRequestBuilder {
 }
 
 impl DropDatabaseRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<DropDatabaseRequest> {
         required("database_name", &self.value.database_name)?;
         Ok(self.value)
@@ -171,6 +181,7 @@ impl DropDatabaseRequestBuilder {
 pub struct ListDatabasesRequest;
 
 impl ListDatabasesRequest {
+    /// Creates a builder for this request.
     pub fn builder() -> ListDatabasesRequestBuilder {
         ListDatabasesRequestBuilder
     }
@@ -193,6 +204,7 @@ impl ListDatabasesRequest {
 pub struct ListDatabasesRequestBuilder;
 
 impl ListDatabasesRequestBuilder {
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<ListDatabasesRequest> {
         Ok(ListDatabasesRequest)
     }
@@ -217,6 +229,7 @@ impl AlterDatabasePropertiesRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> AlterDatabasePropertiesRequestBuilder {
         AlterDatabasePropertiesRequestBuilder {
             value: Self::empty(),
@@ -228,10 +241,12 @@ impl AlterDatabasePropertiesRequest {
         AlterDatabasePropertiesRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &str {
         &self.database_name
     }
 
+    /// Returns the properties.
     pub fn properties(&self) -> &HashMap<String, String> {
         &self.properties
     }
@@ -257,21 +272,25 @@ pub struct AlterDatabasePropertiesRequestBuilder {
 }
 
 impl AlterDatabasePropertiesRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = value.into();
         self
     }
 
+    /// Sets the properties and returns the updated value.
     pub fn properties(mut self, value: HashMap<String, String>) -> Self {
         self.value.properties = value;
         self
     }
 
+    /// Sets the property and returns the updated value.
     pub fn property(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.value.properties.insert(key.into(), value.into());
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<AlterDatabasePropertiesRequest> {
         required("database_name", &self.value.database_name)?;
         if self.value.properties.is_empty() {
@@ -303,6 +322,7 @@ impl DropDatabasePropertiesRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> DropDatabasePropertiesRequestBuilder {
         DropDatabasePropertiesRequestBuilder {
             value: Self::empty(),
@@ -314,10 +334,12 @@ impl DropDatabasePropertiesRequest {
         DropDatabasePropertiesRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &str {
         &self.database_name
     }
 
+    /// Returns the property keys.
     pub fn property_keys(&self) -> &HashSet<String> {
         &self.property_keys
     }
@@ -343,21 +365,25 @@ pub struct DropDatabasePropertiesRequestBuilder {
 }
 
 impl DropDatabasePropertiesRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = value.into();
         self
     }
 
+    /// Sets the property keys and returns the updated value.
     pub fn property_keys(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.property_keys = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the property key and returns the updated value.
     pub fn property_key(mut self, value: impl Into<String>) -> Self {
         self.value.property_keys.insert(value.into());
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<DropDatabasePropertiesRequest> {
         required("database_name", &self.value.database_name)?;
         if self.value.property_keys.is_empty() {
@@ -387,6 +413,7 @@ impl DescribeDatabaseRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> DescribeDatabaseRequestBuilder {
         DescribeDatabaseRequestBuilder {
             value: Self::empty(),
@@ -398,6 +425,7 @@ impl DescribeDatabaseRequest {
         DescribeDatabaseRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &str {
         &self.database_name
     }
@@ -420,11 +448,13 @@ pub struct DescribeDatabaseRequestBuilder {
 }
 
 impl DescribeDatabaseRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<DescribeDatabaseRequest> {
         required("database_name", &self.value.database_name)?;
         Ok(self.value)

@@ -15,6 +15,32 @@
 // limitations under the License.
 
 //! ClientV2 transport, connection settings, and shared RPC behavior.
+//!
+//! Most applications start with [`ClientV2::new`] and [`ConnectConfig`], then call a feature
+//! method with a validated request from [`crate::v2::request`]. Each feature area is implemented
+//! in a private submodule of this client module and re-exported through [`crate::v2`].
+//!
+//! A typical operation looks like this:
+//!
+//! ```no_run
+//! # use milvus::v2::prelude::*;
+//! # async fn example() -> Result<()> {
+//! let client = ClientV2::new(
+//!     &ConnectConfig::new()
+//!         .uri("http://localhost:19530")
+//!         .token("root:Milvus"),
+//! )
+//! .await?;
+//! let request = CheckHealthRequest::builder().build()?;
+//! let response = client.check_health(request).await?;
+//! println!("healthy: {}", response.is_healthy());
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! RPC deadlines apply to individual attempts. Retry behavior is centralized, and mutation
+//! requests use non-idempotent semantics when replaying an ambiguous transport failure could
+//! duplicate a server-side operation.
 
 use crate::proto::milvus::milvus_service_client::MilvusServiceClient;
 use crate::proto::{common, milvus};
@@ -31,6 +57,13 @@ use tonic::transport::{Certificate, Channel, ClientTlsConfig, Endpoint, Identity
 use tonic::{Code, Request, Response, Status};
 
 use cache::SchemaLoadScope;
+
+macro_rules! trace_debug {
+    ($($field:tt)*) => {
+        #[cfg(feature = "tracing")]
+        tracing::debug!($($field)*);
+    };
+}
 
 macro_rules! rpc_with_retry {
     ($semantics:ident, $client:expr, $method:ident, $request:expr) => {{
@@ -307,17 +340,26 @@ impl ClientV2 {
         };
 
         for attempt in 1..=max_attempts {
+            trace_debug!(
+                target: "milvus_sdk::retry",
+                attempt,
+                max_attempts,
+                semantics = ?semantics,
+                "starting Milvus RPC attempt"
+            );
             let call = call()?;
             let outcome = if retry.max_retry_timeout.is_zero() {
                 call.await
             } else {
                 let remaining = retry.max_retry_timeout.saturating_sub(started.elapsed());
                 if remaining.is_zero() {
+                    trace_debug!(target: "milvus_sdk::retry", attempt, max_attempts, timeout_ms = retry.max_retry_timeout.as_millis(), "Milvus RPC retry deadline reached before attempt completed");
                     return Err(retry_attempt_timed_out(retry.max_retry_timeout, attempt));
                 }
                 match tokio::time::timeout(remaining, call).await {
                     Ok(outcome) => outcome,
                     Err(_) => {
+                        trace_debug!(target: "milvus_sdk::retry", attempt, max_attempts, timeout_ms = retry.max_retry_timeout.as_millis(), "Milvus RPC attempt exceeded total retry deadline");
                         return Err(retry_attempt_timed_out(retry.max_retry_timeout, attempt));
                     }
                 }
@@ -340,14 +382,26 @@ impl ClientV2 {
                                     && status.retriable
                                     && semantics == RetrySemantics::Idempotent)
                             {
+                                trace_debug!(
+                                    target: "milvus_sdk::retry",
+                                    attempt,
+                                    max_attempts,
+                                    rate_limited,
+                                    retriable = status.retriable,
+                                    semantics = ?semantics,
+                                    "Milvus server status is eligible for retry"
+                                );
                                 error
                             } else {
+                                trace_debug!(target: "milvus_sdk::retry", attempt, max_attempts, rate_limited, retriable = status.retriable, semantics = ?semantics, error = %error, "Milvus server status is not eligible for retry");
                                 return Err(error);
                             }
                         } else {
+                            trace_debug!(target: "milvus_sdk::retry", attempt, max_attempts, elapsed_ms = started.elapsed().as_millis(), "Milvus RPC completed successfully");
                             return Ok(response);
                         }
                     } else {
+                        trace_debug!(target: "milvus_sdk::retry", attempt, max_attempts, elapsed_ms = started.elapsed().as_millis(), "Milvus RPC completed successfully");
                         return Ok(response);
                     }
                 }
@@ -355,18 +409,37 @@ impl ClientV2 {
                     if semantics == RetrySemantics::Idempotent
                         && is_retryable_grpc(status.code()) =>
                 {
+                    trace_debug!(
+                        target: "milvus_sdk::retry",
+                        attempt,
+                        max_attempts,
+                        grpc_code = ?status.code(),
+                        "gRPC transport status is eligible for retry"
+                    );
                     Error::Grpc(status)
                 }
-                Err(status) => return Err(status.into()),
+                Err(status) => {
+                    trace_debug!(target: "milvus_sdk::retry", attempt, max_attempts, grpc_code = ?status.code(), semantics = ?semantics, "gRPC transport status is not eligible for retry");
+                    return Err(status.into());
+                }
             };
 
             if attempt >= max_attempts {
+                trace_debug!(target: "milvus_sdk::retry", attempt, max_attempts, error = %failure, elapsed_ms = started.elapsed().as_millis(), "Milvus RPC retry attempts exhausted");
                 return Err(retry_exhausted(max_attempts, failure));
             }
             if retry_timeout_reached(started, backoff, retry.max_retry_timeout) {
+                trace_debug!(target: "milvus_sdk::retry", attempt, max_attempts, error = %failure, timeout_ms = retry.max_retry_timeout.as_millis(), elapsed_ms = started.elapsed().as_millis(), "Milvus RPC retry timeout reached");
                 return Err(retry_timed_out(retry.max_retry_timeout, attempt, &failure));
             }
 
+            trace_debug!(
+                target: "milvus_sdk::retry",
+                attempt,
+                max_attempts,
+                backoff_ms = backoff.as_millis(),
+                "waiting before Milvus RPC retry"
+            );
             tokio::time::sleep(backoff).await;
             backoff = next_backoff(backoff, multiplier, retry.max_backoff);
         }

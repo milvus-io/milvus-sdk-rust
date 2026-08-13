@@ -22,7 +22,7 @@ use crate::v2::error::Result;
 use crate::v2::{request, response};
 
 impl ClientV2 {
-    /// Update replicate configuration.
+    /// Updates the CDC replication configuration for the current database.
     pub async fn update_replicate_configuration(
         &self,
         request: request::cdc::UpdateReplicateConfigurationRequest,
@@ -36,7 +36,7 @@ impl ClientV2 {
         self.status(status)
     }
 
-    /// Get replicate configuration.
+    /// Retrieves the current CDC replication configuration.
     pub async fn get_replicate_configuration(
         &self,
         request: request::cdc::GetReplicateConfigurationRequest,
@@ -46,7 +46,7 @@ impl ClientV2 {
         response::cdc::GetReplicateConfigurationResponse::from_proto(response)
     }
 
-    /// Get replicate information for a channel.
+    /// Retrieves replication progress and metadata for a CDC channel.
     pub async fn get_replicate_info(
         &self,
         request: request::cdc::GetReplicateInfoRequest,

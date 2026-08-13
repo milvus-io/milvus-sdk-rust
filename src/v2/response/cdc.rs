@@ -58,6 +58,7 @@ impl GetReplicateConfigurationResponse {
         }
     }
 
+    /// Returns the configuration.
     pub fn configuration(&self) -> &ReplicateConfiguration {
         &self.configuration
     }
@@ -91,11 +92,13 @@ pub(crate) struct GetReplicateConfigurationResponseBuilder {
 
 #[cfg(test)]
 impl GetReplicateConfigurationResponseBuilder {
+    /// Sets the configuration and returns the updated value.
     pub fn configuration(mut self, value: ReplicateConfiguration) -> Self {
         self.value.configuration = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> GetReplicateConfigurationResponse {
         self.value
     }
@@ -138,10 +141,12 @@ impl GetReplicateInfoResponse {
         }
     }
 
+    /// Returns the checkpoint.
     pub fn checkpoint(&self) -> &ReplicateCheckpoint {
         &self.checkpoint
     }
 
+    /// Returns the salvage checkpoint.
     pub fn salvage_checkpoint(&self) -> Option<&ReplicateCheckpoint> {
         self.salvage_checkpoint.as_ref()
     }
@@ -179,16 +184,19 @@ pub(crate) struct GetReplicateInfoResponseBuilder {
 
 #[cfg(test)]
 impl GetReplicateInfoResponseBuilder {
+    /// Sets the checkpoint and returns the updated value.
     pub fn checkpoint(mut self, value: ReplicateCheckpoint) -> Self {
         self.value.checkpoint = value;
         self
     }
 
+    /// Sets the salvage checkpoint and returns the updated value.
     pub fn salvage_checkpoint(mut self, value: ReplicateCheckpoint) -> Self {
         self.value.salvage_checkpoint = Some(value);
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> GetReplicateInfoResponse {
         self.value
     }

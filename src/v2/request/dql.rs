@@ -15,6 +15,11 @@
 // limitations under the License.
 
 //! Request types for query, get, search, hybrid search, and iterators.
+//!
+//! Choose [`QueryRequest`] for scalar/filter reads and [`SearchRequest`] for nearest-neighbor
+//! vector search. Both builders require a collection name; search additionally requires query
+//! vectors and an approximate-nearest-neighbor field. Set `output_fields` to select returned
+//! fields, and use `limit` to control the number of rows per query vector.
 
 use crate::proto::{common, milvus, schema};
 use crate::v2::error::{Error, Result};
@@ -76,6 +81,7 @@ impl QueryRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> QueryRequestBuilder {
         QueryRequestBuilder {
             value: Self::empty(),
@@ -87,14 +93,17 @@ impl QueryRequest {
         QueryRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the partition names.
     pub fn partition_names(&self) -> &[String] {
         &self.partition_names
     }
@@ -104,38 +113,47 @@ impl QueryRequest {
         &self.ids
     }
 
+    /// Returns the filter.
     pub fn filter(&self) -> &str {
         &self.filter
     }
 
+    /// Returns the filter templates.
     pub fn filter_templates(&self) -> &HashMap<String, Value> {
         &self.filter_templates
     }
 
+    /// Returns the output fields.
     pub fn output_fields(&self) -> &[String] {
         &self.output_fields
     }
 
+    /// Returns the limit.
     pub fn limit(&self) -> Option<i64> {
         self.limit
     }
 
+    /// Returns the offset.
     pub fn offset(&self) -> Option<i64> {
         self.offset
     }
 
+    /// Returns whether the request should ignore growing.
     pub fn should_ignore_growing(&self) -> bool {
         self.ignore_growing
     }
 
+    /// Returns the timezone.
     pub fn timezone(&self) -> &str {
         &self.timezone
     }
 
+    /// Returns the consistency level.
     pub fn consistency_level(&self) -> Option<ConsistencyLevel> {
         self.consistency_level
     }
 
+    /// Returns the extra params.
     pub fn extra_params(&self) -> &HashMap<String, String> {
         &self.extra_params
     }
@@ -212,16 +230,19 @@ pub struct QueryRequestBuilder {
 }
 
 impl QueryRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the partition names and returns the updated value.
     pub fn partition_names(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.partition_names = values.into_iter().map(Into::into).collect();
         self
@@ -233,51 +254,61 @@ impl QueryRequestBuilder {
         self
     }
 
+    /// Sets the filter and returns the updated value.
     pub fn filter(mut self, value: impl Into<String>) -> Self {
         self.value.filter = value.into();
         self
     }
 
+    /// Sets the filter templates and returns the updated value.
     pub fn filter_templates(mut self, value: HashMap<String, Value>) -> Self {
         self.value.filter_templates = value;
         self
     }
 
+    /// Sets the output fields and returns the updated value.
     pub fn output_fields(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.output_fields = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the limit and returns the updated value.
     pub fn limit(mut self, value: i64) -> Self {
         self.value.limit = Some(value);
         self
     }
 
+    /// Sets the offset and returns the updated value.
     pub fn offset(mut self, value: i64) -> Self {
         self.value.offset = Some(value);
         self
     }
 
+    /// Sets the ignore growing and returns the updated value.
     pub fn ignore_growing(mut self, value: bool) -> Self {
         self.value.ignore_growing = value;
         self
     }
 
+    /// Sets the timezone and returns the updated value.
     pub fn timezone(mut self, value: impl Into<String>) -> Self {
         self.value.timezone = value.into();
         self
     }
 
+    /// Sets the consistency level and returns the updated value.
     pub fn consistency_level(mut self, value: ConsistencyLevel) -> Self {
         self.value.consistency_level = Some(value);
         self
     }
 
+    /// Sets the extra params and returns the updated value.
     pub fn extra_params(mut self, value: HashMap<String, String>) -> Self {
         self.value.extra_params = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<QueryRequest> {
         validate_query_request(&self.value)?;
         Ok(self.value)
@@ -311,6 +342,7 @@ impl GetRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> GetRequestBuilder {
         GetRequestBuilder {
             value: Self::empty(),
@@ -322,26 +354,32 @@ impl GetRequest {
         GetRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the partition names.
     pub fn partition_names(&self) -> &[String] {
         &self.partition_names
     }
 
+    /// Returns the ids.
     pub fn ids(&self) -> &Ids {
         &self.ids
     }
 
+    /// Returns the output fields.
     pub fn output_fields(&self) -> &[String] {
         &self.output_fields
     }
 
+    /// Returns the consistency level.
     pub fn consistency_level(&self) -> Option<ConsistencyLevel> {
         self.consistency_level
     }
@@ -389,36 +427,43 @@ pub struct GetRequestBuilder {
 }
 
 impl GetRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the partition names and returns the updated value.
     pub fn partition_names(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.partition_names = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the ids and returns the updated value.
     pub fn ids(mut self, value: Ids) -> Self {
         self.value.ids = value;
         self
     }
 
+    /// Sets the output fields and returns the updated value.
     pub fn output_fields(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.output_fields = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the consistency level and returns the updated value.
     pub fn consistency_level(mut self, value: ConsistencyLevel) -> Self {
         self.value.consistency_level = Some(value);
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<GetRequest> {
         required("collection_name", &self.value.collection_name)?;
         non_empty_strings("partition_names", &self.value.partition_names)?;
@@ -466,6 +511,7 @@ pub struct SearchRequest {
 }
 
 impl SearchRequest {
+    /// Creates a builder for this request.
     pub fn builder() -> SearchRequestBuilder {
         SearchRequestBuilder {
             value: Self::empty(),
@@ -477,10 +523,12 @@ impl SearchRequest {
         SearchRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
@@ -490,86 +538,107 @@ impl SearchRequest {
         &self.ids
     }
 
+    /// Returns the vector field.
     pub fn vector_field(&self) -> &str {
         &self.vector_field
     }
 
+    /// Returns the vectors.
     pub fn vectors(&self) -> &SearchVectors {
         &self.vectors
     }
 
+    /// Returns the partition names.
     pub fn partition_names(&self) -> &[String] {
         &self.partition_names
     }
 
+    /// Returns the filter.
     pub fn filter(&self) -> &str {
         &self.filter
     }
 
+    /// Returns the filter templates.
     pub fn filter_templates(&self) -> &HashMap<String, Value> {
         &self.filter_templates
     }
 
+    /// Returns the output fields.
     pub fn output_fields(&self) -> &[String] {
         &self.output_fields
     }
 
+    /// Returns the limit.
     pub fn limit(&self) -> i64 {
         self.limit
     }
 
+    /// Returns the offset.
     pub fn offset(&self) -> i64 {
         self.offset
     }
 
+    /// Returns the round decimal.
     pub fn round_decimal(&self) -> i64 {
         self.round_decimal
     }
 
+    /// Returns whether the request should ignore growing.
     pub fn should_ignore_growing(&self) -> bool {
         self.ignore_growing
     }
 
+    /// Returns the group by field.
     pub fn group_by_field(&self) -> &str {
         &self.group_by_field
     }
 
+    /// Returns the group size.
     pub fn group_size(&self) -> i64 {
         self.group_size
     }
 
+    /// Returns whether strict group size.
     pub fn is_strict_group_size(&self) -> bool {
         self.strict_group_size
     }
 
+    /// Returns the radius.
     pub fn radius(&self) -> Option<f64> {
         self.radius
     }
 
+    /// Returns the range filter.
     pub fn range_filter(&self) -> Option<f64> {
         self.range_filter
     }
 
+    /// Returns the metric type.
     pub fn metric_type(&self) -> Option<MetricType> {
         self.metric_type
     }
 
+    /// Returns the extra params.
     pub fn extra_params(&self) -> &HashMap<String, String> {
         &self.extra_params
     }
 
+    /// Returns the rerank.
     pub fn rerank(&self) -> &Option<FunctionScore> {
         &self.rerank
     }
 
+    /// Returns the timezone.
     pub fn timezone(&self) -> &str {
         &self.timezone
     }
 
+    /// Returns the highlighter.
     pub fn highlighter(&self) -> &Option<Highlighter> {
         &self.highlighter
     }
 
+    /// Returns the consistency level.
     pub fn consistency_level(&self) -> Option<ConsistencyLevel> {
         self.consistency_level
     }
@@ -859,11 +928,13 @@ pub struct SearchRequestBuilder {
 }
 
 impl SearchRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
@@ -877,111 +948,133 @@ impl SearchRequestBuilder {
         self
     }
 
+    /// Sets the vector field and returns the updated value.
     pub fn vector_field(mut self, value: impl Into<String>) -> Self {
         self.value.vector_field = value.into();
         self
     }
 
+    /// Sets the vectors and returns the updated value.
     pub fn vectors(mut self, value: SearchVectors) -> Self {
         self.value.vectors = value;
         self
     }
 
+    /// Sets the partition names and returns the updated value.
     pub fn partition_names(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.partition_names = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the filter and returns the updated value.
     pub fn filter(mut self, value: impl Into<String>) -> Self {
         self.value.filter = value.into();
         self
     }
 
+    /// Sets the filter templates and returns the updated value.
     pub fn filter_templates(mut self, value: HashMap<String, Value>) -> Self {
         self.value.filter_templates = value;
         self
     }
 
+    /// Sets the output fields and returns the updated value.
     pub fn output_fields(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.output_fields = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the limit and returns the updated value.
     pub fn limit(mut self, value: i64) -> Self {
         self.value.limit = value;
         self
     }
 
+    /// Sets the offset and returns the updated value.
     pub fn offset(mut self, value: i64) -> Self {
         self.value.offset = value;
         self
     }
 
+    /// Sets the round decimal and returns the updated value.
     pub fn round_decimal(mut self, value: i64) -> Self {
         self.value.round_decimal = value;
         self
     }
 
+    /// Sets the ignore growing and returns the updated value.
     pub fn ignore_growing(mut self, value: bool) -> Self {
         self.value.ignore_growing = value;
         self
     }
 
+    /// Sets the group by field and returns the updated value.
     pub fn group_by_field(mut self, value: impl Into<String>) -> Self {
         self.value.group_by_field = value.into();
         self
     }
 
+    /// Sets the group size and returns the updated value.
     pub fn group_size(mut self, value: i64) -> Self {
         self.value.group_size = value;
         self
     }
 
+    /// Sets the strict group size and returns the updated value.
     pub fn strict_group_size(mut self, value: bool) -> Self {
         self.value.strict_group_size = value;
         self
     }
 
+    /// Sets the radius and returns the updated value.
     pub fn radius(mut self, value: f64) -> Self {
         self.value.radius = Some(value);
         self
     }
 
+    /// Sets the range filter and returns the updated value.
     pub fn range_filter(mut self, value: f64) -> Self {
         self.value.range_filter = Some(value);
         self
     }
 
+    /// Sets the metric type and returns the updated value.
     pub fn metric_type(mut self, value: MetricType) -> Self {
         self.value.metric_type = Some(value);
         self
     }
 
+    /// Sets the extra params and returns the updated value.
     pub fn extra_params(mut self, value: HashMap<String, String>) -> Self {
         self.value.extra_params = value;
         self
     }
 
+    /// Sets the rerank and returns the updated value.
     pub fn rerank(mut self, value: FunctionScore) -> Self {
         self.value.rerank = Some(value);
         self
     }
 
+    /// Sets the timezone and returns the updated value.
     pub fn timezone(mut self, value: impl Into<String>) -> Self {
         self.value.timezone = value.into();
         self
     }
 
+    /// Sets the highlighter and returns the updated value.
     pub fn highlighter(mut self, value: impl Into<Highlighter>) -> Self {
         self.value.highlighter = Some(value.into());
         self
     }
 
+    /// Sets the consistency level and returns the updated value.
     pub fn consistency_level(mut self, value: ConsistencyLevel) -> Self {
         self.value.consistency_level = Some(value);
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<SearchRequest> {
         validate_search_request(&self.value)?;
         Ok(self.value)
@@ -1008,6 +1101,7 @@ pub struct SubSearchRequest {
 }
 
 impl SubSearchRequest {
+    /// Creates a builder for this request.
     pub fn builder() -> SubSearchRequestBuilder {
         SubSearchRequestBuilder {
             value: Self::empty(),
@@ -1019,42 +1113,52 @@ impl SubSearchRequest {
         SubSearchRequestBuilder { value: self }
     }
 
+    /// Returns the vector field.
     pub fn vector_field(&self) -> &str {
         &self.vector_field
     }
 
+    /// Returns the vectors.
     pub fn vectors(&self) -> &SearchVectors {
         &self.vectors
     }
 
+    /// Returns the filter.
     pub fn filter(&self) -> &str {
         &self.filter
     }
 
+    /// Returns the filter templates.
     pub fn filter_templates(&self) -> &HashMap<String, Value> {
         &self.filter_templates
     }
 
+    /// Returns the limit.
     pub fn limit(&self) -> i64 {
         self.limit
     }
 
+    /// Returns the metric type.
     pub fn metric_type(&self) -> Option<MetricType> {
         self.metric_type
     }
 
+    /// Returns the extra params.
     pub fn extra_params(&self) -> &HashMap<String, String> {
         &self.extra_params
     }
 
+    /// Returns the radius.
     pub fn radius(&self) -> Option<f64> {
         self.radius
     }
 
+    /// Returns the range filter.
     pub fn range_filter(&self) -> Option<f64> {
         self.range_filter
     }
 
+    /// Returns the timezone.
     pub fn timezone(&self) -> &str {
         &self.timezone
     }
@@ -1108,56 +1212,67 @@ pub struct SubSearchRequestBuilder {
 }
 
 impl SubSearchRequestBuilder {
+    /// Sets the vector field and returns the updated value.
     pub fn vector_field(mut self, value: impl Into<String>) -> Self {
         self.value.vector_field = value.into();
         self
     }
 
+    /// Sets the vectors and returns the updated value.
     pub fn vectors(mut self, value: SearchVectors) -> Self {
         self.value.vectors = value;
         self
     }
 
+    /// Sets the filter and returns the updated value.
     pub fn filter(mut self, value: impl Into<String>) -> Self {
         self.value.filter = value.into();
         self
     }
 
+    /// Sets the filter templates and returns the updated value.
     pub fn filter_templates(mut self, value: HashMap<String, Value>) -> Self {
         self.value.filter_templates = value;
         self
     }
 
+    /// Sets the limit and returns the updated value.
     pub fn limit(mut self, value: i64) -> Self {
         self.value.limit = value;
         self
     }
 
+    /// Sets the metric type and returns the updated value.
     pub fn metric_type(mut self, value: MetricType) -> Self {
         self.value.metric_type = Some(value);
         self
     }
 
+    /// Sets the extra params and returns the updated value.
     pub fn extra_params(mut self, value: HashMap<String, String>) -> Self {
         self.value.extra_params = value;
         self
     }
 
+    /// Sets the radius and returns the updated value.
     pub fn radius(mut self, value: f64) -> Self {
         self.value.radius = Some(value);
         self
     }
 
+    /// Sets the range filter and returns the updated value.
     pub fn range_filter(mut self, value: f64) -> Self {
         self.value.range_filter = Some(value);
         self
     }
 
+    /// Sets the timezone and returns the updated value.
     pub fn timezone(mut self, value: impl Into<String>) -> Self {
         self.value.timezone = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<SubSearchRequest> {
         validate_sub_search_request(&self.value)?;
         Ok(self.value)
@@ -1211,6 +1326,7 @@ impl HybridSearchRequest {
 }
 
 impl HybridSearchRequest {
+    /// Creates a builder for this request.
     pub fn builder() -> HybridSearchRequestBuilder {
         HybridSearchRequestBuilder {
             value: Self::empty(),
@@ -1222,62 +1338,77 @@ impl HybridSearchRequest {
         HybridSearchRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the partition names.
     pub fn partition_names(&self) -> &[String] {
         &self.partition_names
     }
 
+    /// Returns the sub requests.
     pub fn sub_requests(&self) -> &[SubSearchRequest] {
         &self.sub_requests
     }
 
+    /// Returns the rerank.
     pub fn rerank(&self) -> &Option<Function> {
         &self.rerank
     }
 
+    /// Returns the limit.
     pub fn limit(&self) -> i64 {
         self.limit
     }
 
+    /// Returns the offset.
     pub fn offset(&self) -> i64 {
         self.offset
     }
 
+    /// Returns the round decimal.
     pub fn round_decimal(&self) -> i64 {
         self.round_decimal
     }
 
+    /// Returns whether the request should ignore growing.
     pub fn should_ignore_growing(&self) -> bool {
         self.ignore_growing
     }
 
+    /// Returns the extra params.
     pub fn extra_params(&self) -> &HashMap<String, String> {
         &self.extra_params
     }
 
+    /// Returns the group by field.
     pub fn group_by_field(&self) -> &str {
         &self.group_by_field
     }
 
+    /// Returns the group size.
     pub fn group_size(&self) -> i64 {
         self.group_size
     }
 
+    /// Returns whether strict group size.
     pub fn is_strict_group_size(&self) -> bool {
         self.strict_group_size
     }
 
+    /// Returns the output fields.
     pub fn output_fields(&self) -> &[String] {
         &self.output_fields
     }
 
+    /// Returns the consistency level.
     pub fn consistency_level(&self) -> Option<ConsistencyLevel> {
         self.consistency_level
     }
@@ -1367,81 +1498,97 @@ pub struct HybridSearchRequestBuilder {
 }
 
 impl HybridSearchRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the partition names and returns the updated value.
     pub fn partition_names(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.partition_names = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the sub requests and returns the updated value.
     pub fn sub_requests(mut self, value: Vec<SubSearchRequest>) -> Self {
         self.value.sub_requests = value;
         self
     }
 
+    /// Sets the rerank and returns the updated value.
     pub fn rerank(mut self, value: impl Into<Function>) -> Self {
         self.value.rerank = Some(value.into());
         self
     }
 
+    /// Sets the limit and returns the updated value.
     pub fn limit(mut self, value: i64) -> Self {
         self.value.limit = value;
         self
     }
 
+    /// Sets the offset and returns the updated value.
     pub fn offset(mut self, value: i64) -> Self {
         self.value.offset = value;
         self
     }
 
+    /// Sets the round decimal and returns the updated value.
     pub fn round_decimal(mut self, value: i64) -> Self {
         self.value.round_decimal = value;
         self
     }
 
+    /// Sets the ignore growing and returns the updated value.
     pub fn ignore_growing(mut self, value: bool) -> Self {
         self.value.ignore_growing = value;
         self
     }
 
+    /// Sets the extra params and returns the updated value.
     pub fn extra_params(mut self, value: HashMap<String, String>) -> Self {
         self.value.extra_params = value;
         self
     }
 
+    /// Sets the group by field and returns the updated value.
     pub fn group_by_field(mut self, value: impl Into<String>) -> Self {
         self.value.group_by_field = value.into();
         self
     }
 
+    /// Sets the group size and returns the updated value.
     pub fn group_size(mut self, value: i64) -> Self {
         self.value.group_size = value;
         self
     }
 
+    /// Sets the strict group size and returns the updated value.
     pub fn strict_group_size(mut self, value: bool) -> Self {
         self.value.strict_group_size = value;
         self
     }
 
+    /// Sets the output fields and returns the updated value.
     pub fn output_fields(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.output_fields = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the consistency level and returns the updated value.
     pub fn consistency_level(mut self, value: ConsistencyLevel) -> Self {
         self.value.consistency_level = Some(value);
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<HybridSearchRequest> {
         required("collection_name", &self.value.collection_name)?;
         non_empty_strings("partition_names", &self.value.partition_names)?;
@@ -1473,6 +1620,7 @@ pub struct QueryIteratorRequest {
 }
 
 impl QueryIteratorRequest {
+    /// Creates a builder for this request.
     pub fn builder() -> QueryIteratorRequestBuilder {
         QueryIteratorRequestBuilder {
             value: Self::empty(),
@@ -1484,18 +1632,22 @@ impl QueryIteratorRequest {
         QueryIteratorRequestBuilder { value: self }
     }
 
+    /// Returns the query.
     pub fn query(&self) -> &QueryRequest {
         &self.query
     }
 
+    /// Returns the limit.
     pub fn limit(&self) -> Option<i64> {
         self.query.limit
     }
 
+    /// Returns the batch size.
     pub fn batch_size(&self) -> usize {
         self.batch_size
     }
 
+    /// Returns whether the request should reduce stop for best.
     pub fn should_reduce_stop_for_best(&self) -> bool {
         self.reduce_stop_for_best
     }
@@ -1521,26 +1673,31 @@ pub struct QueryIteratorRequestBuilder {
 }
 
 impl QueryIteratorRequestBuilder {
+    /// Sets the query and returns the updated value.
     pub fn query(mut self, value: QueryRequest) -> Self {
         self.value.query = value;
         self
     }
 
+    /// Sets the limit and returns the updated value.
     pub fn limit(mut self, value: i64) -> Self {
         self.value.query.limit = Some(value);
         self
     }
 
+    /// Sets the batch size and returns the updated value.
     pub fn batch_size(mut self, value: usize) -> Self {
         self.value.batch_size = value;
         self
     }
 
+    /// Sets the reduce stop for best and returns the updated value.
     pub fn reduce_stop_for_best(mut self, value: bool) -> Self {
         self.value.reduce_stop_for_best = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<QueryIteratorRequest> {
         validate_query_iterator_query(&self.value.query)?;
         positive_usize("batch_size", self.value.batch_size)?;
@@ -1561,6 +1718,7 @@ pub struct SearchIteratorRequest {
 }
 
 impl SearchIteratorRequest {
+    /// Creates a builder for this request.
     pub fn builder() -> SearchIteratorRequestBuilder {
         SearchIteratorRequestBuilder {
             value: Self::empty(),
@@ -1572,14 +1730,17 @@ impl SearchIteratorRequest {
         SearchIteratorRequestBuilder { value: self }
     }
 
+    /// Returns the search.
     pub fn search(&self) -> &SearchRequest {
         &self.search
     }
 
+    /// Returns the batch size.
     pub fn batch_size(&self) -> usize {
         self.batch_size
     }
 
+    /// Returns the limit.
     pub fn limit(&self) -> Option<usize> {
         self.limit
     }
@@ -1605,21 +1766,25 @@ pub struct SearchIteratorRequestBuilder {
 }
 
 impl SearchIteratorRequestBuilder {
+    /// Sets the search and returns the updated value.
     pub fn search(mut self, value: SearchRequest) -> Self {
         self.value.search = value;
         self
     }
 
+    /// Sets the batch size and returns the updated value.
     pub fn batch_size(mut self, value: usize) -> Self {
         self.value.batch_size = value;
         self
     }
 
+    /// Sets the limit and returns the updated value.
     pub fn limit(mut self, value: usize) -> Self {
         self.value.limit = Some(value);
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<SearchIteratorRequest> {
         validate_search_request(&self.value.search)?;
         if !self.value.search.ids.is_empty() {

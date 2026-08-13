@@ -41,6 +41,7 @@ impl CreatePartitionRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> CreatePartitionRequestBuilder {
         CreatePartitionRequestBuilder {
             value: Self::empty(),
@@ -52,14 +53,17 @@ impl CreatePartitionRequest {
         CreatePartitionRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the partition name.
     pub fn partition_name(&self) -> &str {
         &self.partition_name
     }
@@ -84,21 +88,25 @@ pub struct CreatePartitionRequestBuilder {
 }
 
 impl CreatePartitionRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the partition name and returns the updated value.
     pub fn partition_name(mut self, value: impl Into<String>) -> Self {
         self.value.partition_name = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<CreatePartitionRequest> {
         validate_partition_target(
             self.value.database_name.as_deref(),
@@ -130,6 +138,7 @@ impl DropPartitionRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> DropPartitionRequestBuilder {
         DropPartitionRequestBuilder {
             value: Self::empty(),
@@ -141,14 +150,17 @@ impl DropPartitionRequest {
         DropPartitionRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the partition name.
     pub fn partition_name(&self) -> &str {
         &self.partition_name
     }
@@ -173,21 +185,25 @@ pub struct DropPartitionRequestBuilder {
 }
 
 impl DropPartitionRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the partition name and returns the updated value.
     pub fn partition_name(mut self, value: impl Into<String>) -> Self {
         self.value.partition_name = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<DropPartitionRequest> {
         validate_partition_target(
             self.value.database_name.as_deref(),
@@ -219,6 +235,7 @@ impl HasPartitionRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> HasPartitionRequestBuilder {
         HasPartitionRequestBuilder {
             value: Self::empty(),
@@ -230,14 +247,17 @@ impl HasPartitionRequest {
         HasPartitionRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the partition name.
     pub fn partition_name(&self) -> &str {
         &self.partition_name
     }
@@ -262,21 +282,25 @@ pub struct HasPartitionRequestBuilder {
 }
 
 impl HasPartitionRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the partition name and returns the updated value.
     pub fn partition_name(mut self, value: impl Into<String>) -> Self {
         self.value.partition_name = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<HasPartitionRequest> {
         validate_partition_target(
             self.value.database_name.as_deref(),
@@ -308,6 +332,7 @@ impl GetPartitionStatsRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> GetPartitionStatsRequestBuilder {
         GetPartitionStatsRequestBuilder {
             value: Self::empty(),
@@ -319,14 +344,17 @@ impl GetPartitionStatsRequest {
         GetPartitionStatsRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the partition name.
     pub fn partition_name(&self) -> &str {
         &self.partition_name
     }
@@ -351,21 +379,25 @@ pub struct GetPartitionStatsRequestBuilder {
 }
 
 impl GetPartitionStatsRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the partition name and returns the updated value.
     pub fn partition_name(mut self, value: impl Into<String>) -> Self {
         self.value.partition_name = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<GetPartitionStatsRequest> {
         validate_partition_target(
             self.value.database_name.as_deref(),
@@ -395,6 +427,7 @@ impl ListPartitionsRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> ListPartitionsRequestBuilder {
         ListPartitionsRequestBuilder {
             value: Self::empty(),
@@ -406,10 +439,12 @@ impl ListPartitionsRequest {
         ListPartitionsRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
@@ -432,16 +467,19 @@ pub struct ListPartitionsRequestBuilder {
 }
 
 impl ListPartitionsRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<ListPartitionsRequest> {
         validate_partition_collection(
             self.value.database_name.as_deref(),
@@ -473,6 +511,7 @@ pub struct LoadPartitionsRequest {
 }
 
 impl LoadPartitionsRequest {
+    /// Creates a builder for this request.
     pub fn builder() -> LoadPartitionsRequestBuilder {
         LoadPartitionsRequestBuilder {
             value: Self::empty(),
@@ -484,42 +523,52 @@ impl LoadPartitionsRequest {
         LoadPartitionsRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the partition names.
     pub fn partition_names(&self) -> &[String] {
         &self.partition_names
     }
 
+    /// Returns whether sync.
     pub fn is_sync(&self) -> bool {
         self.sync
     }
 
+    /// Returns the replica number.
     pub fn replica_number(&self) -> i32 {
         self.replica_number
     }
 
+    /// Returns the timeout ms.
     pub fn timeout_ms(&self) -> i64 {
         self.timeout_ms
     }
 
+    /// Returns whether the request should refresh.
     pub fn should_refresh(&self) -> bool {
         self.refresh
     }
 
+    /// Returns the load fields.
     pub fn load_fields(&self) -> &[String] {
         &self.load_fields
     }
 
+    /// Returns whether the request should skip load dynamic field.
     pub fn should_skip_load_dynamic_field(&self) -> bool {
         self.skip_load_dynamic_field
     }
 
+    /// Returns the resource groups.
     pub fn resource_groups(&self) -> &[String] {
         &self.resource_groups
     }
@@ -565,16 +614,19 @@ pub struct LoadPartitionsRequestBuilder {
 }
 
 impl LoadPartitionsRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the partition names and returns the updated value.
     pub fn partition_names(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.partition_names.clear();
         for value in values.into_iter().map(Into::into) {
@@ -585,6 +637,7 @@ impl LoadPartitionsRequestBuilder {
         self
     }
 
+    /// Sets the partition name and returns the updated value.
     pub fn partition_name(mut self, value: impl Into<String>) -> Self {
         let value = value.into();
         if !self.value.partition_names.contains(&value) {
@@ -593,26 +646,31 @@ impl LoadPartitionsRequestBuilder {
         self
     }
 
+    /// Sets the sync and returns the updated value.
     pub fn sync(mut self, value: bool) -> Self {
         self.value.sync = value;
         self
     }
 
+    /// Sets the replica number and returns the updated value.
     pub fn replica_number(mut self, value: i32) -> Self {
         self.value.replica_number = value;
         self
     }
 
+    /// Sets the timeout ms and returns the updated value.
     pub fn timeout_ms(mut self, value: i64) -> Self {
         self.value.timeout_ms = value;
         self
     }
 
+    /// Sets the refresh and returns the updated value.
     pub fn refresh(mut self, value: bool) -> Self {
         self.value.refresh = value;
         self
     }
 
+    /// Sets the load fields and returns the updated value.
     pub fn load_fields(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.load_fields.clear();
         for value in values.into_iter().map(Into::into) {
@@ -623,6 +681,7 @@ impl LoadPartitionsRequestBuilder {
         self
     }
 
+    /// Sets the load field and returns the updated value.
     pub fn load_field(mut self, value: impl Into<String>) -> Self {
         let value = value.into();
         if !self.value.load_fields.contains(&value) {
@@ -631,11 +690,13 @@ impl LoadPartitionsRequestBuilder {
         self
     }
 
+    /// Sets the skip load dynamic field and returns the updated value.
     pub fn skip_load_dynamic_field(mut self, value: bool) -> Self {
         self.value.skip_load_dynamic_field = value;
         self
     }
 
+    /// Sets the resource groups and returns the updated value.
     pub fn resource_groups(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.resource_groups.clear();
         for value in values.into_iter().map(Into::into) {
@@ -646,6 +707,7 @@ impl LoadPartitionsRequestBuilder {
         self
     }
 
+    /// Sets the resource group and returns the updated value.
     pub fn resource_group(mut self, value: impl Into<String>) -> Self {
         let value = value.into();
         if !self.value.resource_groups.contains(&value) {
@@ -654,6 +716,7 @@ impl LoadPartitionsRequestBuilder {
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<LoadPartitionsRequest> {
         validate_partition_collection(
             self.value.database_name.as_deref(),
@@ -689,6 +752,7 @@ impl ReleasePartitionsRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> ReleasePartitionsRequestBuilder {
         ReleasePartitionsRequestBuilder {
             value: Self::empty(),
@@ -700,14 +764,17 @@ impl ReleasePartitionsRequest {
         ReleasePartitionsRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the partition names.
     pub fn partition_names(&self) -> &[String] {
         &self.partition_names
     }
@@ -732,21 +799,25 @@ pub struct ReleasePartitionsRequestBuilder {
 }
 
 impl ReleasePartitionsRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the partition names and returns the updated value.
     pub fn partition_names(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.partition_names = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<ReleasePartitionsRequest> {
         validate_partition_collection(
             self.value.database_name.as_deref(),

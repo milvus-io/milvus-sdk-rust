@@ -85,10 +85,12 @@ impl ClientV2 {
     }
 
     pub(super) fn update_dml_timestamp(&self, database: &str, collection: &str, timestamp: u64) {
+        trace_debug!(target: "milvus_sdk::timestamp_cache", endpoint = %self.cache_endpoint, database, collection, timestamp, "updating DML timestamp cache");
         COLLECTION_TS_CACHE.set(&self.cache_endpoint, database, collection, timestamp);
     }
 
     pub(super) fn remove_dml_timestamp(&self, database: &str, collection: &str) {
+        trace_debug!(target: "milvus_sdk::timestamp_cache", endpoint = %self.cache_endpoint, database, collection, "invalidating DML timestamp cache entry");
         COLLECTION_TS_CACHE.invalidate(&self.cache_endpoint, database, collection);
     }
 
@@ -98,6 +100,7 @@ impl ClientV2 {
         source_collection: &str,
         target_collection: &str,
     ) {
+        trace_debug!(target: "milvus_sdk::timestamp_cache", endpoint = %self.cache_endpoint, database, source_collection, target_collection, "copying DML timestamp cache entry");
         COLLECTION_TS_CACHE.copy(
             &self.cache_endpoint,
             database,
@@ -120,17 +123,19 @@ impl ClientV2 {
         } else {
             collection.to_owned()
         };
-        match explicit {
-            Some(level) => Ok(COLLECTION_TS_CACHE.guarantee_timestamp(
+        let timestamp = match explicit {
+            Some(level) => COLLECTION_TS_CACHE.guarantee_timestamp(
                 &self.cache_endpoint,
                 database,
                 &canonical_collection,
                 level,
-            )),
-            None => Ok(COLLECTION_TS_CACHE
+            ),
+            None => COLLECTION_TS_CACHE
                 .get(&self.cache_endpoint, database, &canonical_collection)
-                .unwrap_or(1)),
-        }
+                .unwrap_or(1),
+        };
+        trace_debug!(target: "milvus_sdk::timestamp_cache", endpoint = %self.cache_endpoint, database, collection = %canonical_collection, consistency = ?explicit, guarantee_timestamp = timestamp, "resolved read guarantee timestamp");
+        Ok(timestamp)
     }
 
     pub(super) async fn get_collection_description(

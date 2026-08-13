@@ -43,6 +43,7 @@ impl CreateResourceGroupRequest {
 }
 
 impl CreateResourceGroupRequest {
+    /// Creates a builder for this request.
     pub fn builder() -> CreateResourceGroupRequestBuilder {
         CreateResourceGroupRequestBuilder {
             value: Self::empty(),
@@ -54,10 +55,12 @@ impl CreateResourceGroupRequest {
         CreateResourceGroupRequestBuilder { value: self }
     }
 
+    /// Returns the name.
     pub fn name(&self) -> &str {
         &self.name
     }
 
+    /// Returns the config.
     pub fn config(&self) -> &ResourceGroupConfig {
         &self.config
     }
@@ -81,16 +84,19 @@ pub struct CreateResourceGroupRequestBuilder {
 }
 
 impl CreateResourceGroupRequestBuilder {
+    /// Sets the name and returns the updated value.
     pub fn name(mut self, value: impl Into<String>) -> Self {
         self.value.name = value.into();
         self
     }
 
+    /// Sets the config and returns the updated value.
     pub fn config(mut self, value: ResourceGroupConfig) -> Self {
         self.value.config = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<CreateResourceGroupRequest> {
         required("name", &self.value.name)?;
         Ok(self.value)
@@ -114,6 +120,7 @@ impl DropResourceGroupRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> DropResourceGroupRequestBuilder {
         DropResourceGroupRequestBuilder {
             value: Self::empty(),
@@ -125,6 +132,7 @@ impl DropResourceGroupRequest {
         DropResourceGroupRequestBuilder { value: self }
     }
 
+    /// Returns the group name.
     pub fn group_name(&self) -> &str {
         &self.group_name
     }
@@ -147,11 +155,13 @@ pub struct DropResourceGroupRequestBuilder {
 }
 
 impl DropResourceGroupRequestBuilder {
+    /// Sets the group name and returns the updated value.
     pub fn group_name(mut self, value: impl Into<String>) -> Self {
         self.value.group_name = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<DropResourceGroupRequest> {
         required("group_name", &self.value.group_name)?;
         Ok(self.value)
@@ -175,6 +185,7 @@ impl UpdateResourceGroupsRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> UpdateResourceGroupsRequestBuilder {
         UpdateResourceGroupsRequestBuilder {
             value: Self::empty(),
@@ -186,6 +197,7 @@ impl UpdateResourceGroupsRequest {
         UpdateResourceGroupsRequestBuilder { value: self }
     }
 
+    /// Returns the groups.
     pub fn groups(&self) -> &HashMap<String, ResourceGroupConfig> {
         &self.groups
     }
@@ -212,11 +224,13 @@ pub struct UpdateResourceGroupsRequestBuilder {
 }
 
 impl UpdateResourceGroupsRequestBuilder {
+    /// Sets the groups and returns the updated value.
     pub fn groups(mut self, value: HashMap<String, ResourceGroupConfig>) -> Self {
         self.value.groups = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<UpdateResourceGroupsRequest> {
         if self.value.groups.is_empty() {
             return Err(Error::validation(
@@ -255,6 +269,7 @@ impl TransferNodeRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> TransferNodeRequestBuilder {
         TransferNodeRequestBuilder {
             value: Self::empty(),
@@ -266,14 +281,17 @@ impl TransferNodeRequest {
         TransferNodeRequestBuilder { value: self }
     }
 
+    /// Returns the source group.
     pub fn source_group(&self) -> &str {
         &self.source_group
     }
 
+    /// Returns the target group.
     pub fn target_group(&self) -> &str {
         &self.target_group
     }
 
+    /// Returns the node count.
     pub fn node_count(&self) -> i32 {
         self.node_count
     }
@@ -298,21 +316,25 @@ pub struct TransferNodeRequestBuilder {
 }
 
 impl TransferNodeRequestBuilder {
+    /// Sets the source group and returns the updated value.
     pub fn source_group(mut self, value: impl Into<String>) -> Self {
         self.value.source_group = value.into();
         self
     }
 
+    /// Sets the target group and returns the updated value.
     pub fn target_group(mut self, value: impl Into<String>) -> Self {
         self.value.target_group = value.into();
         self
     }
 
+    /// Sets the node count and returns the updated value.
     pub fn node_count(mut self, value: i32) -> Self {
         self.value.node_count = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<TransferNodeRequest> {
         required("source_group", &self.value.source_group)?;
         required("target_group", &self.value.target_group)?;
@@ -336,6 +358,7 @@ pub struct TransferReplicaRequest {
 }
 
 impl TransferReplicaRequest {
+    /// Creates a builder for this request.
     pub fn builder() -> TransferReplicaRequestBuilder {
         TransferReplicaRequestBuilder {
             value: Self::empty(),
@@ -347,22 +370,27 @@ impl TransferReplicaRequest {
         TransferReplicaRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &str {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the source group.
     pub fn source_group(&self) -> &str {
         &self.source_group
     }
 
+    /// Returns the target group.
     pub fn target_group(&self) -> &str {
         &self.target_group
     }
 
+    /// Returns the replica count.
     pub fn replica_count(&self) -> i64 {
         self.replica_count
     }
@@ -401,31 +429,37 @@ pub struct TransferReplicaRequestBuilder {
 }
 
 impl TransferReplicaRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = value.into();
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the source group and returns the updated value.
     pub fn source_group(mut self, value: impl Into<String>) -> Self {
         self.value.source_group = value.into();
         self
     }
 
+    /// Sets the target group and returns the updated value.
     pub fn target_group(mut self, value: impl Into<String>) -> Self {
         self.value.target_group = value.into();
         self
     }
 
+    /// Sets the replica count and returns the updated value.
     pub fn replica_count(mut self, value: i64) -> Self {
         self.value.replica_count = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<TransferReplicaRequest> {
         required("collection_name", &self.value.collection_name)?;
         required("source_group", &self.value.source_group)?;
@@ -444,6 +478,7 @@ impl TransferReplicaRequestBuilder {
 pub struct ListResourceGroupsRequest;
 
 impl ListResourceGroupsRequest {
+    /// Creates a builder for this request.
     pub fn builder() -> ListResourceGroupsRequestBuilder {
         ListResourceGroupsRequestBuilder
     }
@@ -466,6 +501,7 @@ impl ListResourceGroupsRequest {
 pub struct ListResourceGroupsRequestBuilder;
 
 impl ListResourceGroupsRequestBuilder {
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<ListResourceGroupsRequest> {
         Ok(ListResourceGroupsRequest)
     }
@@ -488,6 +524,7 @@ impl DescribeResourceGroupRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> DescribeResourceGroupRequestBuilder {
         DescribeResourceGroupRequestBuilder {
             value: Self::empty(),
@@ -499,6 +536,7 @@ impl DescribeResourceGroupRequest {
         DescribeResourceGroupRequestBuilder { value: self }
     }
 
+    /// Returns the group name.
     pub fn group_name(&self) -> &str {
         &self.group_name
     }
@@ -521,11 +559,13 @@ pub struct DescribeResourceGroupRequestBuilder {
 }
 
 impl DescribeResourceGroupRequestBuilder {
+    /// Sets the group name and returns the updated value.
     pub fn group_name(mut self, value: impl Into<String>) -> Self {
         self.value.group_name = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<DescribeResourceGroupRequest> {
         required("group_name", &self.value.group_name)?;
         Ok(self.value)

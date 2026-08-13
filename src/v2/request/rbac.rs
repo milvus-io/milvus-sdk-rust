@@ -54,6 +54,7 @@ impl CreateUserRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> CreateUserRequestBuilder {
         CreateUserRequestBuilder {
             value: Self::empty(),
@@ -65,14 +66,17 @@ impl CreateUserRequest {
         CreateUserRequestBuilder { value: self }
     }
 
+    /// Returns the username.
     pub fn username(&self) -> &str {
         &self.username
     }
 
+    /// Returns the password.
     pub fn password(&self) -> &str {
         &self.password
     }
 
+    /// Returns the description.
     pub fn description(&self) -> &Option<String> {
         &self.description
     }
@@ -99,21 +103,25 @@ pub struct CreateUserRequestBuilder {
 }
 
 impl CreateUserRequestBuilder {
+    /// Sets the username and returns the updated value.
     pub fn username(mut self, value: impl Into<String>) -> Self {
         self.value.username = value.into();
         self
     }
 
+    /// Sets the password and returns the updated value.
     pub fn password(mut self, value: impl Into<String>) -> Self {
         self.value.password = value.into();
         self
     }
 
+    /// Sets the description and returns the updated value.
     pub fn description(mut self, value: impl Into<String>) -> Self {
         self.value.description = Some(value.into());
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<CreateUserRequest> {
         required("username", &self.value.username)?;
         required("password", &self.value.password)?;
@@ -153,6 +161,7 @@ impl UpdatePasswordRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> UpdatePasswordRequestBuilder {
         UpdatePasswordRequestBuilder {
             value: Self::empty(),
@@ -164,14 +173,17 @@ impl UpdatePasswordRequest {
         UpdatePasswordRequestBuilder { value: self }
     }
 
+    /// Returns the username.
     pub fn username(&self) -> &str {
         &self.username
     }
 
+    /// Returns the old password.
     pub fn old_password(&self) -> &str {
         &self.old_password
     }
 
+    /// Returns the new password.
     pub fn new_password(&self) -> &str {
         &self.new_password
     }
@@ -195,21 +207,25 @@ pub struct UpdatePasswordRequestBuilder {
 }
 
 impl UpdatePasswordRequestBuilder {
+    /// Sets the username and returns the updated value.
     pub fn username(mut self, value: impl Into<String>) -> Self {
         self.value.username = value.into();
         self
     }
 
+    /// Sets the old password and returns the updated value.
     pub fn old_password(mut self, value: impl Into<String>) -> Self {
         self.value.old_password = value.into();
         self
     }
 
+    /// Sets the new password and returns the updated value.
     pub fn new_password(mut self, value: impl Into<String>) -> Self {
         self.value.new_password = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<UpdatePasswordRequest> {
         required("username", &self.value.username)?;
         required("old_password", &self.value.old_password)?;
@@ -237,6 +253,7 @@ impl UpdateUserRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> UpdateUserRequestBuilder {
         UpdateUserRequestBuilder {
             value: Self::empty(),
@@ -248,10 +265,12 @@ impl UpdateUserRequest {
         UpdateUserRequestBuilder { value: self }
     }
 
+    /// Returns the username.
     pub fn username(&self) -> &str {
         &self.username
     }
 
+    /// Returns the description.
     pub fn description(&self) -> &str {
         &self.description
     }
@@ -276,16 +295,19 @@ pub struct UpdateUserRequestBuilder {
 }
 
 impl UpdateUserRequestBuilder {
+    /// Sets the username and returns the updated value.
     pub fn username(mut self, value: impl Into<String>) -> Self {
         self.value.username = value.into();
         self
     }
 
+    /// Sets the description and returns the updated value.
     pub fn description(mut self, value: impl Into<String>) -> Self {
         self.value.description = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<UpdateUserRequest> {
         required("username", &self.value.username)?;
         Ok(self.value)
@@ -309,6 +331,7 @@ impl DropUserRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> DropUserRequestBuilder {
         DropUserRequestBuilder {
             value: Self::empty(),
@@ -320,6 +343,7 @@ impl DropUserRequest {
         DropUserRequestBuilder { value: self }
     }
 
+    /// Returns the username.
     pub fn username(&self) -> &str {
         &self.username
     }
@@ -342,11 +366,13 @@ pub struct DropUserRequestBuilder {
 }
 
 impl DropUserRequestBuilder {
+    /// Sets the username and returns the updated value.
     pub fn username(mut self, value: impl Into<String>) -> Self {
         self.value.username = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<DropUserRequest> {
         required("username", &self.value.username)?;
         Ok(self.value)
@@ -362,6 +388,7 @@ impl DropUserRequestBuilder {
 pub struct ListUsersRequest;
 
 impl ListUsersRequest {
+    /// Creates a builder for this request.
     pub fn builder() -> ListUsersRequestBuilder {
         ListUsersRequestBuilder
     }
@@ -384,6 +411,7 @@ impl ListUsersRequest {
 pub struct ListUsersRequestBuilder;
 
 impl ListUsersRequestBuilder {
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<ListUsersRequest> {
         Ok(ListUsersRequest)
     }
@@ -398,6 +426,7 @@ impl ListUsersRequestBuilder {
 pub struct ListRolesRequest;
 
 impl ListRolesRequest {
+    /// Creates a builder for this request.
     pub fn builder() -> ListRolesRequestBuilder {
         ListRolesRequestBuilder
     }
@@ -424,6 +453,7 @@ impl ListRolesRequest {
 pub struct ListRolesRequestBuilder;
 
 impl ListRolesRequestBuilder {
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<ListRolesRequest> {
         Ok(ListRolesRequest)
     }
@@ -448,6 +478,7 @@ impl CreateRoleRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> CreateRoleRequestBuilder {
         CreateRoleRequestBuilder {
             value: Self::empty(),
@@ -459,10 +490,12 @@ impl CreateRoleRequest {
         CreateRoleRequestBuilder { value: self }
     }
 
+    /// Returns the role name.
     pub fn role_name(&self) -> &str {
         &self.role_name
     }
 
+    /// Returns the description.
     pub fn description(&self) -> &str {
         &self.description
     }
@@ -488,16 +521,19 @@ pub struct CreateRoleRequestBuilder {
 }
 
 impl CreateRoleRequestBuilder {
+    /// Sets the role name and returns the updated value.
     pub fn role_name(mut self, value: impl Into<String>) -> Self {
         self.value.role_name = value.into();
         self
     }
 
+    /// Sets the description and returns the updated value.
     pub fn description(mut self, value: impl Into<String>) -> Self {
         self.value.description = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<CreateRoleRequest> {
         required("role_name", &self.value.role_name)?;
         Ok(self.value)
@@ -523,6 +559,7 @@ impl AlterRoleRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> AlterRoleRequestBuilder {
         AlterRoleRequestBuilder {
             value: Self::empty(),
@@ -534,10 +571,12 @@ impl AlterRoleRequest {
         AlterRoleRequestBuilder { value: self }
     }
 
+    /// Returns the role name.
     pub fn role_name(&self) -> &str {
         &self.role_name
     }
 
+    /// Returns the description.
     pub fn description(&self) -> &str {
         &self.description
     }
@@ -561,16 +600,19 @@ pub struct AlterRoleRequestBuilder {
 }
 
 impl AlterRoleRequestBuilder {
+    /// Sets the role name and returns the updated value.
     pub fn role_name(mut self, value: impl Into<String>) -> Self {
         self.value.role_name = value.into();
         self
     }
 
+    /// Sets the description and returns the updated value.
     pub fn description(mut self, value: impl Into<String>) -> Self {
         self.value.description = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<AlterRoleRequest> {
         required("role_name", &self.value.role_name)?;
         Ok(self.value)
@@ -596,6 +638,7 @@ impl DropRoleRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> DropRoleRequestBuilder {
         DropRoleRequestBuilder {
             value: Self::empty(),
@@ -607,10 +650,12 @@ impl DropRoleRequest {
         DropRoleRequestBuilder { value: self }
     }
 
+    /// Returns the role name.
     pub fn role_name(&self) -> &str {
         &self.role_name
     }
 
+    /// Returns whether the request should force.
     pub fn should_force(&self) -> bool {
         self.force
     }
@@ -634,16 +679,19 @@ pub struct DropRoleRequestBuilder {
 }
 
 impl DropRoleRequestBuilder {
+    /// Sets the role name and returns the updated value.
     pub fn role_name(mut self, value: impl Into<String>) -> Self {
         self.value.role_name = value.into();
         self
     }
 
+    /// Sets the force and returns the updated value.
     pub fn force(mut self, value: bool) -> Self {
         self.value.force = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<DropRoleRequest> {
         required("role_name", &self.value.role_name)?;
         Ok(self.value)
@@ -669,6 +717,7 @@ impl GrantRoleRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> GrantRoleRequestBuilder {
         GrantRoleRequestBuilder {
             value: Self::empty(),
@@ -680,10 +729,12 @@ impl GrantRoleRequest {
         GrantRoleRequestBuilder { value: self }
     }
 
+    /// Returns the username.
     pub fn username(&self) -> &str {
         &self.username
     }
 
+    /// Returns the role name.
     pub fn role_name(&self) -> &str {
         &self.role_name
     }
@@ -708,16 +759,19 @@ pub struct GrantRoleRequestBuilder {
 }
 
 impl GrantRoleRequestBuilder {
+    /// Sets the username and returns the updated value.
     pub fn username(mut self, value: impl Into<String>) -> Self {
         self.value.username = value.into();
         self
     }
 
+    /// Sets the role name and returns the updated value.
     pub fn role_name(mut self, value: impl Into<String>) -> Self {
         self.value.role_name = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<GrantRoleRequest> {
         validate_user_role(&self.value.username, &self.value.role_name)?;
         Ok(self.value)
@@ -743,6 +797,7 @@ impl RevokeRoleRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> RevokeRoleRequestBuilder {
         RevokeRoleRequestBuilder {
             value: Self::empty(),
@@ -754,10 +809,12 @@ impl RevokeRoleRequest {
         RevokeRoleRequestBuilder { value: self }
     }
 
+    /// Returns the username.
     pub fn username(&self) -> &str {
         &self.username
     }
 
+    /// Returns the role name.
     pub fn role_name(&self) -> &str {
         &self.role_name
     }
@@ -782,16 +839,19 @@ pub struct RevokeRoleRequestBuilder {
 }
 
 impl RevokeRoleRequestBuilder {
+    /// Sets the username and returns the updated value.
     pub fn username(mut self, value: impl Into<String>) -> Self {
         self.value.username = value.into();
         self
     }
 
+    /// Sets the role name and returns the updated value.
     pub fn role_name(mut self, value: impl Into<String>) -> Self {
         self.value.role_name = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<RevokeRoleRequest> {
         validate_user_role(&self.value.username, &self.value.role_name)?;
         Ok(self.value)
@@ -817,6 +877,7 @@ impl DescribeRoleRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> DescribeRoleRequestBuilder {
         DescribeRoleRequestBuilder {
             value: Self::empty(),
@@ -828,10 +889,12 @@ impl DescribeRoleRequest {
         DescribeRoleRequestBuilder { value: self }
     }
 
+    /// Returns the role name.
     pub fn role_name(&self) -> &str {
         &self.role_name
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &str {
         &self.database_name
     }
@@ -879,16 +942,19 @@ pub struct DescribeRoleRequestBuilder {
 }
 
 impl DescribeRoleRequestBuilder {
+    /// Sets the role name and returns the updated value.
     pub fn role_name(mut self, value: impl Into<String>) -> Self {
         self.value.role_name = value.into();
         self
     }
 
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<DescribeRoleRequest> {
         required("role_name", &self.value.role_name)?;
         Ok(self.value)
@@ -907,6 +973,7 @@ pub struct DescribeUserRequest {
 }
 
 impl DescribeUserRequest {
+    /// Creates a builder for this request.
     pub fn builder() -> DescribeUserRequestBuilder {
         DescribeUserRequestBuilder {
             value: Self::empty(),
@@ -918,10 +985,12 @@ impl DescribeUserRequest {
         DescribeUserRequestBuilder { value: self }
     }
 
+    /// Returns the username.
     pub fn username(&self) -> &str {
         &self.username
     }
 
+    /// Returns whether the request should include roles.
     pub fn should_include_roles(&self) -> bool {
         self.include_roles
     }
@@ -956,16 +1025,19 @@ pub struct DescribeUserRequestBuilder {
 }
 
 impl DescribeUserRequestBuilder {
+    /// Sets the username and returns the updated value.
     pub fn username(mut self, value: impl Into<String>) -> Self {
         self.value.username = value.into();
         self
     }
 
+    /// Sets the include roles and returns the updated value.
     pub fn include_roles(mut self, value: bool) -> Self {
         self.value.include_roles = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<DescribeUserRequest> {
         required("username", &self.value.username)?;
         Ok(self.value)
@@ -995,6 +1067,7 @@ impl GrantPrivilegeRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> GrantPrivilegeRequestBuilder {
         GrantPrivilegeRequestBuilder {
             value: Self::empty(),
@@ -1006,18 +1079,22 @@ impl GrantPrivilegeRequest {
         GrantPrivilegeRequestBuilder { value: self }
     }
 
+    /// Returns the role name.
     pub fn role_name(&self) -> &str {
         &self.role_name
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &str {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the privilege.
     pub fn privilege(&self) -> &str {
         &self.privilege
     }
@@ -1052,26 +1129,31 @@ pub struct GrantPrivilegeRequestBuilder {
 }
 
 impl GrantPrivilegeRequestBuilder {
+    /// Sets the role name and returns the updated value.
     pub fn role_name(mut self, value: impl Into<String>) -> Self {
         self.value.role_name = value.into();
         self
     }
 
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = value.into();
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the privilege and returns the updated value.
     pub fn privilege(mut self, value: impl Into<String>) -> Self {
         self.value.privilege = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<GrantPrivilegeRequest> {
         validate_privilege(
             &self.value.role_name,
@@ -1106,6 +1188,7 @@ impl RevokePrivilegeRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> RevokePrivilegeRequestBuilder {
         RevokePrivilegeRequestBuilder {
             value: Self::empty(),
@@ -1117,18 +1200,22 @@ impl RevokePrivilegeRequest {
         RevokePrivilegeRequestBuilder { value: self }
     }
 
+    /// Returns the role name.
     pub fn role_name(&self) -> &str {
         &self.role_name
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &str {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the privilege.
     pub fn privilege(&self) -> &str {
         &self.privilege
     }
@@ -1163,26 +1250,31 @@ pub struct RevokePrivilegeRequestBuilder {
 }
 
 impl RevokePrivilegeRequestBuilder {
+    /// Sets the role name and returns the updated value.
     pub fn role_name(mut self, value: impl Into<String>) -> Self {
         self.value.role_name = value.into();
         self
     }
 
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = value.into();
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the privilege and returns the updated value.
     pub fn privilege(mut self, value: impl Into<String>) -> Self {
         self.value.privilege = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<RevokePrivilegeRequest> {
         validate_privilege(
             &self.value.role_name,
@@ -1211,6 +1303,7 @@ impl CreatePrivilegeGroupRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> CreatePrivilegeGroupRequestBuilder {
         CreatePrivilegeGroupRequestBuilder {
             value: Self::empty(),
@@ -1222,6 +1315,7 @@ impl CreatePrivilegeGroupRequest {
         CreatePrivilegeGroupRequestBuilder { value: self }
     }
 
+    /// Returns the group name.
     pub fn group_name(&self) -> &str {
         &self.group_name
     }
@@ -1244,11 +1338,13 @@ pub struct CreatePrivilegeGroupRequestBuilder {
 }
 
 impl CreatePrivilegeGroupRequestBuilder {
+    /// Sets the group name and returns the updated value.
     pub fn group_name(mut self, value: impl Into<String>) -> Self {
         self.value.group_name = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<CreatePrivilegeGroupRequest> {
         required("group_name", &self.value.group_name)?;
         Ok(self.value)
@@ -1272,6 +1368,7 @@ impl DropPrivilegeGroupRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> DropPrivilegeGroupRequestBuilder {
         DropPrivilegeGroupRequestBuilder {
             value: Self::empty(),
@@ -1283,6 +1380,7 @@ impl DropPrivilegeGroupRequest {
         DropPrivilegeGroupRequestBuilder { value: self }
     }
 
+    /// Returns the group name.
     pub fn group_name(&self) -> &str {
         &self.group_name
     }
@@ -1305,11 +1403,13 @@ pub struct DropPrivilegeGroupRequestBuilder {
 }
 
 impl DropPrivilegeGroupRequestBuilder {
+    /// Sets the group name and returns the updated value.
     pub fn group_name(mut self, value: impl Into<String>) -> Self {
         self.value.group_name = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<DropPrivilegeGroupRequest> {
         required("group_name", &self.value.group_name)?;
         Ok(self.value)
@@ -1325,6 +1425,7 @@ impl DropPrivilegeGroupRequestBuilder {
 pub struct ListPrivilegeGroupsRequest;
 
 impl ListPrivilegeGroupsRequest {
+    /// Creates a builder for this request.
     pub fn builder() -> ListPrivilegeGroupsRequestBuilder {
         ListPrivilegeGroupsRequestBuilder
     }
@@ -1347,6 +1448,7 @@ impl ListPrivilegeGroupsRequest {
 pub struct ListPrivilegeGroupsRequestBuilder;
 
 impl ListPrivilegeGroupsRequestBuilder {
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<ListPrivilegeGroupsRequest> {
         Ok(ListPrivilegeGroupsRequest)
     }
@@ -1371,6 +1473,7 @@ impl AddPrivilegesToGroupRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> AddPrivilegesToGroupRequestBuilder {
         AddPrivilegesToGroupRequestBuilder {
             value: Self::empty(),
@@ -1382,10 +1485,12 @@ impl AddPrivilegesToGroupRequest {
         AddPrivilegesToGroupRequestBuilder { value: self }
     }
 
+    /// Returns the group name.
     pub fn group_name(&self) -> &str {
         &self.group_name
     }
 
+    /// Returns the privileges.
     pub fn privileges(&self) -> &HashSet<String> {
         &self.privileges
     }
@@ -1414,21 +1519,25 @@ pub struct AddPrivilegesToGroupRequestBuilder {
 }
 
 impl AddPrivilegesToGroupRequestBuilder {
+    /// Sets the group name and returns the updated value.
     pub fn group_name(mut self, value: impl Into<String>) -> Self {
         self.value.group_name = value.into();
         self
     }
 
+    /// Sets the privileges and returns the updated value.
     pub fn privileges(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.privileges = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the privilege and returns the updated value.
     pub fn privilege(mut self, value: impl Into<String>) -> Self {
         self.value.privileges.insert(value.into());
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<AddPrivilegesToGroupRequest> {
         validate_privilege_group_members(&self.value.group_name, &self.value.privileges)?;
         Ok(self.value)
@@ -1454,6 +1563,7 @@ impl RemovePrivilegesFromGroupRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> RemovePrivilegesFromGroupRequestBuilder {
         RemovePrivilegesFromGroupRequestBuilder {
             value: Self::empty(),
@@ -1465,10 +1575,12 @@ impl RemovePrivilegesFromGroupRequest {
         RemovePrivilegesFromGroupRequestBuilder { value: self }
     }
 
+    /// Returns the group name.
     pub fn group_name(&self) -> &str {
         &self.group_name
     }
 
+    /// Returns the privileges.
     pub fn privileges(&self) -> &HashSet<String> {
         &self.privileges
     }
@@ -1497,21 +1609,25 @@ pub struct RemovePrivilegesFromGroupRequestBuilder {
 }
 
 impl RemovePrivilegesFromGroupRequestBuilder {
+    /// Sets the group name and returns the updated value.
     pub fn group_name(mut self, value: impl Into<String>) -> Self {
         self.value.group_name = value.into();
         self
     }
 
+    /// Sets the privileges and returns the updated value.
     pub fn privileges(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.privileges = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the privilege and returns the updated value.
     pub fn privilege(mut self, value: impl Into<String>) -> Self {
         self.value.privileges.insert(value.into());
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<RemovePrivilegesFromGroupRequest> {
         validate_privilege_group_members(&self.value.group_name, &self.value.privileges)?;
         Ok(self.value)

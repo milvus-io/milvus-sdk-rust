@@ -28,6 +28,7 @@ pull_request_rules:
       - base=main
       - "check-success=UT on Ubuntu-22.04"
       - "check-success=UT on MacOS 15"
+      - "check-success=UT on Windows"
     actions:
       label:
         add:
@@ -40,6 +41,7 @@ pull_request_rules:
       - or:
         - "-check-success=UT on Ubuntu-22.04"
         - "-check-success=UT on MacOS 15"
+        - "-check-success=UT on Windows"
       - files~=^(?!\.github\/mergify\.yml).*$
       - files~=\.(?!md|png)
     actions:

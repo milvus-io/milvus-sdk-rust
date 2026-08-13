@@ -3,7 +3,32 @@ name = "milvus-sdk-rust"
 description = "The official Milvus Rust SDK"
 version = "2.6.0"
 edition = "2021"
+rust-version = "1.86"
 license-file = "LICENSE"
+readme = "README.md"
+repository = "https://github.com/milvus-io/milvus-sdk-rust"
+homepage = "https://milvus.io"
+documentation = "https://docs.rs/milvus-sdk-rust"
+keywords = ["milvus", "vector-database", "database", "sdk"]
+categories = ["database"]
+include = [
+    "Cargo.toml",
+    "build.rs",
+    "src/**",
+    "tests/**",
+    "examples/**",
+    "milvus-proto/proto/**",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["-A", "rustdoc::bare-urls"]
+
+[features]
+tracing = ["dep:tracing"]
 
 [lib]
 name = "milvus"
@@ -27,6 +52,7 @@ lazy_static = "1.4"
 lru = "0.12"
 parking_lot = "0.12"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+tracing = { version = "0.1", optional = true }
 
 [build-dependencies]
 tonic-build = { version = "0.13", default-features = false, features = [
