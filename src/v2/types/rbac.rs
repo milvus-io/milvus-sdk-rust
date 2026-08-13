@@ -32,6 +32,7 @@ pub struct GrantItem {
 }
 
 impl GrantItem {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             object_type: String::new(),
@@ -43,86 +44,104 @@ impl GrantItem {
         }
     }
 
+    /// Sets the object type and returns the updated value.
     pub fn object_type(mut self, value: impl Into<String>) -> Self {
         self.object_type = value.into();
         self
     }
 
+    /// Sets the object type and returns this value for further mutation.
     pub fn set_object_type(&mut self, value: impl Into<String>) -> &mut Self {
         self.object_type = value.into();
         self
     }
 
+    /// Returns the configured object type.
     pub fn get_object_type(&self) -> &str {
         &self.object_type
     }
 
+    /// Sets the object name and returns the updated value.
     pub fn object_name(mut self, value: impl Into<String>) -> Self {
         self.object_name = value.into();
         self
     }
 
+    /// Sets the object name and returns this value for further mutation.
     pub fn set_object_name(&mut self, value: impl Into<String>) -> &mut Self {
         self.object_name = value.into();
         self
     }
 
+    /// Returns the configured object name.
     pub fn get_object_name(&self) -> &str {
         &self.object_name
     }
 
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.database_name = value.into();
         self
     }
 
+    /// Sets the database name and returns this value for further mutation.
     pub fn set_database_name(&mut self, value: impl Into<String>) -> &mut Self {
         self.database_name = value.into();
         self
     }
 
+    /// Returns the configured database name.
     pub fn get_database_name(&self) -> &str {
         &self.database_name
     }
 
+    /// Sets the role name and returns the updated value.
     pub fn role_name(mut self, value: impl Into<String>) -> Self {
         self.role_name = value.into();
         self
     }
 
+    /// Sets the role name and returns this value for further mutation.
     pub fn set_role_name(&mut self, value: impl Into<String>) -> &mut Self {
         self.role_name = value.into();
         self
     }
 
+    /// Returns the configured role name.
     pub fn get_role_name(&self) -> &str {
         &self.role_name
     }
 
+    /// Sets the privilege and returns the updated value.
     pub fn privilege(mut self, value: impl Into<String>) -> Self {
         self.privilege = value.into();
         self
     }
 
+    /// Sets the privilege and returns this value for further mutation.
     pub fn set_privilege(&mut self, value: impl Into<String>) -> &mut Self {
         self.privilege = value.into();
         self
     }
 
+    /// Returns the configured privilege.
     pub fn get_privilege(&self) -> &str {
         &self.privilege
     }
 
+    /// Sets the grantor name and returns the updated value.
     pub fn grantor_name(mut self, value: impl Into<String>) -> Self {
         self.grantor_name = value.into();
         self
     }
 
+    /// Sets the grantor name and returns this value for further mutation.
     pub fn set_grantor_name(&mut self, value: impl Into<String>) -> &mut Self {
         self.grantor_name = value.into();
         self
     }
 
+    /// Returns the configured grantor name.
     pub fn get_grantor_name(&self) -> &str {
         &self.grantor_name
     }
@@ -141,6 +160,7 @@ pub struct RoleDescription {
 }
 
 impl RoleDescription {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             role_name: String::new(),
@@ -149,48 +169,58 @@ impl RoleDescription {
         }
     }
 
+    /// Sets the role name and returns the updated value.
     pub fn role_name(mut self, value: impl Into<String>) -> Self {
         self.role_name = value.into();
         self
     }
 
+    /// Sets the role name and returns this value for further mutation.
     pub fn set_role_name(&mut self, value: impl Into<String>) -> &mut Self {
         self.role_name = value.into();
         self
     }
 
+    /// Returns the configured role name.
     pub fn get_role_name(&self) -> &str {
         &self.role_name
     }
 
+    /// Sets the description and returns the updated value.
     pub fn description(mut self, value: impl Into<String>) -> Self {
         self.description = value.into();
         self
     }
 
+    /// Sets the description and returns this value for further mutation.
     pub fn set_description(&mut self, value: impl Into<String>) -> &mut Self {
         self.description = value.into();
         self
     }
 
+    /// Returns the configured description.
     pub fn get_description(&self) -> &str {
         &self.description
     }
 
+    /// Sets the grant items and returns the updated value.
     pub fn grant_items(mut self, value: Vec<GrantItem>) -> Self {
         self.grant_items = value;
         self
     }
 
+    /// Sets the grant items and returns this value for further mutation.
     pub fn set_grant_items(&mut self, value: Vec<GrantItem>) -> &mut Self {
         self.grant_items = value;
         self
     }
 
+    /// Returns the configured grant items.
     pub fn get_grant_items(&self) -> &[GrantItem] {
         &self.grant_items
     }
 
+    /// Adds one add grant item to the existing values.
     pub fn add_grant_item(mut self, value: GrantItem) -> Self {
         self.grant_items.push(value);
         self
@@ -210,6 +240,7 @@ pub struct UserDescription {
 }
 
 impl UserDescription {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             username: String::new(),
@@ -218,48 +249,58 @@ impl UserDescription {
         }
     }
 
+    /// Sets the username and returns the updated value.
     pub fn username(mut self, value: impl Into<String>) -> Self {
         self.username = value.into();
         self
     }
 
+    /// Sets the username and returns this value for further mutation.
     pub fn set_username(&mut self, value: impl Into<String>) -> &mut Self {
         self.username = value.into();
         self
     }
 
+    /// Returns the configured username.
     pub fn get_username(&self) -> &str {
         &self.username
     }
 
+    /// Sets the description and returns the updated value.
     pub fn description(mut self, value: impl Into<String>) -> Self {
         self.description = value.into();
         self
     }
 
+    /// Sets the description and returns this value for further mutation.
     pub fn set_description(&mut self, value: impl Into<String>) -> &mut Self {
         self.description = value.into();
         self
     }
 
+    /// Returns the configured description.
     pub fn get_description(&self) -> &str {
         &self.description
     }
 
+    /// Sets the roles and returns the updated value.
     pub fn roles(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.roles = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the roles and returns this value for further mutation.
     pub fn set_roles(&mut self, values: impl IntoIterator<Item = impl Into<String>>) -> &mut Self {
         self.roles = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Returns the configured roles.
     pub fn get_roles(&self) -> &[String] {
         &self.roles
     }
 
+    /// Adds one add role to the existing values.
     pub fn add_role(mut self, value: impl Into<String>) -> Self {
         self.roles.push(value.into());
         self
@@ -278,6 +319,7 @@ pub struct PrivilegeGroupInfo {
 }
 
 impl PrivilegeGroupInfo {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             group_name: String::new(),
@@ -285,25 +327,30 @@ impl PrivilegeGroupInfo {
         }
     }
 
+    /// Sets the group name and returns the updated value.
     pub fn group_name(mut self, value: impl Into<String>) -> Self {
         self.group_name = value.into();
         self
     }
 
+    /// Sets the group name and returns this value for further mutation.
     pub fn set_group_name(&mut self, value: impl Into<String>) -> &mut Self {
         self.group_name = value.into();
         self
     }
 
+    /// Returns the configured group name.
     pub fn get_group_name(&self) -> &str {
         &self.group_name
     }
 
+    /// Sets the privileges and returns the updated value.
     pub fn privileges(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.privileges = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the privileges and returns this value for further mutation.
     pub fn set_privileges(
         &mut self,
         values: impl IntoIterator<Item = impl Into<String>>,
@@ -312,10 +359,12 @@ impl PrivilegeGroupInfo {
         self
     }
 
+    /// Returns the configured privileges.
     pub fn get_privileges(&self) -> &[String] {
         &self.privileges
     }
 
+    /// Adds one add privilege to the existing values.
     pub fn add_privilege(mut self, value: impl Into<String>) -> Self {
         self.privileges.push(value.into());
         self

@@ -46,6 +46,7 @@ impl std::fmt::Debug for ReplicateCluster {
 }
 
 impl ReplicateCluster {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             cluster_id: String::new(),
@@ -55,48 +56,58 @@ impl ReplicateCluster {
         }
     }
 
+    /// Sets the cluster id and returns the updated value.
     pub fn cluster_id(mut self, value: impl Into<String>) -> Self {
         self.cluster_id = value.into();
         self
     }
 
+    /// Sets the cluster id and returns this value for further mutation.
     pub fn set_cluster_id(&mut self, value: impl Into<String>) -> &mut Self {
         self.cluster_id = value.into();
         self
     }
 
+    /// Returns the configured cluster id.
     pub fn get_cluster_id(&self) -> &str {
         &self.cluster_id
     }
 
+    /// Sets the uri and returns the updated value.
     pub fn uri(mut self, value: impl Into<String>) -> Self {
         self.uri = value.into();
         self
     }
 
+    /// Sets the uri and returns this value for further mutation.
     pub fn set_uri(&mut self, value: impl Into<String>) -> &mut Self {
         self.uri = value.into();
         self
     }
 
+    /// Returns the configured uri.
     pub fn get_uri(&self) -> &str {
         &self.uri
     }
 
+    /// Sets the token and returns the updated value.
     pub fn token(mut self, value: impl Into<String>) -> Self {
         self.token = value.into();
         self
     }
 
+    /// Sets the token and returns this value for further mutation.
     pub fn set_token(&mut self, value: impl Into<String>) -> &mut Self {
         self.token = value.into();
         self
     }
 
+    /// Returns the configured token.
     pub fn get_token(&self) -> &str {
         &self.token
     }
 
+    /// Performs the physical channels operation.
     pub fn physical_channels(
         mut self,
         values: impl IntoIterator<Item = impl Into<String>>,
@@ -105,6 +116,7 @@ impl ReplicateCluster {
         self
     }
 
+    /// Sets the physical channels and returns this value for further mutation.
     pub fn set_physical_channels(
         &mut self,
         values: impl IntoIterator<Item = impl Into<String>>,
@@ -113,10 +125,12 @@ impl ReplicateCluster {
         self
     }
 
+    /// Returns the configured physical channels.
     pub fn get_physical_channels(&self) -> &[String] {
         &self.physical_channels
     }
 
+    /// Adds one add physical channel to the existing values.
     pub fn add_physical_channel(mut self, value: impl Into<String>) -> Self {
         self.physical_channels.push(value.into());
         self
@@ -146,6 +160,7 @@ pub struct CrossClusterTopology {
 }
 
 impl CrossClusterTopology {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             source_cluster_id: String::new(),
@@ -153,30 +168,36 @@ impl CrossClusterTopology {
         }
     }
 
+    /// Sets the source cluster id and returns the updated value.
     pub fn source_cluster_id(mut self, value: impl Into<String>) -> Self {
         self.source_cluster_id = value.into();
         self
     }
 
+    /// Sets the source cluster id and returns this value for further mutation.
     pub fn set_source_cluster_id(&mut self, value: impl Into<String>) -> &mut Self {
         self.source_cluster_id = value.into();
         self
     }
 
+    /// Returns the configured source cluster id.
     pub fn get_source_cluster_id(&self) -> &str {
         &self.source_cluster_id
     }
 
+    /// Sets the target cluster id and returns the updated value.
     pub fn target_cluster_id(mut self, value: impl Into<String>) -> Self {
         self.target_cluster_id = value.into();
         self
     }
 
+    /// Sets the target cluster id and returns this value for further mutation.
     pub fn set_target_cluster_id(&mut self, value: impl Into<String>) -> &mut Self {
         self.target_cluster_id = value.into();
         self
     }
 
+    /// Returns the configured target cluster id.
     pub fn get_target_cluster_id(&self) -> &str {
         &self.target_cluster_id
     }
@@ -194,6 +215,7 @@ pub struct ReplicateConfiguration {
 }
 
 impl ReplicateConfiguration {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             clusters: Vec::new(),
@@ -234,39 +256,47 @@ impl ReplicateConfiguration {
 }
 
 impl ReplicateConfiguration {
+    /// Sets the clusters and returns the updated value.
     pub fn clusters(mut self, value: Vec<ReplicateCluster>) -> Self {
         self.clusters = value;
         self
     }
 
+    /// Sets the clusters and returns this value for further mutation.
     pub fn set_clusters(&mut self, value: Vec<ReplicateCluster>) -> &mut Self {
         self.clusters = value;
         self
     }
 
+    /// Returns the configured clusters.
     pub fn get_clusters(&self) -> &[ReplicateCluster] {
         &self.clusters
     }
 
+    /// Sets the topology and returns the updated value.
     pub fn topology(mut self, value: Vec<CrossClusterTopology>) -> Self {
         self.topology = value;
         self
     }
 
+    /// Sets the topology and returns this value for further mutation.
     pub fn set_topology(&mut self, value: Vec<CrossClusterTopology>) -> &mut Self {
         self.topology = value;
         self
     }
 
+    /// Returns the configured topology.
     pub fn get_topology(&self) -> &[CrossClusterTopology] {
         &self.topology
     }
 
+    /// Adds one add cluster to the existing values.
     pub fn add_cluster(mut self, value: ReplicateCluster) -> Self {
         self.clusters.push(value);
         self
     }
 
+    /// Adds one add topology to the existing values.
     pub fn add_topology(mut self, value: CrossClusterTopology) -> Self {
         self.topology.push(value);
         self
@@ -299,11 +329,17 @@ impl ReplicateConfiguration {
 #[non_exhaustive]
 pub enum WalName {
     #[default]
+    /// Represents the Unknown case.
     Unknown,
+    /// Represents the RocksMq case.
     RocksMq,
+    /// Represents the Pulsar case.
     Pulsar,
+    /// Represents the Kafka case.
     Kafka,
+    /// Represents the WoodPecker case.
     WoodPecker,
+    /// Represents the Test case.
     Test,
 }
 
@@ -345,6 +381,7 @@ pub struct ReplicateMessageId {
 }
 
 impl ReplicateMessageId {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             id: String::new(),
@@ -352,30 +389,36 @@ impl ReplicateMessageId {
         }
     }
 
+    /// Sets the id and returns the updated value.
     pub fn id(mut self, value: impl Into<String>) -> Self {
         self.id = value.into();
         self
     }
 
+    /// Sets the id and returns this value for further mutation.
     pub fn set_id(&mut self, value: impl Into<String>) -> &mut Self {
         self.id = value.into();
         self
     }
 
+    /// Returns the configured id.
     pub fn get_id(&self) -> &str {
         &self.id
     }
 
+    /// Sets the wal name and returns the updated value.
     pub fn wal_name(mut self, value: WalName) -> Self {
         self.wal_name = value;
         self
     }
 
+    /// Sets the wal name and returns this value for further mutation.
     pub fn set_wal_name(&mut self, value: WalName) -> &mut Self {
         self.wal_name = value;
         self
     }
 
+    /// Returns the configured wal name.
     pub fn get_wal_name(&self) -> WalName {
         self.wal_name
     }
@@ -395,6 +438,7 @@ pub struct ReplicateCheckpoint {
 }
 
 impl ReplicateCheckpoint {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             cluster_id: String::new(),
@@ -404,58 +448,70 @@ impl ReplicateCheckpoint {
         }
     }
 
+    /// Sets the cluster id and returns the updated value.
     pub fn cluster_id(mut self, value: impl Into<String>) -> Self {
         self.cluster_id = value.into();
         self
     }
 
+    /// Sets the cluster id and returns this value for further mutation.
     pub fn set_cluster_id(&mut self, value: impl Into<String>) -> &mut Self {
         self.cluster_id = value.into();
         self
     }
 
+    /// Returns the configured cluster id.
     pub fn get_cluster_id(&self) -> &str {
         &self.cluster_id
     }
 
+    /// Sets the physical channel and returns the updated value.
     pub fn physical_channel(mut self, value: impl Into<String>) -> Self {
         self.physical_channel = value.into();
         self
     }
 
+    /// Sets the physical channel and returns this value for further mutation.
     pub fn set_physical_channel(&mut self, value: impl Into<String>) -> &mut Self {
         self.physical_channel = value.into();
         self
     }
 
+    /// Returns the configured physical channel.
     pub fn get_physical_channel(&self) -> &str {
         &self.physical_channel
     }
 
+    /// Sets the message id and returns the updated value.
     pub fn message_id(mut self, value: ReplicateMessageId) -> Self {
         self.message_id = value;
         self
     }
 
+    /// Sets the message id and returns this value for further mutation.
     pub fn set_message_id(&mut self, value: ReplicateMessageId) -> &mut Self {
         self.message_id = value;
         self
     }
 
+    /// Returns the configured message id.
     pub fn get_message_id(&self) -> &ReplicateMessageId {
         &self.message_id
     }
 
+    /// Sets the time tick and returns the updated value.
     pub fn time_tick(mut self, value: u64) -> Self {
         self.time_tick = value;
         self
     }
 
+    /// Sets the time tick and returns this value for further mutation.
     pub fn set_time_tick(&mut self, value: u64) -> &mut Self {
         self.time_tick = value;
         self
     }
 
+    /// Returns the configured time tick.
     pub fn get_time_tick(&self) -> u64 {
         self.time_tick
     }
@@ -489,6 +545,7 @@ pub struct DumpedMessage {
 }
 
 impl DumpedMessage {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             message_id: ReplicateMessageId::new(),
@@ -497,48 +554,58 @@ impl DumpedMessage {
         }
     }
 
+    /// Sets the message id and returns the updated value.
     pub fn message_id(mut self, value: ReplicateMessageId) -> Self {
         self.message_id = value;
         self
     }
 
+    /// Sets the message id and returns this value for further mutation.
     pub fn set_message_id(&mut self, value: ReplicateMessageId) -> &mut Self {
         self.message_id = value;
         self
     }
 
+    /// Returns the configured message id.
     pub fn get_message_id(&self) -> &ReplicateMessageId {
         &self.message_id
     }
 
+    /// Sets the payload and returns the updated value.
     pub fn payload(mut self, value: Vec<u8>) -> Self {
         self.payload = value;
         self
     }
 
+    /// Sets the payload and returns this value for further mutation.
     pub fn set_payload(&mut self, value: Vec<u8>) -> &mut Self {
         self.payload = value;
         self
     }
 
+    /// Returns the configured payload.
     pub fn get_payload(&self) -> &[u8] {
         &self.payload
     }
 
+    /// Sets the properties and returns the updated value.
     pub fn properties(mut self, value: HashMap<String, String>) -> Self {
         self.properties = value;
         self
     }
 
+    /// Sets the properties and returns this value for further mutation.
     pub fn set_properties(&mut self, value: HashMap<String, String>) -> &mut Self {
         self.properties = value;
         self
     }
 
+    /// Returns the configured properties.
     pub fn get_properties(&self) -> &HashMap<String, String> {
         &self.properties
     }
 
+    /// Adds one add payload to the existing values.
     pub fn add_payload(mut self, value: u8) -> Self {
         self.payload.push(value);
         self

@@ -29,11 +29,16 @@ use std::time::Duration;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[non_exhaustive]
 pub enum ConsistencyLevel {
+    /// Represents the Strong case.
     Strong,
+    /// Represents the Session case.
     Session,
+    /// Represents the Bounded case.
     Bounded,
+    /// Represents the Eventually case.
     Eventually,
     #[default]
+    /// Represents the Customized case.
     Customized,
 }
 
@@ -69,17 +74,29 @@ pub enum MetricType {
     /// Lets the Milvus server determine the metric type.
     #[default]
     Default,
+    /// Represents the L2 case.
     L2,
+    /// Represents the Ip case.
     Ip,
+    /// Represents the Cosine case.
     Cosine,
+    /// Represents the Hamming case.
     Hamming,
+    /// Represents the Jaccard case.
     Jaccard,
+    /// Represents the MhJaccard case.
     MhJaccard,
+    /// Represents the Bm25 case.
     Bm25,
+    /// Represents the MaxSimCosine case.
     MaxSimCosine,
+    /// Represents the MaxSimIp case.
     MaxSimIp,
+    /// Represents the MaxSimL2 case.
     MaxSimL2,
+    /// Represents the MaxSimJaccard case.
     MaxSimJaccard,
+    /// Represents the MaxSimHamming case.
     MaxSimHamming,
 }
 
@@ -130,25 +147,45 @@ impl MetricType {
 #[non_exhaustive]
 pub enum DataType {
     #[default]
+    /// Represents the Unknown case.
     Unknown,
+    /// Represents the Bool case.
     Bool,
+    /// Represents the Int8 case.
     Int8,
+    /// Represents the Int16 case.
     Int16,
+    /// Represents the Int32 case.
     Int32,
+    /// Represents the Int64 case.
     Int64,
+    /// Represents the Float case.
     Float,
+    /// Represents the Double case.
     Double,
+    /// Represents the VarChar case.
     VarChar,
+    /// Represents the Json case.
     Json,
+    /// Represents the Geometry case.
     Geometry,
+    /// Represents the Timestamptz case.
     Timestamptz,
+    /// Represents the Array case.
     Array,
+    /// Represents the Struct case.
     Struct,
+    /// Represents the FloatVector case.
     FloatVector,
+    /// Represents the BinaryVector case.
     BinaryVector,
+    /// Represents the Float16Vector case.
     Float16Vector,
+    /// Represents the BFloat16Vector case.
     BFloat16Vector,
+    /// Represents the SparseFloatVector case.
     SparseFloatVector,
+    /// Represents the Int8Vector case.
     Int8Vector,
 }
 
@@ -229,9 +266,13 @@ impl DataType {
 #[non_exhaustive]
 pub enum FunctionType {
     #[default]
+    /// Represents the Unknown case.
     Unknown,
+    /// Represents the Bm25 case.
     Bm25,
+    /// Represents the TextEmbedding case.
     TextEmbedding,
+    /// Represents the Rerank case.
     Rerank,
 }
 
@@ -251,6 +292,7 @@ pub struct Function {
 }
 
 impl Function {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             name: String::new(),
@@ -262,53 +304,64 @@ impl Function {
         }
     }
 
+    /// Sets the name and returns the updated value.
     pub fn name(mut self, value: impl Into<String>) -> Self {
         self.name = value.into();
         self
     }
 
+    /// Sets the name and returns this value for further mutation.
     pub fn set_name(&mut self, value: impl Into<String>) -> &mut Self {
         self.name = value.into();
         self
     }
 
+    /// Returns the configured name.
     pub fn get_name(&self) -> &str {
         &self.name
     }
 
+    /// Sets the description and returns the updated value.
     pub fn description(mut self, value: impl Into<String>) -> Self {
         self.description = value.into();
         self
     }
 
+    /// Sets the description and returns this value for further mutation.
     pub fn set_description(&mut self, value: impl Into<String>) -> &mut Self {
         self.description = value.into();
         self
     }
 
+    /// Returns the configured description.
     pub fn get_description(&self) -> &str {
         &self.description
     }
 
+    /// Sets the function type and returns the updated value.
     pub fn function_type(mut self, value: FunctionType) -> Self {
         self.function_type = value;
         self
     }
 
+    /// Sets the function type and returns this value for further mutation.
     pub fn set_function_type(&mut self, value: FunctionType) -> &mut Self {
         self.function_type = value;
         self
     }
 
+    /// Returns the configured function type.
     pub fn get_function_type(&self) -> FunctionType {
         self.function_type
     }
 
+    /// Sets the input fields and returns the updated value.
     pub fn input_fields(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.input_fields = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the input fields and returns this value for further mutation.
     pub fn set_input_fields(
         &mut self,
         values: impl IntoIterator<Item = impl Into<String>>,
@@ -317,15 +370,18 @@ impl Function {
         self
     }
 
+    /// Returns the configured input fields.
     pub fn get_input_fields(&self) -> &[String] {
         &self.input_fields
     }
 
+    /// Sets the output fields and returns the updated value.
     pub fn output_fields(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.output_fields = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the output fields and returns this value for further mutation.
     pub fn set_output_fields(
         &mut self,
         values: impl IntoIterator<Item = impl Into<String>>,
@@ -334,34 +390,41 @@ impl Function {
         self
     }
 
+    /// Returns the configured output fields.
     pub fn get_output_fields(&self) -> &[String] {
         &self.output_fields
     }
 
+    /// Sets the params and returns the updated value.
     pub fn params(mut self, value: HashMap<String, String>) -> Self {
         self.params = value;
         self
     }
 
+    /// Sets the params and returns this value for further mutation.
     pub fn set_params(&mut self, value: HashMap<String, String>) -> &mut Self {
         self.params = value;
         self
     }
 
+    /// Returns the configured params.
     pub fn get_params(&self) -> &HashMap<String, String> {
         &self.params
     }
 
+    /// Adds one add input field to the existing values.
     pub fn add_input_field(mut self, value: impl Into<String>) -> Self {
         self.input_fields.push(value.into());
         self
     }
 
+    /// Adds one add output field to the existing values.
     pub fn add_output_field(mut self, value: impl Into<String>) -> Self {
         self.output_fields.push(value.into());
         self
     }
 
+    /// Sets the param and returns the updated value.
     pub fn param(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.params.insert(key.into(), value.into());
         self
@@ -442,11 +505,14 @@ impl From<ModelRerank> for Function {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Ids {
+    /// Represents the Int64 case.
     Int64(Vec<i64>),
+    /// Represents the VarChar case.
     VarChar(Vec<String>),
 }
 
 impl Ids {
+    /// Returns the len.
     pub fn len(&self) -> usize {
         match self {
             Self::Int64(values) => values.len(),
@@ -454,6 +520,7 @@ impl Ids {
         }
     }
 
+    /// Returns whether empty.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -526,117 +593,199 @@ impl Ids {
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum FieldData {
+    /// Represents the Bool case.
     Bool {
+        /// Field name shared with the collection schema.
         name: String,
+        /// Values for this field, in row order.
         values: Vec<bool>,
     },
+    /// Represents the Int8 case.
     Int8 {
+        /// Field name shared with the collection schema.
         name: String,
+        /// Values for this field, in row order.
         values: Vec<i8>,
     },
+    /// Represents the Int16 case.
     Int16 {
+        /// Field name shared with the collection schema.
         name: String,
+        /// Values for this field, in row order.
         values: Vec<i16>,
     },
+    /// Represents the Int32 case.
     Int32 {
+        /// Field name shared with the collection schema.
         name: String,
+        /// Values for this field, in row order.
         values: Vec<i32>,
     },
+    /// Represents the Int64 case.
     Int64 {
+        /// Field name shared with the collection schema.
         name: String,
+        /// Values for this field, in row order.
         values: Vec<i64>,
     },
+    /// Represents the Float case.
     Float {
+        /// Field name shared with the collection schema.
         name: String,
+        /// Values for this field, in row order.
         values: Vec<f32>,
     },
+    /// Represents the Double case.
     Double {
+        /// Field name shared with the collection schema.
         name: String,
+        /// Values for this field, in row order.
         values: Vec<f64>,
     },
+    /// Represents the VarChar case.
     VarChar {
+        /// Field name shared with the collection schema.
         name: String,
+        /// Values for this field, in row order.
         values: Vec<String>,
     },
+    /// Represents the Json case.
     Json {
+        /// Field name shared with the collection schema.
         name: String,
+        /// Values for this field, in row order.
         values: Vec<serde_json::Value>,
     },
+    /// Represents the Geometry case.
     Geometry {
+        /// Field name shared with the collection schema.
         name: String,
+        /// Values for this field, in row order.
         values: Vec<String>,
     },
+    /// Represents the Timestamptz case.
     Timestamptz {
+        /// Field name shared with the collection schema.
         name: String,
+        /// Values for this field, in row order.
         values: Vec<String>,
     },
+    /// Represents the ArrayBool case.
     ArrayBool {
+        /// Field name shared with the collection schema.
         name: String,
+        /// Values for this field, in row order.
         values: Vec<Vec<bool>>,
     },
+    /// Represents the ArrayInt8 case.
     ArrayInt8 {
+        /// Field name shared with the collection schema.
         name: String,
+        /// Values for this field, in row order.
         values: Vec<Vec<i8>>,
     },
+    /// Represents the ArrayInt16 case.
     ArrayInt16 {
+        /// Field name shared with the collection schema.
         name: String,
+        /// Values for this field, in row order.
         values: Vec<Vec<i16>>,
     },
+    /// Represents the ArrayInt32 case.
     ArrayInt32 {
+        /// Field name shared with the collection schema.
         name: String,
+        /// Values for this field, in row order.
         values: Vec<Vec<i32>>,
     },
+    /// Represents the ArrayInt64 case.
     ArrayInt64 {
+        /// Field name shared with the collection schema.
         name: String,
+        /// Values for this field, in row order.
         values: Vec<Vec<i64>>,
     },
+    /// Represents the ArrayFloat case.
     ArrayFloat {
+        /// Field name shared with the collection schema.
         name: String,
+        /// Values for this field, in row order.
         values: Vec<Vec<f32>>,
     },
+    /// Represents the ArrayDouble case.
     ArrayDouble {
+        /// Field name shared with the collection schema.
         name: String,
+        /// Values for this field, in row order.
         values: Vec<Vec<f64>>,
     },
+    /// Represents the ArrayVarChar case.
     ArrayVarChar {
+        /// Field name shared with the collection schema.
         name: String,
+        /// Values for this field, in row order.
         values: Vec<Vec<String>>,
     },
+    /// Represents the Struct case.
     Struct {
+        /// Field name shared with the collection schema.
         name: String,
+        /// Values for this field, in row order.
         values: Vec<Vec<StructValue>>,
     },
+    /// Represents the FloatVector case.
     FloatVector {
+        /// Field name shared with the collection schema.
         name: String,
+        /// Values for this field, in row order.
         values: Vec<Vec<f32>>,
     },
+    /// Represents the BinaryVector case.
     BinaryVector {
+        /// Field name shared with the collection schema.
         name: String,
+        /// Values for this field, in row order.
         values: Vec<Vec<u8>>,
     },
+    /// Represents the Float16Vector case.
     Float16Vector {
+        /// Field name shared with the collection schema.
         name: String,
+        /// Values for this field, in row order.
         values: Vec<Vec<u16>>,
     },
+    /// Represents the BFloat16Vector case.
     BFloat16Vector {
+        /// Field name shared with the collection schema.
         name: String,
+        /// Values for this field, in row order.
         values: Vec<Vec<u16>>,
     },
+    /// Represents the SparseFloatVector case.
     SparseFloatVector {
+        /// Field name shared with the collection schema.
         name: String,
+        /// Values for this field, in row order.
         values: Vec<SparseVector>,
     },
+    /// Represents the Int8Vector case.
     Int8Vector {
+        /// Field name shared with the collection schema.
         name: String,
+        /// Values for this field, in row order.
         values: Vec<Vec<i8>>,
     },
+    /// Represents the Nullable case.
     Nullable {
+        /// Wrapped field data.
         data: Box<FieldData>,
+        /// Validity bitmap corresponding to `data`.
         valid_data: Vec<bool>,
     },
 }
 
 impl FieldData {
+    /// Performs the boolean operation.
     pub fn boolean(name: impl Into<String>, values: Vec<bool>) -> Self {
         Self::Bool {
             name: name.into(),
@@ -644,6 +793,7 @@ impl FieldData {
         }
     }
 
+    /// Performs the int8 operation.
     pub fn int8(name: impl Into<String>, values: Vec<i8>) -> Self {
         Self::Int8 {
             name: name.into(),
@@ -651,6 +801,7 @@ impl FieldData {
         }
     }
 
+    /// Performs the int16 operation.
     pub fn int16(name: impl Into<String>, values: Vec<i16>) -> Self {
         Self::Int16 {
             name: name.into(),
@@ -658,6 +809,7 @@ impl FieldData {
         }
     }
 
+    /// Performs the int32 operation.
     pub fn int32(name: impl Into<String>, values: Vec<i32>) -> Self {
         Self::Int32 {
             name: name.into(),
@@ -665,6 +817,7 @@ impl FieldData {
         }
     }
 
+    /// Performs the int64 operation.
     pub fn int64(name: impl Into<String>, values: Vec<i64>) -> Self {
         Self::Int64 {
             name: name.into(),
@@ -672,6 +825,7 @@ impl FieldData {
         }
     }
 
+    /// Performs the float operation.
     pub fn float(name: impl Into<String>, values: Vec<f32>) -> Self {
         Self::Float {
             name: name.into(),
@@ -679,6 +833,7 @@ impl FieldData {
         }
     }
 
+    /// Performs the double operation.
     pub fn double(name: impl Into<String>, values: Vec<f64>) -> Self {
         Self::Double {
             name: name.into(),
@@ -686,6 +841,7 @@ impl FieldData {
         }
     }
 
+    /// Performs the varchar operation.
     pub fn varchar(name: impl Into<String>, values: Vec<String>) -> Self {
         Self::VarChar {
             name: name.into(),
@@ -693,6 +849,7 @@ impl FieldData {
         }
     }
 
+    /// Performs the json operation.
     pub fn json(name: impl Into<String>, values: Vec<serde_json::Value>) -> Self {
         Self::Json {
             name: name.into(),
@@ -700,6 +857,7 @@ impl FieldData {
         }
     }
 
+    /// Performs the geometry operation.
     pub fn geometry(name: impl Into<String>, values: Vec<String>) -> Self {
         Self::Geometry {
             name: name.into(),
@@ -707,6 +865,7 @@ impl FieldData {
         }
     }
 
+    /// Performs the timestamptz operation.
     pub fn timestamptz(name: impl Into<String>, values: Vec<String>) -> Self {
         Self::Timestamptz {
             name: name.into(),
@@ -714,6 +873,7 @@ impl FieldData {
         }
     }
 
+    /// Performs the array bool operation.
     pub fn array_bool(name: impl Into<String>, values: Vec<Vec<bool>>) -> Self {
         Self::ArrayBool {
             name: name.into(),
@@ -721,6 +881,7 @@ impl FieldData {
         }
     }
 
+    /// Performs the array int8 operation.
     pub fn array_int8(name: impl Into<String>, values: Vec<Vec<i8>>) -> Self {
         Self::ArrayInt8 {
             name: name.into(),
@@ -728,6 +889,7 @@ impl FieldData {
         }
     }
 
+    /// Performs the array int16 operation.
     pub fn array_int16(name: impl Into<String>, values: Vec<Vec<i16>>) -> Self {
         Self::ArrayInt16 {
             name: name.into(),
@@ -735,6 +897,7 @@ impl FieldData {
         }
     }
 
+    /// Performs the array int32 operation.
     pub fn array_int32(name: impl Into<String>, values: Vec<Vec<i32>>) -> Self {
         Self::ArrayInt32 {
             name: name.into(),
@@ -742,6 +905,7 @@ impl FieldData {
         }
     }
 
+    /// Performs the array int64 operation.
     pub fn array_int64(name: impl Into<String>, values: Vec<Vec<i64>>) -> Self {
         Self::ArrayInt64 {
             name: name.into(),
@@ -749,6 +913,7 @@ impl FieldData {
         }
     }
 
+    /// Performs the array float operation.
     pub fn array_float(name: impl Into<String>, values: Vec<Vec<f32>>) -> Self {
         Self::ArrayFloat {
             name: name.into(),
@@ -756,6 +921,7 @@ impl FieldData {
         }
     }
 
+    /// Performs the array double operation.
     pub fn array_double(name: impl Into<String>, values: Vec<Vec<f64>>) -> Self {
         Self::ArrayDouble {
             name: name.into(),
@@ -763,6 +929,7 @@ impl FieldData {
         }
     }
 
+    /// Performs the array varchar operation.
     pub fn array_varchar(name: impl Into<String>, values: Vec<Vec<String>>) -> Self {
         Self::ArrayVarChar {
             name: name.into(),
@@ -770,6 +937,7 @@ impl FieldData {
         }
     }
 
+    /// Performs the struct field operation.
     pub fn struct_field(name: impl Into<String>, values: Vec<Vec<StructValue>>) -> Self {
         Self::Struct {
             name: name.into(),
@@ -777,6 +945,7 @@ impl FieldData {
         }
     }
 
+    /// Performs the float vector operation.
     pub fn float_vector(name: impl Into<String>, values: Vec<Vec<f32>>) -> Self {
         Self::FloatVector {
             name: name.into(),
@@ -784,6 +953,7 @@ impl FieldData {
         }
     }
 
+    /// Performs the binary vector operation.
     pub fn binary_vector(name: impl Into<String>, values: Vec<Vec<u8>>) -> Self {
         Self::BinaryVector {
             name: name.into(),
@@ -791,6 +961,7 @@ impl FieldData {
         }
     }
 
+    /// Performs the float16 vector operation.
     pub fn float16_vector(name: impl Into<String>, values: Vec<Vec<u16>>) -> Self {
         Self::Float16Vector {
             name: name.into(),
@@ -798,6 +969,7 @@ impl FieldData {
         }
     }
 
+    /// Performs the bfloat16 vector operation.
     pub fn bfloat16_vector(name: impl Into<String>, values: Vec<Vec<u16>>) -> Self {
         Self::BFloat16Vector {
             name: name.into(),
@@ -805,6 +977,7 @@ impl FieldData {
         }
     }
 
+    /// Performs the sparse float vector operation.
     pub fn sparse_float_vector(name: impl Into<String>, values: Vec<SparseVector>) -> Self {
         Self::SparseFloatVector {
             name: name.into(),
@@ -812,6 +985,7 @@ impl FieldData {
         }
     }
 
+    /// Performs the int8 vector operation.
     pub fn int8_vector(name: impl Into<String>, values: Vec<Vec<i8>>) -> Self {
         Self::Int8Vector {
             name: name.into(),
@@ -819,10 +993,12 @@ impl FieldData {
         }
     }
 
+    /// Returns this value configured with with validity.
     pub fn with_validity(self, valid_data: Vec<bool>) -> Result<Self> {
         Self::nullable(self, valid_data)
     }
 
+    /// Returns the as bool.
     pub fn as_bool(&self) -> Option<&[bool]> {
         match self.inner() {
             Self::Bool { values, .. } => Some(values),
@@ -830,6 +1006,7 @@ impl FieldData {
         }
     }
 
+    /// Returns the as int8.
     pub fn as_int8(&self) -> Option<&[i8]> {
         match self.inner() {
             Self::Int8 { values, .. } => Some(values),
@@ -837,6 +1014,7 @@ impl FieldData {
         }
     }
 
+    /// Returns the as int16.
     pub fn as_int16(&self) -> Option<&[i16]> {
         match self.inner() {
             Self::Int16 { values, .. } => Some(values),
@@ -844,6 +1022,7 @@ impl FieldData {
         }
     }
 
+    /// Returns the as int32.
     pub fn as_int32(&self) -> Option<&[i32]> {
         match self.inner() {
             Self::Int32 { values, .. } => Some(values),
@@ -851,6 +1030,7 @@ impl FieldData {
         }
     }
 
+    /// Returns the as int64.
     pub fn as_int64(&self) -> Option<&[i64]> {
         match self.inner() {
             Self::Int64 { values, .. } => Some(values),
@@ -858,6 +1038,7 @@ impl FieldData {
         }
     }
 
+    /// Returns the as float.
     pub fn as_float(&self) -> Option<&[f32]> {
         match self.inner() {
             Self::Float { values, .. } => Some(values),
@@ -865,6 +1046,7 @@ impl FieldData {
         }
     }
 
+    /// Returns the as double.
     pub fn as_double(&self) -> Option<&[f64]> {
         match self.inner() {
             Self::Double { values, .. } => Some(values),
@@ -872,6 +1054,7 @@ impl FieldData {
         }
     }
 
+    /// Returns the as varchar.
     pub fn as_varchar(&self) -> Option<&[String]> {
         match self.inner() {
             Self::VarChar { values, .. } => Some(values),
@@ -879,6 +1062,7 @@ impl FieldData {
         }
     }
 
+    /// Returns the as json.
     pub fn as_json(&self) -> Option<&[serde_json::Value]> {
         match self.inner() {
             Self::Json { values, .. } => Some(values),
@@ -886,6 +1070,7 @@ impl FieldData {
         }
     }
 
+    /// Returns the as geometry.
     pub fn as_geometry(&self) -> Option<&[String]> {
         match self.inner() {
             Self::Geometry { values, .. } => Some(values),
@@ -893,6 +1078,7 @@ impl FieldData {
         }
     }
 
+    /// Returns the as timestamptz.
     pub fn as_timestamptz(&self) -> Option<&[String]> {
         match self.inner() {
             Self::Timestamptz { values, .. } => Some(values),
@@ -900,6 +1086,7 @@ impl FieldData {
         }
     }
 
+    /// Returns the as array bool.
     pub fn as_array_bool(&self) -> Option<&[Vec<bool>]> {
         match self.inner() {
             Self::ArrayBool { values, .. } => Some(values),
@@ -907,6 +1094,7 @@ impl FieldData {
         }
     }
 
+    /// Returns the as array int8.
     pub fn as_array_int8(&self) -> Option<&[Vec<i8>]> {
         match self.inner() {
             Self::ArrayInt8 { values, .. } => Some(values),
@@ -914,6 +1102,7 @@ impl FieldData {
         }
     }
 
+    /// Returns the as array int16.
     pub fn as_array_int16(&self) -> Option<&[Vec<i16>]> {
         match self.inner() {
             Self::ArrayInt16 { values, .. } => Some(values),
@@ -921,6 +1110,7 @@ impl FieldData {
         }
     }
 
+    /// Returns the as array int32.
     pub fn as_array_int32(&self) -> Option<&[Vec<i32>]> {
         match self.inner() {
             Self::ArrayInt32 { values, .. } => Some(values),
@@ -928,6 +1118,7 @@ impl FieldData {
         }
     }
 
+    /// Returns the as array int64.
     pub fn as_array_int64(&self) -> Option<&[Vec<i64>]> {
         match self.inner() {
             Self::ArrayInt64 { values, .. } => Some(values),
@@ -935,6 +1126,7 @@ impl FieldData {
         }
     }
 
+    /// Returns the as array float.
     pub fn as_array_float(&self) -> Option<&[Vec<f32>]> {
         match self.inner() {
             Self::ArrayFloat { values, .. } => Some(values),
@@ -942,6 +1134,7 @@ impl FieldData {
         }
     }
 
+    /// Returns the as array double.
     pub fn as_array_double(&self) -> Option<&[Vec<f64>]> {
         match self.inner() {
             Self::ArrayDouble { values, .. } => Some(values),
@@ -949,6 +1142,7 @@ impl FieldData {
         }
     }
 
+    /// Returns the as array varchar.
     pub fn as_array_varchar(&self) -> Option<&[Vec<String>]> {
         match self.inner() {
             Self::ArrayVarChar { values, .. } => Some(values),
@@ -956,6 +1150,7 @@ impl FieldData {
         }
     }
 
+    /// Returns the as struct.
     pub fn as_struct(&self) -> Option<&[Vec<StructValue>]> {
         match self.inner() {
             Self::Struct { values, .. } => Some(values),
@@ -963,6 +1158,7 @@ impl FieldData {
         }
     }
 
+    /// Returns the as float vectors.
     pub fn as_float_vectors(&self) -> Option<&[Vec<f32>]> {
         match self.inner() {
             Self::FloatVector { values, .. } => Some(values),
@@ -970,6 +1166,7 @@ impl FieldData {
         }
     }
 
+    /// Returns the as binary vectors.
     pub fn as_binary_vectors(&self) -> Option<&[Vec<u8>]> {
         match self.inner() {
             Self::BinaryVector { values, .. } => Some(values),
@@ -977,6 +1174,7 @@ impl FieldData {
         }
     }
 
+    /// Returns the as float16 vectors.
     pub fn as_float16_vectors(&self) -> Option<&[Vec<u16>]> {
         match self.inner() {
             Self::Float16Vector { values, .. } => Some(values),
@@ -984,6 +1182,7 @@ impl FieldData {
         }
     }
 
+    /// Returns the as bfloat16 vectors.
     pub fn as_bfloat16_vectors(&self) -> Option<&[Vec<u16>]> {
         match self.inner() {
             Self::BFloat16Vector { values, .. } => Some(values),
@@ -991,6 +1190,7 @@ impl FieldData {
         }
     }
 
+    /// Returns the as sparse float vectors.
     pub fn as_sparse_float_vectors(&self) -> Option<&[SparseVector]> {
         match self.inner() {
             Self::SparseFloatVector { values, .. } => Some(values),
@@ -998,6 +1198,7 @@ impl FieldData {
         }
     }
 
+    /// Returns the as int8 vectors.
     pub fn as_int8_vectors(&self) -> Option<&[Vec<i8>]> {
         match self.inner() {
             Self::Int8Vector { values, .. } => Some(values),
@@ -1005,6 +1206,7 @@ impl FieldData {
         }
     }
 
+    /// Returns the name.
     pub fn name(&self) -> &str {
         match self {
             Self::Bool { name, .. }
@@ -1037,6 +1239,7 @@ impl FieldData {
         }
     }
 
+    /// Returns the len.
     pub fn len(&self) -> usize {
         match self {
             Self::Bool { values, .. } => values.len(),
@@ -1069,10 +1272,12 @@ impl FieldData {
         }
     }
 
+    /// Returns whether empty.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    /// Returns the valid data.
     pub fn valid_data(&self) -> Option<&[bool]> {
         match self {
             Self::Nullable { valid_data, .. } => Some(valid_data),
@@ -1080,12 +1285,14 @@ impl FieldData {
         }
     }
 
+    /// Returns whether null.
     pub fn is_null(&self, index: usize) -> bool {
         self.valid_data()
             .and_then(|values| values.get(index))
             .is_some_and(|valid| !valid)
     }
 
+    /// Performs the nullable operation.
     pub fn nullable(data: FieldData, valid_data: Vec<bool>) -> Result<Self> {
         let valid_count = valid_data.iter().filter(|valid| **valid).count();
         if data.len() != valid_count {
@@ -1103,6 +1310,7 @@ impl FieldData {
         })
     }
 
+    /// Returns the inner.
     pub fn inner(&self) -> &FieldData {
         match self {
             Self::Nullable { data, .. } => data,
@@ -2235,6 +2443,7 @@ pub struct RetryConfig {
 }
 
 impl RetryConfig {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             max_attempts: 75,
@@ -2246,86 +2455,104 @@ impl RetryConfig {
         }
     }
 
+    /// Sets the max attempts and returns the updated value.
     pub fn max_attempts(mut self, value: u32) -> Self {
         self.max_attempts = value;
         self
     }
 
+    /// Sets the max attempts and returns this value for further mutation.
     pub fn set_max_attempts(&mut self, value: u32) -> &mut Self {
         self.max_attempts = value;
         self
     }
 
+    /// Returns the configured max attempts.
     pub fn get_max_attempts(&self) -> u32 {
         self.max_attempts
     }
 
+    /// Sets the max retry timeout and returns the updated value.
     pub fn max_retry_timeout(mut self, value: Duration) -> Self {
         self.max_retry_timeout = value;
         self
     }
 
+    /// Sets the max retry timeout and returns this value for further mutation.
     pub fn set_max_retry_timeout(&mut self, value: Duration) -> &mut Self {
         self.max_retry_timeout = value;
         self
     }
 
+    /// Returns the configured max retry timeout.
     pub fn get_max_retry_timeout(&self) -> Duration {
         self.max_retry_timeout
     }
 
+    /// Sets the initial backoff and returns the updated value.
     pub fn initial_backoff(mut self, value: Duration) -> Self {
         self.initial_backoff = value;
         self
     }
 
+    /// Sets the initial backoff and returns this value for further mutation.
     pub fn set_initial_backoff(&mut self, value: Duration) -> &mut Self {
         self.initial_backoff = value;
         self
     }
 
+    /// Returns the configured initial backoff.
     pub fn get_initial_backoff(&self) -> Duration {
         self.initial_backoff
     }
 
+    /// Sets the max backoff and returns the updated value.
     pub fn max_backoff(mut self, value: Duration) -> Self {
         self.max_backoff = value;
         self
     }
 
+    /// Sets the max backoff and returns this value for further mutation.
     pub fn set_max_backoff(&mut self, value: Duration) -> &mut Self {
         self.max_backoff = value;
         self
     }
 
+    /// Returns the configured max backoff.
     pub fn get_max_backoff(&self) -> Duration {
         self.max_backoff
     }
 
+    /// Sets the backoff multiplier and returns the updated value.
     pub fn backoff_multiplier(mut self, value: f64) -> Self {
         self.backoff_multiplier = value;
         self
     }
 
+    /// Sets the backoff multiplier and returns this value for further mutation.
     pub fn set_backoff_multiplier(&mut self, value: f64) -> &mut Self {
         self.backoff_multiplier = value;
         self
     }
 
+    /// Returns the configured backoff multiplier.
     pub fn get_backoff_multiplier(&self) -> f64 {
         self.backoff_multiplier
     }
 
+    /// Sets the retry on rate limit and returns the updated value.
     pub fn retry_on_rate_limit(mut self, value: bool) -> Self {
         self.retry_on_rate_limit = value;
         self
     }
 
+    /// Sets the retry on rate limit and returns this value for further mutation.
     pub fn set_retry_on_rate_limit(&mut self, value: bool) -> &mut Self {
         self.retry_on_rate_limit = value;
         self
     }
 
+    /// Returns the configured retry on rate limit.
     pub fn get_retry_on_rate_limit(&self) -> bool {
         self.retry_on_rate_limit
     }
@@ -2377,6 +2604,7 @@ impl std::fmt::Debug for ConnectConfig {
 }
 
 impl ConnectConfig {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             uri: "http://localhost:19530".to_owned(),
@@ -2395,32 +2623,38 @@ impl ConnectConfig {
         }
     }
 
+    /// Sets the uri and returns the updated value.
     pub fn uri(mut self, uri: impl Into<String>) -> Self {
         self.uri = uri.into();
         self
     }
 
+    /// Sets the uri and returns this value for further mutation.
     pub fn set_uri(&mut self, uri: impl Into<String>) -> &mut Self {
         self.uri = uri.into();
         self
     }
 
+    /// Returns the configured uri.
     pub fn get_uri(&self) -> &str {
         &self.uri
     }
 
+    /// Sets the token and returns the updated value.
     pub fn token(mut self, token: impl Into<String>) -> Self {
         use base64::Engine;
         self.token = Some(base64::engine::general_purpose::STANDARD.encode(token.into()));
         self
     }
 
+    /// Sets the token and returns this value for further mutation.
     pub fn set_token(&mut self, token: impl Into<String>) -> &mut Self {
         use base64::Engine;
         self.token = Some(base64::engine::general_purpose::STANDARD.encode(token.into()));
         self
     }
 
+    /// Returns the configured token.
     pub fn get_token(&self) -> &Option<String> {
         &self.token
     }
@@ -2510,90 +2744,109 @@ impl ConnectConfig {
         self.connect_timeout
     }
 
+    /// Sets the rpc timeout and returns the updated value.
     pub fn rpc_timeout(mut self, timeout: Duration) -> Self {
         self.rpc_timeout = timeout;
         self
     }
 
+    /// Sets the rpc timeout and returns this value for further mutation.
     pub fn set_rpc_timeout(&mut self, timeout: Duration) -> &mut Self {
         self.rpc_timeout = timeout;
         self
     }
 
+    /// Returns the configured rpc timeout.
     pub fn get_rpc_timeout(&self) -> Duration {
         self.rpc_timeout
     }
 
+    /// Sets the keepalive time and returns the updated value.
     pub fn keepalive_time(mut self, value: Duration) -> Self {
         self.keepalive_time = value;
         self
     }
 
+    /// Sets the keepalive time and returns this value for further mutation.
     pub fn set_keepalive_time(&mut self, value: Duration) -> &mut Self {
         self.keepalive_time = value;
         self
     }
 
+    /// Returns the configured keepalive time.
     pub fn get_keepalive_time(&self) -> Duration {
         self.keepalive_time
     }
 
+    /// Sets the keepalive timeout and returns the updated value.
     pub fn keepalive_timeout(mut self, value: Duration) -> Self {
         self.keepalive_timeout = value;
         self
     }
 
+    /// Sets the keepalive timeout and returns this value for further mutation.
     pub fn set_keepalive_timeout(&mut self, value: Duration) -> &mut Self {
         self.keepalive_timeout = value;
         self
     }
 
+    /// Returns the configured keepalive timeout.
     pub fn get_keepalive_timeout(&self) -> Duration {
         self.keepalive_timeout
     }
 
+    /// Sets the keepalive while idle and returns the updated value.
     pub fn keepalive_while_idle(mut self, value: bool) -> Self {
         self.keepalive_while_idle = value;
         self
     }
 
+    /// Sets the keepalive while idle and returns this value for further mutation.
     pub fn set_keepalive_while_idle(&mut self, value: bool) -> &mut Self {
         self.keepalive_while_idle = value;
         self
     }
 
+    /// Returns the configured keepalive while idle.
     pub fn get_keepalive_while_idle(&self) -> bool {
         self.keepalive_while_idle
     }
 
+    /// Sets the database and returns the updated value.
     pub fn database(mut self, database: impl Into<String>) -> Self {
         self.database = database.into();
         self
     }
 
+    /// Sets the database and returns this value for further mutation.
     pub fn set_database(&mut self, database: impl Into<String>) -> &mut Self {
         self.database = database.into();
         self
     }
 
+    /// Returns the configured database.
     pub fn get_database(&self) -> &str {
         &self.database
     }
 
+    /// Sets the retry and returns the updated value.
     pub fn retry(mut self, retry: RetryConfig) -> Self {
         self.retry = retry;
         self
     }
 
+    /// Sets the retry and returns this value for further mutation.
     pub fn set_retry(&mut self, retry: RetryConfig) -> &mut Self {
         self.retry = retry;
         self
     }
 
+    /// Returns the configured retry.
     pub fn get_retry(&self) -> &RetryConfig {
         &self.retry
     }
 
+    /// Performs the username password operation.
     pub fn username_password(self, username: &str, password: &str) -> Self {
         self.token(format!("{username}:{password}"))
     }

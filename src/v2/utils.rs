@@ -89,18 +89,22 @@ pub fn bf16_to_f32(value: u16) -> f32 {
     f32::from_bits((value as u32) << 16)
 }
 
+/// Performs the array f32 to f16 operation.
 pub fn array_f32_to_f16(values: &[f32]) -> Vec<u16> {
     values.iter().copied().map(f32_to_f16).collect()
 }
 
+/// Performs the array f16 to f32 operation.
 pub fn array_f16_to_f32(values: &[u16]) -> Vec<f32> {
     values.iter().copied().map(f16_to_f32).collect()
 }
 
+/// Performs the array f32 to bf16 operation.
 pub fn array_f32_to_bf16(values: &[f32]) -> Vec<u16> {
     values.iter().copied().map(f32_to_bf16).collect()
 }
 
+/// Performs the array bf16 to f32 operation.
 pub fn array_bf16_to_f32(values: &[u16]) -> Vec<f32> {
     values.iter().copied().map(bf16_to_f32).collect()
 }

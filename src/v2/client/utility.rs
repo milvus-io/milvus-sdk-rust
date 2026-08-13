@@ -150,12 +150,12 @@ impl OptimizeTaskState {
 }
 
 impl ClientV2 {
-    /// Returns the Rust SDK package version.
+    /// Returns the compile-time Rust SDK package version.
     pub fn sdk_version(&self) -> &'static str {
         env!("CARGO_PKG_VERSION")
     }
 
-    /// Returns version and optional build details reported by the connected Milvus server.
+    /// Returns the connected Milvus server version and optional build details.
     pub async fn server_version(
         &self,
         request: request::utility::GetServerVersionRequest,
@@ -171,7 +171,7 @@ impl ClientV2 {
         Ok(response::utility::GetServerVersionResponse::from_version_proto(response))
     }
 
-    /// Check the health of the server.
+    /// Checks whether the connected Milvus server is healthy.
     pub async fn check_health(
         &self,
         request: request::utility::CheckHealthRequest,
@@ -181,7 +181,7 @@ impl ClientV2 {
         Ok(response::utility::CheckHealthResponse::from_proto(response))
     }
 
-    /// Flush insert buffer data into storage.
+    /// Flushes pending insert data for a collection into durable storage.
     pub async fn flush(
         &self,
         mut request: request::utility::FlushRequest,
@@ -196,9 +196,10 @@ impl ClientV2 {
         Ok(response::utility::FlushResponse::from_proto(response))
     }
 
-    /// Flush all insert buffer data into storage.
+    /// Flushes pending insert data for all collections into durable storage.
     // Milvus 2.6 still returns the deprecated aggregate flush timestamp.
     #[allow(deprecated)]
+    /// Performs the flush all operation.
     pub async fn flush_all(
         &self,
         mut request: request::utility::FlushAllRequest,
@@ -213,7 +214,7 @@ impl ClientV2 {
         Ok(response::utility::FlushAllResponse::from_proto(response))
     }
 
-    /// Get flush-all action state.
+    /// Retrieves the state of an earlier flush-all operation.
     pub async fn get_flush_all_state(
         &self,
         request: request::utility::GetFlushAllStateRequest,
@@ -226,7 +227,7 @@ impl ClientV2 {
         ))
     }
 
-    /// Retrieve information of persisted segments from data nodes.
+    /// Lists persisted segments reported by data nodes.
     pub async fn list_persistent_segments(
         &self,
         request: request::utility::ListPersistentSegmentsRequest,
@@ -247,7 +248,7 @@ impl ClientV2 {
         )
     }
 
-    /// Retrieve information of loaded segments from query nodes.
+    /// Lists segments currently loaded on query nodes.
     pub async fn list_query_segments(
         &self,
         request: request::utility::ListQuerySegmentsRequest,
@@ -263,7 +264,7 @@ impl ClientV2 {
         ))
     }
 
-    /// Manually trigger a compaction action.
+    /// Starts a compaction action for a collection.
     pub async fn compact(
         &self,
         request: request::utility::CompactRequest,
@@ -281,7 +282,10 @@ impl ClientV2 {
         Ok(response::utility::CompactResponse::from_proto(response))
     }
 
-    /// Optimize collection segments with a task object.
+    /// Starts an asynchronous collection-optimization task.
+    ///
+    /// Use the returned [`OptimizeTask`] to observe progress, wait for completion, or request
+    /// cooperative cancellation. Optimization may involve multiple server-side stages.
     pub async fn optimize(
         &self,
         request: request::utility::OptimizeRequest,
@@ -437,6 +441,16 @@ impl ClientV2 {
                         .build()?,
                 )
                 .await?;
+            trace_debug!(
+                target: "milvus_sdk::polling",
+                operation = "optimize_compaction",
+                database = %database,
+                collection = %collection,
+                compaction_id,
+                state = ?compaction.state,
+                failed_plans = compaction.failed_plans,
+                "optimize compaction polling state"
+            );
             if compaction.failed_plans > 0 {
                 return Err(Error::Unexpected("compaction failed".into()));
             }
@@ -537,7 +551,7 @@ impl ClientV2 {
         }
     }
 
-    /// Get compaction action state.
+    /// Retrieves the state of a compaction action.
     pub async fn get_compaction_state(
         &self,
         request: request::utility::GetCompactionStateRequest,
@@ -549,7 +563,7 @@ impl ClientV2 {
         ))
     }
 
-    /// Get plans of a compaction action.
+    /// Retrieves the execution plans produced for a compaction action.
     pub async fn get_compaction_plans(
         &self,
         request: request::utility::GetCompactionPlansRequest,
@@ -562,7 +576,7 @@ impl ClientV2 {
         ))
     }
 
-    /// Run analyzer. Return result tokens of analysis.
+    /// Runs a server-side analyzer and returns its result tokens.
     pub async fn run_analyzer(
         &self,
         request: request::utility::RunAnalyzerRequest,
@@ -633,6 +647,13 @@ impl ClientV2 {
                     })?;
                 let poll = self.get_flush_state(database, segment_ids, flush_timestamp);
                 if wait_for_flush_poll(deadline, poll).await? {
+                    trace_debug!(
+                        target: "milvus_sdk::polling",
+                        operation = "flush",
+                        database,
+                        collection = %collection,
+                        "collection flush completed"
+                    );
                     pending.remove(&collection);
                 }
             }
@@ -677,6 +698,13 @@ impl ClientV2 {
             };
             let response = wait_for_flush_poll(deadline, poll).await?;
             status_to_result(&response.status)?;
+            trace_debug!(
+                target: "milvus_sdk::polling",
+                operation = "flush_all",
+                database,
+                flushed = response.flushed,
+                "flush-all polling state"
+            );
             if response.flushed {
                 return Ok(());
             }

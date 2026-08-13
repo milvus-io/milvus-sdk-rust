@@ -7,6 +7,8 @@ The official Rust SDK for [Milvus](https://milvus.io/).
 The current `2.6.x` SDK release line targets Milvus `2.6.x`. See [CHANGELOG.md](CHANGELOG.md) for
 release-specific features, fixes, and compatibility notes.
 
+The minimum supported Rust version (MSRV) is Rust `1.86`.
+
 ## Use the SDK in your project
 
 ### Choose the client API
@@ -116,6 +118,46 @@ and its connection settings before running it.
 - load or index timeout: verify that Milvus is healthy and has enough CPU and memory, then retry.
 - Docker or port errors from repository scripts: ensure `docker info` succeeds and the required
   ports are available.
+
+## Optional SDK diagnostics
+
+Enable the SDK's `tracing` feature and add a subscriber to your application:
+
+```toml
+[dependencies]
+milvus-sdk-rust = { version = "2.6", features = ["tracing"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+```
+
+Initialize the subscriber before creating `ClientV2`:
+
+```rust
+use tracing_subscriber::EnvFilter;
+
+fn init_tracing() {
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .init();
+}
+```
+
+Call `init_tracing()` at the beginning of `main`, then select the events to display with
+`RUST_LOG`:
+
+```shell
+RUST_LOG=milvus_sdk=debug cargo run
+```
+
+Use a narrower target when diagnosing one subsystem:
+
+```shell
+RUST_LOG=milvus_sdk::retry=debug cargo run
+RUST_LOG=milvus_sdk::schema_cache=debug cargo run
+RUST_LOG=milvus_sdk::polling=debug cargo run
+```
+
+The tracing feature is disabled by default. The SDK does not log credentials, request payloads,
+filters, or vector data.
 
 ## Development
 

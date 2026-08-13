@@ -36,6 +36,7 @@ impl GetServerVersionRequest {
         Self { detail: false }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> GetServerVersionRequestBuilder {
         GetServerVersionRequestBuilder {
             value: Self::empty(),
@@ -47,6 +48,7 @@ impl GetServerVersionRequest {
         GetServerVersionRequestBuilder { value: self }
     }
 
+    /// Returns whether detail enabled.
     pub fn is_detail_enabled(&self) -> bool {
         self.detail
     }
@@ -70,11 +72,13 @@ pub struct GetServerVersionRequestBuilder {
 }
 
 impl GetServerVersionRequestBuilder {
+    /// Sets the detail and returns the updated value.
     pub fn detail(mut self, value: bool) -> Self {
         self.value.detail = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<GetServerVersionRequest> {
         Ok(self.value)
     }
@@ -89,6 +93,7 @@ impl GetServerVersionRequestBuilder {
 pub struct CheckHealthRequest;
 
 impl CheckHealthRequest {
+    /// Creates a builder for this request.
     pub fn builder() -> CheckHealthRequestBuilder {
         CheckHealthRequestBuilder
     }
@@ -111,6 +116,7 @@ impl CheckHealthRequest {
 pub struct CheckHealthRequestBuilder;
 
 impl CheckHealthRequestBuilder {
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<CheckHealthRequest> {
         Ok(CheckHealthRequest)
     }
@@ -139,6 +145,7 @@ impl FlushRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> FlushRequestBuilder {
         FlushRequestBuilder {
             value: Self::empty(),
@@ -150,14 +157,17 @@ impl FlushRequest {
         FlushRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection names.
     pub fn collection_names(&self) -> &[String] {
         &self.collection_names
     }
 
+    /// Returns the wait flushed ms.
     pub fn wait_flushed_ms(&self) -> i64 {
         self.wait_flushed_ms
     }
@@ -181,11 +191,13 @@ pub struct FlushRequestBuilder {
 }
 
 impl FlushRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection names and returns the updated value.
     pub fn collection_names(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.collection_names = values.into_iter().map(Into::into).collect();
         self
@@ -199,6 +211,7 @@ impl FlushRequestBuilder {
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<FlushRequest> {
         required_slice("collection_names", &self.value.collection_names)?;
         non_empty_strings("collection_names", &self.value.collection_names)?;
@@ -233,6 +246,7 @@ impl FlushAllRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> FlushAllRequestBuilder {
         FlushAllRequestBuilder {
             value: Self::empty(),
@@ -244,10 +258,12 @@ impl FlushAllRequest {
         FlushAllRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the wait flushed ms.
     pub fn wait_flushed_ms(&self) -> i64 {
         self.wait_flushed_ms
     }
@@ -271,6 +287,7 @@ pub struct FlushAllRequestBuilder {
 }
 
 impl FlushAllRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
@@ -284,6 +301,7 @@ impl FlushAllRequestBuilder {
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<FlushAllRequest> {
         if self.value.wait_flushed_ms < 0 {
             return Err(Error::validation(
@@ -316,6 +334,7 @@ impl GetFlushAllStateRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> GetFlushAllStateRequestBuilder {
         GetFlushAllStateRequestBuilder {
             value: Self::empty(),
@@ -327,14 +346,17 @@ impl GetFlushAllStateRequest {
         GetFlushAllStateRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the flush all timestamp.
     pub fn flush_all_timestamp(&self) -> u64 {
         self.flush_all_timestamp
     }
 
+    /// Returns the channel timestamps.
     pub fn channel_timestamps(&self) -> &HashMap<String, u64> {
         &self.channel_timestamps
     }
@@ -361,21 +383,25 @@ pub struct GetFlushAllStateRequestBuilder {
 }
 
 impl GetFlushAllStateRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the flush all timestamp and returns the updated value.
     pub fn flush_all_timestamp(mut self, value: u64) -> Self {
         self.value.flush_all_timestamp = value;
         self
     }
 
+    /// Sets the channel timestamps and returns the updated value.
     pub fn channel_timestamps(mut self, value: HashMap<String, u64>) -> Self {
         self.value.channel_timestamps = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<GetFlushAllStateRequest> {
         Ok(self.value)
     }
@@ -400,6 +426,7 @@ impl ListPersistentSegmentsRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> ListPersistentSegmentsRequestBuilder {
         ListPersistentSegmentsRequestBuilder {
             value: Self::empty(),
@@ -411,10 +438,12 @@ impl ListPersistentSegmentsRequest {
         ListPersistentSegmentsRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
@@ -437,16 +466,19 @@ pub struct ListPersistentSegmentsRequestBuilder {
 }
 
 impl ListPersistentSegmentsRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<ListPersistentSegmentsRequest> {
         validate_collection_target(
             self.value.database_name.as_deref(),
@@ -475,6 +507,7 @@ impl ListQuerySegmentsRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> ListQuerySegmentsRequestBuilder {
         ListQuerySegmentsRequestBuilder {
             value: Self::empty(),
@@ -486,10 +519,12 @@ impl ListQuerySegmentsRequest {
         ListQuerySegmentsRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
@@ -512,16 +547,19 @@ pub struct ListQuerySegmentsRequestBuilder {
 }
 
 impl ListQuerySegmentsRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<ListQuerySegmentsRequest> {
         validate_collection_target(
             self.value.database_name.as_deref(),
@@ -554,6 +592,7 @@ impl CompactRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> CompactRequestBuilder {
         CompactRequestBuilder {
             value: Self::empty(),
@@ -565,18 +604,22 @@ impl CompactRequest {
         CompactRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the target size.
     pub fn target_size(&self) -> i64 {
         self.target_size
     }
 
+    /// Returns whether clustering compaction.
     pub fn is_clustering_compaction(&self) -> bool {
         self.clustering_compaction
     }
@@ -601,26 +644,31 @@ pub struct CompactRequestBuilder {
 }
 
 impl CompactRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the target size and returns the updated value.
     pub fn target_size(mut self, value: i64) -> Self {
         self.value.target_size = value;
         self
     }
 
+    /// Sets the clustering compaction and returns the updated value.
     pub fn clustering_compaction(mut self, value: bool) -> Self {
         self.value.clustering_compaction = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<CompactRequest> {
         validate_collection_target(
             self.value.database_name.as_deref(),
@@ -666,6 +714,7 @@ impl OptimizeRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> OptimizeRequestBuilder {
         OptimizeRequestBuilder {
             value: Self::empty(),
@@ -677,22 +726,27 @@ impl OptimizeRequest {
         OptimizeRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the target size.
     pub fn target_size(&self) -> &str {
         &self.target_size
     }
 
+    /// Returns whether async.
     pub fn is_async(&self) -> bool {
         self.async_mode
     }
 
+    /// Returns the timeout ms.
     pub fn timeout_ms(&self) -> i64 {
         self.timeout_ms
     }
@@ -708,31 +762,37 @@ pub struct OptimizeRequestBuilder {
 }
 
 impl OptimizeRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the target size and returns the updated value.
     pub fn target_size(mut self, value: impl Into<String>) -> Self {
         self.value.target_size = value.into();
         self
     }
 
+    /// Sets the async mode and returns the updated value.
     pub fn async_mode(mut self, value: bool) -> Self {
         self.value.async_mode = value;
         self
     }
 
+    /// Sets the timeout ms and returns the updated value.
     pub fn timeout_ms(mut self, value: i64) -> Self {
         self.value.timeout_ms = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<OptimizeRequest> {
         validate_collection_target(
             self.value.database_name.as_deref(),
@@ -759,6 +819,7 @@ impl GetCompactionStateRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> GetCompactionStateRequestBuilder {
         GetCompactionStateRequestBuilder {
             value: Self::empty(),
@@ -770,6 +831,7 @@ impl GetCompactionStateRequest {
         GetCompactionStateRequestBuilder { value: self }
     }
 
+    /// Returns the compaction id.
     pub fn compaction_id(&self) -> i64 {
         self.compaction_id
     }
@@ -791,11 +853,13 @@ pub struct GetCompactionStateRequestBuilder {
 }
 
 impl GetCompactionStateRequestBuilder {
+    /// Sets the compaction id and returns the updated value.
     pub fn compaction_id(mut self, value: i64) -> Self {
         self.value.compaction_id = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<GetCompactionStateRequest> {
         positive_i64("compaction_id", self.value.compaction_id)?;
         Ok(self.value)
@@ -819,6 +883,7 @@ impl GetCompactionPlansRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> GetCompactionPlansRequestBuilder {
         GetCompactionPlansRequestBuilder {
             value: Self::empty(),
@@ -830,6 +895,7 @@ impl GetCompactionPlansRequest {
         GetCompactionPlansRequestBuilder { value: self }
     }
 
+    /// Returns the compaction id.
     pub fn compaction_id(&self) -> i64 {
         self.compaction_id
     }
@@ -851,11 +917,13 @@ pub struct GetCompactionPlansRequestBuilder {
 }
 
 impl GetCompactionPlansRequestBuilder {
+    /// Sets the compaction id and returns the updated value.
     pub fn compaction_id(mut self, value: i64) -> Self {
         self.value.compaction_id = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<GetCompactionPlansRequest> {
         positive_i64("compaction_id", self.value.compaction_id)?;
         Ok(self.value)
@@ -893,6 +961,7 @@ impl RunAnalyzerRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> RunAnalyzerRequestBuilder {
         RunAnalyzerRequestBuilder {
             value: Self::empty(),
@@ -904,34 +973,42 @@ impl RunAnalyzerRequest {
         RunAnalyzerRequestBuilder { value: self }
     }
 
+    /// Returns the analyzer params.
     pub fn analyzer_params(&self) -> &str {
         &self.analyzer_params
     }
 
+    /// Returns the texts.
     pub fn texts(&self) -> &[String] {
         &self.texts
     }
 
+    /// Returns whether the request should include detail.
     pub fn should_include_detail(&self) -> bool {
         self.with_detail
     }
 
+    /// Returns whether the request should include hash.
     pub fn should_include_hash(&self) -> bool {
         self.with_hash
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the field name.
     pub fn field_name(&self) -> &str {
         &self.field_name
     }
 
+    /// Returns the analyzer names.
     pub fn analyzer_names(&self) -> &[String] {
         &self.analyzer_names
     }
@@ -961,46 +1038,55 @@ pub struct RunAnalyzerRequestBuilder {
 }
 
 impl RunAnalyzerRequestBuilder {
+    /// Sets the analyzer params and returns the updated value.
     pub fn analyzer_params(mut self, value: impl Into<String>) -> Self {
         self.value.analyzer_params = value.into();
         self
     }
 
+    /// Sets the texts and returns the updated value.
     pub fn texts(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.texts = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Returns this value configured with with detail.
     pub fn with_detail(mut self, value: bool) -> Self {
         self.value.with_detail = value;
         self
     }
 
+    /// Returns this value configured with with hash.
     pub fn with_hash(mut self, value: bool) -> Self {
         self.value.with_hash = value;
         self
     }
 
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the field name and returns the updated value.
     pub fn field_name(mut self, value: impl Into<String>) -> Self {
         self.value.field_name = value.into();
         self
     }
 
+    /// Sets the analyzer names and returns the updated value.
     pub fn analyzer_names(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.analyzer_names = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<RunAnalyzerRequest> {
         required_slice("texts", &self.value.texts)?;
         if self.value.analyzer_params.trim().is_empty() {

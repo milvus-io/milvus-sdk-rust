@@ -1,5 +1,7 @@
 name: Publish release to crates.io
 
+run-name: Publish release ${{ github.ref_name }}
+
 on:
   push:
     tags:
@@ -7,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  checks: read
 
 # crates.io releases are immutable. Do not publish two release tags at the same time,
 # and do not cancel a workflow after it has started uploading the crate.
@@ -15,8 +18,73 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate:
+    name: Validate release commit
+    if: github.repository == 'milvus-io/milvus-sdk-rust'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout release tag and history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Verify tag ancestry and completed CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch --no-tags origin '+refs/heads/*:refs/remotes/origin/*'
+          approved_branch=""
+          if git merge-base --is-ancestor "${TAG_SHA}" origin/main; then
+            approved_branch="main"
+          else
+            while IFS= read -r branch; do
+              branch_name="${branch#origin/}"
+              if [[ "${branch_name}" =~ ^[0-9]+\.[0-9]+$ ]] && \
+                git merge-base --is-ancestor "${TAG_SHA}" "${branch}"; then
+                approved_branch="${branch_name}"
+                break
+              fi
+            done < <(git for-each-ref --format='%(refname:short)' 'refs/remotes/origin/')
+          fi
+          if [[ -z "${approved_branch}" ]]; then
+            echo "Release tag commit ${TAG_SHA} is not contained in main or a numeric release branch." >&2
+            exit 1
+          fi
+          echo "Release commit is contained in ${approved_branch}."
+
+          check_runs="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${TAG_SHA}/check-runs?per_page=100")"
+          for check_name in 'UT on Ubuntu-22.04' 'UT on Windows'; do
+            if ! jq -e --arg name "${check_name}" --arg sha "${TAG_SHA}" \
+              '[.check_runs[] | select(.name == $name and .head_sha == $sha and .conclusion == "success")] | length > 0' <<<"${check_runs}" >/dev/null; then
+              echo "No successful ${check_name} check was found for ${TAG_SHA}." >&2
+              exit 1
+            fi
+          done
+          echo "Required post-merge checks passed for ${TAG_SHA}."
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run local tutorials before publication
+        run: ./scripts/run_tutorials.sh --local-sdk
+
   publish:
     name: Publish crate
+    needs: validate
     if: github.repository == 'milvus-io/milvus-sdk-rust'
     runs-on: ubuntu-latest
     environment: crates-io
@@ -93,8 +161,8 @@ jobs:
 
   release:
     name: Create GitHub release
-    needs: publish
-    if: needs.publish.result == 'success' && github.repository == 'milvus-io/milvus-sdk-rust'
+    needs: run-tutorial
+    if: needs.run-tutorial.result == 'success' && github.repository == 'milvus-io/milvus-sdk-rust'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -127,8 +195,8 @@ jobs:
 
   run-tutorial:
     name: Run tutorials
-    needs: release
-    if: needs.release.result == 'success' && github.repository == 'milvus-io/milvus-sdk-rust'
+    needs: publish
+    if: needs.publish.result == 'success' && github.repository == 'milvus-io/milvus-sdk-rust'
     runs-on: ubuntu-latest
     timeout-minutes: 60
 

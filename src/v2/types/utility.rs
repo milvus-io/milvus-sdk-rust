@@ -26,12 +26,19 @@ use crate::proto::common;
 #[non_exhaustive]
 pub enum SegmentState {
     #[default]
+    /// Represents the Unknown case.
     Unknown,
+    /// Represents the NotExist case.
     NotExist,
+    /// Represents the Growing case.
     Growing,
+    /// Represents the Sealed case.
     Sealed,
+    /// Represents the Flushed case.
     Flushed,
+    /// Represents the Flushing case.
     Flushing,
+    /// Represents the Dropped case.
     Dropped,
 }
 
@@ -57,10 +64,15 @@ impl SegmentState {
 #[non_exhaustive]
 pub enum SegmentLevel {
     #[default]
+    /// Represents the Unknown case.
     Unknown,
+    /// Represents the Legacy case.
     Legacy,
+    /// Represents the L0 case.
     L0,
+    /// Represents the L1 case.
     L1,
+    /// Represents the L2 case.
     L2,
 }
 
@@ -84,8 +96,11 @@ impl SegmentLevel {
 #[non_exhaustive]
 pub enum CompactionStateCode {
     #[default]
+    /// Represents the Unknown case.
     Unknown,
+    /// Represents the Executing case.
     Executing,
+    /// Represents the Completed case.
     Completed,
 }
 
@@ -118,6 +133,7 @@ pub struct PersistentSegmentInfo {
 }
 
 impl PersistentSegmentInfo {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             segment_id: 0,
@@ -132,128 +148,155 @@ impl PersistentSegmentInfo {
         }
     }
 
+    /// Sets the segment id and returns the updated value.
     pub fn segment_id(mut self, value: i64) -> Self {
         self.segment_id = value;
         self
     }
 
+    /// Sets the segment id and returns this value for further mutation.
     pub fn set_segment_id(&mut self, value: i64) -> &mut Self {
         self.segment_id = value;
         self
     }
 
+    /// Returns the configured segment id.
     pub fn get_segment_id(&self) -> i64 {
         self.segment_id
     }
 
+    /// Sets the collection id and returns the updated value.
     pub fn collection_id(mut self, value: i64) -> Self {
         self.collection_id = value;
         self
     }
 
+    /// Sets the collection id and returns this value for further mutation.
     pub fn set_collection_id(&mut self, value: i64) -> &mut Self {
         self.collection_id = value;
         self
     }
 
+    /// Returns the configured collection id.
     pub fn get_collection_id(&self) -> i64 {
         self.collection_id
     }
 
+    /// Sets the partition id and returns the updated value.
     pub fn partition_id(mut self, value: i64) -> Self {
         self.partition_id = value;
         self
     }
 
+    /// Sets the partition id and returns this value for further mutation.
     pub fn set_partition_id(&mut self, value: i64) -> &mut Self {
         self.partition_id = value;
         self
     }
 
+    /// Returns the configured partition id.
     pub fn get_partition_id(&self) -> i64 {
         self.partition_id
     }
 
+    /// Sets the row count and returns the updated value.
     pub fn row_count(mut self, value: i64) -> Self {
         self.row_count = value;
         self
     }
 
+    /// Sets the row count and returns this value for further mutation.
     pub fn set_row_count(&mut self, value: i64) -> &mut Self {
         self.row_count = value;
         self
     }
 
+    /// Returns the configured row count.
     pub fn get_row_count(&self) -> i64 {
         self.row_count
     }
 
+    /// Sets the state and returns the updated value.
     pub fn state(mut self, value: SegmentState) -> Self {
         self.state = value;
         self
     }
 
+    /// Sets the state and returns this value for further mutation.
     pub fn set_state(&mut self, value: SegmentState) -> &mut Self {
         self.state = value;
         self
     }
 
+    /// Returns the configured state.
     pub fn get_state(&self) -> SegmentState {
         self.state
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.collection_name = value.into();
         self
     }
 
+    /// Sets the collection name and returns this value for further mutation.
     pub fn set_collection_name(&mut self, value: impl Into<String>) -> &mut Self {
         self.collection_name = value.into();
         self
     }
 
+    /// Returns the configured collection name.
     pub fn get_collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Sets the level and returns the updated value.
     pub fn level(mut self, value: SegmentLevel) -> Self {
         self.level = value;
         self
     }
 
+    /// Sets the level and returns this value for further mutation.
     pub fn set_level(&mut self, value: SegmentLevel) -> &mut Self {
         self.level = value;
         self
     }
 
+    /// Returns the configured level.
     pub fn get_level(&self) -> SegmentLevel {
         self.level
     }
 
+    /// Sets the sorted and returns the updated value.
     pub fn sorted(mut self, value: bool) -> Self {
         self.sorted = value;
         self
     }
 
+    /// Sets the sorted and returns this value for further mutation.
     pub fn set_sorted(&mut self, value: bool) -> &mut Self {
         self.sorted = value;
         self
     }
 
+    /// Returns the configured sorted.
     pub fn get_sorted(&self) -> bool {
         self.sorted
     }
 
+    /// Sets the storage version and returns the updated value.
     pub fn storage_version(mut self, value: i64) -> Self {
         self.storage_version = value;
         self
     }
 
+    /// Sets the storage version and returns this value for further mutation.
     pub fn set_storage_version(&mut self, value: i64) -> &mut Self {
         self.storage_version = value;
         self
     }
 
+    /// Returns the configured storage version.
     pub fn get_storage_version(&self) -> i64 {
         self.storage_version
     }
@@ -282,6 +325,7 @@ pub struct QuerySegmentInfo {
 }
 
 impl QuerySegmentInfo {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             segment_id: 0,
@@ -300,188 +344,228 @@ impl QuerySegmentInfo {
         }
     }
 
+    /// Sets the segment id and returns the updated value.
     pub fn segment_id(mut self, value: i64) -> Self {
         self.segment_id = value;
         self
     }
 
+    /// Sets the segment id and returns this value for further mutation.
     pub fn set_segment_id(&mut self, value: i64) -> &mut Self {
         self.segment_id = value;
         self
     }
 
+    /// Returns the configured segment id.
     pub fn get_segment_id(&self) -> i64 {
         self.segment_id
     }
 
+    /// Sets the collection id and returns the updated value.
     pub fn collection_id(mut self, value: i64) -> Self {
         self.collection_id = value;
         self
     }
 
+    /// Sets the collection id and returns this value for further mutation.
     pub fn set_collection_id(&mut self, value: i64) -> &mut Self {
         self.collection_id = value;
         self
     }
 
+    /// Returns the configured collection id.
     pub fn get_collection_id(&self) -> i64 {
         self.collection_id
     }
 
+    /// Sets the partition id and returns the updated value.
     pub fn partition_id(mut self, value: i64) -> Self {
         self.partition_id = value;
         self
     }
 
+    /// Sets the partition id and returns this value for further mutation.
     pub fn set_partition_id(&mut self, value: i64) -> &mut Self {
         self.partition_id = value;
         self
     }
 
+    /// Returns the configured partition id.
     pub fn get_partition_id(&self) -> i64 {
         self.partition_id
     }
 
+    /// Sets the memory size and returns the updated value.
     pub fn memory_size(mut self, value: i64) -> Self {
         self.memory_size = value;
         self
     }
 
+    /// Sets the memory size and returns this value for further mutation.
     pub fn set_memory_size(&mut self, value: i64) -> &mut Self {
         self.memory_size = value;
         self
     }
 
+    /// Returns the configured memory size.
     pub fn get_memory_size(&self) -> i64 {
         self.memory_size
     }
 
+    /// Sets the row count and returns the updated value.
     pub fn row_count(mut self, value: i64) -> Self {
         self.row_count = value;
         self
     }
 
+    /// Sets the row count and returns this value for further mutation.
     pub fn set_row_count(&mut self, value: i64) -> &mut Self {
         self.row_count = value;
         self
     }
 
+    /// Returns the configured row count.
     pub fn get_row_count(&self) -> i64 {
         self.row_count
     }
 
+    /// Sets the index name and returns the updated value.
     pub fn index_name(mut self, value: impl Into<String>) -> Self {
         self.index_name = value.into();
         self
     }
 
+    /// Sets the index name and returns this value for further mutation.
     pub fn set_index_name(&mut self, value: impl Into<String>) -> &mut Self {
         self.index_name = value.into();
         self
     }
 
+    /// Returns the configured index name.
     pub fn get_index_name(&self) -> &str {
         &self.index_name
     }
 
+    /// Sets the index id and returns the updated value.
     pub fn index_id(mut self, value: i64) -> Self {
         self.index_id = value;
         self
     }
 
+    /// Sets the index id and returns this value for further mutation.
     pub fn set_index_id(&mut self, value: i64) -> &mut Self {
         self.index_id = value;
         self
     }
 
+    /// Returns the configured index id.
     pub fn get_index_id(&self) -> i64 {
         self.index_id
     }
 
+    /// Sets the node ids and returns the updated value.
     pub fn node_ids(mut self, value: Vec<i64>) -> Self {
         self.node_ids = value;
         self
     }
 
+    /// Sets the node ids and returns this value for further mutation.
     pub fn set_node_ids(&mut self, value: Vec<i64>) -> &mut Self {
         self.node_ids = value;
         self
     }
 
+    /// Returns the configured node ids.
     pub fn get_node_ids(&self) -> &[i64] {
         &self.node_ids
     }
 
+    /// Sets the state and returns the updated value.
     pub fn state(mut self, value: SegmentState) -> Self {
         self.state = value;
         self
     }
 
+    /// Sets the state and returns this value for further mutation.
     pub fn set_state(&mut self, value: SegmentState) -> &mut Self {
         self.state = value;
         self
     }
 
+    /// Returns the configured state.
     pub fn get_state(&self) -> SegmentState {
         self.state
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.collection_name = value.into();
         self
     }
 
+    /// Sets the collection name and returns this value for further mutation.
     pub fn set_collection_name(&mut self, value: impl Into<String>) -> &mut Self {
         self.collection_name = value.into();
         self
     }
 
+    /// Returns the configured collection name.
     pub fn get_collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Sets the level and returns the updated value.
     pub fn level(mut self, value: SegmentLevel) -> Self {
         self.level = value;
         self
     }
 
+    /// Sets the level and returns this value for further mutation.
     pub fn set_level(&mut self, value: SegmentLevel) -> &mut Self {
         self.level = value;
         self
     }
 
+    /// Returns the configured level.
     pub fn get_level(&self) -> SegmentLevel {
         self.level
     }
 
+    /// Sets the sorted and returns the updated value.
     pub fn sorted(mut self, value: bool) -> Self {
         self.sorted = value;
         self
     }
 
+    /// Sets the sorted and returns this value for further mutation.
     pub fn set_sorted(&mut self, value: bool) -> &mut Self {
         self.sorted = value;
         self
     }
 
+    /// Returns the configured sorted.
     pub fn get_sorted(&self) -> bool {
         self.sorted
     }
 
+    /// Sets the storage version and returns the updated value.
     pub fn storage_version(mut self, value: i64) -> Self {
         self.storage_version = value;
         self
     }
 
+    /// Sets the storage version and returns this value for further mutation.
     pub fn set_storage_version(&mut self, value: i64) -> &mut Self {
         self.storage_version = value;
         self
     }
 
+    /// Returns the configured storage version.
     pub fn get_storage_version(&self) -> i64 {
         self.storage_version
     }
 
+    /// Adds one add node id to the existing values.
     pub fn add_node_id(mut self, value: i64) -> Self {
         self.node_ids.push(value);
         self
@@ -500,6 +584,7 @@ pub struct CompactionMerge {
 }
 
 impl CompactionMerge {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             source_segment_ids: Vec::new(),
@@ -507,34 +592,41 @@ impl CompactionMerge {
         }
     }
 
+    /// Sets the source segment ids and returns the updated value.
     pub fn source_segment_ids(mut self, value: Vec<i64>) -> Self {
         self.source_segment_ids = value;
         self
     }
 
+    /// Sets the source segment ids and returns this value for further mutation.
     pub fn set_source_segment_ids(&mut self, value: Vec<i64>) -> &mut Self {
         self.source_segment_ids = value;
         self
     }
 
+    /// Returns the configured source segment ids.
     pub fn get_source_segment_ids(&self) -> &[i64] {
         &self.source_segment_ids
     }
 
+    /// Sets the target segment id and returns the updated value.
     pub fn target_segment_id(mut self, value: i64) -> Self {
         self.target_segment_id = value;
         self
     }
 
+    /// Sets the target segment id and returns this value for further mutation.
     pub fn set_target_segment_id(&mut self, value: i64) -> &mut Self {
         self.target_segment_id = value;
         self
     }
 
+    /// Returns the configured target segment id.
     pub fn get_target_segment_id(&self) -> i64 {
         self.target_segment_id
     }
 
+    /// Adds one add source segment id to the existing values.
     pub fn add_source_segment_id(mut self, value: i64) -> Self {
         self.source_segment_ids.push(value);
         self
@@ -557,6 +649,7 @@ pub struct AnalyzerToken {
 }
 
 impl AnalyzerToken {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
             text: String::new(),
@@ -568,86 +661,104 @@ impl AnalyzerToken {
         }
     }
 
+    /// Sets the text and returns the updated value.
     pub fn text(mut self, value: impl Into<String>) -> Self {
         self.text = value.into();
         self
     }
 
+    /// Sets the text and returns this value for further mutation.
     pub fn set_text(&mut self, value: impl Into<String>) -> &mut Self {
         self.text = value.into();
         self
     }
 
+    /// Returns the configured text.
     pub fn get_text(&self) -> &str {
         &self.text
     }
 
+    /// Sets the start offset and returns the updated value.
     pub fn start_offset(mut self, value: i64) -> Self {
         self.start_offset = value;
         self
     }
 
+    /// Sets the start offset and returns this value for further mutation.
     pub fn set_start_offset(&mut self, value: i64) -> &mut Self {
         self.start_offset = value;
         self
     }
 
+    /// Returns the configured start offset.
     pub fn get_start_offset(&self) -> i64 {
         self.start_offset
     }
 
+    /// Sets the end offset and returns the updated value.
     pub fn end_offset(mut self, value: i64) -> Self {
         self.end_offset = value;
         self
     }
 
+    /// Sets the end offset and returns this value for further mutation.
     pub fn set_end_offset(&mut self, value: i64) -> &mut Self {
         self.end_offset = value;
         self
     }
 
+    /// Returns the configured end offset.
     pub fn get_end_offset(&self) -> i64 {
         self.end_offset
     }
 
+    /// Sets the position and returns the updated value.
     pub fn position(mut self, value: i64) -> Self {
         self.position = value;
         self
     }
 
+    /// Sets the position and returns this value for further mutation.
     pub fn set_position(&mut self, value: i64) -> &mut Self {
         self.position = value;
         self
     }
 
+    /// Returns the configured position.
     pub fn get_position(&self) -> i64 {
         self.position
     }
 
+    /// Sets the position length and returns the updated value.
     pub fn position_length(mut self, value: i64) -> Self {
         self.position_length = value;
         self
     }
 
+    /// Sets the position length and returns this value for further mutation.
     pub fn set_position_length(&mut self, value: i64) -> &mut Self {
         self.position_length = value;
         self
     }
 
+    /// Returns the configured position length.
     pub fn get_position_length(&self) -> i64 {
         self.position_length
     }
 
+    /// Sets the hash and returns the updated value.
     pub fn hash(mut self, value: u32) -> Self {
         self.hash = value;
         self
     }
 
+    /// Sets the hash and returns this value for further mutation.
     pub fn set_hash(&mut self, value: u32) -> &mut Self {
         self.hash = value;
         self
     }
 
+    /// Returns the configured hash.
     pub fn get_hash(&self) -> u32 {
         self.hash
     }
@@ -664,24 +775,29 @@ pub struct AnalyzerResult {
 }
 
 impl AnalyzerResult {
+    /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self { tokens: Vec::new() }
     }
 
+    /// Sets the tokens and returns the updated value.
     pub fn tokens(mut self, value: Vec<AnalyzerToken>) -> Self {
         self.tokens = value;
         self
     }
 
+    /// Sets the tokens and returns this value for further mutation.
     pub fn set_tokens(&mut self, value: Vec<AnalyzerToken>) -> &mut Self {
         self.tokens = value;
         self
     }
 
+    /// Returns the configured tokens.
     pub fn get_tokens(&self) -> &[AnalyzerToken] {
         &self.tokens
     }
 
+    /// Adds one add token to the existing values.
     pub fn add_token(mut self, value: AnalyzerToken) -> Self {
         self.tokens.push(value);
         self

@@ -14,11 +14,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Milvus Rust SDK V2.
+//! Current request/response-based Milvus API for new applications.
 //!
-//! V2 is additive: the crate-root exports continue to point at V1 so existing
-//! applications keep compiling, while new applications can opt in through
-//! `milvus::v2`.
+//! Start with [`ClientV2`], [`ConnectConfig`], and the types exported by [`prelude`]:
+//!
+//! ```
+//! use milvus::v2::prelude::*;
+//!
+//! let config = ConnectConfig::new()
+//!     .uri("http://localhost:19530")
+//!     .token("root:Milvus");
+//! ```
+//!
+//! Public operations accept validated values from [`request`] and return SDK-owned values from
+//! [`response`]. Reusable schemas, enums, search parameters, and data values live in [`types`].
+//! Request builders report invalid or conflicting parameters before an RPC is sent.
+//!
+//! Typical workflow:
+//!
+//! 1. Connect with [`ClientV2::new`].
+//! 2. Build a request with `RequestType::builder().build()?`.
+//! 3. Pass the request to the matching client method.
+//! 4. Read the response through its accessors or result-row iterators.
+//!
+//! The V2 API is additive. [`crate::v1`] and crate-root compatibility exports remain available so
+//! existing applications continue to compile, while new features are developed here.
+
+#![warn(missing_docs)]
 
 pub mod bulk_import;
 pub mod client;

@@ -72,7 +72,10 @@ impl QueryIterator {
         }
     }
 
-    /// Retrieves the next result batch, or None when iteration is complete.
+    /// Retrieves the next query-result batch, or `None` when iteration is complete.
+    ///
+    /// Pages advance a primary-key cursor and are decoded on demand rather than materializing the
+    /// entire result set.
     pub async fn next(&mut self) -> Result<Option<response::dql::QueryResponse>> {
         if self.finished || self.remaining == Some(0) {
             return Ok(None);
@@ -83,10 +86,12 @@ impl QueryIterator {
             .as_ref()
             .is_some_and(|cached| query_response_row_count(cached) >= self.batch_size)
         {
+            trace_debug!(target: "milvus_sdk::iterator", kind = "query", batch_size = self.batch_size, "serving query iterator page from local cache");
             let cached = self.cache.take().expect("checked query iterator cache");
             let (page, remaining) = cached.split_at(self.batch_size)?;
             (page, false, remaining)
         } else {
+            trace_debug!(target: "milvus_sdk::iterator", kind = "query", batch_size = self.batch_size, remaining = ?self.remaining, "requesting next query iterator page");
             self.cache = None;
             self.request.expr = self.next_filter();
             set_param(
@@ -112,6 +117,7 @@ impl QueryIterator {
             let should_cache = count >= self.batch_size.saturating_mul(2);
             let (page, remaining) = decoded.split_at(self.batch_size)?;
             let next_cache = should_cache.then_some(remaining).flatten();
+            trace_debug!(target: "milvus_sdk::iterator", kind = "query", rows = count, source_exhausted, cached_surplus = next_cache.is_some(), "received query iterator page");
             (page, source_exhausted, next_cache)
         };
 
@@ -133,10 +139,11 @@ impl QueryIterator {
         self.remaining = next_remaining;
         self.cache = next_cache;
         self.finished = next_finished;
+        trace_debug!(target: "milvus_sdk::iterator", kind = "query", rows = count, remaining = ?self.remaining, finished = self.finished, "completed query iterator page");
         Ok(Some(response))
     }
 
-    /// Releases cached rows held by the iterator.
+    /// Releases cached rows and marks the query iterator closed.
     pub async fn close(&mut self) -> Result<()> {
         self.cache = None;
         Ok(())
@@ -220,7 +227,7 @@ pub enum SearchIterator {
 }
 
 impl SearchIterator {
-    /// Retrieves the next result batch, or None when iteration is complete.
+    /// Retrieves the next search-result batch, or `None` when iteration is complete.
     pub async fn next(&mut self) -> Result<Option<response::dql::SearchResponse>> {
         match self {
             Self::V1(iterator) => iterator.next().await,
@@ -228,7 +235,7 @@ impl SearchIterator {
         }
     }
 
-    /// Releases iterator-local cached results.
+    /// Releases iterator-local search state.
     pub async fn close(&mut self) -> Result<()> {
         match self {
             Self::V1(iterator) => iterator.close().await,
@@ -260,7 +267,7 @@ pub struct SearchIteratorV1 {
 }
 
 impl SearchIteratorV1 {
-    /// Retrieves the next result batch, or None when iteration is complete.
+    /// Retrieves the next legacy search-result batch, or `None` when iteration is complete.
     pub async fn next(&mut self) -> Result<Option<response::dql::SearchResponse>> {
         if self.finished || self.remaining == Some(0) {
             return Ok(None);
@@ -273,8 +280,10 @@ impl SearchIteratorV1 {
 
         if self.cache_row_count()? < size {
             for coefficient in 1..=LEGACY_SEARCH_MAX_TRIES + 1 {
+                trace_debug!(target: "milvus_sdk::iterator", kind = "search_v1", coefficient, batch_size = size, "requesting legacy search iterator expansion page");
                 let page = self.fetch_page(coefficient).await?;
                 if page.row_count()? == 0 {
+                    trace_debug!(target: "milvus_sdk::iterator", kind = "search_v1", coefficient, "legacy search iterator expansion returned no rows");
                     if coefficient > LEGACY_SEARCH_MAX_TRIES {
                         exhausted = true;
                     }
@@ -310,10 +319,11 @@ impl SearchIteratorV1 {
         self.remaining = next_remaining;
         self.cache = remaining_cache;
         self.finished = next_remaining == Some(0) || (exhausted && self.cache.is_none());
+        trace_debug!(target: "milvus_sdk::iterator", kind = "search_v1", rows = count, remaining = ?self.remaining, finished = self.finished, exhausted, "completed legacy search iterator page");
         Ok(Some(page))
     }
 
-    /// Releases iterator-local cached results.
+    /// Releases iterator-local legacy search state.
     pub async fn close(&mut self) -> Result<()> {
         self.cache = None;
         self.finished = true;
@@ -427,7 +437,7 @@ impl SearchIteratorV2 {
         }
     }
 
-    /// Retrieves the next result batch, or None when iteration is complete.
+    /// Retrieves the next token-based search-result batch, or `None` when iteration is complete.
     pub async fn next(&mut self) -> Result<Option<response::dql::SearchResponse>> {
         if self.finished || self.remaining == Some(0) {
             return Ok(None);
@@ -435,6 +445,7 @@ impl SearchIteratorV2 {
         let size = self
             .remaining
             .map_or(self.batch_size, |left| left.min(self.batch_size));
+        trace_debug!(target: "milvus_sdk::iterator", kind = "search_v2", batch_size = size, remaining = ?self.remaining, has_token = self.token.is_some(), "requesting token-based search iterator page");
         let mut request = self.request.clone();
         set_param(
             &mut request.search_params,
@@ -464,6 +475,7 @@ impl SearchIteratorV2 {
             &format_iterator_bound(iterator_bound),
         );
         if search_iterator_result_count(&raw) == Some(0) {
+            trace_debug!(target: "milvus_sdk::iterator", kind = "search_v2", "token-based search iterator reached end of results");
             self.finished = true;
             return Ok(None);
         }
@@ -487,10 +499,11 @@ impl SearchIteratorV2 {
         self.request = request;
         self.token = Some(next_token);
         self.remaining = next_remaining;
+        trace_debug!(target: "milvus_sdk::iterator", kind = "search_v2", rows = count, remaining = ?self.remaining, "completed token-based search iterator page");
         Ok(Some(response))
     }
 
-    /// Releases iterator-local state.
+    /// Releases token-based search iterator state.
     pub async fn close(&mut self) -> Result<()> {
         self.finished = true;
         Ok(())
@@ -584,7 +597,10 @@ impl LegacyFilteredIds {
 }
 
 impl ClientV2 {
-    /// Creates an iterator that retrieves query results in batches.
+    /// Creates an iterator that retrieves query results in bounded batches.
+    ///
+    /// Pagination uses the collection primary key as a cursor and preserves the request's
+    /// consistency semantics across pages. Query iterators do not accept primary-key ID input.
     pub async fn query_iterator(
         &self,
         request: request::dql::QueryIteratorRequest,
@@ -678,7 +694,8 @@ impl ClientV2 {
         Ok(iterator)
     }
 
-    /// Creates an iterator that retrieves search results in batches.
+    /// Creates an iterator that retrieves search results in batches while preserving the server
+    /// search token/bound and one MVCC session timestamp across pages.
     pub async fn search_iterator(
         &self,
         mut request: request::dql::SearchIteratorRequest,

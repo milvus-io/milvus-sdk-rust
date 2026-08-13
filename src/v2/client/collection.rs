@@ -28,7 +28,12 @@ use tokio::time::{sleep, Instant};
 const LOAD_POLL_INTERVAL: Duration = Duration::from_millis(500);
 
 impl ClientV2 {
-    /// Create a collection.
+    /// Creates a collection and, optionally, its indexes and load state.
+    ///
+    /// When the request contains index parameters, this method creates the collection first,
+    /// creates those indexes, and starts loading the collection as asynchronous follow-up
+    /// operations. The call therefore does not wait for index-building or loading completion. A
+    /// successful lifecycle change invalidates the client's cached collection description.
     pub async fn create_collection(
         &self,
         request: impl Into<request::collection::CreateCollectionRequest>,
@@ -70,7 +75,7 @@ impl ClientV2 {
         Ok(())
     }
 
-    /// Check existence of a collection.
+    /// Checks whether a collection exists in the request's database.
     pub async fn has_collection(
         &self,
         request: request::collection::HasCollectionRequest,
@@ -81,7 +86,10 @@ impl ClientV2 {
         Ok(response::collection::HasCollectionResponse(response.value))
     }
 
-    /// Drop a collection, with all its partitions, index and segments.
+    /// Drops a collection together with its partitions, indexes, and stored segments.
+    ///
+    /// This is destructive and cannot be undone. The collection's schema and DML timestamp cache
+    /// entries are removed after the server confirms success.
     pub async fn drop_collection(
         &self,
         request: request::collection::DropCollectionRequest,
@@ -100,7 +108,11 @@ impl ClientV2 {
         Ok(())
     }
 
-    /// Load collection data into CPU memory of query node.
+    /// Loads collection data into query-node memory.
+    ///
+    /// With `sync = false`, the method returns after the load request is accepted. With `sync =
+    /// true`, it polls load state until success or the request's operation timeout expires; that
+    /// timeout covers the polling workflow, not only one RPC attempt.
     pub async fn load_collection(
         &self,
         mut request: request::collection::LoadCollectionRequest,
@@ -133,7 +145,10 @@ impl ClientV2 {
         .await
     }
 
-    /// Refresh loaded collection data in query node.
+    /// Refreshes a loaded collection or its partitions on query nodes.
+    ///
+    /// Synchronous requests poll until the refreshed load is complete. Use this after new data or
+    /// index changes when the existing loaded view must be updated.
     pub async fn refresh_load(
         &self,
         mut request: request::collection::RefreshLoadRequest,
@@ -214,6 +229,14 @@ impl ClientV2 {
             } else {
                 response.progress
             };
+            trace_debug!(
+                target: "milvus_sdk::polling",
+                operation = if refresh { "refresh_load" } else { "load_collection" },
+                database,
+                collection,
+                progress,
+                "collection load polling progress"
+            );
             if progress >= 100 {
                 return Ok(());
             }
@@ -233,7 +256,7 @@ impl ClientV2 {
         }
     }
 
-    /// Release collection data from query node.
+    /// Releases a collection's loaded data from query nodes while retaining its definition.
     pub async fn release_collection(
         &self,
         request: request::collection::ReleaseCollectionRequest,
@@ -248,7 +271,10 @@ impl ClientV2 {
         self.status(status)
     }
 
-    /// Get collection description, including its schema and properties.
+    /// Retrieves a collection's schema, functions, and collection properties.
+    ///
+    /// This is a direct metadata read; schema-aware DML operations maintain their own shared cache
+    /// and should not be assumed to populate it from this call.
     pub async fn describe_collection(
         &self,
         request: request::collection::DescribeCollectionRequest,
@@ -259,7 +285,7 @@ impl ClientV2 {
         response::collection::DescribeCollectionResponse::from_proto(response)
     }
 
-    /// List all collections brief information.
+    /// Lists collections visible in the selected database.
     pub async fn list_collections(
         &self,
         request: request::collection::ListCollectionsRequest,
@@ -269,7 +295,7 @@ impl ClientV2 {
         response::collection::ListCollectionsResponse::from_proto(response)
     }
 
-    /// Get collection statistics, currently only return row count.
+    /// Returns collection statistics, currently including the server-reported row count.
     pub async fn get_collection_stats(
         &self,
         request: request::collection::GetCollectionStatsRequest,
@@ -284,7 +310,7 @@ impl ClientV2 {
         Ok(response::collection::GetCollectionStatsResponse::from_proto(response))
     }
 
-    /// Describe multiple collections.
+    /// Retrieves descriptions for multiple collections in one request.
     pub async fn batch_describe_collections(
         &self,
         request: request::collection::BatchDescribeCollectionsRequest,
@@ -294,7 +320,7 @@ impl ClientV2 {
         response::collection::BatchDescribeCollectionsResponse::from_proto(response)
     }
 
-    /// Describe replicas of a collection.
+    /// Describes the query replicas serving a collection and their resource assignments.
     pub async fn describe_replicas(
         &self,
         request: request::collection::DescribeReplicasRequest,
@@ -306,7 +332,7 @@ impl ClientV2 {
         ))
     }
 
-    /// Get load state of collection or partitions.
+    /// Returns the current load state for a collection or selected partitions.
     pub async fn get_load_state(
         &self,
         request: request::collection::GetLoadStateRequest,
@@ -342,7 +368,10 @@ impl ClientV2 {
         ))
     }
 
-    /// Truncate a collection, removing all data while keeping the collection structure.
+    /// Removes all entities while retaining the collection schema, indexes, and properties.
+    ///
+    /// Truncation is destructive and non-idempotent. A successful operation updates the shared DML
+    /// timestamp state used by Session-consistency reads.
     pub async fn truncate_collection(
         &self,
         request: request::collection::TruncateCollectionRequest,
@@ -357,7 +386,10 @@ impl ClientV2 {
         Ok(())
     }
 
-    /// RenameCollection rename a collection.
+    /// Renames a collection within the selected database.
+    ///
+    /// The SDK moves the collection's session timestamp state to the new name and invalidates
+    /// affected schema-cache entries after success.
     pub async fn rename_collection(
         &self,
         request: request::collection::RenameCollectionRequest,

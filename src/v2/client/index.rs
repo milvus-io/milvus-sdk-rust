@@ -28,7 +28,11 @@ use tokio::time::{sleep, timeout, Instant};
 const INDEX_POLL_INTERVAL: Duration = Duration::from_millis(500);
 
 impl ClientV2 {
-    /// Create indexes on vector fields or scalar fields. You can specify multiple indexes in one call.
+    /// Creates one or more vector or scalar indexes for a collection.
+    ///
+    /// Index creation is asynchronous on the server. Set the request's synchronization and timeout
+    /// options when the caller must wait until the index is ready; otherwise this method returns
+    /// after the create request is accepted.
     pub async fn create_index(&self, request: request::index::CreateIndexRequest) -> Result<()> {
         let database = self.current_database();
         let (database, collection, index_params, sync, timeout_ms) = request.into_parts(&database);
@@ -46,7 +50,7 @@ impl ClientV2 {
         Ok(())
     }
 
-    /// Get index descriptions and parameters.
+    /// Retrieves index definitions and server-side parameters for a collection field.
     pub async fn describe_index(
         &self,
         request: request::index::DescribeIndexRequest,
@@ -57,7 +61,7 @@ impl ClientV2 {
         response::index::DescribeIndexResponse::from_proto(response)
     }
 
-    /// Drop index of a field.
+    /// Drops the index associated with a collection field.
     pub async fn drop_index(&self, request: request::index::DropIndexRequest) -> Result<()> {
         let database = self.current_database();
         let status =
@@ -65,7 +69,7 @@ impl ClientV2 {
         self.status(status)
     }
 
-    /// Get index names of a collection.
+    /// Lists index names and metadata associated with a collection.
     pub async fn list_indexes(
         &self,
         request: request::index::ListIndexesRequest,
@@ -76,7 +80,7 @@ impl ClientV2 {
         response::index::ListIndexesResponse::from_proto(response)
     }
 
-    /// Alter an index's properties.
+    /// Updates mutable properties of an existing index.
     pub async fn alter_index_properties(
         &self,
         request: request::index::AlterIndexPropertiesRequest,
@@ -87,7 +91,7 @@ impl ClientV2 {
         self.status(status)
     }
 
-    /// Drop an index's properties.
+    /// Removes the requested mutable properties from an index.
     pub async fn drop_index_properties(
         &self,
         request: request::index::DropIndexPropertiesRequest,
@@ -152,7 +156,18 @@ impl ClientV2 {
 
             let mut finished = true;
             for index in indexes {
-                match IndexStateCode::from_proto(index.state) {
+                let state = IndexStateCode::from_proto(index.state);
+                trace_debug!(
+                    target: "milvus_sdk::polling",
+                    operation = "create_index",
+                    database,
+                    collection,
+                    field = %index.field_name,
+                    index = %index.index_name,
+                    state = ?state,
+                    "index polling state"
+                );
+                match state {
                     IndexStateCode::Finished => {}
                     IndexStateCode::Failed => {
                         return Err(Error::Unexpected(format!(

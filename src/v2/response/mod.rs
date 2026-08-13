@@ -16,8 +16,13 @@
 
 //! V2 response objects, grouped by Milvus functional area.
 //!
-//! Responses expose only SDK-owned domain data. Protobuf-to-domain conversion
-//! is crate-private and lives beside the public response type.
+//! Responses expose only SDK-owned domain data. Protobuf-to-domain conversion is crate-private and
+//! lives beside the public response type. Read response fields through accessors; response values
+//! are obtained from [`crate::v2::ClientV2`] methods and are not constructed by applications.
+//!
+//! For query and search operations, the recommended path is to iterate the response's result groups
+//! and then each row. Use typed field accessors when the schema is known, or generic value accessors
+//! when processing dynamic output.
 
 use crate::v2::error::{Error, Result};
 

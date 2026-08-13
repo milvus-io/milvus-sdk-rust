@@ -44,6 +44,7 @@ pub struct CreateCollectionRequest {
 }
 
 impl CreateCollectionRequest {
+    /// Creates a builder for this request.
     pub fn builder() -> CreateCollectionRequestBuilder {
         CreateCollectionRequestBuilder {
             value: Self::empty(),
@@ -55,38 +56,47 @@ impl CreateCollectionRequest {
         CreateCollectionRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the description.
     pub fn description(&self) -> &Option<String> {
         &self.description
     }
 
+    /// Returns the schema.
     pub fn schema(&self) -> &Option<CollectionSchema> {
         &self.schema
     }
 
+    /// Returns the num partitions.
     pub fn num_partitions(&self) -> i64 {
         self.num_partitions
     }
 
+    /// Returns the num shards.
     pub fn num_shards(&self) -> i32 {
         self.num_shards
     }
 
+    /// Returns the consistency level.
     pub fn consistency_level(&self) -> ConsistencyLevel {
         self.consistency_level
     }
 
+    /// Returns the index params.
     pub fn index_params(&self) -> &[IndexParam] {
         &self.index_params
     }
 
+    /// Returns the properties.
     pub fn properties(&self) -> &HashMap<String, String> {
         &self.properties
     }
@@ -175,56 +185,67 @@ pub struct CreateCollectionRequestBuilder {
 }
 
 impl CreateCollectionRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the description and returns the updated value.
     pub fn description(mut self, value: impl Into<String>) -> Self {
         self.value.description = Some(value.into());
         self
     }
 
+    /// Sets the schema and returns the updated value.
     pub fn schema(mut self, value: CollectionSchema) -> Self {
         self.value.schema = Some(value);
         self
     }
 
+    /// Sets the num partitions and returns the updated value.
     pub fn num_partitions(mut self, value: i64) -> Self {
         self.value.num_partitions = value;
         self
     }
 
+    /// Sets the num shards and returns the updated value.
     pub fn num_shards(mut self, value: i32) -> Self {
         self.value.num_shards = value;
         self
     }
 
+    /// Sets the consistency level and returns the updated value.
     pub fn consistency_level(mut self, value: ConsistencyLevel) -> Self {
         self.value.consistency_level = value;
         self
     }
 
+    /// Sets the index params and returns the updated value.
     pub fn index_params(mut self, value: Vec<IndexParam>) -> Self {
         self.value.index_params = value;
         self
     }
 
+    /// Sets the index param and returns the updated value.
     pub fn index_param(mut self, value: IndexParam) -> Self {
         self.value.index_params.push(value);
         self
     }
 
+    /// Sets the properties and returns the updated value.
     pub fn properties(mut self, value: HashMap<String, String>) -> Self {
         self.value.properties = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<CreateCollectionRequest> {
         required("collection_name", &self.value.collection_name)?;
         if self.value.num_partitions < 0 {
@@ -301,6 +322,7 @@ pub struct CreateSimpleCollectionRequest {
 }
 
 impl CreateSimpleCollectionRequest {
+    /// Creates a builder for this request.
     pub fn builder() -> CreateSimpleCollectionRequestBuilder {
         CreateSimpleCollectionRequestBuilder {
             value: Self::empty(),
@@ -312,46 +334,57 @@ impl CreateSimpleCollectionRequest {
         CreateSimpleCollectionRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the dimension.
     pub fn dimension(&self) -> u32 {
         self.dimension
     }
 
+    /// Returns the primary field.
     pub fn primary_field(&self) -> &str {
         &self.primary_field
     }
 
+    /// Returns the primary field type.
     pub fn primary_field_type(&self) -> DataType {
         self.primary_field_type
     }
 
+    /// Returns the max length.
     pub fn max_length(&self) -> u32 {
         self.max_length
     }
 
+    /// Returns the vector field.
     pub fn vector_field(&self) -> &str {
         &self.vector_field
     }
 
+    /// Returns whether auto id.
     pub fn is_auto_id(&self) -> bool {
         self.auto_id
     }
 
+    /// Returns whether dynamic field enabled.
     pub fn is_dynamic_field_enabled(&self) -> bool {
         self.enable_dynamic_field
     }
 
+    /// Returns the consistency level.
     pub fn consistency_level(&self) -> ConsistencyLevel {
         self.consistency_level
     }
 
+    /// Returns the metric type.
     pub fn metric_type(&self) -> MetricType {
         self.metric_type
     }
@@ -385,61 +418,73 @@ pub struct CreateSimpleCollectionRequestBuilder {
 }
 
 impl CreateSimpleCollectionRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the dimension and returns the updated value.
     pub fn dimension(mut self, value: u32) -> Self {
         self.value.dimension = value;
         self
     }
 
+    /// Sets the primary field and returns the updated value.
     pub fn primary_field(mut self, value: impl Into<String>) -> Self {
         self.value.primary_field = value.into();
         self
     }
 
+    /// Sets the primary field type and returns the updated value.
     pub fn primary_field_type(mut self, value: DataType) -> Self {
         self.value.primary_field_type = value;
         self
     }
 
+    /// Sets the max length and returns the updated value.
     pub fn max_length(mut self, value: u32) -> Self {
         self.value.max_length = value;
         self
     }
 
+    /// Sets the vector field and returns the updated value.
     pub fn vector_field(mut self, value: impl Into<String>) -> Self {
         self.value.vector_field = value.into();
         self
     }
 
+    /// Sets the auto id and returns the updated value.
     pub fn auto_id(mut self, value: bool) -> Self {
         self.value.auto_id = value;
         self
     }
 
+    /// Sets the enable dynamic field and returns the updated value.
     pub fn enable_dynamic_field(mut self, value: bool) -> Self {
         self.value.enable_dynamic_field = value;
         self
     }
 
+    /// Sets the consistency level and returns the updated value.
     pub fn consistency_level(mut self, value: ConsistencyLevel) -> Self {
         self.value.consistency_level = value;
         self
     }
 
+    /// Sets the metric type and returns the updated value.
     pub fn metric_type(mut self, value: MetricType) -> Self {
         self.value.metric_type = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<CreateSimpleCollectionRequest> {
         required("collection_name", &self.value.collection_name)?;
         if self.value.dimension == 0 {
@@ -488,6 +533,7 @@ impl DropCollectionRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> DropCollectionRequestBuilder {
         DropCollectionRequestBuilder {
             value: Self::empty(),
@@ -499,10 +545,12 @@ impl DropCollectionRequest {
         DropCollectionRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
@@ -525,16 +573,19 @@ pub struct DropCollectionRequestBuilder {
 }
 
 impl DropCollectionRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<DropCollectionRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -563,6 +614,7 @@ impl HasCollectionRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> HasCollectionRequestBuilder {
         HasCollectionRequestBuilder {
             value: Self::empty(),
@@ -574,10 +626,12 @@ impl HasCollectionRequest {
         HasCollectionRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
@@ -600,16 +654,19 @@ pub struct HasCollectionRequestBuilder {
 }
 
 impl HasCollectionRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<HasCollectionRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -638,6 +695,7 @@ impl ReleaseCollectionRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> ReleaseCollectionRequestBuilder {
         ReleaseCollectionRequestBuilder {
             value: Self::empty(),
@@ -649,10 +707,12 @@ impl ReleaseCollectionRequest {
         ReleaseCollectionRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
@@ -675,16 +735,19 @@ pub struct ReleaseCollectionRequestBuilder {
 }
 
 impl ReleaseCollectionRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<ReleaseCollectionRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -713,6 +776,7 @@ impl DescribeCollectionRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> DescribeCollectionRequestBuilder {
         DescribeCollectionRequestBuilder {
             value: Self::empty(),
@@ -724,10 +788,12 @@ impl DescribeCollectionRequest {
         DescribeCollectionRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
@@ -750,16 +816,19 @@ pub struct DescribeCollectionRequestBuilder {
 }
 
 impl DescribeCollectionRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<DescribeCollectionRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -790,6 +859,7 @@ pub struct LoadCollectionRequest {
 }
 
 impl LoadCollectionRequest {
+    /// Creates a builder for this request.
     pub fn builder() -> LoadCollectionRequestBuilder {
         LoadCollectionRequestBuilder {
             value: Self::empty(),
@@ -801,38 +871,47 @@ impl LoadCollectionRequest {
         LoadCollectionRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns whether sync.
     pub fn is_sync(&self) -> bool {
         self.sync
     }
 
+    /// Returns the replica number.
     pub fn replica_number(&self) -> i32 {
         self.replica_number
     }
 
+    /// Returns the timeout ms.
     pub fn timeout_ms(&self) -> i64 {
         self.timeout_ms
     }
 
+    /// Returns whether the request should refresh.
     pub fn should_refresh(&self) -> bool {
         self.refresh
     }
 
+    /// Returns the load fields.
     pub fn load_fields(&self) -> &[String] {
         &self.load_fields
     }
 
+    /// Returns whether the request should skip load dynamic field.
     pub fn should_skip_load_dynamic_field(&self) -> bool {
         self.skip_load_dynamic_field
     }
 
+    /// Returns the resource groups.
     pub fn resource_groups(&self) -> &[String] {
         &self.resource_groups
     }
@@ -876,51 +955,61 @@ pub struct LoadCollectionRequestBuilder {
 }
 
 impl LoadCollectionRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the sync and returns the updated value.
     pub fn sync(mut self, value: bool) -> Self {
         self.value.sync = value;
         self
     }
 
+    /// Sets the replica number and returns the updated value.
     pub fn replica_number(mut self, value: i32) -> Self {
         self.value.replica_number = value;
         self
     }
 
+    /// Sets the timeout ms and returns the updated value.
     pub fn timeout_ms(mut self, value: i64) -> Self {
         self.value.timeout_ms = value;
         self
     }
 
+    /// Sets the refresh and returns the updated value.
     pub fn refresh(mut self, value: bool) -> Self {
         self.value.refresh = value;
         self
     }
 
+    /// Sets the load fields and returns the updated value.
     pub fn load_fields(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.load_fields = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the skip load dynamic field and returns the updated value.
     pub fn skip_load_dynamic_field(mut self, value: bool) -> Self {
         self.value.skip_load_dynamic_field = value;
         self
     }
 
+    /// Sets the resource groups and returns the updated value.
     pub fn resource_groups(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.resource_groups = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<LoadCollectionRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -949,6 +1038,7 @@ pub struct RefreshLoadRequest {
 }
 
 impl RefreshLoadRequest {
+    /// Creates a builder for this request.
     pub fn builder() -> RefreshLoadRequestBuilder {
         RefreshLoadRequestBuilder {
             value: Self::empty(),
@@ -960,18 +1050,22 @@ impl RefreshLoadRequest {
         RefreshLoadRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns whether sync.
     pub fn is_sync(&self) -> bool {
         self.sync
     }
 
+    /// Returns the timeout ms.
     pub fn timeout_ms(&self) -> i64 {
         self.timeout_ms
     }
@@ -1008,26 +1102,31 @@ pub struct RefreshLoadRequestBuilder {
 }
 
 impl RefreshLoadRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the sync and returns the updated value.
     pub fn sync(mut self, value: bool) -> Self {
         self.value.sync = value;
         self
     }
 
+    /// Sets the timeout ms and returns the updated value.
     pub fn timeout_ms(mut self, value: i64) -> Self {
         self.value.timeout_ms = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<RefreshLoadRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -1058,6 +1157,7 @@ impl BatchDescribeCollectionsRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> BatchDescribeCollectionsRequestBuilder {
         BatchDescribeCollectionsRequestBuilder {
             value: Self::empty(),
@@ -1069,14 +1169,17 @@ impl BatchDescribeCollectionsRequest {
         BatchDescribeCollectionsRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection names.
     pub fn collection_names(&self) -> &[String] {
         &self.collection_names
     }
 
+    /// Returns the collection ids.
     pub fn collection_ids(&self) -> &[i64] {
         &self.collection_ids
     }
@@ -1100,31 +1203,37 @@ pub struct BatchDescribeCollectionsRequestBuilder {
 }
 
 impl BatchDescribeCollectionsRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection names and returns the updated value.
     pub fn collection_names(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.collection_names = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_names.push(value.into());
         self
     }
 
+    /// Sets the collection ids and returns the updated value.
     pub fn collection_ids(mut self, value: Vec<i64>) -> Self {
         self.value.collection_ids = value;
         self
     }
 
+    /// Sets the collection id and returns the updated value.
     pub fn collection_id(mut self, value: i64) -> Self {
         self.value.collection_ids.push(value);
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<BatchDescribeCollectionsRequest> {
         non_empty_strings("collection_names", &self.value.collection_names)?;
         if self.value.collection_ids.iter().any(|value| *value <= 0) {
@@ -1156,6 +1265,7 @@ impl GetCollectionStatsRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> GetCollectionStatsRequestBuilder {
         GetCollectionStatsRequestBuilder {
             value: Self::empty(),
@@ -1167,10 +1277,12 @@ impl GetCollectionStatsRequest {
         GetCollectionStatsRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
@@ -1193,16 +1305,19 @@ pub struct GetCollectionStatsRequestBuilder {
 }
 
 impl GetCollectionStatsRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<GetCollectionStatsRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -1231,6 +1346,7 @@ impl ListCollectionsRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> ListCollectionsRequestBuilder {
         ListCollectionsRequestBuilder {
             value: Self::empty(),
@@ -1242,10 +1358,12 @@ impl ListCollectionsRequest {
         ListCollectionsRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns whether only loaded.
     pub fn is_only_loaded(&self) -> bool {
         self.only_loaded
     }
@@ -1272,16 +1390,19 @@ pub struct ListCollectionsRequestBuilder {
 }
 
 impl ListCollectionsRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the only loaded and returns the updated value.
     pub fn only_loaded(mut self, value: bool) -> Self {
         self.value.only_loaded = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<ListCollectionsRequest> {
         Ok(self.value)
     }
@@ -1308,6 +1429,7 @@ impl GetLoadStateRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> GetLoadStateRequestBuilder {
         GetLoadStateRequestBuilder {
             value: Self::empty(),
@@ -1319,14 +1441,17 @@ impl GetLoadStateRequest {
         GetLoadStateRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the partition names.
     pub fn partition_names(&self) -> &[String] {
         &self.partition_names
     }
@@ -1351,16 +1476,19 @@ pub struct GetLoadStateRequestBuilder {
 }
 
 impl GetLoadStateRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the partition names and returns the updated value.
     pub fn partition_names(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.partition_names.clear();
         for value in values.into_iter().map(Into::into) {
@@ -1371,6 +1499,7 @@ impl GetLoadStateRequestBuilder {
         self
     }
 
+    /// Sets the partition name and returns the updated value.
     pub fn partition_name(mut self, value: impl Into<String>) -> Self {
         let value = value.into();
         if !self.value.partition_names.contains(&value) {
@@ -1379,6 +1508,7 @@ impl GetLoadStateRequestBuilder {
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<GetLoadStateRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -1410,6 +1540,7 @@ impl AlterCollectionPropertiesRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> AlterCollectionPropertiesRequestBuilder {
         AlterCollectionPropertiesRequestBuilder {
             value: Self::empty(),
@@ -1421,14 +1552,17 @@ impl AlterCollectionPropertiesRequest {
         AlterCollectionPropertiesRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the properties.
     pub fn properties(&self) -> &HashMap<String, String> {
         &self.properties
     }
@@ -1455,26 +1589,31 @@ pub struct AlterCollectionPropertiesRequestBuilder {
 }
 
 impl AlterCollectionPropertiesRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the properties and returns the updated value.
     pub fn properties(mut self, value: HashMap<String, String>) -> Self {
         self.value.properties = value;
         self
     }
 
+    /// Sets the property and returns the updated value.
     pub fn property(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.value.properties.insert(key.into(), value.into());
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<AlterCollectionPropertiesRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -1511,6 +1650,7 @@ impl DropCollectionPropertiesRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> DropCollectionPropertiesRequestBuilder {
         DropCollectionPropertiesRequestBuilder {
             value: Self::empty(),
@@ -1522,14 +1662,17 @@ impl DropCollectionPropertiesRequest {
         DropCollectionPropertiesRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the property keys.
     pub fn property_keys(&self) -> &HashSet<String> {
         &self.property_keys
     }
@@ -1556,26 +1699,31 @@ pub struct DropCollectionPropertiesRequestBuilder {
 }
 
 impl DropCollectionPropertiesRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the property keys and returns the updated value.
     pub fn property_keys(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.property_keys = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the property key and returns the updated value.
     pub fn property_key(mut self, value: impl Into<String>) -> Self {
         self.value.property_keys.insert(value.into());
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<DropCollectionPropertiesRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -1614,6 +1762,7 @@ impl AlterCollectionFieldPropertiesRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> AlterCollectionFieldPropertiesRequestBuilder {
         AlterCollectionFieldPropertiesRequestBuilder {
             value: Self::empty(),
@@ -1625,18 +1774,22 @@ impl AlterCollectionFieldPropertiesRequest {
         AlterCollectionFieldPropertiesRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the field name.
     pub fn field_name(&self) -> &str {
         &self.field_name
     }
 
+    /// Returns the properties.
     pub fn properties(&self) -> &HashMap<String, String> {
         &self.properties
     }
@@ -1663,31 +1816,37 @@ pub struct AlterCollectionFieldPropertiesRequestBuilder {
 }
 
 impl AlterCollectionFieldPropertiesRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the field name and returns the updated value.
     pub fn field_name(mut self, value: impl Into<String>) -> Self {
         self.value.field_name = value.into();
         self
     }
 
+    /// Sets the properties and returns the updated value.
     pub fn properties(mut self, value: HashMap<String, String>) -> Self {
         self.value.properties = value;
         self
     }
 
+    /// Sets the property and returns the updated value.
     pub fn property(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.value.properties.insert(key.into(), value.into());
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<AlterCollectionFieldPropertiesRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -1727,6 +1886,7 @@ impl DropCollectionFieldPropertiesRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> DropCollectionFieldPropertiesRequestBuilder {
         DropCollectionFieldPropertiesRequestBuilder {
             value: Self::empty(),
@@ -1738,18 +1898,22 @@ impl DropCollectionFieldPropertiesRequest {
         DropCollectionFieldPropertiesRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the field name.
     pub fn field_name(&self) -> &str {
         &self.field_name
     }
 
+    /// Returns the property keys.
     pub fn property_keys(&self) -> &HashSet<String> {
         &self.property_keys
     }
@@ -1776,31 +1940,37 @@ pub struct DropCollectionFieldPropertiesRequestBuilder {
 }
 
 impl DropCollectionFieldPropertiesRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the field name and returns the updated value.
     pub fn field_name(mut self, value: impl Into<String>) -> Self {
         self.value.field_name = value.into();
         self
     }
 
+    /// Sets the property keys and returns the updated value.
     pub fn property_keys(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.property_keys = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the property key and returns the updated value.
     pub fn property_key(mut self, value: impl Into<String>) -> Self {
         self.value.property_keys.insert(value.into());
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<DropCollectionFieldPropertiesRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -1838,6 +2008,7 @@ impl AddCollectionFieldRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> AddCollectionFieldRequestBuilder {
         AddCollectionFieldRequestBuilder {
             value: Self::empty(),
@@ -1849,14 +2020,17 @@ impl AddCollectionFieldRequest {
         AddCollectionFieldRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the field.
     pub fn field(&self) -> Option<&FieldSchema> {
         self.field.as_ref()
     }
@@ -1885,21 +2059,25 @@ pub struct AddCollectionFieldRequestBuilder {
 }
 
 impl AddCollectionFieldRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the field and returns the updated value.
     pub fn field(mut self, value: FieldSchema) -> Self {
         self.value.field = Some(value);
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<AddCollectionFieldRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -1943,6 +2121,7 @@ impl AddCollectionFunctionRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> AddCollectionFunctionRequestBuilder {
         AddCollectionFunctionRequestBuilder {
             value: Self::empty(),
@@ -1954,14 +2133,17 @@ impl AddCollectionFunctionRequest {
         AddCollectionFunctionRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the function.
     pub fn function(&self) -> &Option<Function> {
         &self.function
     }
@@ -1987,21 +2169,25 @@ pub struct AddCollectionFunctionRequestBuilder {
 }
 
 impl AddCollectionFunctionRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the function and returns the updated value.
     pub fn function(mut self, value: impl Into<Function>) -> Self {
         self.value.function = Some(value.into());
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<AddCollectionFunctionRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -2038,6 +2224,7 @@ impl AlterCollectionFunctionRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> AlterCollectionFunctionRequestBuilder {
         AlterCollectionFunctionRequestBuilder {
             value: Self::empty(),
@@ -2049,14 +2236,17 @@ impl AlterCollectionFunctionRequest {
         AlterCollectionFunctionRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the function.
     pub fn function(&self) -> &Option<Function> {
         &self.function
     }
@@ -2087,21 +2277,25 @@ pub struct AlterCollectionFunctionRequestBuilder {
 }
 
 impl AlterCollectionFunctionRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the function and returns the updated value.
     pub fn function(mut self, value: impl Into<Function>) -> Self {
         self.value.function = Some(value.into());
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<AlterCollectionFunctionRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -2138,6 +2332,7 @@ impl DropCollectionFunctionRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> DropCollectionFunctionRequestBuilder {
         DropCollectionFunctionRequestBuilder {
             value: Self::empty(),
@@ -2149,14 +2344,17 @@ impl DropCollectionFunctionRequest {
         DropCollectionFunctionRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the function name.
     pub fn function_name(&self) -> &str {
         &self.function_name
     }
@@ -2182,21 +2380,25 @@ pub struct DropCollectionFunctionRequestBuilder {
 }
 
 impl DropCollectionFunctionRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the function name and returns the updated value.
     pub fn function_name(mut self, value: impl Into<String>) -> Self {
         self.value.function_name = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<DropCollectionFunctionRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -2226,6 +2428,7 @@ impl TruncateCollectionRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> TruncateCollectionRequestBuilder {
         TruncateCollectionRequestBuilder {
             value: Self::empty(),
@@ -2237,10 +2440,12 @@ impl TruncateCollectionRequest {
         TruncateCollectionRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
@@ -2263,16 +2468,19 @@ pub struct TruncateCollectionRequestBuilder {
 }
 
 impl TruncateCollectionRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<TruncateCollectionRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -2303,6 +2511,7 @@ impl DescribeReplicasRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> DescribeReplicasRequestBuilder {
         DescribeReplicasRequestBuilder {
             value: Self::empty(),
@@ -2314,14 +2523,17 @@ impl DescribeReplicasRequest {
         DescribeReplicasRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns whether the request should include shard nodes.
     pub fn should_include_shard_nodes(&self) -> bool {
         self.with_shard_nodes
     }
@@ -2347,21 +2559,25 @@ pub struct DescribeReplicasRequestBuilder {
 }
 
 impl DescribeReplicasRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Returns this value configured with with shard nodes.
     pub fn with_shard_nodes(mut self, value: bool) -> Self {
         self.value.with_shard_nodes = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<DescribeReplicasRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -2394,6 +2610,7 @@ impl RenameCollectionRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> RenameCollectionRequestBuilder {
         RenameCollectionRequestBuilder {
             value: Self::empty(),
@@ -2405,18 +2622,22 @@ impl RenameCollectionRequest {
         RenameCollectionRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the new collection name.
     pub fn new_collection_name(&self) -> &str {
         &self.new_collection_name
     }
 
+    /// Returns the new database name.
     pub fn new_database_name(&self) -> &Option<String> {
         &self.new_database_name
     }
@@ -2450,26 +2671,31 @@ pub struct RenameCollectionRequestBuilder {
 }
 
 impl RenameCollectionRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the new collection name and returns the updated value.
     pub fn new_collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.new_collection_name = value.into();
         self
     }
 
+    /// Sets the new database name and returns the updated value.
     pub fn new_database_name(mut self, value: impl Into<String>) -> Self {
         self.value.new_database_name = Some(value.into());
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<RenameCollectionRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),

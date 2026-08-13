@@ -22,14 +22,18 @@ use crate::v2::error::Result;
 use crate::v2::{request, response};
 
 impl ClientV2 {
-    /// Create an user with username and password to login milvus.
+    /// Creates a user account with a username and password.
+    ///
+    /// The caller must have the corresponding administrative privilege. Milvus can accept RBAC
+    /// management calls with authorization disabled; enabling authorization is required when the
+    /// deployment must enforce the resulting permissions for subsequent operations.
     pub async fn create_user(&self, request: request::rbac::CreateUserRequest) -> Result<()> {
         let status =
             status_rpc_with_retry!(NonIdempotent, self, create_credential, request.into_proto())?;
         self.status(status)
     }
 
-    /// Update password of an user.
+    /// Changes an existing user's password.
     pub async fn update_password(
         &self,
         request: request::rbac::UpdatePasswordRequest,
@@ -39,21 +43,21 @@ impl ClientV2 {
         self.status(status)
     }
 
-    /// Updates a user account.
+    /// Updates mutable properties of a user account.
     pub async fn update_user(&self, request: request::rbac::UpdateUserRequest) -> Result<()> {
         let status =
             status_rpc_with_retry!(NonIdempotent, self, update_credential, request.into_proto())?;
         self.status(status)
     }
 
-    /// Drop an user.
+    /// Drops a user account.
     pub async fn drop_user(&self, request: request::rbac::DropUserRequest) -> Result<()> {
         let status =
             status_rpc_with_retry!(NonIdempotent, self, delete_credential, request.into_proto())?;
         self.status(status)
     }
 
-    /// List users.
+    /// Lists user accounts visible to the caller.
     pub async fn list_users(
         &self,
         request: request::rbac::ListUsersRequest,
@@ -63,7 +67,7 @@ impl ClientV2 {
         Ok(response::rbac::ListUsersResponse::from_proto(response))
     }
 
-    /// List roles.
+    /// Lists roles visible to the caller.
     pub async fn list_roles(
         &self,
         request: request::rbac::ListRolesRequest,
@@ -73,40 +77,40 @@ impl ClientV2 {
         response::rbac::ListRolesResponse::from_proto(response)
     }
 
-    /// Create a role with specific privileges.
+    /// Creates a role that can receive privileges.
     pub async fn create_role(&self, request: request::rbac::CreateRoleRequest) -> Result<()> {
         let status =
             status_rpc_with_retry!(NonIdempotent, self, create_role, request.into_proto())?;
         self.status(status)
     }
 
-    /// Updates a role.
+    /// Updates a role's mutable properties.
     pub async fn alter_role(&self, request: request::rbac::AlterRoleRequest) -> Result<()> {
         let status = status_rpc_with_retry!(NonIdempotent, self, alter_role, request.into_proto())?;
         self.status(status)
     }
 
-    /// Drop a role.
+    /// Drops a role.
     pub async fn drop_role(&self, request: request::rbac::DropRoleRequest) -> Result<()> {
         let status = status_rpc_with_retry!(NonIdempotent, self, drop_role, request.into_proto())?;
         self.status(status)
     }
 
-    /// Grant a role to an user.
+    /// Assigns a role to a user.
     pub async fn grant_role(&self, request: request::rbac::GrantRoleRequest) -> Result<()> {
         let status =
             status_rpc_with_retry!(NonIdempotent, self, operate_user_role, request.into_proto())?;
         self.status(status)
     }
 
-    /// Revoke a role from an user.
+    /// Removes a role assignment from a user.
     pub async fn revoke_role(&self, request: request::rbac::RevokeRoleRequest) -> Result<()> {
         let status =
             status_rpc_with_retry!(NonIdempotent, self, operate_user_role, request.into_proto())?;
         self.status(status)
     }
 
-    /// Describe an role.
+    /// Retrieves a role and its assignments.
     pub async fn describe_role(
         &self,
         request: request::rbac::DescribeRoleRequest,
@@ -119,7 +123,7 @@ impl ClientV2 {
         response::rbac::DescribeRoleResponse::from_proto(role_name, grant_response, role_response)
     }
 
-    /// Describe an user.
+    /// Retrieves a user and its role assignments.
     pub async fn describe_user(
         &self,
         request: request::rbac::DescribeUserRequest,
@@ -129,7 +133,7 @@ impl ClientV2 {
         response::rbac::DescribeUserResponse::from_proto(response)
     }
 
-    /// Grants a privilege to a role.
+    /// Grants a privilege on a resource to a role.
     pub async fn grant_privilege(
         &self,
         request: request::rbac::GrantPrivilegeRequest,
@@ -157,7 +161,7 @@ impl ClientV2 {
         self.status(status)
     }
 
-    /// Create a privilege group.
+    /// Creates a named group of privileges.
     pub async fn create_privilege_group(
         &self,
         request: request::rbac::CreatePrivilegeGroupRequest,
@@ -171,7 +175,7 @@ impl ClientV2 {
         self.status(status)
     }
 
-    /// Drop a privilege group.
+    /// Drops a privilege group.
     pub async fn drop_privilege_group(
         &self,
         request: request::rbac::DropPrivilegeGroupRequest,
@@ -185,7 +189,7 @@ impl ClientV2 {
         self.status(status)
     }
 
-    /// List all the privilege groups.
+    /// Lists privilege groups visible to the caller.
     pub async fn list_privilege_groups(
         &self,
         request: request::rbac::ListPrivilegeGroupsRequest,
@@ -197,7 +201,7 @@ impl ClientV2 {
         ))
     }
 
-    /// Add privileges to a privilege group.
+    /// Adds privileges to a privilege group.
     pub async fn add_privileges_to_group(
         &self,
         request: request::rbac::AddPrivilegesToGroupRequest,
@@ -211,7 +215,7 @@ impl ClientV2 {
         self.status(status)
     }
 
-    /// Remove privileges from a privilege group.
+    /// Removes privileges from a privilege group.
     pub async fn remove_privileges_from_group(
         &self,
         request: request::rbac::RemovePrivilegesFromGroupRequest,

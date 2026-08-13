@@ -15,6 +15,10 @@
 // limitations under the License.
 
 //! Response types returned by query and search operations.
+//!
+//! Query and search responses may contain multiple result groups when a request has multiple query
+//! vectors. Iterate each group and then its rows before reading IDs, scores, or output fields. The
+//! borrowed row iterators avoid materializing every result as an owned JSON map.
 
 use crate::proto::{milvus, schema};
 use crate::v2::error::{Error, Result};
@@ -713,10 +717,12 @@ impl QueryResponse {
         }
     }
 
+    /// Returns the results.
     pub fn results(&self) -> &QueryResults {
         &self.results
     }
 
+    /// Returns the session timestamp.
     pub fn session_timestamp(&self) -> u64 {
         self.session_timestamp
     }
@@ -796,16 +802,19 @@ pub(crate) struct QueryResponseBuilder {
 
 #[cfg(test)]
 impl QueryResponseBuilder {
+    /// Sets the results and returns the updated value.
     pub fn results(mut self, value: QueryResults) -> Self {
         self.value.results = value;
         self
     }
 
+    /// Sets the session timestamp and returns the updated value.
     pub fn session_timestamp(mut self, value: u64) -> Self {
         self.value.session_timestamp = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> QueryResponse {
         self.value
     }
@@ -841,26 +850,32 @@ impl SearchResponse {
         }
     }
 
+    /// Returns the results.
     pub fn results(&self) -> &SearchResults {
         &self.results
     }
 
+    /// Returns the session timestamp.
     pub fn session_timestamp(&self) -> u64 {
         self.session_timestamp
     }
 
+    /// Returns the cost.
     pub fn cost(&self) -> i64 {
         self.cost
     }
 
+    /// Returns the scanned remote bytes.
     pub fn scanned_remote_bytes(&self) -> i64 {
         self.scanned_remote_bytes
     }
 
+    /// Returns the scanned total bytes.
     pub fn scanned_total_bytes(&self) -> i64 {
         self.scanned_total_bytes
     }
 
+    /// Returns the cache hit ratio.
     pub fn cache_hit_ratio(&self) -> f32 {
         self.cache_hit_ratio
     }
@@ -1558,36 +1573,43 @@ pub(crate) struct SearchResponseBuilder {
 
 #[cfg(test)]
 impl SearchResponseBuilder {
+    /// Sets the results and returns the updated value.
     pub fn results(mut self, value: SearchResults) -> Self {
         self.value.results = value;
         self
     }
 
+    /// Sets the session timestamp and returns the updated value.
     pub fn session_timestamp(mut self, value: u64) -> Self {
         self.value.session_timestamp = value;
         self
     }
 
+    /// Sets the cost and returns the updated value.
     pub fn cost(mut self, value: i64) -> Self {
         self.value.cost = value;
         self
     }
 
+    /// Sets the scanned remote bytes and returns the updated value.
     pub fn scanned_remote_bytes(mut self, value: i64) -> Self {
         self.value.scanned_remote_bytes = value;
         self
     }
 
+    /// Sets the scanned total bytes and returns the updated value.
     pub fn scanned_total_bytes(mut self, value: i64) -> Self {
         self.value.scanned_total_bytes = value;
         self
     }
 
+    /// Sets the cache hit ratio and returns the updated value.
     pub fn cache_hit_ratio(mut self, value: f32) -> Self {
         self.value.cache_hit_ratio = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> SearchResponse {
         self.value
     }

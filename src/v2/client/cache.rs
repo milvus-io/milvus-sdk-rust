@@ -156,8 +156,23 @@ impl SchemaCache {
         };
         let initial = self.schemas.lock().get(&key).cloned();
         if initial.is_some() && !force_update {
+            trace_debug!(
+                target: "milvus_sdk::schema_cache",
+                endpoint = %key.0,
+                database = %key.1,
+                collection = %key.2,
+                "schema cache hit"
+            );
             return Ok(initial.expect("cached schema exists"));
         }
+        trace_debug!(
+            target: "milvus_sdk::schema_cache",
+            endpoint = %key.0,
+            database = %key.1,
+            collection = %key.2,
+            force_update,
+            "schema cache miss"
+        );
 
         let (state, is_loader) = {
             let mut loading = self.loading.lock();
@@ -170,6 +185,13 @@ impl SchemaCache {
             }
         };
         if !is_loader {
+            trace_debug!(
+                target: "milvus_sdk::schema_cache",
+                endpoint = %key.0,
+                database = %key.1,
+                collection = %key.2,
+                "joining in-flight schema load"
+            );
             return state.wait().await;
         }
         let mut load_guard = SchemaLoadGuard::new(self, load_key.clone(), Arc::clone(&state));
@@ -198,9 +220,24 @@ impl SchemaCache {
                     }
                 }
                 load_guard.finish(Ok(Arc::clone(&response)));
+                trace_debug!(
+                    target: "milvus_sdk::schema_cache",
+                    endpoint = %key.0,
+                    database = %key.1,
+                    collection = %key.2,
+                    cached = !state.invalidated.load(Ordering::Acquire),
+                    "schema load completed"
+                );
                 Ok(response)
             }
             Err(error) => {
+                trace_debug!(
+                    target: "milvus_sdk::schema_cache",
+                    endpoint = %key.0,
+                    database = %key.1,
+                    collection = %key.2,
+                    "schema load failed"
+                );
                 load_guard.finish(Err(error.clone()));
                 Err(error)
             }
@@ -224,6 +261,13 @@ impl SchemaCache {
 
     pub(super) fn invalidate(&self, endpoint: &str, database: &str, collection: &str) {
         let key = cache_key(endpoint, database, collection);
+        trace_debug!(
+            target: "milvus_sdk::schema_cache",
+            endpoint = %key.0,
+            database = %key.1,
+            collection = %key.2,
+            "invalidating schema cache entry"
+        );
         self.invalidate_load(&key);
         self.schemas.lock().pop(&key);
     }
@@ -395,10 +439,12 @@ impl CollectionTsCache {
         }
         let key = cache_key(endpoint, database, collection);
         let mut timestamps = self.timestamps.lock();
+        let _previous = timestamps.get(&key).copied();
         timestamps
             .entry(key)
             .and_modify(|current| *current = (*current).max(timestamp))
             .or_insert(timestamp);
+        trace_debug!(target: "milvus_sdk::timestamp_cache", endpoint = %normalize_endpoint(endpoint), database = %database_name(database), collection, previous = ?_previous, timestamp, entries = timestamps.len(), "DML timestamp cache updated");
     }
 
     pub(super) fn get(&self, endpoint: &str, database: &str, collection: &str) -> Option<u64> {
@@ -408,7 +454,9 @@ impl CollectionTsCache {
 
     pub(super) fn invalidate(&self, endpoint: &str, database: &str, collection: &str) {
         let key = cache_key(endpoint, database, collection);
-        self.timestamps.lock().remove(&key);
+        let mut timestamps = self.timestamps.lock();
+        let _removed = timestamps.remove(&key).is_some();
+        trace_debug!(target: "milvus_sdk::timestamp_cache", endpoint = %key.0, database = %key.1, collection = %key.2, removed = _removed, entries = timestamps.len(), "DML timestamp cache entry invalidated");
     }
 
     pub(super) fn copy(
@@ -433,15 +481,18 @@ impl CollectionTsCache {
         if timestamp != 0 {
             timestamps.insert(target_key, timestamp);
         }
+        trace_debug!(target: "milvus_sdk::timestamp_cache", endpoint = %normalize_endpoint(endpoint), database = %database_name(database), source_collection, target_collection, timestamp, entries = timestamps.len(), "DML timestamp cache entry copied");
     }
 
     pub(super) fn invalidate_database(&self, endpoint: &str, database: &str) {
         let endpoint = normalize_endpoint(endpoint);
         let database = database_name(database);
         let mut timestamps = self.timestamps.lock();
+        let _before = timestamps.len();
         timestamps.retain(|(entry_endpoint, entry_database, _), _| {
             entry_endpoint != &endpoint || entry_database != database
         });
+        trace_debug!(target: "milvus_sdk::timestamp_cache", endpoint = %endpoint, database, removed = _before.saturating_sub(timestamps.len()), entries = timestamps.len(), "DML timestamp database entries invalidated");
     }
 
     pub(super) fn move_ts(
@@ -469,6 +520,7 @@ impl CollectionTsCache {
         if timestamp != 0 {
             timestamps.insert(new_key, timestamp);
         }
+        trace_debug!(target: "milvus_sdk::timestamp_cache", endpoint = %normalize_endpoint(endpoint), old_database = %database_name(old_database), old_collection, new_database = %database_name(new_database), new_collection, timestamp, entries = timestamps.len(), "DML timestamp cache entry moved");
     }
 
     #[allow(dead_code)]

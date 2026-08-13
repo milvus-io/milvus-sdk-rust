@@ -50,6 +50,7 @@ impl InsertRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> InsertRequestBuilder {
         InsertRequestBuilder {
             value: Self::empty(),
@@ -66,22 +67,27 @@ impl InsertRequest {
         InsertRequestBuilder { value: self, rows }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the partition name.
     pub fn partition_name(&self) -> &str {
         &self.partition_name
     }
 
+    /// Returns the columns.
     pub fn columns(&self) -> &[FieldData] {
         &self.columns
     }
 
+    /// Returns the rows.
     pub fn rows(&self) -> &[EntityRow] {
         &self.rows
     }
@@ -121,21 +127,25 @@ pub struct InsertRequestBuilder {
 }
 
 impl InsertRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the partition name and returns the updated value.
     pub fn partition_name(mut self, value: impl Into<String>) -> Self {
         self.value.partition_name = value.into();
         self
     }
 
+    /// Sets the columns and returns the updated value.
     pub fn columns(mut self, value: Vec<FieldData>) -> Self {
         self.value.columns = value;
         self
@@ -157,6 +167,7 @@ impl InsertRequestBuilder {
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<InsertRequest> {
         required("collection_name", &self.value.collection_name)?;
         match (self.value.columns.is_empty(), self.rows.is_empty()) {
@@ -212,6 +223,7 @@ impl UpsertRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> UpsertRequestBuilder {
         UpsertRequestBuilder {
             value: Self::empty(),
@@ -223,10 +235,12 @@ impl UpsertRequest {
         UpsertRequestBuilder { value: self }
     }
 
+    /// Returns the insert.
     pub fn insert(&self) -> &InsertRequest {
         &self.insert
     }
 
+    /// Returns whether partial update.
     pub fn is_partial_update(&self) -> bool {
         self.partial_update
             || self
@@ -235,6 +249,7 @@ impl UpsertRequest {
                 .any(|operation| operation.op_type != FieldPartialUpdateOpType::Replace)
     }
 
+    /// Returns the field ops.
     pub fn field_ops(&self) -> &[FieldPartialUpdateOp] {
         &self.field_ops
     }
@@ -250,26 +265,31 @@ pub struct UpsertRequestBuilder {
 }
 
 impl UpsertRequestBuilder {
+    /// Sets the insert and returns the updated value.
     pub fn insert(mut self, value: InsertRequest) -> Self {
         self.value.insert = value;
         self
     }
 
+    /// Sets the partial update and returns the updated value.
     pub fn partial_update(mut self, value: bool) -> Self {
         self.value.partial_update = value;
         self
     }
 
+    /// Sets the field ops and returns the updated value.
     pub fn field_ops(mut self, value: Vec<FieldPartialUpdateOp>) -> Self {
         self.value.field_ops = value;
         self
     }
 
+    /// Adds one add field op to the existing values.
     pub fn add_field_op(mut self, value: FieldPartialUpdateOp) -> Self {
         self.value.field_ops.push(value);
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<UpsertRequest> {
         required("collection_name", &self.value.insert.collection_name)?;
         for operation in &self.value.field_ops {
@@ -308,6 +328,7 @@ pub struct DeleteRequest {
 }
 
 impl DeleteRequest {
+    /// Creates a builder for this request.
     pub fn builder() -> DeleteRequestBuilder {
         DeleteRequestBuilder {
             value: Self::empty(),
@@ -319,26 +340,32 @@ impl DeleteRequest {
         DeleteRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the partition name.
     pub fn partition_name(&self) -> &str {
         &self.partition_name
     }
 
+    /// Returns the filter.
     pub fn filter(&self) -> &str {
         &self.filter
     }
 
+    /// Returns the filter templates.
     pub fn filter_templates(&self) -> &HashMap<String, Value> {
         &self.filter_templates
     }
 
+    /// Returns the ids.
     pub fn ids(&self) -> &Ids {
         &self.ids
     }
@@ -407,36 +434,43 @@ pub struct DeleteRequestBuilder {
 }
 
 impl DeleteRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the partition name and returns the updated value.
     pub fn partition_name(mut self, value: impl Into<String>) -> Self {
         self.value.partition_name = value.into();
         self
     }
 
+    /// Sets the filter and returns the updated value.
     pub fn filter(mut self, value: impl Into<String>) -> Self {
         self.value.filter = value.into();
         self
     }
 
+    /// Sets the filter templates and returns the updated value.
     pub fn filter_templates(mut self, value: HashMap<String, Value>) -> Self {
         self.value.filter_templates = value;
         self
     }
 
+    /// Sets the ids and returns the updated value.
     pub fn ids(mut self, value: Ids) -> Self {
         self.value.ids = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<DeleteRequest> {
         required("collection_name", &self.value.collection_name)?;
         match (self.value.filter.is_empty(), self.value.ids.is_empty()) {

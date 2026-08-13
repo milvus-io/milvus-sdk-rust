@@ -5,12 +5,15 @@ and should receive only compatibility, correctness, or security fixes.
 
 ## Prerequisites
 
-- Rust toolchain with Cargo
+- Rust 1.86 or newer with Cargo
 - Git submodules initialized
 - Linux server-backed tests: Python 3 and access to a running Docker daemon
 - macOS compile and non-server tests: Homebrew; Docker is not required
 
 The protobuf compiler is provided through Cargo, so a system-installed `protoc` is not required.
+
+Rust `1.86` is the minimum supported Rust version (MSRV). Changes that require a newer compiler
+must update `rust-version`, user documentation, and the MSRV CI check together.
 
 Initialize the repository submodules:
 
@@ -115,6 +118,31 @@ standalone server with:
 The RBAC tutorial can exercise management calls on the default authorization-disabled server, but
 permission enforcement requires a separately configured authorization-enabled Milvus instance.
 
+## Optional diagnostics
+
+Enable the `tracing` feature in an application to observe retry attempts, schema-cache hits and
+invalidations, and progress from index, load, compaction, and flush polling:
+
+```toml
+[dependencies]
+milvus-sdk-rust = { version = "2.6", features = ["tracing"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+```
+
+Initialize a subscriber before creating the client:
+
+```rust
+use tracing_subscriber::EnvFilter;
+
+tracing_subscriber::fmt()
+    .with_env_filter(EnvFilter::from_default_env())
+    .init();
+```
+
+Run with `RUST_LOG=milvus_sdk=debug`, or select `milvus_sdk::retry`,
+`milvus_sdk::schema_cache`, or `milvus_sdk::polling`. The SDK never logs credentials, request
+payloads, filters, or vector data.
+
 ## Formatting and linting
 
 Check root-crate formatting before submitting changes:
@@ -137,6 +165,15 @@ Run Clippy when appropriate for the change:
 ```shell
 cargo clippy --all-targets --all-features
 ```
+
+Check the maintained V2 request/response conventions with:
+
+```shell
+python3 scripts/check_v2_api.py
+```
+
+This verifies `#[non_exhaustive]` DTOs, request-builder `build()` methods where builders are
+declared, and that generated protobuf types do not appear in public V2 signatures.
 
 ## Coverage
 

@@ -42,6 +42,7 @@ pub struct CreateIndexRequest {
 }
 
 impl CreateIndexRequest {
+    /// Creates a builder for this request.
     pub fn builder() -> CreateIndexRequestBuilder {
         CreateIndexRequestBuilder {
             value: Self::empty(),
@@ -53,22 +54,27 @@ impl CreateIndexRequest {
         CreateIndexRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the index params.
     pub fn index_params(&self) -> &[IndexParam] {
         &self.index_params
     }
 
+    /// Returns whether sync.
     pub fn is_sync(&self) -> bool {
         self.sync
     }
 
+    /// Returns the timeout ms.
     pub fn timeout_ms(&self) -> i64 {
         self.timeout_ms
     }
@@ -106,36 +112,43 @@ pub struct CreateIndexRequestBuilder {
 }
 
 impl CreateIndexRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the index params and returns the updated value.
     pub fn index_params(mut self, value: Vec<IndexParam>) -> Self {
         self.value.index_params = value;
         self
     }
 
+    /// Sets the index param and returns the updated value.
     pub fn index_param(mut self, value: IndexParam) -> Self {
         self.value.index_params.push(value);
         self
     }
 
+    /// Sets the sync and returns the updated value.
     pub fn sync(mut self, value: bool) -> Self {
         self.value.sync = value;
         self
     }
 
+    /// Sets the timeout ms and returns the updated value.
     pub fn timeout_ms(mut self, value: i64) -> Self {
         self.value.timeout_ms = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<CreateIndexRequest> {
         validate_index_collection(
             self.value.database_name.as_deref(),
@@ -180,6 +193,7 @@ impl DescribeIndexRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> DescribeIndexRequestBuilder {
         DescribeIndexRequestBuilder {
             value: Self::empty(),
@@ -191,22 +205,27 @@ impl DescribeIndexRequest {
         DescribeIndexRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the field name.
     pub fn field_name(&self) -> &str {
         &self.field_name
     }
 
+    /// Returns the index name.
     pub fn index_name(&self) -> &str {
         &self.index_name
     }
 
+    /// Returns the timestamp.
     pub fn timestamp(&self) -> u64 {
         self.timestamp
     }
@@ -233,31 +252,37 @@ pub struct DescribeIndexRequestBuilder {
 }
 
 impl DescribeIndexRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the field name and returns the updated value.
     pub fn field_name(mut self, value: impl Into<String>) -> Self {
         self.value.field_name = value.into();
         self
     }
 
+    /// Sets the index name and returns the updated value.
     pub fn index_name(mut self, value: impl Into<String>) -> Self {
         self.value.index_name = value.into();
         self
     }
 
+    /// Sets the timestamp and returns the updated value.
     pub fn timestamp(mut self, value: u64) -> Self {
         self.value.timestamp = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<DescribeIndexRequest> {
         validate_index_collection(
             self.value.database_name.as_deref(),
@@ -290,6 +315,7 @@ impl ListIndexesRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> ListIndexesRequestBuilder {
         ListIndexesRequestBuilder {
             value: Self::empty(),
@@ -301,18 +327,22 @@ impl ListIndexesRequest {
         ListIndexesRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the index name.
     pub fn index_name(&self) -> &str {
         &self.index_name
     }
 
+    /// Returns the timestamp.
     pub fn timestamp(&self) -> u64 {
         self.timestamp
     }
@@ -338,26 +368,31 @@ pub struct ListIndexesRequestBuilder {
 }
 
 impl ListIndexesRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the index name and returns the updated value.
     pub fn index_name(mut self, value: impl Into<String>) -> Self {
         self.value.index_name = value.into();
         self
     }
 
+    /// Sets the timestamp and returns the updated value.
     pub fn timestamp(mut self, value: u64) -> Self {
         self.value.timestamp = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<ListIndexesRequest> {
         validate_index_collection(
             self.value.database_name.as_deref(),
@@ -390,6 +425,7 @@ impl DropIndexRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> DropIndexRequestBuilder {
         DropIndexRequestBuilder {
             value: Self::empty(),
@@ -401,18 +437,22 @@ impl DropIndexRequest {
         DropIndexRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the field name.
     pub fn field_name(&self) -> &str {
         &self.field_name
     }
 
+    /// Returns the index name.
     pub fn index_name(&self) -> &str {
         &self.index_name
     }
@@ -445,26 +485,31 @@ pub struct DropIndexRequestBuilder {
 }
 
 impl DropIndexRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the field name and returns the updated value.
     pub fn field_name(mut self, value: impl Into<String>) -> Self {
         self.value.field_name = value.into();
         self
     }
 
+    /// Sets the index name and returns the updated value.
     pub fn index_name(mut self, value: impl Into<String>) -> Self {
         self.value.index_name = value.into();
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<DropIndexRequest> {
         validate_index_collection(
             self.value.database_name.as_deref(),
@@ -497,6 +542,7 @@ impl AlterIndexPropertiesRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> AlterIndexPropertiesRequestBuilder {
         AlterIndexPropertiesRequestBuilder {
             value: Self::empty(),
@@ -508,18 +554,22 @@ impl AlterIndexPropertiesRequest {
         AlterIndexPropertiesRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the index name.
     pub fn index_name(&self) -> &str {
         &self.index_name
     }
 
+    /// Returns the properties.
     pub fn properties(&self) -> &HashMap<String, String> {
         &self.properties
     }
@@ -546,31 +596,37 @@ pub struct AlterIndexPropertiesRequestBuilder {
 }
 
 impl AlterIndexPropertiesRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the index name and returns the updated value.
     pub fn index_name(mut self, value: impl Into<String>) -> Self {
         self.value.index_name = value.into();
         self
     }
 
+    /// Sets the properties and returns the updated value.
     pub fn properties(mut self, value: HashMap<String, String>) -> Self {
         self.value.properties = value;
         self
     }
 
+    /// Sets the property and returns the updated value.
     pub fn property(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.value.properties.insert(key.into(), value.into());
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<AlterIndexPropertiesRequest> {
         validate_index_collection(
             self.value.database_name.as_deref(),
@@ -610,6 +666,7 @@ impl DropIndexPropertiesRequest {
         }
     }
 
+    /// Creates a builder for this request.
     pub fn builder() -> DropIndexPropertiesRequestBuilder {
         DropIndexPropertiesRequestBuilder {
             value: Self::empty(),
@@ -621,18 +678,22 @@ impl DropIndexPropertiesRequest {
         DropIndexPropertiesRequestBuilder { value: self }
     }
 
+    /// Returns the database name.
     pub fn database_name(&self) -> &Option<String> {
         &self.database_name
     }
 
+    /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
     }
 
+    /// Returns the index name.
     pub fn index_name(&self) -> &str {
         &self.index_name
     }
 
+    /// Returns the property keys.
     pub fn property_keys(&self) -> &HashSet<String> {
         &self.property_keys
     }
@@ -659,31 +720,37 @@ pub struct DropIndexPropertiesRequestBuilder {
 }
 
 impl DropIndexPropertiesRequestBuilder {
+    /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = Some(value.into());
         self
     }
 
+    /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
+    /// Sets the index name and returns the updated value.
     pub fn index_name(mut self, value: impl Into<String>) -> Self {
         self.value.index_name = value.into();
         self
     }
 
+    /// Sets the property keys and returns the updated value.
     pub fn property_keys(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.property_keys = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the property key and returns the updated value.
     pub fn property_key(mut self, value: impl Into<String>) -> Self {
         self.value.property_keys.insert(value.into());
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<DropIndexPropertiesRequest> {
         validate_index_collection(
             self.value.database_name.as_deref(),

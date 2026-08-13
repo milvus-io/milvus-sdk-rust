@@ -53,6 +53,7 @@ impl DescribeIndexResponse {
         }
     }
 
+    /// Returns the indexes.
     pub fn indexes(&self) -> &[IndexDesc] {
         &self.indexes
     }
@@ -87,11 +88,13 @@ pub(crate) struct DescribeIndexResponseBuilder {
 
 #[cfg(test)]
 impl DescribeIndexResponseBuilder {
+    /// Sets the indexes and returns the updated value.
     pub fn indexes(mut self, value: Vec<IndexDesc>) -> Self {
         self.value.indexes = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> DescribeIndexResponse {
         self.value
     }
@@ -132,10 +135,12 @@ impl ListIndexesResponse {
         }
     }
 
+    /// Returns the index names.
     pub fn index_names(&self) -> &[String] {
         &self.index_names
     }
 
+    /// Returns the indexes.
     pub fn indexes(&self) -> &[IndexDesc] {
         &self.indexes
     }
@@ -173,16 +178,19 @@ pub(crate) struct ListIndexesResponseBuilder {
 
 #[cfg(test)]
 impl ListIndexesResponseBuilder {
+    /// Sets the index names and returns the updated value.
     pub fn index_names(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.index_names = values.into_iter().map(Into::into).collect();
         self
     }
 
+    /// Sets the indexes and returns the updated value.
     pub fn indexes(mut self, value: Vec<IndexDesc>) -> Self {
         self.value.indexes = value;
         self
     }
 
+    /// Validates the configured values and builds the request.
     pub fn build(self) -> ListIndexesResponse {
         self.value
     }

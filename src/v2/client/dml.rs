@@ -23,7 +23,12 @@ use crate::v2::error::Result;
 use crate::v2::{request, response};
 
 impl ClientV2 {
-    /// Insert data into a collection.You can input column-based data or row-based data.
+    /// Inserts entities into a collection using column-based or row-based input.
+    ///
+    /// The request is validated against the collection schema before it is sent. The client
+    /// resolves the effective database, fills the schema timestamp, and updates the session
+    /// timestamp cache after a successful insert. Because an insert is non-idempotent, ambiguous
+    /// transport failures are not replayed automatically.
     pub async fn insert(
         &self,
         request: request::dml::InsertRequest,
@@ -78,7 +83,12 @@ impl ClientV2 {
         unreachable!("insert schema-mismatch retry loop always returns")
     }
 
-    /// Upsert entities of a collection.You can input column-based data or row-based data.
+    /// Inserts new entities or updates existing entities in a collection.
+    ///
+    /// Use the request's `partial_update` option only when the server and collection support
+    /// partial updates. Input is schema-validated before dispatch, and successful mutations update
+    /// the session timestamp used by later consistency-sensitive reads. Upserts are non-idempotent
+    /// and are not replayed after an ambiguous transport failure.
     pub async fn upsert(
         &self,
         request: request::dml::UpsertRequest,
@@ -153,7 +163,11 @@ impl ClientV2 {
         unreachable!("upsert schema-mismatch retry loop always returns")
     }
 
-    /// Delete entities by filtering expression or ID array.
+    /// Deletes entities selected by a filter expression or primary-key IDs.
+    ///
+    /// The request must provide exactly one selection form. A successful delete updates the
+    /// collection's session timestamp so subsequent Session-consistency reads observe the change.
+    /// Delete is non-idempotent; the client does not replay an ambiguous mutation automatically.
     pub async fn delete(
         &self,
         request: request::dml::DeleteRequest,
