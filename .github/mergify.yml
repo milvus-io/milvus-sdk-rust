@@ -1,7 +1,7 @@
 pull_request_rules:
   - name: Add needs-dco label when DCO check failed
     conditions:
-      - base=main
+      - 'base~=^(main|[0-9]+[.][0-9]+)$'
       - -status-success=DCO
     actions:
       label:
@@ -14,7 +14,7 @@ pull_request_rules:
           @{{author}} Thanks for your contribution. Please submit with DCO, see the contributing guide https://github.com/milvus-io/milvus/blob/master/CONTRIBUTING.md#developer-certificate-of-origin-dco.
   - name: Add dco-passed label when DCO check passed
     conditions:
-      - base=main
+      - 'base~=^(main|[0-9]+[.][0-9]+)$'
       - status-success=DCO
     actions:
       label:
@@ -25,7 +25,7 @@ pull_request_rules:
 
   - name: Add ci-passed when eligible
     conditions:
-      - base=main
+      - 'base~=^(main|[0-9]+[.][0-9]+)$'
       - "check-success=UT on Ubuntu-22.04"
       - "check-success=UT on MacOS 15"
       - "check-success=UT on Windows"
@@ -36,7 +36,7 @@ pull_request_rules:
 
   - name: Remove ci-passed when checks are not green
     conditions:
-      - base=main
+      - 'base~=^(main|[0-9]+[.][0-9]+)$'
       - label=ci-passed
       - or:
         - "-check-success=UT on Ubuntu-22.04"
@@ -51,7 +51,7 @@ pull_request_rules:
 
   - name: Add ci-passed when no code changes
     conditions:
-      - base=main
+      - 'base~=^(main|[0-9]+[.][0-9]+)$'
       - "-files~=^(?!(.*\\.md$|.*\\.png$|\\.gitignore$|codecov\\.yml$|LICENSE$|OWNERS$|\\.github/mergify\\.yml$)).+"
     actions:
       label:
