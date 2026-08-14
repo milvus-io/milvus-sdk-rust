@@ -12,15 +12,15 @@ documentation = "https://docs.rs/milvus-sdk-rust"
 keywords = ["milvus", "vector-database", "database", "sdk"]
 categories = ["database"]
 include = [
-    "Cargo.toml",
-    "build.rs",
-    "src/**",
-    "tests/**",
-    "examples/**",
-    "milvus-proto/proto/**",
-    "README.md",
-    "CHANGELOG.md",
-    "LICENSE",
+    "/Cargo.toml",
+    "/build.rs",
+    "/src/**",
+    "/tests/**",
+    "/examples/**",
+    "/milvus-proto/proto/**",
+    "/README.md",
+    "/CHANGELOG.md",
+    "/LICENSE",
 ]
 
 [package.metadata.docs.rs]

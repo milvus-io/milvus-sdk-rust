@@ -1,6 +1,6 @@
 # Changelog
 
-## milvus-sdk-rust 2.6.0 (2026-08-12)
+## milvus-sdk-rust 2.6.0 (2026-08-14)
 
 ### Feature
 
@@ -58,6 +58,16 @@
   examples compile with the published crate paths and valid Milvus URLs
 - Replace Docker Compose test setup with a signal-safe standalone Milvus launcher, add macOS
   non-server validation, and verify published-crate tutorials after release
+- Add complete V2 Rustdoc coverage, clearer V1/V2 navigation, standalone development guidance, and
+  optional `tracing` diagnostics for retries, schema/session caches, iterator paging, and polling
+- Define and validate Rust 1.86 as the MSRV, complete the crates.io package metadata, and restrict
+  published package contents to the SDK sources, examples, tests, protobuf inputs, and release
+  documents
+- Add Windows CI, strict Rustdoc/package validation, Clippy correctness/suspicious enforcement, and
+  mechanical checks for V2 DTO extensibility, builders, accessors, setters, and protobuf boundaries
+- Harden the release workflow by validating tag ancestry and successful post-merge checks, running
+  tutorials against the tagged local SDK before publication, and validating the crates.io artifact
+  before creating the GitHub release
 
 
 ## milvus-sdk-rust 0.1.0 (2023-05-23)

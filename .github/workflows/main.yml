@@ -95,6 +95,8 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: macos-15
     timeout-minutes: 45
+    env:
+      CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS: fallback
     steps:
       - uses: actions/checkout@v3
         with:
@@ -117,6 +119,8 @@ jobs:
     name: UT on Windows
     runs-on: windows-latest
     timeout-minutes: 45
+    env:
+      CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS: fallback
     steps:
       - uses: actions/checkout@v4
         with:
