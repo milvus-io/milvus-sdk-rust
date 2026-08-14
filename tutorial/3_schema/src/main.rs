@@ -78,6 +78,13 @@ fn scalar_schema() -> CollectionSchema {
         .add_field(primary_key())
         .add_field(
             FieldSchema::new()
+                .name("required_vector")
+                .description("Required because every Milvus collection needs a vector field")
+                .data_type(DataType::FloatVector)
+                .dimension(2),
+        )
+        .add_field(
+            FieldSchema::new()
                 .name("bool_value")
                 .description("Boolean value; this field may be null")
                 .data_type(DataType::Bool)

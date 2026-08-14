@@ -7,7 +7,7 @@ V2 `DataType`.
 The program creates three collections so the examples remain within common Milvus vector-field
 limits:
 
-1. Scalar and container fields.
+1. Scalar and container fields, plus the vector field required by every Milvus collection.
 2. Dense and binary vector fields.
 3. Sparse and `Int8Vector` fields plus a struct-array field with scalar and vector sub-fields.
 
@@ -41,6 +41,8 @@ a top-level `FieldSchema` with `DataType::Struct` directly.
 ## Schema rules demonstrated
 
 - A collection has exactly one primary key, using `Int64` or `VarChar`.
+- Every collection has at least one vector field. The scalar/container example therefore includes
+  a small `required_vector` field even though its focus is scalar data.
 - Dense and binary vectors require `dimension(...)`; sparse vectors do not.
 - `VarChar` uses `max_length(...)`.
 - `Array` uses `element_type(...)` and `max_capacity(...)`.
@@ -94,5 +96,6 @@ create_collection completed
 Calling describe_collection: read back "RUST_V2_SCHEMA_..._SCALAR"
 describe_collection completed
   field=id                 type=Int64 primary_key
+  field=required_vector    type=FloatVector dim=2
   field=varchar_value      type=VarChar
 ```
