@@ -27,7 +27,7 @@ for example_path in examples/v2/*.rs; do
   example_name="$(basename "$example_path" .rs)"
 
   case "$example_name" in
-    utils | cdc | optimize)
+    utils | cdc | optimize | external_table)
       continue
       ;;
   esac

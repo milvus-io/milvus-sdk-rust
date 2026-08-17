@@ -159,6 +159,7 @@ pub struct FieldSchema {
     pub(crate) default_value: Option<DefaultValue>,
     pub(crate) type_params: HashMap<String, String>,
     pub(crate) index_params: HashMap<String, String>,
+    pub(crate) external_field: String,
 }
 
 impl FieldSchema {
@@ -177,6 +178,7 @@ impl FieldSchema {
             default_value: None,
             type_params: HashMap::new(),
             index_params: HashMap::new(),
+            external_field: String::new(),
         }
     }
 
@@ -388,6 +390,23 @@ impl FieldSchema {
         &self.index_params
     }
 
+    /// Sets the external field mapping name and returns the updated value.
+    pub fn external_field(mut self, value: impl Into<String>) -> Self {
+        self.external_field = value.into();
+        self
+    }
+
+    /// Sets the external field mapping name and returns this value for further mutation.
+    pub fn set_external_field(&mut self, value: impl Into<String>) -> &mut Self {
+        self.external_field = value.into();
+        self
+    }
+
+    /// Returns the external field mapping name.
+    pub fn get_external_field(&self) -> &str {
+        &self.external_field
+    }
+
     /// Sets the dimension and returns the updated value.
     pub fn dimension(mut self, dimension: u32) -> Self {
         if dimension > 0 {
@@ -571,6 +590,7 @@ impl FieldSchema {
             default_value: self.default_value.map(DefaultValue::into_proto),
             type_params: pairs(self.type_params),
             index_params: pairs(self.index_params),
+            external_field: self.external_field,
             ..Default::default()
         }
     }
@@ -708,6 +728,7 @@ impl FieldSchema {
                 .into_iter()
                 .map(|v| (v.key, v.value))
                 .collect(),
+            external_field: value.external_field,
         };
         if field.name.is_empty() {
             return Err(Error::MalformedResponse(
@@ -1047,6 +1068,8 @@ pub struct CollectionSchema {
     pub(crate) struct_fields: Vec<StructFieldSchema>,
     pub(crate) functions: Vec<Function>,
     pub(crate) properties: HashMap<String, String>,
+    pub(crate) external_source: String,
+    pub(crate) external_spec: Option<serde_json::Value>,
 }
 
 impl CollectionSchema {
@@ -1059,6 +1082,8 @@ impl CollectionSchema {
             struct_fields: Vec::new(),
             functions: Vec::new(),
             properties: HashMap::new(),
+            external_source: String::new(),
+            external_spec: None,
         }
     }
 
@@ -1188,6 +1213,40 @@ impl CollectionSchema {
         self
     }
 
+    /// Sets the external collection source path and returns the updated value.
+    pub fn external_source(mut self, value: impl Into<String>) -> Self {
+        self.external_source = value.into();
+        self
+    }
+
+    /// Sets the external collection source path and returns this value for further mutation.
+    pub fn set_external_source(&mut self, value: impl Into<String>) -> &mut Self {
+        self.external_source = value.into();
+        self
+    }
+
+    /// Returns the external collection source path.
+    pub fn get_external_source(&self) -> &str {
+        &self.external_source
+    }
+
+    /// Sets the external collection spec JSON and returns the updated value.
+    pub fn external_spec(mut self, value: serde_json::Value) -> Self {
+        self.external_spec = Some(value);
+        self
+    }
+
+    /// Sets the external collection spec JSON and returns this value for further mutation.
+    pub fn set_external_spec(&mut self, value: serde_json::Value) -> &mut Self {
+        self.external_spec = Some(value);
+        self
+    }
+
+    /// Returns the external collection spec JSON.
+    pub fn get_external_spec(&self) -> Option<&serde_json::Value> {
+        self.external_spec.as_ref()
+    }
+
     pub(crate) fn to_proto(&self) -> schema::CollectionSchema {
         schema::CollectionSchema {
             description: self.description.clone(),
@@ -1211,6 +1270,12 @@ impl CollectionSchema {
                 .into_iter()
                 .map(Function::into_proto)
                 .collect(),
+            external_source: self.external_source.clone(),
+            external_spec: self
+                .external_spec
+                .as_ref()
+                .map(serde_json::Value::to_string)
+                .unwrap_or_default(),
             ..Default::default()
         }
     }
@@ -1237,6 +1302,15 @@ impl CollectionSchema {
     }
 
     pub(crate) fn from_proto(value: schema::CollectionSchema) -> Result<Self> {
+        let external_spec = if value.external_spec.is_empty() {
+            None
+        } else {
+            Some(serde_json::from_str(&value.external_spec).map_err(|error| {
+                Error::MalformedResponse(format!(
+                    "collection schema external_spec is not valid JSON: {error}"
+                ))
+            })?)
+        };
         Ok(Self {
             description: value.description,
             enable_dynamic_field: value.enable_dynamic_field,
@@ -1260,6 +1334,8 @@ impl CollectionSchema {
                 .into_iter()
                 .map(|v| (v.key, v.value))
                 .collect(),
+            external_source: value.external_source,
+            external_spec,
         })
     }
 }
@@ -1632,6 +1708,16 @@ impl CollectionDesc {
     /// Returns the configured properties.
     pub fn get_properties(&self) -> &HashMap<String, String> {
         &self.properties
+    }
+
+    /// Returns the external collection source path.
+    pub fn get_external_source(&self) -> &str {
+        self.schema.get_external_source()
+    }
+
+    /// Returns the external collection spec JSON.
+    pub fn get_external_spec(&self) -> Option<&serde_json::Value> {
+        self.schema.get_external_spec()
     }
 
     /// Adds one add field name to the existing values.
@@ -3065,6 +3151,40 @@ mod constructor_value_tests {
             value.get_properties().get("key").map(String::as_str),
             Some("value")
         );
+    }
+
+    #[test]
+    fn collection_schema_external_fields_round_trip() {
+        let value = CollectionSchema::new()
+            .external_source("s3://bucket/path")
+            .external_spec(serde_json::json!({"format": "parquet"}))
+            .add_field(
+                FieldSchema::new()
+                    .name("id")
+                    .data_type(DataType::Int64)
+                    .primary_key(true)
+                    .external_field("id"),
+            );
+
+        assert_eq!(value.get_external_source(), "s3://bucket/path");
+        assert_eq!(
+            value.get_external_spec(),
+            Some(&serde_json::json!({"format": "parquet"}))
+        );
+        assert_eq!(value.get_fields()[0].get_external_field(), "id");
+
+        let proto = value.to_proto();
+        assert_eq!(proto.external_source, "s3://bucket/path");
+        assert_eq!(proto.external_spec, r#"{"format":"parquet"}"#);
+        assert_eq!(proto.fields[0].external_field, "id");
+        assert_eq!(CollectionSchema::from_proto(proto).unwrap(), value);
+    }
+
+    #[test]
+    fn collection_schema_external_spec_defaults_to_none() {
+        let value = CollectionSchema::new().external_source("s3://bucket/path");
+        assert!(value.get_external_spec().is_none());
+        assert_eq!(value.to_proto().external_spec, "");
     }
 }
 

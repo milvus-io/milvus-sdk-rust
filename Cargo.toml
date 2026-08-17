@@ -142,6 +142,10 @@ name = "v2_db"
 path = "examples/v2/db.rs"
 
 [[example]]
+name = "v2_external_table"
+path = "examples/v2/external_table.rs"
+
+[[example]]
 name = "v2_default_value"
 path = "examples/v2/default_value.rs"
 
