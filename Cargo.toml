@@ -230,6 +230,10 @@ name = "v2_simple"
 path = "examples/v2/simple.rs"
 
 [[example]]
+name = "v2_snapshot"
+path = "examples/v2/snapshot.rs"
+
+[[example]]
 name = "v2_struct_field"
 path = "examples/v2/struct_field.rs"
 

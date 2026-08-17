@@ -111,6 +111,11 @@ impl DefaultValue {
                 Data::StringData(v) => Self::String(v),
                 Data::BytesData(v) => Self::Bytes(v),
                 Data::TimestamptzData(v) => Self::TimestampTz(v),
+                Data::DateData(_) | Data::TimeData(_) => {
+                    return Err(Error::conversion(
+                        "unsupported default value data type Date/Time",
+                    ))
+                }
             },
         )
     }
@@ -943,6 +948,7 @@ impl StructFieldSchema {
                 })
                 .collect(),
             type_params: Vec::new(),
+            nullable: false,
         }
     }
 

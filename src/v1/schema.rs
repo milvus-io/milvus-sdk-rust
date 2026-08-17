@@ -614,6 +614,7 @@ impl From<FieldSchema> for schema::FieldSchema {
             is_clustering_key: false,
             is_function_output: false,
             nullable: fld.nullable,
+            ..Default::default()
         }
     }
 }
@@ -710,6 +711,7 @@ impl From<CollectionSchema> for schema::CollectionSchema {
             struct_array_fields: Vec::new(),
             version: 0,
             enable_namespace: false,
+            ..Default::default()
         }
     }
 }

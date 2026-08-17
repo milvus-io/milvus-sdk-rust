@@ -1467,6 +1467,7 @@ impl SearchIterator {
                 function_score: None,
                 namespace: self.options.namespace.clone(),
                 highlighter: None,
+                ..Default::default()
             })
             .await?
             .into_inner();

@@ -883,6 +883,7 @@ impl SearchRequest {
             namespace: None,
             highlighter: self.highlighter.map(Highlighter::into_proto),
             search_input: Some(search_input),
+            ..Default::default()
         })
     }
 }
@@ -1484,6 +1485,7 @@ impl HybridSearchRequest {
             use_default_consistency: self.consistency_level.is_none(),
             function_score: None,
             namespace: None,
+            ..Default::default()
         })
     }
 }

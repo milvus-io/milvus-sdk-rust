@@ -384,6 +384,18 @@ fn scalar_data_get_row(sd: &ScalarData, idx: usize) -> Option<ScalarData> {
         ScalarData::GeometryWktData(v) => ScalarData::GeometryWktData(schema::GeometryWktArray {
             data: vec![v.data.get(idx)?.clone()],
         }),
+        ScalarData::MolData(v) => ScalarData::MolData(schema::MolArray {
+            data: vec![v.data.get(idx)?.clone()],
+        }),
+        ScalarData::MolSmilesData(v) => ScalarData::MolSmilesData(schema::MolSmilesArray {
+            data: vec![v.data.get(idx)?.clone()],
+        }),
+        ScalarData::DateData(v) => ScalarData::DateData(schema::DateArray {
+            data: vec![*v.data.get(idx)?],
+        }),
+        ScalarData::TimeData(v) => ScalarData::TimeData(schema::TimeArray {
+            data: vec![*v.data.get(idx)?],
+        }),
     })
 }
 

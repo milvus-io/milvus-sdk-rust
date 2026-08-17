@@ -1258,6 +1258,10 @@ fn proto_field_row_count(value: &schema::FieldData) -> Option<usize> {
             Scalar::GeometryData(values) => values.data.len(),
             Scalar::TimestamptzData(values) => values.data.len(),
             Scalar::GeometryWktData(values) => values.data.len(),
+            Scalar::MolData(values) => values.data.len(),
+            Scalar::MolSmilesData(values) => values.data.len(),
+            Scalar::DateData(values) => values.data.len(),
+            Scalar::TimeData(values) => values.data.len(),
         }),
         Field::Vectors(vectors) => {
             let dimension = usize::try_from(vectors.dim).ok()?;
@@ -1305,6 +1309,10 @@ fn truncate_proto_payload(value: &mut schema::FieldData, count: usize) -> Option
             Scalar::GeometryData(values) => values.data.truncate(count),
             Scalar::TimestamptzData(values) => values.data.truncate(count),
             Scalar::GeometryWktData(values) => values.data.truncate(count),
+            Scalar::MolData(values) => values.data.truncate(count),
+            Scalar::MolSmilesData(values) => values.data.truncate(count),
+            Scalar::DateData(values) => values.data.truncate(count),
+            Scalar::TimeData(values) => values.data.truncate(count),
         },
         Field::Vectors(vectors) => {
             let dimension = usize::try_from(vectors.dim).ok()?;

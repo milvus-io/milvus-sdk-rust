@@ -25,6 +25,7 @@ mod index;
 mod partition;
 mod rbac;
 mod resource_group;
+mod snapshot;
 mod utility;
 
 pub use cdc::*;
@@ -36,4 +37,5 @@ pub use index::*;
 pub use partition::*;
 pub use rbac::*;
 pub use resource_group::*;
+pub use snapshot::*;
 pub use utility::*;

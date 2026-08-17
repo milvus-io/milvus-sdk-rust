@@ -272,6 +272,9 @@ impl ValueVec {
             DataType::Geometry => Self::Geometry(Vec::new()),
             DataType::Text => Self::String(Vec::new()),
             DataType::Timestamptz => Self::Timestamptz(Vec::new()),
+            DataType::Mol => Self::Binary(Vec::new()),
+            DataType::Date => Self::Int(Vec::new()),
+            DataType::Time => Self::Long(Vec::new()),
             DataType::SparseFloatVector => Self::SparseFloat(proto::schema::SparseFloatArray {
                 contents: Vec::new(),
                 dim: 0,
@@ -385,6 +388,10 @@ fn struct_array_len(v: &proto::schema::StructArrayField) -> usize {
                 Some(ScalarData::GeometryData(v)) => v.data.len(),
                 Some(ScalarData::TimestamptzData(v)) => v.data.len(),
                 Some(ScalarData::GeometryWktData(v)) => v.data.len(),
+                Some(ScalarData::MolData(v)) => v.data.len(),
+                Some(ScalarData::MolSmilesData(v)) => v.data.len(),
+                Some(ScalarData::DateData(v)) => v.data.len(),
+                Some(ScalarData::TimeData(v)) => v.data.len(),
                 None => 0,
             },
             Some(Field::Vectors(vectors)) => match vectors.data.as_ref() {
@@ -431,6 +438,12 @@ impl From<Field> for ValueVec {
                     ScalarData::GeometryData(v) => Self::Geometry(v.data),
                     ScalarData::TimestamptzData(v) => Self::Timestamptz(v.data),
                     ScalarData::GeometryWktData(v) => Self::GeometryWkt(v.data),
+                    // Mol data is one binary blob per row (MolArray), which does not fit
+                    // ValueVec::Binary's flat byte buffer, so V1 intentionally drops it.
+                    ScalarData::MolData(_) => Self::None,
+                    ScalarData::MolSmilesData(v) => Self::String(v.data),
+                    ScalarData::DateData(v) => Self::Int(v.data),
+                    ScalarData::TimeData(v) => Self::Long(v.data),
                 },
                 None => Self::None,
             },
