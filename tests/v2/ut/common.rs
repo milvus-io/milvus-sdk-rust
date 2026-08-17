@@ -1059,6 +1059,53 @@ impl MilvusService for MockMilvus {
             success_status()
         }
     );
+    response_method!(
+        refresh_external_collection,
+        pb::RefreshExternalCollectionRequest,
+        pb::RefreshExternalCollectionResponse,
+        pb::RefreshExternalCollectionResponse {
+            status: Some(success_status()),
+            job_id: 7,
+        }
+    );
+    response_method!(
+        get_refresh_external_collection_progress,
+        pb::GetRefreshExternalCollectionProgressRequest,
+        pb::GetRefreshExternalCollectionProgressResponse,
+        pb::GetRefreshExternalCollectionProgressResponse {
+            status: Some(success_status()),
+            job_info: Some(pb::RefreshExternalCollectionJobInfo {
+                job_id: 7,
+                collection_name: "books".into(),
+                state: pb::RefreshExternalCollectionState::RefreshCompleted as i32,
+                progress: 100,
+                reason: String::new(),
+                external_source: "s3://bucket/path".into(),
+                start_time: 100,
+                end_time: 200,
+                external_spec: String::new(),
+            }),
+        }
+    );
+    response_method!(
+        list_refresh_external_collection_jobs,
+        pb::ListRefreshExternalCollectionJobsRequest,
+        pb::ListRefreshExternalCollectionJobsResponse,
+        pb::ListRefreshExternalCollectionJobsResponse {
+            status: Some(success_status()),
+            jobs: vec![pb::RefreshExternalCollectionJobInfo {
+                job_id: 7,
+                collection_name: "books".into(),
+                state: pb::RefreshExternalCollectionState::RefreshInProgress as i32,
+                progress: 50,
+                reason: String::new(),
+                external_source: "s3://bucket/path".into(),
+                start_time: 100,
+                end_time: 0,
+                external_spec: String::new(),
+            }],
+        }
+    );
 
     response_method_with!(
         has_collection,

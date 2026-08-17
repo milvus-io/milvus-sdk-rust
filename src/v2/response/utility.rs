@@ -19,7 +19,8 @@
 use crate::proto::milvus;
 use crate::v2::error::{Error, Result};
 pub use crate::v2::types::{
-    AnalyzerResult, AnalyzerToken, CompactionMerge, PersistentSegmentInfo, QuerySegmentInfo,
+    AnalyzerResult, AnalyzerToken, CompactionMerge, FileResourceInfo, PersistentSegmentInfo,
+    QuerySegmentInfo, RefreshExternalCollectionJobInfo, RefreshExternalCollectionStateCode,
 };
 use crate::v2::types::{CompactionStateCode, SegmentLevel, SegmentState};
 use std::collections::HashMap;
@@ -1277,6 +1278,287 @@ impl RunAnalyzerResponseBuilder {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// RefreshExternalCollectionResponse
+///////////////////////////////////////////////////////////////////////////////
+/// Response returned by the ClientV2 refresh_external_collection operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct RefreshExternalCollectionResponse {
+    pub(crate) job_id: i64,
+}
+
+impl RefreshExternalCollectionResponse {
+    #[cfg(test)]
+    fn empty() -> Self {
+        Self { job_id: 0 }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn builder() -> RefreshExternalCollectionResponseBuilder {
+        RefreshExternalCollectionResponseBuilder {
+            value: Self::empty(),
+        }
+    }
+
+    /// Returns the refresh job id.
+    pub fn job_id(&self) -> i64 {
+        self.job_id
+    }
+
+    pub(crate) fn from_proto(v: milvus::RefreshExternalCollectionResponse) -> Self {
+        Self { job_id: v.job_id }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// RefreshExternalCollectionResponseBuilder
+///////////////////////////////////////////////////////////////////////////////
+/// Builder for RefreshExternalCollectionResponse.
+#[derive(Debug, Clone)]
+///////////////////////////////////////////////////////////////////////////////
+// Test Cases
+///////////////////////////////////////////////////////////////////////////////
+#[cfg(test)]
+pub(crate) struct RefreshExternalCollectionResponseBuilder {
+    value: RefreshExternalCollectionResponse,
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Test Cases
+///////////////////////////////////////////////////////////////////////////////
+
+#[cfg(test)]
+impl RefreshExternalCollectionResponseBuilder {
+    /// Sets the job id and returns the updated value.
+    pub fn job_id(mut self, value: i64) -> Self {
+        self.value.job_id = value;
+        self
+    }
+
+    /// Validates the configured values and builds the response.
+    pub fn build(self) -> RefreshExternalCollectionResponse {
+        self.value
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// GetRefreshExternalCollectionProgressResponse
+///////////////////////////////////////////////////////////////////////////////
+/// Response returned by the ClientV2 get_refresh_external_collection_progress operation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct GetRefreshExternalCollectionProgressResponse {
+    pub(crate) job_info: RefreshExternalCollectionJobInfo,
+}
+
+impl GetRefreshExternalCollectionProgressResponse {
+    #[cfg(test)]
+    fn empty() -> Self {
+        Self {
+            job_info: RefreshExternalCollectionJobInfo::new(),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn builder() -> GetRefreshExternalCollectionProgressResponseBuilder {
+        GetRefreshExternalCollectionProgressResponseBuilder {
+            value: Self::empty(),
+        }
+    }
+
+    /// Returns the refresh job info.
+    pub fn job_info(&self) -> &RefreshExternalCollectionJobInfo {
+        &self.job_info
+    }
+
+    pub(crate) fn from_proto(
+        v: milvus::GetRefreshExternalCollectionProgressResponse,
+    ) -> Result<Self> {
+        let job_info = v.job_info.ok_or_else(|| {
+            Error::MalformedResponse(
+                "get refresh external collection progress response has no job info".into(),
+            )
+        })?;
+        Ok(Self {
+            job_info: RefreshExternalCollectionJobInfo::from_proto(job_info),
+        })
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// GetRefreshExternalCollectionProgressResponseBuilder
+///////////////////////////////////////////////////////////////////////////////
+/// Builder for GetRefreshExternalCollectionProgressResponse.
+#[derive(Debug, Clone)]
+///////////////////////////////////////////////////////////////////////////////
+// Test Cases
+///////////////////////////////////////////////////////////////////////////////
+#[cfg(test)]
+pub(crate) struct GetRefreshExternalCollectionProgressResponseBuilder {
+    value: GetRefreshExternalCollectionProgressResponse,
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Test Cases
+///////////////////////////////////////////////////////////////////////////////
+
+#[cfg(test)]
+impl GetRefreshExternalCollectionProgressResponseBuilder {
+    /// Sets the job info and returns the updated value.
+    pub fn job_info(mut self, value: RefreshExternalCollectionJobInfo) -> Self {
+        self.value.job_info = value;
+        self
+    }
+
+    /// Validates the configured values and builds the response.
+    pub fn build(self) -> GetRefreshExternalCollectionProgressResponse {
+        self.value
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// ListRefreshExternalCollectionJobsResponse
+///////////////////////////////////////////////////////////////////////////////
+/// Response returned by the ClientV2 list_refresh_external_collection_jobs operation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ListRefreshExternalCollectionJobsResponse {
+    pub(crate) jobs: Vec<RefreshExternalCollectionJobInfo>,
+}
+
+impl ListRefreshExternalCollectionJobsResponse {
+    #[cfg(test)]
+    fn empty() -> Self {
+        Self { jobs: Vec::new() }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn builder() -> ListRefreshExternalCollectionJobsResponseBuilder {
+        ListRefreshExternalCollectionJobsResponseBuilder {
+            value: Self::empty(),
+        }
+    }
+
+    /// Returns the refresh jobs.
+    pub fn jobs(&self) -> &[RefreshExternalCollectionJobInfo] {
+        &self.jobs
+    }
+
+    pub(crate) fn from_proto(v: milvus::ListRefreshExternalCollectionJobsResponse) -> Self {
+        Self {
+            jobs: v
+                .jobs
+                .into_iter()
+                .map(RefreshExternalCollectionJobInfo::from_proto)
+                .collect(),
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// ListRefreshExternalCollectionJobsResponseBuilder
+///////////////////////////////////////////////////////////////////////////////
+/// Builder for ListRefreshExternalCollectionJobsResponse.
+#[derive(Debug, Clone)]
+///////////////////////////////////////////////////////////////////////////////
+// Test Cases
+///////////////////////////////////////////////////////////////////////////////
+#[cfg(test)]
+pub(crate) struct ListRefreshExternalCollectionJobsResponseBuilder {
+    value: ListRefreshExternalCollectionJobsResponse,
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Test Cases
+///////////////////////////////////////////////////////////////////////////////
+
+#[cfg(test)]
+impl ListRefreshExternalCollectionJobsResponseBuilder {
+    /// Sets the jobs and returns the updated value.
+    pub fn jobs(mut self, value: Vec<RefreshExternalCollectionJobInfo>) -> Self {
+        self.value.jobs = value;
+        self
+    }
+
+    /// Validates the configured values and builds the response.
+    pub fn build(self) -> ListRefreshExternalCollectionJobsResponse {
+        self.value
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// ListFileResourcesResponse
+///////////////////////////////////////////////////////////////////////////////
+/// Response returned by the ClientV2 list_file_resources operation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ListFileResourcesResponse {
+    pub(crate) resources: Vec<FileResourceInfo>,
+}
+
+impl ListFileResourcesResponse {
+    #[cfg(test)]
+    fn empty() -> Self {
+        Self {
+            resources: Vec::new(),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn builder() -> ListFileResourcesResponseBuilder {
+        ListFileResourcesResponseBuilder {
+            value: Self::empty(),
+        }
+    }
+
+    /// Returns the file resources.
+    pub fn resources(&self) -> &[FileResourceInfo] {
+        &self.resources
+    }
+
+    pub(crate) fn from_proto(v: milvus::ListFileResourcesResponse) -> Self {
+        Self {
+            resources: v
+                .resources
+                .into_iter()
+                .map(FileResourceInfo::from_proto)
+                .collect(),
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// ListFileResourcesResponseBuilder
+///////////////////////////////////////////////////////////////////////////////
+/// Builder for ListFileResourcesResponse.
+#[derive(Debug, Clone)]
+///////////////////////////////////////////////////////////////////////////////
+// Test Cases
+///////////////////////////////////////////////////////////////////////////////
+#[cfg(test)]
+pub(crate) struct ListFileResourcesResponseBuilder {
+    value: ListFileResourcesResponse,
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Test Cases
+///////////////////////////////////////////////////////////////////////////////
+
+#[cfg(test)]
+impl ListFileResourcesResponseBuilder {
+    /// Sets the resources and returns the updated value.
+    pub fn resources(mut self, value: Vec<FileResourceInfo>) -> Self {
+        self.value.resources = value;
+        self
+    }
+
+    /// Validates the configured values and builds the response.
+    pub fn build(self) -> ListFileResourcesResponse {
+        self.value
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // Test Cases
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -1644,5 +1926,171 @@ mod builder_value_tests {
             .build();
 
         assert_eq!(value.results().to_owned(), results);
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Test Cases
+///////////////////////////////////////////////////////////////////////////////
+
+#[cfg(test)]
+mod external_collection_response_tests {
+    use super::*;
+    use crate::proto::milvus;
+
+    #[test]
+    fn refresh_external_collection_response_decodes_job_id() {
+        let response = RefreshExternalCollectionResponse::from_proto(
+            milvus::RefreshExternalCollectionResponse {
+                status: None,
+                job_id: 7,
+            },
+        );
+        assert_eq!(response.job_id(), 7);
+    }
+
+    #[test]
+    fn get_refresh_external_collection_progress_rejects_missing_job_info() {
+        let error = GetRefreshExternalCollectionProgressResponse::from_proto(
+            milvus::GetRefreshExternalCollectionProgressResponse {
+                status: None,
+                job_info: None,
+            },
+        )
+        .unwrap_err();
+        assert!(matches!(error, Error::MalformedResponse(_)));
+    }
+
+    #[test]
+    fn get_refresh_external_collection_progress_decodes_job_info() {
+        let response = GetRefreshExternalCollectionProgressResponse::from_proto(
+            milvus::GetRefreshExternalCollectionProgressResponse {
+                status: None,
+                job_info: Some(milvus::RefreshExternalCollectionJobInfo {
+                    job_id: 7,
+                    collection_name: "books".into(),
+                    state: milvus::RefreshExternalCollectionState::RefreshCompleted as i32,
+                    progress: 100,
+                    reason: String::new(),
+                    external_source: "s3://bucket/path".into(),
+                    start_time: 100,
+                    end_time: 200,
+                    external_spec: String::new(),
+                }),
+            },
+        )
+        .expect("valid job info");
+        let job_info = response.job_info();
+        assert_eq!(job_info.get_job_id(), 7);
+        assert_eq!(
+            job_info.get_state(),
+            RefreshExternalCollectionStateCode::Completed
+        );
+        assert_eq!(job_info.get_progress(), 100);
+        assert_eq!(job_info.get_external_source(), "s3://bucket/path");
+    }
+
+    #[test]
+    fn list_refresh_external_collection_jobs_response_decodes_jobs() {
+        let response = ListRefreshExternalCollectionJobsResponse::from_proto(
+            milvus::ListRefreshExternalCollectionJobsResponse {
+                status: None,
+                jobs: vec![milvus::RefreshExternalCollectionJobInfo {
+                    job_id: 7,
+                    collection_name: "books".into(),
+                    state: milvus::RefreshExternalCollectionState::RefreshInProgress as i32,
+                    progress: 50,
+                    reason: String::new(),
+                    external_source: "s3://bucket/path".into(),
+                    start_time: 100,
+                    end_time: 0,
+                    external_spec: String::new(),
+                }],
+            },
+        );
+        assert_eq!(response.jobs().len(), 1);
+        assert_eq!(
+            response.jobs()[0].get_state(),
+            RefreshExternalCollectionStateCode::InProgress
+        );
+    }
+
+    #[test]
+    fn list_file_resources_response_decodes_resources() {
+        let response = ListFileResourcesResponse::from_proto(milvus::ListFileResourcesResponse {
+            status: None,
+            resources: vec![milvus::FileResourceInfo {
+                id: 30,
+                name: "data-files".into(),
+                path: "s3://bucket/path".into(),
+            }],
+        });
+        assert_eq!(response.resources().len(), 1);
+        assert_eq!(response.resources()[0].get_name(), "data-files");
+        assert_eq!(response.resources()[0].get_path(), "s3://bucket/path");
+    }
+
+    #[test]
+    fn refresh_external_collection_response_default_values() {
+        let value = RefreshExternalCollectionResponse::builder().build();
+        assert_eq!(value.job_id(), 0);
+    }
+
+    #[test]
+    fn refresh_external_collection_response_populated_values() {
+        let value = RefreshExternalCollectionResponse::builder()
+            .job_id(7)
+            .build();
+        assert_eq!(value.job_id(), 7);
+    }
+
+    #[test]
+    fn get_refresh_external_collection_progress_response_default_values() {
+        let value = GetRefreshExternalCollectionProgressResponse::builder().build();
+        assert_eq!(
+            value.job_info().get_state(),
+            RefreshExternalCollectionStateCode::Unknown
+        );
+    }
+
+    #[test]
+    fn get_refresh_external_collection_progress_response_populated_values() {
+        let job_info = RefreshExternalCollectionJobInfo::new().job_id(7);
+        let value = GetRefreshExternalCollectionProgressResponse::builder()
+            .job_info(job_info.clone())
+            .build();
+        assert_eq!(value.job_info(), &job_info);
+    }
+
+    #[test]
+    fn list_refresh_external_collection_jobs_response_default_values() {
+        let value = ListRefreshExternalCollectionJobsResponse::builder().build();
+        assert!(value.jobs().is_empty());
+    }
+
+    #[test]
+    fn list_refresh_external_collection_jobs_response_populated_values() {
+        let job_info = RefreshExternalCollectionJobInfo::new().job_id(7);
+        let value = ListRefreshExternalCollectionJobsResponse::builder()
+            .jobs(vec![job_info.clone()])
+            .build();
+        assert_eq!(value.jobs(), &[job_info]);
+    }
+
+    #[test]
+    fn list_file_resources_response_default_values() {
+        let value = ListFileResourcesResponse::builder().build();
+        assert!(value.resources().is_empty());
+    }
+
+    #[test]
+    fn list_file_resources_response_populated_values() {
+        let resource = FileResourceInfo::new()
+            .name("data-files")
+            .path("s3://bucket/path");
+        let value = ListFileResourcesResponse::builder()
+            .resources(vec![resource.clone()])
+            .build();
+        assert_eq!(value.resources(), &[resource]);
     }
 }

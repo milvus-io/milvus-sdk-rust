@@ -1103,6 +1103,444 @@ fn validate_collection_target(_database_name: Option<&str>, collection_name: &st
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// RefreshExternalCollectionRequest
+///////////////////////////////////////////////////////////////////////////////
+/// Parameters for the ClientV2 refresh_external_collection operation.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct RefreshExternalCollectionRequest {
+    pub(crate) database_name: Option<String>,
+    pub(crate) collection_name: String,
+    pub(crate) external_source: String,
+    pub(crate) external_spec: Option<serde_json::Value>,
+}
+
+impl RefreshExternalCollectionRequest {
+    fn empty() -> Self {
+        Self {
+            database_name: Default::default(),
+            collection_name: Default::default(),
+            external_source: Default::default(),
+            external_spec: Default::default(),
+        }
+    }
+
+    /// Creates a builder for this request.
+    pub fn builder() -> RefreshExternalCollectionRequestBuilder {
+        RefreshExternalCollectionRequestBuilder {
+            value: Self::empty(),
+        }
+    }
+
+    /// Converts this request back into a builder while preserving its current values.
+    pub fn into_builder(self) -> RefreshExternalCollectionRequestBuilder {
+        RefreshExternalCollectionRequestBuilder { value: self }
+    }
+
+    /// Returns the database name.
+    pub fn database_name(&self) -> &Option<String> {
+        &self.database_name
+    }
+
+    /// Returns the collection name.
+    pub fn collection_name(&self) -> &str {
+        &self.collection_name
+    }
+
+    /// Returns the external source.
+    pub fn external_source(&self) -> &str {
+        &self.external_source
+    }
+
+    /// Returns the external spec.
+    pub fn external_spec(&self) -> Option<&serde_json::Value> {
+        self.external_spec.as_ref()
+    }
+
+    pub(crate) fn into_proto(self, default_db: &str) -> milvus::RefreshExternalCollectionRequest {
+        milvus::RefreshExternalCollectionRequest {
+            base: None,
+            db_name: self.database_name.unwrap_or_else(|| default_db.to_owned()),
+            collection_name: self.collection_name,
+            external_source: self.external_source,
+            external_spec: self
+                .external_spec
+                .as_ref()
+                .map(serde_json::Value::to_string)
+                .unwrap_or_default(),
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// RefreshExternalCollectionRequestBuilder
+///////////////////////////////////////////////////////////////////////////////
+/// Builder for RefreshExternalCollectionRequest.
+#[derive(Debug, Clone)]
+pub struct RefreshExternalCollectionRequestBuilder {
+    value: RefreshExternalCollectionRequest,
+}
+
+impl RefreshExternalCollectionRequestBuilder {
+    /// Sets the database name and returns the updated value.
+    pub fn database_name(mut self, value: impl Into<String>) -> Self {
+        self.value.database_name = Some(value.into());
+        self
+    }
+
+    /// Sets the collection name and returns the updated value.
+    pub fn collection_name(mut self, value: impl Into<String>) -> Self {
+        self.value.collection_name = value.into();
+        self
+    }
+
+    /// Sets the external source and returns the updated value.
+    pub fn external_source(mut self, value: impl Into<String>) -> Self {
+        self.value.external_source = value.into();
+        self
+    }
+
+    /// Sets the external spec and returns the updated value.
+    pub fn external_spec(mut self, value: serde_json::Value) -> Self {
+        self.value.external_spec = Some(value);
+        self
+    }
+
+    /// Validates the configured values and builds the request.
+    pub fn build(self) -> Result<RefreshExternalCollectionRequest> {
+        required("collection_name", &self.value.collection_name)?;
+        Ok(self.value)
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// GetRefreshExternalCollectionProgressRequest
+///////////////////////////////////////////////////////////////////////////////
+/// Parameters for the ClientV2 get_refresh_external_collection_progress operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct GetRefreshExternalCollectionProgressRequest {
+    pub(crate) job_id: i64,
+}
+
+impl GetRefreshExternalCollectionProgressRequest {
+    fn empty() -> Self {
+        Self { job_id: 0 }
+    }
+
+    /// Creates a builder for this request.
+    pub fn builder() -> GetRefreshExternalCollectionProgressRequestBuilder {
+        GetRefreshExternalCollectionProgressRequestBuilder {
+            value: Self::empty(),
+        }
+    }
+
+    /// Converts this request back into a builder while preserving its current values.
+    pub fn into_builder(self) -> GetRefreshExternalCollectionProgressRequestBuilder {
+        GetRefreshExternalCollectionProgressRequestBuilder { value: self }
+    }
+
+    /// Returns the job id.
+    pub fn job_id(&self) -> i64 {
+        self.job_id
+    }
+
+    pub(crate) fn into_proto(self) -> milvus::GetRefreshExternalCollectionProgressRequest {
+        milvus::GetRefreshExternalCollectionProgressRequest {
+            base: None,
+            job_id: self.job_id,
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// GetRefreshExternalCollectionProgressRequestBuilder
+///////////////////////////////////////////////////////////////////////////////
+/// Builder for GetRefreshExternalCollectionProgressRequest.
+#[derive(Debug, Clone)]
+pub struct GetRefreshExternalCollectionProgressRequestBuilder {
+    value: GetRefreshExternalCollectionProgressRequest,
+}
+
+impl GetRefreshExternalCollectionProgressRequestBuilder {
+    /// Sets the job id and returns the updated value.
+    pub fn job_id(mut self, value: i64) -> Self {
+        self.value.job_id = value;
+        self
+    }
+
+    /// Validates the configured values and builds the request.
+    pub fn build(self) -> Result<GetRefreshExternalCollectionProgressRequest> {
+        positive_i64("job_id", self.value.job_id)?;
+        Ok(self.value)
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// ListRefreshExternalCollectionJobsRequest
+///////////////////////////////////////////////////////////////////////////////
+/// Parameters for the ClientV2 list_refresh_external_collection_jobs operation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ListRefreshExternalCollectionJobsRequest {
+    pub(crate) database_name: Option<String>,
+    pub(crate) collection_name: String,
+}
+
+impl ListRefreshExternalCollectionJobsRequest {
+    fn empty() -> Self {
+        Self {
+            database_name: Default::default(),
+            collection_name: Default::default(),
+        }
+    }
+
+    /// Creates a builder for this request.
+    pub fn builder() -> ListRefreshExternalCollectionJobsRequestBuilder {
+        ListRefreshExternalCollectionJobsRequestBuilder {
+            value: Self::empty(),
+        }
+    }
+
+    /// Converts this request back into a builder while preserving its current values.
+    pub fn into_builder(self) -> ListRefreshExternalCollectionJobsRequestBuilder {
+        ListRefreshExternalCollectionJobsRequestBuilder { value: self }
+    }
+
+    /// Returns the database name.
+    pub fn database_name(&self) -> &Option<String> {
+        &self.database_name
+    }
+
+    /// Returns the collection name.
+    pub fn collection_name(&self) -> &str {
+        &self.collection_name
+    }
+
+    pub(crate) fn into_proto(
+        self,
+        default_db: &str,
+    ) -> milvus::ListRefreshExternalCollectionJobsRequest {
+        milvus::ListRefreshExternalCollectionJobsRequest {
+            base: None,
+            db_name: self.database_name.unwrap_or_else(|| default_db.to_owned()),
+            collection_name: self.collection_name,
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// ListRefreshExternalCollectionJobsRequestBuilder
+///////////////////////////////////////////////////////////////////////////////
+/// Builder for ListRefreshExternalCollectionJobsRequest.
+#[derive(Debug, Clone)]
+pub struct ListRefreshExternalCollectionJobsRequestBuilder {
+    value: ListRefreshExternalCollectionJobsRequest,
+}
+
+impl ListRefreshExternalCollectionJobsRequestBuilder {
+    /// Sets the database name and returns the updated value.
+    pub fn database_name(mut self, value: impl Into<String>) -> Self {
+        self.value.database_name = Some(value.into());
+        self
+    }
+
+    /// Sets the collection name and returns the updated value.
+    pub fn collection_name(mut self, value: impl Into<String>) -> Self {
+        self.value.collection_name = value.into();
+        self
+    }
+
+    /// Validates the configured values and builds the request.
+    pub fn build(self) -> Result<ListRefreshExternalCollectionJobsRequest> {
+        Ok(self.value)
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// AddFileResourceRequest
+///////////////////////////////////////////////////////////////////////////////
+/// Parameters for the ClientV2 add_file_resource operation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct AddFileResourceRequest {
+    pub(crate) name: String,
+    pub(crate) path: String,
+}
+
+impl AddFileResourceRequest {
+    fn empty() -> Self {
+        Self {
+            name: String::new(),
+            path: String::new(),
+        }
+    }
+
+    /// Creates a builder for this request.
+    pub fn builder() -> AddFileResourceRequestBuilder {
+        AddFileResourceRequestBuilder {
+            value: Self::empty(),
+        }
+    }
+
+    /// Converts this request back into a builder while preserving its current values.
+    pub fn into_builder(self) -> AddFileResourceRequestBuilder {
+        AddFileResourceRequestBuilder { value: self }
+    }
+
+    /// Returns the name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns the path.
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+
+    pub(crate) fn into_proto(self) -> milvus::AddFileResourceRequest {
+        milvus::AddFileResourceRequest {
+            base: None,
+            name: self.name,
+            path: self.path,
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// AddFileResourceRequestBuilder
+///////////////////////////////////////////////////////////////////////////////
+/// Builder for AddFileResourceRequest.
+#[derive(Debug, Clone)]
+pub struct AddFileResourceRequestBuilder {
+    value: AddFileResourceRequest,
+}
+
+impl AddFileResourceRequestBuilder {
+    /// Sets the name and returns the updated value.
+    pub fn name(mut self, value: impl Into<String>) -> Self {
+        self.value.name = value.into();
+        self
+    }
+
+    /// Sets the path and returns the updated value.
+    pub fn path(mut self, value: impl Into<String>) -> Self {
+        self.value.path = value.into();
+        self
+    }
+
+    /// Validates the configured values and builds the request.
+    pub fn build(self) -> Result<AddFileResourceRequest> {
+        required("name", &self.value.name)?;
+        required("path", &self.value.path)?;
+        Ok(self.value)
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// RemoveFileResourceRequest
+///////////////////////////////////////////////////////////////////////////////
+/// Parameters for the ClientV2 remove_file_resource operation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct RemoveFileResourceRequest {
+    pub(crate) name: String,
+}
+
+impl RemoveFileResourceRequest {
+    fn empty() -> Self {
+        Self {
+            name: String::new(),
+        }
+    }
+
+    /// Creates a builder for this request.
+    pub fn builder() -> RemoveFileResourceRequestBuilder {
+        RemoveFileResourceRequestBuilder {
+            value: Self::empty(),
+        }
+    }
+
+    /// Converts this request back into a builder while preserving its current values.
+    pub fn into_builder(self) -> RemoveFileResourceRequestBuilder {
+        RemoveFileResourceRequestBuilder { value: self }
+    }
+
+    /// Returns the name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub(crate) fn into_proto(self) -> milvus::RemoveFileResourceRequest {
+        milvus::RemoveFileResourceRequest {
+            base: None,
+            name: self.name,
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// RemoveFileResourceRequestBuilder
+///////////////////////////////////////////////////////////////////////////////
+/// Builder for RemoveFileResourceRequest.
+#[derive(Debug, Clone)]
+pub struct RemoveFileResourceRequestBuilder {
+    value: RemoveFileResourceRequest,
+}
+
+impl RemoveFileResourceRequestBuilder {
+    /// Sets the name and returns the updated value.
+    pub fn name(mut self, value: impl Into<String>) -> Self {
+        self.value.name = value.into();
+        self
+    }
+
+    /// Validates the configured values and builds the request.
+    pub fn build(self) -> Result<RemoveFileResourceRequest> {
+        required("name", &self.value.name)?;
+        Ok(self.value)
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// ListFileResourcesRequest
+///////////////////////////////////////////////////////////////////////////////
+/// Parameters for the ClientV2 list_file_resources operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ListFileResourcesRequest;
+
+impl ListFileResourcesRequest {
+    /// Creates a builder for this request.
+    pub fn builder() -> ListFileResourcesRequestBuilder {
+        ListFileResourcesRequestBuilder
+    }
+
+    /// Converts this request back into a builder while preserving its current values.
+    pub fn into_builder(self) -> ListFileResourcesRequestBuilder {
+        ListFileResourcesRequestBuilder
+    }
+
+    pub(crate) fn into_proto(self) -> milvus::ListFileResourcesRequest {
+        milvus::ListFileResourcesRequest { base: None }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// ListFileResourcesRequestBuilder
+///////////////////////////////////////////////////////////////////////////////
+/// Builder for ListFileResourcesRequest.
+#[derive(Debug, Clone, Copy)]
+pub struct ListFileResourcesRequestBuilder;
+
+impl ListFileResourcesRequestBuilder {
+    /// Validates the configured values and builds the request.
+    pub fn build(self) -> Result<ListFileResourcesRequest> {
+        Ok(ListFileResourcesRequest)
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // Test Cases
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -1482,5 +1920,128 @@ mod builder_value_tests {
         assert_eq!(value.collection_name().to_owned(), collection_name);
         assert_eq!(value.field_name().to_owned(), field_name);
         assert_eq!(value.analyzer_names().to_owned(), analyzer_names);
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Test Cases
+///////////////////////////////////////////////////////////////////////////////
+
+#[cfg(test)]
+mod external_collection_request_tests {
+    use super::*;
+    use crate::v2::error::Error;
+
+    #[test]
+    fn refresh_external_collection_request_default_values() {
+        let value = RefreshExternalCollectionRequest::empty();
+        assert_eq!(value.database_name(), &None);
+        assert_eq!(value.collection_name(), "");
+        assert_eq!(value.external_source(), "");
+        assert!(value.external_spec().is_none());
+    }
+
+    #[test]
+    fn refresh_external_collection_request_populated_values() {
+        let value = RefreshExternalCollectionRequest::builder()
+            .database_name("default")
+            .collection_name("books")
+            .external_source("s3://bucket/path")
+            .external_spec(serde_json::json!({"format": "parquet"}))
+            .build()
+            .expect("valid request");
+        assert_eq!(value.database_name().as_deref(), Some("default"));
+        assert_eq!(value.collection_name(), "books");
+        assert_eq!(value.external_source(), "s3://bucket/path");
+        assert_eq!(
+            value.external_spec(),
+            Some(&serde_json::json!({"format": "parquet"}))
+        );
+
+        let proto = value.into_proto("default");
+        assert_eq!(proto.collection_name, "books");
+        assert_eq!(proto.external_source, "s3://bucket/path");
+        assert_eq!(proto.external_spec, r#"{"format":"parquet"}"#);
+    }
+
+    #[test]
+    fn refresh_external_collection_request_uses_selected_database_and_rejects_empty_collection() {
+        let value = RefreshExternalCollectionRequest::builder()
+            .collection_name("books")
+            .build()
+            .expect("valid request");
+        assert_eq!(value.into_proto("analytics").db_name, "analytics");
+        assert!(matches!(
+            RefreshExternalCollectionRequest::builder()
+                .build()
+                .unwrap_err(),
+            Error::Validation(_)
+        ));
+    }
+
+    #[test]
+    fn get_refresh_external_collection_progress_request_populated_values() {
+        let value = GetRefreshExternalCollectionProgressRequest::builder()
+            .job_id(7)
+            .build()
+            .expect("valid request");
+        assert_eq!(value.job_id(), 7);
+        assert_eq!(value.into_proto().job_id, 7);
+        assert!(GetRefreshExternalCollectionProgressRequest::builder()
+            .job_id(0)
+            .build()
+            .is_err());
+    }
+
+    #[test]
+    fn list_refresh_external_collection_jobs_request_is_valid_without_a_collection() {
+        let value = ListRefreshExternalCollectionJobsRequest::builder()
+            .build()
+            .expect("valid request");
+        assert_eq!(value.into_proto("default").collection_name, "");
+        let value = ListRefreshExternalCollectionJobsRequest::builder()
+            .collection_name("books")
+            .build()
+            .expect("valid request");
+        assert_eq!(value.into_proto("default").collection_name, "books");
+    }
+
+    #[test]
+    fn add_file_resource_request_populated_values() {
+        let value = AddFileResourceRequest::builder()
+            .name("data-files")
+            .path("s3://bucket/path")
+            .build()
+            .expect("valid request");
+        let proto = value.into_proto();
+        assert_eq!(proto.name, "data-files");
+        assert_eq!(proto.path, "s3://bucket/path");
+        assert!(AddFileResourceRequest::builder().build().is_err());
+        assert!(AddFileResourceRequest::builder()
+            .name("data-files")
+            .build()
+            .is_err());
+    }
+
+    #[test]
+    fn remove_file_resource_request_populated_values() {
+        let value = RemoveFileResourceRequest::builder()
+            .name("data-files")
+            .build()
+            .expect("valid request");
+        assert_eq!(value.name(), "data-files");
+        assert_eq!(value.into_proto().name, "data-files");
+        assert!(RemoveFileResourceRequest::builder().build().is_err());
+    }
+
+    #[test]
+    fn list_file_resources_request_is_valid() {
+        assert_eq!(
+            ListFileResourcesRequest::builder()
+                .build()
+                .expect("valid request")
+                .into_proto(),
+            milvus::ListFileResourcesRequest { base: None }
+        );
     }
 }

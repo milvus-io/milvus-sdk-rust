@@ -587,6 +587,91 @@ impl ClientV2 {
         Ok(response::utility::RunAnalyzerResponse::from_proto(response))
     }
 
+    /// Refreshes an external collection from its external data source.
+    ///
+    /// The operation is asynchronous and returns a job id that can be polled
+    /// through [`ClientV2::get_refresh_external_collection_progress`].
+    pub async fn refresh_external_collection(
+        &self,
+        request: request::utility::RefreshExternalCollectionRequest,
+    ) -> Result<response::utility::RefreshExternalCollectionResponse> {
+        let database = self.current_database();
+        let response = rpc_with_retry!(
+            NonIdempotent,
+            self,
+            refresh_external_collection,
+            request.into_proto(&database)
+        )?;
+        status_to_result(&response.status)?;
+        Ok(response::utility::RefreshExternalCollectionResponse::from_proto(response))
+    }
+
+    /// Retrieves the state and progress of a refresh-external-collection job.
+    pub async fn get_refresh_external_collection_progress(
+        &self,
+        request: request::utility::GetRefreshExternalCollectionProgressRequest,
+    ) -> Result<response::utility::GetRefreshExternalCollectionProgressResponse> {
+        let response = rpc_with_retry!(
+            self,
+            get_refresh_external_collection_progress,
+            request.into_proto()
+        )?;
+        status_to_result(&response.status)?;
+        response::utility::GetRefreshExternalCollectionProgressResponse::from_proto(response)
+    }
+
+    /// Lists refresh-external-collection jobs for a collection, or for the whole
+    /// database when the collection name is omitted.
+    pub async fn list_refresh_external_collection_jobs(
+        &self,
+        request: request::utility::ListRefreshExternalCollectionJobsRequest,
+    ) -> Result<response::utility::ListRefreshExternalCollectionJobsResponse> {
+        let database = self.current_database();
+        let response = rpc_with_retry!(
+            self,
+            list_refresh_external_collection_jobs,
+            request.into_proto(&database)
+        )?;
+        status_to_result(&response.status)?;
+        Ok(response::utility::ListRefreshExternalCollectionJobsResponse::from_proto(response))
+    }
+
+    /// Registers a named file resource for external-table workflows.
+    pub async fn add_file_resource(
+        &self,
+        request: request::utility::AddFileResourceRequest,
+    ) -> Result<()> {
+        let status =
+            status_rpc_with_retry!(NonIdempotent, self, add_file_resource, request.into_proto())?;
+        self.status(status)
+    }
+
+    /// Removes a registered file resource.
+    pub async fn remove_file_resource(
+        &self,
+        request: request::utility::RemoveFileResourceRequest,
+    ) -> Result<()> {
+        let status = status_rpc_with_retry!(
+            NonIdempotent,
+            self,
+            remove_file_resource,
+            request.into_proto()
+        )?;
+        self.status(status)
+    }
+
+    /// Lists all registered file resources.
+    pub async fn list_file_resources(
+        &self,
+        request: request::utility::ListFileResourcesRequest,
+    ) -> Result<response::utility::ListFileResourcesResponse> {
+        let response = rpc_with_retry!(self, list_file_resources, request.into_proto())?;
+        status_to_result(&response.status)?;
+        Ok(response::utility::ListFileResourcesResponse::from_proto(
+            response,
+        ))
+    }
+
     async fn get_flush_state(
         &self,
         database: &str,

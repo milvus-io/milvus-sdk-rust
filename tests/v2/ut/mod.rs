@@ -23,6 +23,7 @@ mod common;
 mod database;
 mod dml;
 mod dql;
+mod external;
 mod index;
 mod iterator;
 mod partition;

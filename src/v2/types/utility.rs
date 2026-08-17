@@ -16,7 +16,7 @@
 
 //! Utility, maintenance, analyzer, compaction, and segment types.
 
-use crate::proto::common;
+use crate::proto::{common, milvus};
 
 ///////////////////////////////////////////////////////////////////////////////
 // SegmentState
@@ -805,6 +805,299 @@ impl AnalyzerResult {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// RefreshExternalCollectionStateCode
+///////////////////////////////////////////////////////////////////////////////
+/// Execution state of a refresh-external-collection job.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum RefreshExternalCollectionStateCode {
+    #[default]
+    /// Represents the Unknown case.
+    Unknown,
+    /// Represents the Pending case.
+    Pending,
+    /// Represents the InProgress case.
+    InProgress,
+    /// Represents the Completed case.
+    Completed,
+    /// Represents the Failed case.
+    Failed,
+}
+
+impl RefreshExternalCollectionStateCode {
+    /// Returns the wire/display name of this state.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Unknown => "RefreshUnknown",
+            Self::Pending => "RefreshPending",
+            Self::InProgress => "RefreshInProgress",
+            Self::Completed => "RefreshCompleted",
+            Self::Failed => "RefreshFailed",
+        }
+    }
+
+    pub(crate) fn from_proto(value: i32) -> Self {
+        match milvus::RefreshExternalCollectionState::try_from(value).ok() {
+            Some(milvus::RefreshExternalCollectionState::RefreshPending) => Self::Pending,
+            Some(milvus::RefreshExternalCollectionState::RefreshInProgress) => Self::InProgress,
+            Some(milvus::RefreshExternalCollectionState::RefreshCompleted) => Self::Completed,
+            Some(milvus::RefreshExternalCollectionState::RefreshFailed) => Self::Failed,
+            _ => Self::Unknown,
+        }
+    }
+}
+
+impl std::fmt::Display for RefreshExternalCollectionStateCode {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// RefreshExternalCollectionJobInfo
+///////////////////////////////////////////////////////////////////////////////
+/// Metadata and progress of a refresh-external-collection job.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct RefreshExternalCollectionJobInfo {
+    pub(crate) job_id: i64,
+    pub(crate) collection_name: String,
+    pub(crate) state: RefreshExternalCollectionStateCode,
+    pub(crate) progress: i32,
+    pub(crate) reason: String,
+    pub(crate) external_source: String,
+    pub(crate) start_time: u64,
+    pub(crate) end_time: u64,
+}
+
+impl RefreshExternalCollectionJobInfo {
+    /// Creates a value initialized with its SDK defaults.
+    pub fn new() -> Self {
+        Self {
+            job_id: 0,
+            collection_name: String::new(),
+            state: RefreshExternalCollectionStateCode::Unknown,
+            progress: 0,
+            reason: String::new(),
+            external_source: String::new(),
+            start_time: 0,
+            end_time: 0,
+        }
+    }
+
+    /// Sets the job id and returns the updated value.
+    pub fn job_id(mut self, value: i64) -> Self {
+        self.job_id = value;
+        self
+    }
+
+    /// Sets the job id and returns this value for further mutation.
+    pub fn set_job_id(&mut self, value: i64) -> &mut Self {
+        self.job_id = value;
+        self
+    }
+
+    /// Returns the job id.
+    pub fn get_job_id(&self) -> i64 {
+        self.job_id
+    }
+
+    /// Sets the collection name and returns the updated value.
+    pub fn collection_name(mut self, value: impl Into<String>) -> Self {
+        self.collection_name = value.into();
+        self
+    }
+
+    /// Sets the collection name and returns this value for further mutation.
+    pub fn set_collection_name(&mut self, value: impl Into<String>) -> &mut Self {
+        self.collection_name = value.into();
+        self
+    }
+
+    /// Returns the collection name.
+    pub fn get_collection_name(&self) -> &str {
+        &self.collection_name
+    }
+
+    /// Sets the state and returns the updated value.
+    pub fn state(mut self, value: RefreshExternalCollectionStateCode) -> Self {
+        self.state = value;
+        self
+    }
+
+    /// Sets the state and returns this value for further mutation.
+    pub fn set_state(&mut self, value: RefreshExternalCollectionStateCode) -> &mut Self {
+        self.state = value;
+        self
+    }
+
+    /// Returns the state.
+    pub fn get_state(&self) -> RefreshExternalCollectionStateCode {
+        self.state
+    }
+
+    /// Sets the progress percentage and returns the updated value.
+    pub fn progress(mut self, value: i32) -> Self {
+        self.progress = value;
+        self
+    }
+
+    /// Sets the progress percentage and returns this value for further mutation.
+    pub fn set_progress(&mut self, value: i32) -> &mut Self {
+        self.progress = value;
+        self
+    }
+
+    /// Returns the progress percentage in the range `0..=100`.
+    pub fn get_progress(&self) -> i32 {
+        self.progress
+    }
+
+    /// Sets the failure reason and returns the updated value.
+    pub fn reason(mut self, value: impl Into<String>) -> Self {
+        self.reason = value.into();
+        self
+    }
+
+    /// Sets the failure reason and returns this value for further mutation.
+    pub fn set_reason(&mut self, value: impl Into<String>) -> &mut Self {
+        self.reason = value.into();
+        self
+    }
+
+    /// Returns the failure reason.
+    pub fn get_reason(&self) -> &str {
+        &self.reason
+    }
+
+    /// Sets the external source and returns the updated value.
+    pub fn external_source(mut self, value: impl Into<String>) -> Self {
+        self.external_source = value.into();
+        self
+    }
+
+    /// Sets the external source and returns this value for further mutation.
+    pub fn set_external_source(&mut self, value: impl Into<String>) -> &mut Self {
+        self.external_source = value.into();
+        self
+    }
+
+    /// Returns the external source.
+    pub fn get_external_source(&self) -> &str {
+        &self.external_source
+    }
+
+    /// Sets the start time and returns the updated value.
+    pub fn start_time(mut self, value: u64) -> Self {
+        self.start_time = value;
+        self
+    }
+
+    /// Sets the start time and returns this value for further mutation.
+    pub fn set_start_time(&mut self, value: u64) -> &mut Self {
+        self.start_time = value;
+        self
+    }
+
+    /// Returns the start time.
+    pub fn get_start_time(&self) -> u64 {
+        self.start_time
+    }
+
+    /// Sets the end time and returns the updated value.
+    pub fn end_time(mut self, value: u64) -> Self {
+        self.end_time = value;
+        self
+    }
+
+    /// Sets the end time and returns this value for further mutation.
+    pub fn set_end_time(&mut self, value: u64) -> &mut Self {
+        self.end_time = value;
+        self
+    }
+
+    /// Returns the end time.
+    pub fn get_end_time(&self) -> u64 {
+        self.end_time
+    }
+
+    pub(crate) fn from_proto(value: milvus::RefreshExternalCollectionJobInfo) -> Self {
+        Self {
+            job_id: value.job_id,
+            collection_name: value.collection_name,
+            state: RefreshExternalCollectionStateCode::from_proto(value.state),
+            progress: value.progress as i32,
+            reason: value.reason,
+            external_source: value.external_source,
+            start_time: value.start_time as u64,
+            end_time: value.end_time as u64,
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// FileResourceInfo
+///////////////////////////////////////////////////////////////////////////////
+/// Metadata of a named file resource registered for external-table workflows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct FileResourceInfo {
+    pub(crate) name: String,
+    pub(crate) path: String,
+}
+
+impl FileResourceInfo {
+    /// Creates a value initialized with its SDK defaults.
+    pub fn new() -> Self {
+        Self {
+            name: String::new(),
+            path: String::new(),
+        }
+    }
+
+    /// Sets the name and returns the updated value.
+    pub fn name(mut self, value: impl Into<String>) -> Self {
+        self.name = value.into();
+        self
+    }
+
+    /// Sets the name and returns this value for further mutation.
+    pub fn set_name(&mut self, value: impl Into<String>) -> &mut Self {
+        self.name = value.into();
+        self
+    }
+
+    /// Returns the name.
+    pub fn get_name(&self) -> &str {
+        &self.name
+    }
+
+    /// Sets the path and returns the updated value.
+    pub fn path(mut self, value: impl Into<String>) -> Self {
+        self.path = value.into();
+        self
+    }
+
+    /// Sets the path and returns this value for further mutation.
+    pub fn set_path(&mut self, value: impl Into<String>) -> &mut Self {
+        self.path = value.into();
+        self
+    }
+
+    /// Returns the path.
+    pub fn get_path(&self) -> &str {
+        &self.path
+    }
+
+    pub(crate) fn from_proto(value: milvus::FileResourceInfo) -> Self {
+        Self {
+            name: value.name,
+            path: value.path,
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // Test Cases
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -843,6 +1136,53 @@ mod state_enum_tests {
         assert_eq!(
             CompactionStateCode::from_proto(i32::MAX),
             CompactionStateCode::Unknown
+        );
+    }
+}
+
+#[cfg(test)]
+mod refresh_external_collection_state_tests {
+    use super::RefreshExternalCollectionStateCode;
+    use crate::proto::milvus;
+
+    #[test]
+    fn refresh_external_collection_state_as_str_and_display() {
+        let cases = [
+            (
+                RefreshExternalCollectionStateCode::Unknown,
+                "RefreshUnknown",
+            ),
+            (
+                RefreshExternalCollectionStateCode::Pending,
+                "RefreshPending",
+            ),
+            (
+                RefreshExternalCollectionStateCode::InProgress,
+                "RefreshInProgress",
+            ),
+            (
+                RefreshExternalCollectionStateCode::Completed,
+                "RefreshCompleted",
+            ),
+            (RefreshExternalCollectionStateCode::Failed, "RefreshFailed"),
+        ];
+        for (state, expected) in cases {
+            assert_eq!(state.as_str(), expected);
+            assert_eq!(state.to_string(), expected);
+        }
+    }
+
+    #[test]
+    fn refresh_external_collection_state_maps_unknown_proto_values() {
+        assert_eq!(
+            RefreshExternalCollectionStateCode::from_proto(
+                milvus::RefreshExternalCollectionState::RefreshPending as i32
+            ),
+            RefreshExternalCollectionStateCode::Pending
+        );
+        assert_eq!(
+            RefreshExternalCollectionStateCode::from_proto(i32::MAX),
+            RefreshExternalCollectionStateCode::Unknown
         );
     }
 }
