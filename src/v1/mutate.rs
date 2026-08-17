@@ -259,6 +259,7 @@ impl Client {
                 hash_keys: Vec::new(),
                 consistency_level: crate::proto::common::ConsistencyLevel::Strong.into(),
                 expr_template_values: std::collections::HashMap::new(),
+                ..Default::default()
             })
             .await?
             .into_inner();

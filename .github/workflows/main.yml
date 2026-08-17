@@ -55,6 +55,8 @@ jobs:
           submodules: 'true'
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: ubuntu-${{ matrix.ubuntu }}
 
       - name: Install dependencies
         run: ./scripts/install_deps.sh

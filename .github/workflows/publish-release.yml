@@ -21,7 +21,7 @@ jobs:
   validate:
     name: Validate release commit
     if: github.repository == 'milvus-io/milvus-sdk-rust'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 90
 
     steps:
@@ -86,7 +86,7 @@ jobs:
     name: Publish crate
     needs: validate
     if: github.repository == 'milvus-io/milvus-sdk-rust'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     environment: crates-io
     timeout-minutes: 45
 
@@ -101,6 +101,8 @@ jobs:
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
+        with:
+          key: ubuntu-22.04
 
       - name: Validate release tag and crate version
         shell: bash
@@ -163,7 +165,7 @@ jobs:
     name: Create GitHub release
     needs: run-tutorial
     if: needs.run-tutorial.result == 'success' && github.repository == 'milvus-io/milvus-sdk-rust'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 5
     permissions:
       contents: write
@@ -197,7 +199,7 @@ jobs:
     name: Run tutorials
     needs: publish
     if: needs.publish.result == 'success' && github.repository == 'milvus-io/milvus-sdk-rust'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 60
 
     steps:
@@ -210,6 +212,7 @@ jobs:
       - name: Cache tutorial build artifacts
         uses: Swatinem/rust-cache@v2
         with:
+          key: ubuntu-22.04
           shared-key: release-tutorials
 
       - name: Wait for crates.io propagation

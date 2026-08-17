@@ -120,6 +120,7 @@ mod iterator;
 mod partition;
 mod rbac;
 mod resource_group;
+mod snapshot;
 mod utility;
 
 pub use iterator::{QueryIterator, SearchIterator, SearchIteratorV1, SearchIteratorV2};

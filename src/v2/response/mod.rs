@@ -68,4 +68,5 @@ pub mod index;
 pub mod partition;
 pub mod rbac;
 pub mod resource_group;
+pub mod snapshot;
 pub mod utility;

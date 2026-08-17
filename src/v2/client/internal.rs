@@ -1615,6 +1615,7 @@ mod tests {
                 description: String::new(),
                 fields: vec![label, nested_location, nested_time, embedding],
                 type_params: Vec::new(),
+                nullable: false,
             }],
             ..Default::default()
         }

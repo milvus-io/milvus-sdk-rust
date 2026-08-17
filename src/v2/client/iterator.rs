@@ -1300,6 +1300,10 @@ fn field_row_count(field: &schema::FieldData) -> usize {
             Some(scalar_field::Data::GeometryData(values)) => values.data.len(),
             Some(scalar_field::Data::TimestamptzData(values)) => values.data.len(),
             Some(scalar_field::Data::GeometryWktData(values)) => values.data.len(),
+            Some(scalar_field::Data::MolData(values)) => values.data.len(),
+            Some(scalar_field::Data::MolSmilesData(values)) => values.data.len(),
+            Some(scalar_field::Data::DateData(values)) => values.data.len(),
+            Some(scalar_field::Data::TimeData(values)) => values.data.len(),
             None => 0,
         },
         Some(field_data::Field::Vectors(vector)) => match vector.data.as_ref() {

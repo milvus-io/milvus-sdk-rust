@@ -25,11 +25,11 @@ pub use crate::v2::bulk_import::*;
 pub use crate::v2::error::{ConversionError, Error, Result, ServerError, ValidationError};
 pub use crate::v2::request::{
     alias::*, cdc::*, collection::*, database::*, dml::*, dql::*, index::*, partition::*, rbac::*,
-    resource_group::*, utility::*,
+    resource_group::*, snapshot::*, utility::*,
 };
 pub use crate::v2::response::{
     alias::*, cdc::*, collection::*, database::*, dml::*, dql::*, index::*, partition::*, rbac::*,
-    resource_group::*, utility::*,
+    resource_group::*, snapshot::*, utility::*,
 };
 pub use crate::v2::types::*;
 pub use crate::v2::{ClientV2, OptimizeTask, QueryIterator, SearchIterator};

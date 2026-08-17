@@ -2288,6 +2288,88 @@ impl MilvusService for MockMilvus {
             Ok(Response::new(stream))
         })
     }
+    status_method!(create_snapshot, pb::CreateSnapshotRequest);
+    status_method!(drop_snapshot, pb::DropSnapshotRequest);
+    response_method!(
+        list_snapshots,
+        pb::ListSnapshotsRequest,
+        pb::ListSnapshotsResponse,
+        pb::ListSnapshotsResponse {
+            status: Some(success_status()),
+            snapshots: vec!["snap-1".into(), "snap-2".into()],
+        }
+    );
+    response_method!(
+        describe_snapshot,
+        pb::DescribeSnapshotRequest,
+        pb::DescribeSnapshotResponse,
+        pb::DescribeSnapshotResponse {
+            status: Some(success_status()),
+            name: "snap-1".into(),
+            description: "backup".into(),
+            collection_name: "books".into(),
+            partition_names: vec!["p1".into(), "p2".into()],
+            create_ts: 123,
+            s3_location: "s3://bucket/export".into(),
+        }
+    );
+    response_method!(
+        restore_snapshot,
+        pb::RestoreSnapshotRequest,
+        pb::RestoreSnapshotResponse,
+        pb::RestoreSnapshotResponse {
+            status: Some(success_status()),
+            job_id: 7,
+        }
+    );
+    response_method!(
+        get_restore_snapshot_state,
+        pb::GetRestoreSnapshotStateRequest,
+        pb::GetRestoreSnapshotStateResponse,
+        pb::GetRestoreSnapshotStateResponse {
+            status: Some(success_status()),
+            info: Some(pb::RestoreSnapshotInfo {
+                job_id: 7,
+                snapshot_name: "snap-1".into(),
+                db_name: "default".into(),
+                collection_name: "books".into(),
+                state: pb::RestoreSnapshotState::RestoreSnapshotExecuting as i32,
+                progress: 50,
+                reason: String::new(),
+                start_time: 100,
+                time_cost: 5,
+            }),
+        }
+    );
+    response_method!(
+        list_restore_snapshot_jobs,
+        pb::ListRestoreSnapshotJobsRequest,
+        pb::ListRestoreSnapshotJobsResponse,
+        pb::ListRestoreSnapshotJobsResponse {
+            status: Some(success_status()),
+            jobs: vec![pb::RestoreSnapshotInfo {
+                job_id: 7,
+                snapshot_name: "snap-1".into(),
+                db_name: "default".into(),
+                collection_name: "books".into(),
+                state: pb::RestoreSnapshotState::RestoreSnapshotCompleted as i32,
+                progress: 100,
+                reason: String::new(),
+                start_time: 100,
+                time_cost: 5,
+            }],
+        }
+    );
+    response_method!(
+        pin_snapshot_data,
+        pb::PinSnapshotDataRequest,
+        pb::PinSnapshotDataResponse,
+        pb::PinSnapshotDataResponse {
+            status: Some(success_status()),
+            pin_id: 42,
+        }
+    );
+    status_method!(unpin_snapshot_data, pb::UnpinSnapshotDataRequest);
 }
 
 pub struct MockServer {
