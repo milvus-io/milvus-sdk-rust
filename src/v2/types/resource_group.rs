@@ -201,7 +201,11 @@ impl ResourceGroupConfig {
                     node_labels: self
                         .node_labels
                         .into_iter()
-                        .map(|(key, value)| common::KeyValuePair { key, value })
+                        .map(|(key, value)| common::KeyValuePair {
+                            key,
+                            value,
+                            ..Default::default()
+                        })
                         .collect(),
                 })
             },

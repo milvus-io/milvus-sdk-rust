@@ -53,7 +53,8 @@ pub mod utils;
 
 pub use bulk_import::*;
 pub use client::{
-    ClientV2, OptimizeTask, QueryIterator, SearchIterator, SearchIteratorV1, SearchIteratorV2,
+    ClientV2, MilvusClientV2Session, OptimizeTask, QueryIterator, SearchIterator, SearchIteratorV1,
+    SearchIteratorV2,
 };
 pub use types::*;
 pub use utils::*;

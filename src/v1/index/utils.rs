@@ -207,6 +207,7 @@ impl Client {
                 index_name: index_name.into(),
                 extra_params: properties,
                 delete_keys: Vec::new(),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -243,6 +244,7 @@ impl Client {
                 index_name: index_name.into(),
                 extra_params: Vec::new(),
                 delete_keys,
+                ..Default::default()
             })
             .await?
             .into_inner();

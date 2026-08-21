@@ -74,6 +74,7 @@ impl CreateAliasRequest {
             db_name: self.database_name.unwrap_or_else(|| default_db.to_owned()),
             collection_name: self.collection_name,
             alias: self.alias,
+            ..Default::default()
         }
     }
 }
@@ -168,6 +169,7 @@ impl AlterAliasRequest {
             db_name: self.database_name.unwrap_or_else(|| default_db.to_owned()),
             collection_name: self.collection_name,
             alias: self.alias,
+            ..Default::default()
         }
     }
 }
@@ -254,6 +256,7 @@ impl DropAliasRequest {
             base: None,
             db_name: self.database_name.unwrap_or_else(|| default_db.to_owned()),
             alias: self.alias,
+            ..Default::default()
         }
     }
 }
@@ -333,6 +336,7 @@ impl DescribeAliasRequest {
             base: None,
             db_name: self.database_name.unwrap_or_else(|| default_db.to_owned()),
             alias: self.alias,
+            ..Default::default()
         }
     }
 }
@@ -412,6 +416,7 @@ impl ListAliasesRequest {
             base: None,
             db_name: self.database_name.unwrap_or_else(|| default_db.to_owned()),
             collection_name: self.collection_name,
+            ..Default::default()
         }
     }
 }

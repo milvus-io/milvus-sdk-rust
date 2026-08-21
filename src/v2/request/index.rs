@@ -23,7 +23,11 @@ use crate::v2::types::{IndexParam, IndexType};
 use std::collections::{HashMap, HashSet};
 fn pairs(v: HashMap<String, String>) -> Vec<common::KeyValuePair> {
     v.into_iter()
-        .map(|(key, value)| common::KeyValuePair { key, value })
+        .map(|(key, value)| common::KeyValuePair {
+            key,
+            value,
+            ..Default::default()
+        })
         .collect()
 }
 
@@ -238,6 +242,7 @@ impl DescribeIndexRequest {
             field_name: self.field_name,
             index_name: self.index_name,
             timestamp: self.timestamp,
+            ..Default::default()
         }
     }
 }
@@ -354,6 +359,7 @@ impl ListIndexesRequest {
             collection_name: self.collection_name,
             index_name: self.index_name,
             timestamp: self.timestamp,
+            ..Default::default()
         }
     }
 }
@@ -471,6 +477,7 @@ impl DropIndexRequest {
             // name. This matches the C++ V2 request conversion.
             field_name: String::new(),
             index_name,
+            ..Default::default()
         }
     }
 }
@@ -582,6 +589,7 @@ impl AlterIndexPropertiesRequest {
             index_name: self.index_name,
             extra_params: pairs(self.properties),
             delete_keys: Vec::new(),
+            ..Default::default()
         }
     }
 }
@@ -706,6 +714,7 @@ impl DropIndexPropertiesRequest {
             index_name: self.index_name,
             extra_params: Vec::new(),
             delete_keys: self.property_keys.into_iter().collect(),
+            ..Default::default()
         }
     }
 }

@@ -116,7 +116,10 @@ impl ClientV2 {
             rpc_with_retry!(
                 self,
                 alloc_timestamp,
-                milvus::AllocTimestampRequest { base: None }
+                milvus::AllocTimestampRequest {
+                    base: None,
+                    ..Default::default()
+                }
             )
         })
         .await?;
@@ -134,6 +137,7 @@ impl ClientV2 {
                         field_name: field_name.to_owned(),
                         index_name: index_name.to_owned(),
                         timestamp: timestamp.timestamp,
+                        ..Default::default()
                     }
                 )
             })

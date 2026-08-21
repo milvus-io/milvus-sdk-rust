@@ -861,6 +861,7 @@ mod test {
                 type_params: vec![crate::proto::common::KeyValuePair {
                     key: "dim".to_string(),
                     value: dim.to_string(),
+                    ..Default::default()
                 }],
                 ..Default::default()
             };

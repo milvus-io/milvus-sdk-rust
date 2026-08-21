@@ -257,6 +257,7 @@ impl Client {
                 base: Some(MsgBase::new(MsgType::CreateResourceGroup)),
                 resource_group,
                 config: Some(config),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -302,6 +303,7 @@ impl Client {
             .describe_resource_group(proto::milvus::DescribeResourceGroupRequest {
                 base: Some(MsgBase::new(MsgType::DescribeResourceGroup)),
                 resource_group: name.into(),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -343,6 +345,7 @@ impl Client {
             .drop_resource_group(proto::milvus::DropResourceGroupRequest {
                 base: Some(MsgBase::new(MsgType::DropResourceGroup)),
                 resource_group: name.into(),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -376,6 +379,7 @@ impl Client {
             .clone()
             .list_resource_groups(proto::milvus::ListResourceGroupsRequest {
                 base: Some(MsgBase::new(MsgType::ListResourceGroups)),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -427,6 +431,7 @@ impl Client {
                 collection_name: collection_name.into(),
                 num_replica: num_replicas,
                 db_name: "".to_string(),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -474,6 +479,7 @@ impl Client {
                 source_resource_group: source.into(),
                 target_resource_group: target.into(),
                 num_node,
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -532,6 +538,7 @@ impl Client {
             .update_resource_groups(proto::milvus::UpdateResourceGroupsRequest {
                 base: Some(MsgBase::new(MsgType::UpdateResourceGroups)),
                 resource_groups: config,
+                ..Default::default()
             })
             .await?
             .into_inner();

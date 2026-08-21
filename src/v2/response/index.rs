@@ -215,14 +215,17 @@ mod index_desc_tests {
                 common::KeyValuePair {
                     key: "index_type".into(),
                     value: "HNSW".into(),
+                    ..Default::default()
                 },
                 common::KeyValuePair {
                     key: "metric_type".into(),
                     value: "COSINE".into(),
+                    ..Default::default()
                 },
                 common::KeyValuePair {
                     key: "params".into(),
                     value: r#"{"M":16,"efConstruction":"200"}"#.into(),
+                    ..Default::default()
                 },
             ],
             ..Default::default()
