@@ -37,7 +37,17 @@ fn field_data(value: schema::FieldData) -> Result<FieldData> {
 fn decode_field_data(value: schema::FieldData) -> Option<FieldData> {
     use schema::{field_data::Field, scalar_field, vector_field};
     let data_type = schema::DataType::try_from(value.r#type).ok();
-    let valid_data = value.valid_data;
+    // Prefer the field-specific validity channel introduced by newer servers;
+    // fall back to the legacy top-level field only for legacy writers.
+    let valid_data = match value.field {
+        Some(Field::Scalars(ref scalars)) if !scalars.valid_data.is_empty() => {
+            scalars.valid_data.clone()
+        }
+        Some(Field::Vectors(ref vectors)) if !vectors.valid_data.is_empty() => {
+            vectors.valid_data.clone()
+        }
+        _ => value.valid_data.clone(),
+    };
     let valid_count = valid_data.iter().filter(|valid| **valid).count();
     let name = value.field_name;
     let data = match value.field? {
@@ -551,6 +561,7 @@ fn struct_field_data(name: String, value: schema::StructArrayField) -> Option<Fi
                             is_dynamic: false,
                             valid_data: Vec::new(),
                             field: Some(proto_field_data::Field::Scalars(scalars)),
+                            ..Default::default()
                         })?)
                     })
                     .collect::<Option<Vec<_>>>()?
@@ -570,6 +581,7 @@ fn struct_field_data(name: String, value: schema::StructArrayField) -> Option<Fi
                             is_dynamic: false,
                             valid_data: Vec::new(),
                             field: Some(proto_field_data::Field::Vectors(vectors)),
+                            ..Default::default()
                         })?)
                     })
                     .collect::<Option<Vec<_>>>()?
@@ -971,7 +983,7 @@ impl SearchResponse {
                 }
             }
         }
-        let ids = Ids::from_proto(result.ids);
+        let ids = Ids::from_proto(result.ids)?;
         let element_indices = result.element_indices.map(|indices| indices.data);
         let mut single_results = Vec::with_capacity(query_count);
         let mut offset = 0_usize;
@@ -1191,28 +1203,39 @@ fn truncate_proto_field_data(
     mut value: schema::FieldData,
     logical_count: usize,
 ) -> Result<schema::FieldData> {
+    use schema::field_data::Field;
     let field_name = value.field_name.clone();
     let encoded_count = proto_field_row_count(&value).ok_or_else(|| {
         Error::MalformedResponse(format!(
             "failed to determine response field row count for {field_name:?}"
         ))
     })?;
-    let payload_count = if value.valid_data.is_empty() {
+    // Prefer the field-specific validity channel (newer servers write here), falling back to the
+    // legacy top-level channel, exactly as `decode_field_data` does.
+    let valid_data: Vec<bool> = match value.field {
+        Some(Field::Scalars(ref scalars)) if !scalars.valid_data.is_empty() => {
+            scalars.valid_data.clone()
+        }
+        Some(Field::Vectors(ref vectors)) if !vectors.valid_data.is_empty() => {
+            vectors.valid_data.clone()
+        }
+        _ => value.valid_data.clone(),
+    };
+    let payload_count = if valid_data.is_empty() {
         logical_count
     } else {
-        if value.valid_data.len() < logical_count {
+        if valid_data.len() < logical_count {
             return Err(Error::MalformedResponse(format!(
                 "response field {field_name:?} validity bitmap is shorter than its result range"
             )));
         }
-        let total_valid = value.valid_data.iter().filter(|valid| **valid).count();
-        let selected_valid = value
-            .valid_data
+        let total_valid = valid_data.iter().filter(|valid| **valid).count();
+        let selected_valid = valid_data
             .iter()
             .take(logical_count)
             .filter(|valid| **valid)
             .count();
-        if encoded_count == value.valid_data.len() {
+        if encoded_count == valid_data.len() {
             logical_count
         } else if encoded_count == total_valid {
             selected_valid
@@ -1232,6 +1255,18 @@ fn truncate_proto_field_data(
         )));
     }
 
+    // Truncate both the field-specific and the legacy validity channels so the preferred bitmap
+    // still matches the truncated payload; leaving the field-specific channel untruncated would
+    // make `decode_field_data` see mismatched lengths and fail the whole decode.
+    if let Some(Field::Scalars(scalars)) = value.field.as_mut() {
+        if !scalars.valid_data.is_empty() {
+            scalars.valid_data.truncate(logical_count);
+        }
+    } else if let Some(Field::Vectors(vectors)) = value.field.as_mut() {
+        if !vectors.valid_data.is_empty() {
+            vectors.valid_data.truncate(logical_count);
+        }
+    }
     value.valid_data.truncate(logical_count);
     truncate_proto_payload(&mut value, payload_count).ok_or_else(|| {
         Error::MalformedResponse(format!(
@@ -1656,14 +1691,65 @@ mod tests {
     use crate::proto::{common, milvus, schema};
     use crate::v2::types::{DataType, FieldData};
 
+    #[test]
+    fn decode_field_data_prefers_field_specific_validity() {
+        // Server sends the new field-specific validity that contradicts the legacy
+        // top-level field; the field-specific channel must win.
+        let proto = schema::FieldData {
+            r#type: schema::DataType::Int64 as i32,
+            field_name: "id".into(),
+            valid_data: vec![false, false, false],
+            field: Some(schema::field_data::Field::Scalars(schema::ScalarField {
+                valid_data: vec![true, false, true],
+                data: Some(schema::scalar_field::Data::LongData(schema::LongArray {
+                    data: vec![1, 2, 3],
+                })),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let decoded = super::decode_field_data(proto).expect("decodes");
+        let FieldData::Nullable { data, valid_data } = decoded else {
+            panic!("expected nullable field data")
+        };
+        assert_eq!(valid_data, vec![true, false, true]);
+        assert_eq!(data.as_int64(), Some([1, 3].as_slice()));
+    }
+
+    #[test]
+    fn decode_field_data_falls_back_to_legacy_validity() {
+        // Legacy writer: only the top-level field carries validity.
+        let proto = schema::FieldData {
+            r#type: schema::DataType::Int64 as i32,
+            field_name: "id".into(),
+            valid_data: vec![true, false, true],
+            field: Some(schema::field_data::Field::Scalars(schema::ScalarField {
+                valid_data: Vec::new(),
+                data: Some(schema::scalar_field::Data::LongData(schema::LongArray {
+                    data: vec![1, 2, 3],
+                })),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let decoded = super::decode_field_data(proto).expect("decodes");
+        let FieldData::Nullable { data, valid_data } = decoded else {
+            panic!("expected nullable field data")
+        };
+        assert_eq!(valid_data, vec![true, false, true]);
+        assert_eq!(data.as_int64(), Some([1, 3].as_slice()));
+    }
+
     fn all_null_vector_field(data_type: schema::DataType, dimension: i64) -> schema::FieldData {
         schema::FieldData {
             r#type: data_type as i32,
             field_name: "embedding".into(),
             valid_data: vec![false, false],
             field: Some(schema::field_data::Field::Vectors(schema::VectorField {
+                valid_data: Vec::new(),
                 dim: dimension,
                 data: None,
+                ..Default::default()
             })),
             ..Default::default()
         }
@@ -1722,6 +1808,7 @@ mod tests {
                     id_field: Some(schema::i_ds::IdField::IntId(schema::LongArray {
                         data: vec![1, 2],
                     })),
+                    ..Default::default()
                 }),
                 fields_data: vec![field],
                 output_fields: vec!["embedding".into()],
@@ -1746,9 +1833,11 @@ mod tests {
             field_name: "optional".into(),
             valid_data: vec![true, false, true],
             field: Some(Field::Scalars(schema::ScalarField {
+                valid_data: Vec::new(),
                 data: Some(scalar_field::Data::LongData(schema::LongArray {
                     data: vec![10, 30],
                 })),
+                ..Default::default()
             })),
             ..Default::default()
         })
@@ -1763,14 +1852,17 @@ mod tests {
             r#type: schema::DataType::Array as i32,
             field_name: "tags".into(),
             field: Some(Field::Scalars(schema::ScalarField {
+                valid_data: Vec::new(),
                 data: Some(scalar_field::Data::ArrayData(schema::ArrayArray {
                     element_type: schema::DataType::VarChar as i32,
                     data: vec![schema::ScalarField {
+                        valid_data: Vec::new(),
                         data: Some(scalar_field::Data::StringData(schema::StringArray {
                             data: vec!["a".into(), "b".into()],
                         })),
                     }],
                 })),
+                ..Default::default()
             })),
             ..Default::default()
         })
@@ -1784,6 +1876,7 @@ mod tests {
             r#type: schema::DataType::SparseFloatVector as i32,
             field_name: "sparse".into(),
             field: Some(Field::Vectors(schema::VectorField {
+                valid_data: Vec::new(),
                 dim: 3,
                 data: Some(vector_field::Data::SparseFloatVector(
                     schema::SparseFloatArray {
@@ -1791,6 +1884,7 @@ mod tests {
                         dim: 3,
                     },
                 )),
+                ..Default::default()
             })),
             ..Default::default()
         })
@@ -1824,6 +1918,7 @@ mod tests {
                 r#type: data_type as i32,
                 field_name: "value".into(),
                 field: Some(Field::Scalars(schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(scalar_field::Data::IntData(schema::IntArray {
                         data: match data_type {
                             schema::DataType::Int8 => vec![-128, 127],
@@ -1831,6 +1926,7 @@ mod tests {
                             _ => unreachable!(),
                         },
                     })),
+                    ..Default::default()
                 })),
                 ..Default::default()
             })
@@ -1848,9 +1944,11 @@ mod tests {
                 r#type: data_type,
                 field_name: "integer".into(),
                 field: Some(Field::Scalars(schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(scalar_field::Data::IntData(schema::IntArray {
                         data: vec![1],
                     })),
+                    ..Default::default()
                 })),
                 ..Default::default()
             }
@@ -1861,9 +1959,11 @@ mod tests {
                 r#type: data_type,
                 field_name: "text".into(),
                 field: Some(Field::Scalars(schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(scalar_field::Data::StringData(schema::StringArray {
                         data: vec!["value".into()],
                     })),
+                    ..Default::default()
                 })),
                 ..Default::default()
             }
@@ -1878,9 +1978,11 @@ mod tests {
                 r#type: schema::DataType::Int64 as i32,
                 field_name: "boolean".into(),
                 field: Some(Field::Scalars(schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(scalar_field::Data::BoolData(schema::BoolArray {
                         data: vec![true],
                     })),
+                    ..Default::default()
                 })),
                 ..Default::default()
             },
@@ -1888,9 +1990,11 @@ mod tests {
                 r#type: schema::DataType::Bool as i32,
                 field_name: "integer".into(),
                 field: Some(Field::Scalars(schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(scalar_field::Data::LongData(schema::LongArray {
                         data: vec![1],
                     })),
+                    ..Default::default()
                 })),
                 ..Default::default()
             },
@@ -1898,10 +2002,12 @@ mod tests {
                 r#type: schema::DataType::Bool as i32,
                 field_name: "embedding".into(),
                 field: Some(Field::Vectors(schema::VectorField {
+                    valid_data: Vec::new(),
                     dim: 2,
                     data: Some(vector_field::Data::FloatVector(schema::FloatArray {
                         data: vec![0.1, 0.2],
                     })),
+                    ..Default::default()
                 })),
                 ..Default::default()
             },
@@ -1961,10 +2067,12 @@ mod tests {
             r#type: schema::DataType::Float16Vector as i32,
             field_name: "embedding".into(),
             field: Some(Field::Vectors(schema::VectorField {
+                valid_data: Vec::new(),
                 dim: 2,
                 data: Some(vector_field::Data::Float16Vector(vec![
                     0x00, 0x3c, 0x00, 0xbc,
                 ])),
+                ..Default::default()
             })),
             ..Default::default()
         })
@@ -1984,11 +2092,13 @@ mod tests {
             r#type: schema::DataType::Geometry as i32,
             field_name: "location".into(),
             field: Some(field_data::Field::Scalars(schema::ScalarField {
+                valid_data: Vec::new(),
                 data: Some(scalar_field::Data::GeometryWktData(
                     schema::GeometryWktArray {
                         data: vec!["POINT (1 2)".into()],
                     },
                 )),
+                ..Default::default()
             })),
             ..Default::default()
         };
@@ -1996,9 +2106,11 @@ mod tests {
             r#type: schema::DataType::Timestamptz as i32,
             field_name: "observed_at".into(),
             field: Some(field_data::Field::Scalars(schema::ScalarField {
+                valid_data: Vec::new(),
                 data: Some(scalar_field::Data::StringData(schema::StringArray {
                     data: vec!["2026-07-15T12:30:00+08:00".into()],
                 })),
+                ..Default::default()
             })),
             ..Default::default()
         };
@@ -2006,14 +2118,17 @@ mod tests {
             r#type: schema::DataType::Array as i32,
             field_name: "label".into(),
             field: Some(field_data::Field::Scalars(schema::ScalarField {
+                valid_data: Vec::new(),
                 data: Some(scalar_field::Data::ArrayData(schema::ArrayArray {
                     element_type: schema::DataType::VarChar as i32,
                     data: vec![schema::ScalarField {
+                        valid_data: Vec::new(),
                         data: Some(scalar_field::Data::StringData(schema::StringArray {
                             data: vec!["start".into(), "finish".into()],
                         })),
                     }],
                 })),
+                ..Default::default()
             })),
             ..Default::default()
         };
@@ -2021,9 +2136,11 @@ mod tests {
             r#type: schema::DataType::Array as i32,
             field_name: "location".into(),
             field: Some(field_data::Field::Scalars(schema::ScalarField {
+                valid_data: Vec::new(),
                 data: Some(scalar_field::Data::ArrayData(schema::ArrayArray {
                     element_type: schema::DataType::Geometry as i32,
                     data: vec![schema::ScalarField {
+                        valid_data: Vec::new(),
                         data: Some(scalar_field::Data::GeometryWktData(
                             schema::GeometryWktArray {
                                 data: vec!["POINT (3 4)".into(), "POINT (5 6)".into()],
@@ -2031,6 +2148,7 @@ mod tests {
                         )),
                     }],
                 })),
+                ..Default::default()
             })),
             ..Default::default()
         };
@@ -2038,9 +2156,11 @@ mod tests {
             r#type: schema::DataType::Array as i32,
             field_name: "observed_at".into(),
             field: Some(field_data::Field::Scalars(schema::ScalarField {
+                valid_data: Vec::new(),
                 data: Some(scalar_field::Data::ArrayData(schema::ArrayArray {
                     element_type: schema::DataType::Timestamptz as i32,
                     data: vec![schema::ScalarField {
+                        valid_data: Vec::new(),
                         data: Some(scalar_field::Data::StringData(schema::StringArray {
                             data: vec![
                                 "2026-07-15T12:31:00+08:00".into(),
@@ -2049,6 +2169,7 @@ mod tests {
                         })),
                     }],
                 })),
+                ..Default::default()
             })),
             ..Default::default()
         };
@@ -2056,17 +2177,20 @@ mod tests {
             r#type: schema::DataType::ArrayOfVector as i32,
             field_name: "embedding".into(),
             field: Some(field_data::Field::Vectors(schema::VectorField {
+                valid_data: Vec::new(),
                 dim: 2,
                 data: Some(vector_field::Data::VectorArray(schema::VectorArray {
                     dim: 2,
                     element_type: schema::DataType::FloatVector as i32,
                     data: vec![schema::VectorField {
+                        valid_data: Vec::new(),
                         dim: 2,
                         data: Some(vector_field::Data::FloatVector(schema::FloatArray {
                             data: vec![0.1, 0.2, 0.3, 0.4],
                         })),
                     }],
                 })),
+                ..Default::default()
             })),
             ..Default::default()
         };
@@ -2075,6 +2199,7 @@ mod tests {
             field_name: "events".into(),
             field: Some(field_data::Field::StructArrays(schema::StructArrayField {
                 fields: vec![label, nested_geometry, nested_time, nested_embedding],
+                ..Default::default()
             })),
             ..Default::default()
         };
@@ -2130,6 +2255,7 @@ mod tests {
                     id_field: Some(schema::i_ds::IdField::IntId(schema::LongArray {
                         data: vec![1],
                     })),
+                    ..Default::default()
                 }),
                 fields_data: fields,
                 ..Default::default()
@@ -2178,14 +2304,17 @@ mod tests {
                     id_field: Some(schema::i_ds::IdField::IntId(schema::LongArray {
                         data: vec![1],
                     })),
+                    ..Default::default()
                 }),
                 fields_data: vec![schema::FieldData {
                     r#type: schema::DataType::Int64 as i32,
                     field_name: "score".into(),
                     field: Some(schema::field_data::Field::Scalars(schema::ScalarField {
+                        valid_data: Vec::new(),
                         data: Some(schema::scalar_field::Data::LongData(schema::LongArray {
                             data: vec![42],
                         })),
+                        ..Default::default()
                     })),
                     ..Default::default()
                 }],
@@ -2195,6 +2324,7 @@ mod tests {
                         fragments: vec!["<em>Milvus</em>".into()],
                         scores: vec![0.8],
                     }],
+                    ..Default::default()
                 }],
                 ..Default::default()
             }),
@@ -2221,9 +2351,11 @@ mod tests {
                 r#type: schema::DataType::Json as i32,
                 field_name: "metadata".into(),
                 field: Some(schema::field_data::Field::Scalars(schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(schema::scalar_field::Data::JsonData(schema::JsonArray {
                         data: vec![b"not-json".to_vec()],
                     })),
+                    ..Default::default()
                 })),
                 ..Default::default()
             }],
@@ -2240,9 +2372,11 @@ mod tests {
             field_name: "metadata".into(),
             valid_data: vec![true, false],
             field: Some(schema::field_data::Field::Scalars(schema::ScalarField {
+                valid_data: Vec::new(),
                 data: Some(schema::scalar_field::Data::JsonData(schema::JsonArray {
                     data: vec![br#"{"present":true}"#.to_vec(), Vec::new()],
                 })),
+                ..Default::default()
             })),
             ..Default::default()
         })
@@ -2268,14 +2402,17 @@ mod tests {
                     id_field: Some(schema::i_ds::IdField::IntId(schema::LongArray {
                         data: vec![1],
                     })),
+                    ..Default::default()
                 }),
                 fields_data: vec![schema::FieldData {
                     r#type: schema::DataType::Int8 as i32,
                     field_name: "narrow".into(),
                     field: Some(schema::field_data::Field::Scalars(schema::ScalarField {
+                        valid_data: Vec::new(),
                         data: Some(schema::scalar_field::Data::IntData(schema::IntArray {
                             data: vec![128],
                         })),
+                        ..Default::default()
                     })),
                     ..Default::default()
                 }],
@@ -2326,18 +2463,22 @@ mod tests {
                     id_field: Some(schema::i_ds::IdField::IntId(schema::LongArray {
                         data: vec![10, 11, 20],
                     })),
+                    ..Default::default()
                 }),
                 element_indices: Some(schema::LongArray {
                     data: vec![2, 4, 1],
+                    ..Default::default()
                 }),
                 fields_data: vec![
                     schema::FieldData {
                         r#type: schema::DataType::Int64 as i32,
                         field_name: "value".into(),
                         field: Some(Field::Scalars(schema::ScalarField {
+                            valid_data: Vec::new(),
                             data: Some(scalar_field::Data::LongData(schema::LongArray {
                                 data: vec![100, 101, 200],
                             })),
+                            ..Default::default()
                         })),
                         ..Default::default()
                     },
@@ -2346,9 +2487,11 @@ mod tests {
                         field_name: "nullable_text".into(),
                         valid_data: vec![true, false, true],
                         field: Some(Field::Scalars(schema::ScalarField {
+                            valid_data: Vec::new(),
                             data: Some(scalar_field::Data::StringData(schema::StringArray {
                                 data: vec!["first".into(), "third".into()],
                             })),
+                            ..Default::default()
                         })),
                         ..Default::default()
                     },
@@ -2365,6 +2508,7 @@ mod tests {
                             scores: vec![1.0],
                         })
                         .collect(),
+                    ..Default::default()
                 }],
                 ..Default::default()
             }),
@@ -2444,14 +2588,17 @@ mod tests {
                     id_field: Some(schema::i_ds::IdField::IntId(schema::LongArray {
                         data: vec![10, 20],
                     })),
+                    ..Default::default()
                 }),
                 fields_data: vec![schema::FieldData {
                     r#type: schema::DataType::Int64 as i32,
                     field_name: "value".into(),
                     field: Some(Field::Scalars(schema::ScalarField {
+                        valid_data: Vec::new(),
                         data: Some(scalar_field::Data::LongData(schema::LongArray {
                             data: vec![100, 200, 300],
                         })),
+                        ..Default::default()
                     })),
                     ..Default::default()
                 }],
@@ -2481,9 +2628,11 @@ mod tests {
                         id_field: Some(schema::i_ds::IdField::IntId(schema::LongArray {
                             data: vec![10, 11, 12],
                         })),
+                        ..Default::default()
                     }),
                     element_indices: Some(schema::LongArray {
                         data: vec![4, 5, 6],
+                        ..Default::default()
                     }),
                     fields_data: vec![
                         schema::FieldData {
@@ -2491,9 +2640,11 @@ mod tests {
                             field_name: "age".into(),
                             valid_data: vec![true, true, true],
                             field: Some(Field::Scalars(schema::ScalarField {
+                                valid_data: Vec::new(),
                                 data: Some(scalar_field::Data::IntData(schema::IntArray {
                                     data: vec![20, 21],
                                 })),
+                                ..Default::default()
                             })),
                             ..Default::default()
                         },
@@ -2502,9 +2653,11 @@ mod tests {
                             field_name: "name".into(),
                             valid_data: vec![true, true, true],
                             field: Some(Field::Scalars(schema::ScalarField {
+                                valid_data: Vec::new(),
                                 data: Some(scalar_field::Data::StringData(schema::StringArray {
                                     data: vec!["first".into(), "second".into()],
                                 })),
+                                ..Default::default()
                             })),
                             ..Default::default()
                         },
@@ -2540,6 +2693,61 @@ mod tests {
     }
 
     #[test]
+    fn search_truncation_also_truncates_field_specific_validity() {
+        use schema::{field_data::Field, scalar_field};
+
+        // The server sends field-level validity (newer proto channel) with surplus rows; the
+        // single-query row-limit truncation must slice the field-specific validity alongside the
+        // payload so decode does not fail on a length mismatch.
+        let search = SearchResponse::from_proto_with_row_limit(
+            milvus::SearchResults {
+                results: Some(schema::SearchResultData {
+                    num_queries: 1,
+                    top_k: 3,
+                    topks: vec![3],
+                    scores: vec![0.9, 0.8, 0.7],
+                    ids: Some(schema::IDs {
+                        id_field: Some(schema::i_ds::IdField::IntId(schema::LongArray {
+                            data: vec![10, 11, 12],
+                        })),
+                        ..Default::default()
+                    }),
+                    element_indices: Some(schema::LongArray {
+                        data: vec![4, 5, 6],
+                        ..Default::default()
+                    }),
+                    fields_data: vec![schema::FieldData {
+                        r#type: schema::DataType::Int16 as i32,
+                        field_name: "age".into(),
+                        valid_data: Vec::new(),
+                        field: Some(Field::Scalars(schema::ScalarField {
+                            valid_data: vec![true, true, true, true],
+                            data: Some(scalar_field::Data::IntData(schema::IntArray {
+                                data: vec![20, 21, 22, 23],
+                            })),
+                            ..Default::default()
+                        })),
+                        ..Default::default()
+                    }],
+                    primary_field_name: "id".into(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+            Some(2),
+        )
+        .expect("truncate search response with field-specific validity");
+
+        let result = &search.results().get_results()[0];
+        assert!(matches!(
+            result.get_output_field("age"),
+            Some(FieldData::Nullable { valid_data, data })
+                if valid_data == &vec![true, true]
+                    && matches!(data.as_ref(), FieldData::Int16 { values, .. } if values == &vec![20, 21])
+        ));
+    }
+
+    #[test]
     fn search_rejects_short_element_indices() {
         let response = SearchResponse::from_proto(milvus::SearchResults {
             results: Some(schema::SearchResultData {
@@ -2551,8 +2759,12 @@ mod tests {
                     id_field: Some(schema::i_ds::IdField::IntId(schema::LongArray {
                         data: vec![10, 10],
                     })),
+                    ..Default::default()
                 }),
-                element_indices: Some(schema::LongArray { data: vec![3] }),
+                element_indices: Some(schema::LongArray {
+                    data: vec![3],
+                    ..Default::default()
+                }),
                 ..Default::default()
             }),
             ..Default::default()
@@ -2574,9 +2786,11 @@ mod tests {
                     id_field: Some(schema::i_ds::IdField::IntId(schema::LongArray {
                         data: vec![10, 10, 11],
                     })),
+                    ..Default::default()
                 }),
                 element_indices: Some(schema::LongArray {
                     data: vec![2, 4, 1],
+                    ..Default::default()
                 }),
                 primary_field_name: "id".into(),
                 ..Default::default()

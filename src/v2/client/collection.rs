@@ -202,6 +202,7 @@ impl ClientV2 {
                         collection_name: collection.to_owned(),
                         partition_names: partition_names.to_vec(),
                         db_name: database.to_owned(),
+                        ..Default::default()
                     }
                 )
             };
@@ -344,6 +345,7 @@ impl ClientV2 {
             collection_name: request.collection_name.clone(),
             partition_names: request.partition_names.clone(),
             db_name: request.db_name.clone(),
+            ..Default::default()
         };
         let response = rpc_with_retry!(self, get_load_state, request)?;
         status_to_result(&response.status)?;

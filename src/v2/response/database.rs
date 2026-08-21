@@ -235,6 +235,7 @@ mod describe_database_response_tests {
             properties: vec![common::KeyValuePair {
                 key: "key".into(),
                 value: "value".into(),
+                ..Default::default()
             }],
             ..Default::default()
         });

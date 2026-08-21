@@ -45,7 +45,7 @@
 use crate::proto::milvus::milvus_service_client::MilvusServiceClient;
 use crate::proto::{common, milvus};
 use crate::v2::error::{Error, Result};
-use crate::v2::types::{ConnectConfig, RetryConfig};
+use crate::v2::types::{is_global_endpoint, ConnectConfig, RetryConfig};
 use parking_lot::RwLock;
 use std::future::Future;
 use std::sync::Arc;
@@ -62,6 +62,20 @@ macro_rules! trace_debug {
     ($($field:tt)*) => {
         #[cfg(feature = "tracing")]
         tracing::debug!($($field)*);
+    };
+}
+
+macro_rules! trace_info {
+    ($($field:tt)*) => {
+        #[cfg(feature = "tracing")]
+        tracing::info!($($field)*);
+    };
+}
+
+macro_rules! trace_warn {
+    ($($field:tt)*) => {
+        #[cfg(feature = "tracing")]
+        tracing::warn!($($field)*);
     };
 }
 
@@ -114,16 +128,19 @@ mod collection;
 mod database;
 mod dml;
 mod dql;
+mod global_cluster;
 mod index;
 mod internal;
 mod iterator;
 mod partition;
 mod rbac;
 mod resource_group;
+mod session;
 mod snapshot;
 mod utility;
 
 pub use iterator::{QueryIterator, SearchIterator, SearchIteratorV1, SearchIteratorV2};
+pub use session::MilvusClientV2Session;
 pub use utility::OptimizeTask;
 
 type Service = MilvusServiceClient<InterceptedService<Channel, V2Interceptor>>;
@@ -215,12 +232,13 @@ impl Interceptor for V2Interceptor {
 ///   are required.
 #[derive(Clone)]
 pub struct ClientV2 {
-    service: Service,
+    service: Arc<RwLock<Service>>,
     database: Arc<RwLock<String>>,
     rpc_timeout: Arc<RwLock<Duration>>,
     retry: Arc<RwLock<RetryConfig>>,
     cache_endpoint: Arc<String>,
     schema_load_scope: Arc<SchemaLoadScope>,
+    global_cluster: Option<Arc<global_cluster::GlobalCluster>>,
 }
 
 impl ClientV2 {
@@ -230,23 +248,58 @@ impl ClientV2 {
     }
 
     async fn connect(param: ConnectConfig) -> Result<Self> {
-        let (endpoint, effective_endpoint_uri) = configured_endpoint(&param).await?;
-        let database = Arc::new(RwLock::new(normalize_database(param.database)?));
-        let cache_endpoint = Arc::new(effective_endpoint_uri);
+        let database = Arc::new(RwLock::new(normalize_database(param.database.clone())?));
         let token = param
             .token
+            .as_deref()
             .map(|value| value.parse())
             .transpose()
             .map_err(|_| {
                 Error::validation("token".into(), "token is not valid HTTP metadata".into())
             })?;
-        let channel = endpoint.connect_lazy();
-        let interceptor = V2Interceptor {
-            token,
-            database: Arc::clone(&database),
+
+        validate_client_identity(&param)?;
+
+        let (service, database, cache_endpoint, global_cluster) = if is_global_endpoint(&param.uri)
+        {
+            let topology = global_cluster::fetch_topology(&param.uri, &param).await?;
+            let primary_endpoint = topology.primary()?.endpoint().to_owned();
+            let primary_uri = global_cluster::cluster_endpoint_uri(&primary_endpoint, &param)?;
+            let mut service =
+                global_cluster::build_service(&primary_uri, &param, &database).await?;
+            wait_for_server(&mut service, param.connect_timeout).await?;
+            let service = Arc::new(RwLock::new(service));
+            // The cache endpoint is the global URI itself, resolved with the same
+            // scheme-upgrade logic as the plain connection path (an explicit http:// global
+            // URI is upgraded to https:// when TLS is enabled) rather than the member-endpoint
+            // validator used for the primary endpoint above.
+            let cache_endpoint = Arc::new(tls_endpoint_uri(&param.uri, tls_enabled(&param))?);
+            let global = Arc::new(global_cluster::GlobalCluster::new(
+                param.uri.clone(),
+                param.clone(),
+                Arc::clone(&database),
+                Arc::clone(&service),
+                topology,
+            ));
+            global.start_refresh();
+            (service, database, cache_endpoint, Some(global))
+        } else {
+            let (endpoint, effective_endpoint_uri) = configured_endpoint(&param).await?;
+            let channel = endpoint.connect_lazy();
+            let interceptor = V2Interceptor {
+                token,
+                database: Arc::clone(&database),
+            };
+            let mut service = MilvusServiceClient::with_interceptor(channel, interceptor);
+            wait_for_server(&mut service, param.connect_timeout).await?;
+            (
+                Arc::new(RwLock::new(service)),
+                database,
+                Arc::new(effective_endpoint_uri),
+                None,
+            )
         };
-        let mut service = MilvusServiceClient::with_interceptor(channel, interceptor);
-        wait_for_server(&mut service, param.connect_timeout).await?;
+
         Ok(Self {
             service,
             database,
@@ -254,6 +307,7 @@ impl ClientV2 {
             retry: Arc::new(RwLock::new(param.retry)),
             cache_endpoint,
             schema_load_scope: Arc::new(SchemaLoadScope::new()),
+            global_cluster,
         })
     }
 
@@ -265,6 +319,42 @@ impl ClientV2 {
     /// Replaces the retry policy used by subsequent RPC calls.
     pub fn set_retry_param(&self, retry: RetryConfig) {
         *self.retry.write() = retry;
+    }
+
+    /// Creates a cluster-scoped session view bound to the given cluster identifier.
+    ///
+    /// The returned [`MilvusClientV2Session`] exposes the DQL surface only and routes every
+    /// request to the target global-cluster identifier. It shares this client's channel,
+    /// selected database, RPC settings, and caches.
+    ///
+    /// A global-cluster connection is not required: the session is a routing directive that
+    /// attaches `cluster_id` to each request's extra params. On a global cluster the identifier
+    /// selects the member cluster to serve the request; on a regular server it is forwarded as an
+    /// ordinary param, which the server ignores if it does not support cluster routing.
+    pub fn session(&self, cluster_id: impl Into<String>) -> Result<MilvusClientV2Session> {
+        let cluster_id = cluster_id.into();
+        if cluster_id.is_empty() {
+            return Err(Error::validation(
+                "cluster_id".into(),
+                "must not be empty".into(),
+            ));
+        }
+        Ok(MilvusClientV2Session::new(self.clone(), cluster_id))
+    }
+
+    /// Triggers a reactive global-cluster failover probe on `UNAVAILABLE`.
+    ///
+    /// The probe runs in a detached task so it does not block the retry loop on a full topology
+    /// fetch (which has its own retry backoff). A debounce window inside [`GlobalCluster::on_unavailable`]
+    /// coalesces repeated probes so a burst of `UNAVAILABLE` attempts does not hammer the global
+    /// REST endpoint; the rebuilt channel is picked up by later retry attempts.
+    fn refresh_global_on_unavailable(&self) {
+        if let Some(global) = &self.global_cluster {
+            let global = Arc::clone(global);
+            tokio::spawn(async move {
+                global.on_unavailable().await;
+            });
+        }
     }
 
     async fn retry_rpc<Req, Resp, MakeRequest, Call, CallFuture, GetStatus>(
@@ -282,7 +372,7 @@ impl ClientV2 {
     {
         self.retry_call(
             || {
-                let service = self.service.clone();
+                let service = self.service.read().clone();
                 let request = self.rpc_request(make_request()?);
                 Ok(call(service, request))
             },
@@ -305,7 +395,7 @@ impl ClientV2 {
     {
         self.retry_call(
             || {
-                let service = self.service.clone();
+                let service = self.service.read().clone();
                 let request = if apply_rpc_timeout {
                     self.rpc_request(request.clone())
                 } else {
@@ -378,7 +468,13 @@ impl ClientV2 {
                             crate::v2::error::status_to_result(&Some(status.clone()))
                         {
                             let rate_limited = is_rate_limit(&status);
-                            if (rate_limited && retry.retry_on_rate_limit)
+                            let region_switch = is_replicate_violation(&status);
+                            if region_switch {
+                                trace_info!(target: "milvus_sdk::retry", attempt, max_attempts, "detected global cluster region switch (REPLICATE_VIOLATION), triggering topology refresh");
+                                self.refresh_global_on_unavailable();
+                            }
+                            if region_switch
+                                || (rate_limited && retry.retry_on_rate_limit)
                                 || (!rate_limited
                                     && status.retriable
                                     && semantics == RetrySemantics::Idempotent)
@@ -417,10 +513,16 @@ impl ClientV2 {
                         grpc_code = ?status.code(),
                         "gRPC transport status is eligible for retry"
                     );
+                    if status.code() == tonic::Code::Unavailable {
+                        self.refresh_global_on_unavailable();
+                    }
                     Error::Grpc(status)
                 }
                 Err(status) => {
                     trace_debug!(target: "milvus_sdk::retry", attempt, max_attempts, grpc_code = ?status.code(), semantics = ?semantics, "gRPC transport status is not eligible for retry");
+                    if status.code() == tonic::Code::Unavailable {
+                        self.refresh_global_on_unavailable();
+                    }
                     return Err(status.into());
                 }
             };
@@ -452,20 +554,29 @@ impl ClientV2 {
 async fn configured_endpoint(param: &ConnectConfig) -> Result<(Endpoint, String)> {
     validate_client_identity(param)?;
 
-    let tls_enabled = param.uri.starts_with("https://")
+    let tls_enabled = tls_enabled(param);
+    let endpoint_uri = tls_endpoint_uri(&param.uri, tls_enabled)?;
+    let endpoint = build_endpoint(&endpoint_uri, param).await?;
+    Ok((endpoint, endpoint_uri))
+}
+
+fn tls_enabled(param: &ConnectConfig) -> bool {
+    param.uri.starts_with("https://")
         || param.tls_server_name.is_some()
         || param.ca_certificate.is_some()
         || param.client_certificate.is_some()
-        || param.client_key.is_some();
-    let endpoint_uri = tls_endpoint_uri(&param.uri, tls_enabled)?;
-    let mut endpoint = Endpoint::from_shared(endpoint_uri.clone())
+        || param.client_key.is_some()
+}
+
+async fn build_endpoint(endpoint_uri: &str, param: &ConnectConfig) -> Result<Endpoint> {
+    let mut endpoint = Endpoint::from_shared(endpoint_uri.to_owned())
         .map_err(|error| Error::validation("uri".into(), error.to_string()))?
         .connect_timeout(param.connect_timeout)
         .http2_keep_alive_interval(param.keepalive_time)
         .keep_alive_timeout(param.keepalive_timeout)
         .keep_alive_while_idle(param.keepalive_while_idle);
 
-    if tls_enabled {
+    if tls_enabled(param) {
         let mut tls = ClientTlsConfig::new();
         if let Some(server_name) = &param.tls_server_name {
             tls = tls.domain_name(server_name);
@@ -490,7 +601,7 @@ async fn configured_endpoint(param: &ConnectConfig) -> Result<(Endpoint, String)
             .map_err(|error| Error::validation("tls".into(), error.to_string()))?;
     }
 
-    Ok((endpoint, endpoint_uri))
+    Ok(endpoint)
 }
 
 fn validate_client_identity(param: &ConnectConfig) -> Result<()> {
@@ -590,6 +701,18 @@ fn is_retryable_grpc(code: Code) -> bool {
     )
 }
 
+/// Server error marker for a global-cluster region switch, mirroring pymilvus and the Java SDK.
+///
+/// A streaming replicate-violation rejection means the request reached a replica that is no longer
+/// the primary for its key range after a region switch, so the client must refresh the global
+/// topology (and rebuild to the current primary) before retrying.
+const STREAMING_CODE_REPLICATE_VIOLATION: &str = "STREAMING_CODE_REPLICATE_VIOLATION";
+
+/// Returns whether the server status signals a global-cluster region switch.
+fn is_replicate_violation(status: &crate::proto::common::Status) -> bool {
+    status.reason.contains(STREAMING_CODE_REPLICATE_VIOLATION)
+}
+
 #[allow(deprecated)]
 fn is_rate_limit(status: &crate::proto::common::Status) -> bool {
     status.error_code == crate::proto::common::ErrorCode::RateLimit as i32 || status.code == 8
@@ -651,12 +774,16 @@ mod retry_tests {
             database: Arc::clone(&database),
         };
         ClientV2 {
-            service: MilvusServiceClient::with_interceptor(channel, interceptor),
+            service: Arc::new(RwLock::new(MilvusServiceClient::with_interceptor(
+                channel,
+                interceptor,
+            ))),
             database,
             rpc_timeout: Arc::new(RwLock::new(Duration::from_secs(1))),
             retry: Arc::new(RwLock::new(retry)),
             cache_endpoint: Arc::new("http://127.0.0.1:19530".to_owned()),
             schema_load_scope: Arc::new(SchemaLoadScope::new()),
+            global_cluster: None,
         }
     }
 
@@ -768,6 +895,28 @@ mod retry_tests {
         let missing_certificate = ConnectConfig::new().client_key("client-key.pem");
         let Err(Error::Validation(error)) = configured_endpoint(&missing_certificate).await else {
             panic!("client key without a certificate must be rejected");
+        };
+        assert_eq!(error.parameter(), "client_certificate");
+    }
+
+    #[tokio::test]
+    async fn global_cluster_connections_also_require_a_complete_client_identity() {
+        // The global branch bypasses configured_endpoint, so connect must validate the identity
+        // before selecting either connection path rather than silently ignoring an incomplete TLS
+        // identity.
+        let missing_key = ConnectConfig::new()
+            .uri("https://my.global-cluster.example.com:443")
+            .client_certificate("client.pem");
+        let Err(Error::Validation(error)) = ClientV2::new(&missing_key).await else {
+            panic!("client certificate without a key must be rejected on a global endpoint");
+        };
+        assert_eq!(error.parameter(), "client_key");
+
+        let missing_certificate = ConnectConfig::new()
+            .uri("https://my.global-cluster.example.com:443")
+            .client_key("client-key.pem");
+        let Err(Error::Validation(error)) = ClientV2::new(&missing_certificate).await else {
+            panic!("client key without a certificate must be rejected on a global endpoint");
         };
         assert_eq!(error.parameter(), "client_certificate");
     }
@@ -1181,5 +1330,54 @@ mod retry_tests {
             assert!(matches!(result, Err(Error::Grpc(status)) if status.code() == code));
             assert_eq!(attempts.load(Ordering::SeqCst), 1);
         }
+    }
+
+    #[tokio::test]
+    async fn replicate_violation_server_status_is_retried_even_for_non_idempotent_calls() {
+        // A streaming replicate-violation signals a global-cluster region switch. Mirroring the
+        // Java SDK and pymilvus, it must be retried (after triggering a topology refresh) even for
+        // a non-idempotent call that would otherwise never replay a server status error.
+        let client = client(fast_retry(3));
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let observed = Arc::clone(&attempts);
+        let result = client
+            .retry_call(
+                move || {
+                    observed.fetch_add(1, Ordering::SeqCst);
+                    Ok(async {
+                        Ok(Response::new(common::Status {
+                            code: 1001,
+                            reason: "STREAMING_CODE_REPLICATE_VIOLATION: region switched".into(),
+                            retriable: false,
+                            ..Default::default()
+                        }))
+                    })
+                },
+                Some(|status: &common::Status| Some(status.clone())),
+                RetrySemantics::NonIdempotent,
+            )
+            .await;
+
+        assert!(matches!(
+            result,
+            Err(Error::RetryExhausted { attempts: 3, source })
+                if matches!(*source, Error::Server(_))
+        ));
+        assert_eq!(attempts.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn replicate_violation_marker_is_detected_in_server_reason() {
+        let region_switch = common::Status {
+            reason: "STREAMING_CODE_REPLICATE_VIOLATION: replica not primary".into(),
+            ..Default::default()
+        };
+        assert!(is_replicate_violation(&region_switch));
+
+        let ordinary = common::Status {
+            reason: "temporarily unavailable".into(),
+            ..Default::default()
+        };
+        assert!(!is_replicate_violation(&ordinary));
     }
 }

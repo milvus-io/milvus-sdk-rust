@@ -502,6 +502,7 @@ mod describe_role_tests {
                         }),
                     }),
                     db_name: "catalog".to_owned(),
+                    ..Default::default()
                 }],
                 ..Default::default()
             },
@@ -512,6 +513,7 @@ mod describe_role_tests {
                         description: "read-only role".to_owned(),
                     }),
                     users: Vec::new(),
+                    ..Default::default()
                 }],
                 ..Default::default()
             },
@@ -542,6 +544,7 @@ mod describe_role_tests {
                     users: vec![milvus::UserEntity {
                         name: "alice".to_owned(),
                     }],
+                    ..Default::default()
                 },
                 milvus::RoleResult {
                     role: Some(milvus::RoleEntity {
@@ -549,6 +552,7 @@ mod describe_role_tests {
                         description: String::new(),
                     }),
                     users: Vec::new(),
+                    ..Default::default()
                 },
             ],
             ..Default::default()

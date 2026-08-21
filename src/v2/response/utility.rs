@@ -1581,6 +1581,7 @@ mod segment_response_tests {
                     level: common::SegmentLevel::L1 as i32,
                     is_sorted: true,
                     storage_version: 2,
+                    ..Default::default()
                 }],
                 ..Default::default()
             },
@@ -1944,6 +1945,7 @@ mod external_collection_response_tests {
             milvus::RefreshExternalCollectionResponse {
                 status: None,
                 job_id: 7,
+                ..Default::default()
             },
         );
         assert_eq!(response.job_id(), 7);
@@ -1955,6 +1957,7 @@ mod external_collection_response_tests {
             milvus::GetRefreshExternalCollectionProgressResponse {
                 status: None,
                 job_info: None,
+                ..Default::default()
             },
         )
         .unwrap_err();
@@ -1977,6 +1980,7 @@ mod external_collection_response_tests {
                     end_time: 200,
                     external_spec: String::new(),
                 }),
+                ..Default::default()
             },
         )
         .expect("valid job info");
@@ -2006,6 +2010,7 @@ mod external_collection_response_tests {
                     end_time: 0,
                     external_spec: String::new(),
                 }],
+                ..Default::default()
             },
         );
         assert_eq!(response.jobs().len(), 1);
@@ -2024,6 +2029,7 @@ mod external_collection_response_tests {
                 name: "data-files".into(),
                 path: "s3://bucket/path".into(),
             }],
+            ..Default::default()
         });
         assert_eq!(response.resources().len(), 1);
         assert_eq!(response.resources()[0].get_name(), "data-files");

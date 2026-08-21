@@ -112,6 +112,7 @@ impl InsertRequest {
             num_rows: num_rows as u32,
             schema_timestamp,
             namespace: None,
+            ..Default::default()
         })
     }
 }

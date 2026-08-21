@@ -24,7 +24,11 @@ use std::collections::{HashMap, HashSet};
 fn properties(values: HashMap<String, String>) -> Vec<common::KeyValuePair> {
     values
         .into_iter()
-        .map(|(key, value)| common::KeyValuePair { key, value })
+        .map(|(key, value)| common::KeyValuePair {
+            key,
+            value,
+            ..Default::default()
+        })
         .collect()
 }
 
@@ -74,6 +78,7 @@ impl CreateDatabaseRequest {
             base: None,
             db_name: self.database_name,
             properties: properties(self.properties),
+            ..Default::default()
         }
     }
 }
@@ -145,6 +150,7 @@ impl DropDatabaseRequest {
         milvus::DropDatabaseRequest {
             base: None,
             db_name: self.database_name,
+            ..Default::default()
         }
     }
 }
@@ -258,6 +264,7 @@ impl AlterDatabasePropertiesRequest {
             db_id: String::new(),
             properties: properties(self.properties),
             delete_keys: Vec::new(),
+            ..Default::default()
         }
     }
 }
@@ -351,6 +358,7 @@ impl DropDatabasePropertiesRequest {
             db_id: String::new(),
             properties: Vec::new(),
             delete_keys: self.property_keys.into_iter().collect(),
+            ..Default::default()
         }
     }
 }
@@ -434,6 +442,7 @@ impl DescribeDatabaseRequest {
         milvus::DescribeDatabaseRequest {
             base: None,
             db_name: self.database_name,
+            ..Default::default()
         }
     }
 }

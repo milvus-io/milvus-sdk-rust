@@ -17,6 +17,7 @@
 //! Response types returned by data-manipulation operations.
 
 use crate::proto::milvus;
+use crate::v2::error::Result;
 pub use crate::v2::types::Ids;
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -106,9 +107,9 @@ impl DmlResponse {
         self.timestamp
     }
 
-    pub(crate) fn from_proto(value: milvus::MutationResult) -> Self {
-        Self {
-            ids: Ids::from_proto(value.i_ds),
+    pub(crate) fn from_proto(value: milvus::MutationResult) -> Result<Self> {
+        Ok(Self {
+            ids: Ids::from_proto(value.i_ds)?,
             succeeded_indices: value.succ_index,
             failed_indices: value.err_index,
             acknowledged: value.acknowledged,
@@ -116,7 +117,7 @@ impl DmlResponse {
             delete_count: value.delete_cnt,
             upsert_count: value.upsert_cnt,
             timestamp: value.timestamp,
-        }
+        })
     }
 }
 
@@ -213,16 +214,15 @@ mod dml_response_tests {
 
     #[test]
     fn protobuf_ids_convert_to_shared_ids() {
-        assert_eq!(Ids::from_proto(None), Ids::default());
-        assert_eq!(
-            Ids::from_proto(Some(schema::IDs {
-                id_field: Some(schema::i_ds::IdField::IntId(schema::LongArray {
-                    data: vec![1, 2],
-                    ..Default::default()
-                })),
+        assert_eq!(Ids::from_proto(None).unwrap(), Ids::default());
+        let int_ids = Ids::from_proto(Some(schema::IDs {
+            id_field: Some(schema::i_ds::IdField::IntId(schema::LongArray {
+                data: vec![1, 2],
+                ..Default::default()
             })),
-            Ids::Int64(vec![1, 2])
-        );
+        }))
+        .unwrap();
+        assert_eq!(int_ids, Ids::Int64(vec![1, 2]));
     }
 }
 

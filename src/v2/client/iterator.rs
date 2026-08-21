@@ -16,12 +16,15 @@
 
 //! Query and search iterators for paginated V2 reads.
 
+use super::dql::set_cluster_param;
 use super::ClientV2;
 use crate::proto::{common, milvus, schema};
 use crate::v2::error::status_to_result;
 use crate::v2::error::{Error, Result};
 use crate::v2::{request, response};
 use crate::v2::{DataType, IndexDesc, MetricType};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const MAX_BATCH_SIZE: usize = 16_384;
@@ -54,6 +57,7 @@ pub struct QueryIterator {
     cursor: Option<QueryCursor>,
     cache: Option<response::dql::QueryResponse>,
     finished: bool,
+    closed: Option<Arc<AtomicBool>>,
 }
 
 impl QueryIterator {
@@ -69,6 +73,26 @@ impl QueryIterator {
             cursor: None,
             cache: None,
             finished: true,
+            closed: None,
+        }
+    }
+
+    /// Binds this iterator to a session-closed flag so pages stop once the owning session closes.
+    pub(crate) fn bind_session_close(&mut self, closed: Arc<AtomicBool>) {
+        self.closed = Some(closed);
+    }
+
+    fn ensure_session_open(&self) -> Result<()> {
+        if self
+            .closed
+            .as_ref()
+            .is_some_and(|flag| flag.load(Ordering::SeqCst))
+        {
+            Err(Error::Unexpected(
+                "MilvusClientV2 session is closed".to_owned(),
+            ))
+        } else {
+            Ok(())
         }
     }
 
@@ -77,6 +101,7 @@ impl QueryIterator {
     /// Pages advance a primary-key cursor and are decoded on demand rather than materializing the
     /// entire result set.
     pub async fn next(&mut self) -> Result<Option<response::dql::QueryResponse>> {
+        self.ensure_session_open()?;
         if self.finished || self.remaining == Some(0) {
             return Ok(None);
         }
@@ -227,6 +252,14 @@ pub enum SearchIterator {
 }
 
 impl SearchIterator {
+    /// Binds this iterator to a session-closed flag so pages stop once the owning session closes.
+    pub(crate) fn bind_session_close(&mut self, closed: Arc<AtomicBool>) {
+        match self {
+            Self::V1(iterator) => iterator.closed = Some(closed),
+            Self::V2(iterator) => iterator.closed = Some(closed),
+        }
+    }
+
     /// Retrieves the next search-result batch, or `None` when iteration is complete.
     pub async fn next(&mut self) -> Result<Option<response::dql::SearchResponse>> {
         match self {
@@ -264,11 +297,27 @@ pub struct SearchIteratorV1 {
     width: f64,
     cache: Option<response::dql::SearchResponse>,
     finished: bool,
+    closed: Option<Arc<AtomicBool>>,
 }
 
 impl SearchIteratorV1 {
+    fn ensure_session_open(&self) -> Result<()> {
+        if self
+            .closed
+            .as_ref()
+            .is_some_and(|flag| flag.load(Ordering::SeqCst))
+        {
+            Err(Error::Unexpected(
+                "MilvusClientV2 session is closed".to_owned(),
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
     /// Retrieves the next legacy search-result batch, or `None` when iteration is complete.
     pub async fn next(&mut self) -> Result<Option<response::dql::SearchResponse>> {
+        self.ensure_session_open()?;
         if self.finished || self.remaining == Some(0) {
             return Ok(None);
         }
@@ -422,6 +471,7 @@ pub struct SearchIteratorV2 {
     token: Option<String>,
     primary_field_name: String,
     finished: bool,
+    closed: Option<Arc<AtomicBool>>,
 }
 
 impl SearchIteratorV2 {
@@ -434,11 +484,27 @@ impl SearchIteratorV2 {
             token: None,
             primary_field_name: String::new(),
             finished: true,
+            closed: None,
+        }
+    }
+
+    fn ensure_session_open(&self) -> Result<()> {
+        if self
+            .closed
+            .as_ref()
+            .is_some_and(|flag| flag.load(Ordering::SeqCst))
+        {
+            Err(Error::Unexpected(
+                "MilvusClientV2 session is closed".to_owned(),
+            ))
+        } else {
+            Ok(())
         }
     }
 
     /// Retrieves the next token-based search-result batch, or `None` when iteration is complete.
     pub async fn next(&mut self) -> Result<Option<response::dql::SearchResponse>> {
+        self.ensure_session_open()?;
         if self.finished || self.remaining == Some(0) {
             return Ok(None);
         }
@@ -605,6 +671,14 @@ impl ClientV2 {
         &self,
         request: request::dql::QueryIteratorRequest,
     ) -> Result<QueryIterator> {
+        self.query_iterator_with_cluster(request, "").await
+    }
+
+    pub(super) async fn query_iterator_with_cluster(
+        &self,
+        request: request::dql::QueryIteratorRequest,
+        cluster_id: &str,
+    ) -> Result<QueryIterator> {
         let request::dql::QueryIteratorRequest {
             query,
             batch_size,
@@ -651,6 +725,7 @@ impl ClientV2 {
             Some(_) | None => None,
         };
         let mut raw = query.into_proto(&database, None, guarantee)?;
+        set_cluster_param(&mut raw.query_params, cluster_id);
         let original_filter = raw.expr.clone();
         set_param(&mut raw.query_params, "offset", "0".into());
         set_param(
@@ -689,6 +764,7 @@ impl ClientV2 {
             cursor: None,
             cache: None,
             finished: false,
+            closed: None,
         };
         iterator.seek_to_offset(offset).await?;
         Ok(iterator)
@@ -698,7 +774,15 @@ impl ClientV2 {
     /// search token/bound and one MVCC session timestamp across pages.
     pub async fn search_iterator(
         &self,
+        request: request::dql::SearchIteratorRequest,
+    ) -> Result<SearchIterator> {
+        self.search_iterator_with_cluster(request, "").await
+    }
+
+    pub(super) async fn search_iterator_with_cluster(
+        &self,
         mut request: request::dql::SearchIteratorRequest,
+        cluster_id: &str,
     ) -> Result<SearchIterator> {
         validate_batch_size(request.batch_size)?;
         if request.limit == Some(0) {
@@ -738,6 +822,7 @@ impl ClientV2 {
         request.search.limit = batch_size as i64;
         let consistency_level = request.search.consistency_level;
         let mut raw = request.search.into_proto(&database, 0)?;
+        set_cluster_param(&mut raw.search_params, cluster_id);
         if raw.nq != 1 {
             return Err(Error::validation(
                 "vectors".into(),
@@ -776,6 +861,7 @@ impl ClientV2 {
                 token: None,
                 primary_field_name: direct_info.primary_field_name,
                 finished: false,
+                closed: None,
             }));
         }
 
@@ -845,6 +931,7 @@ impl ClientV2 {
             width,
             cache: (initial_count > 0).then_some(initial),
             finished: initial_count == 0,
+            closed: None,
         };
         Ok(SearchIterator::V1(iterator))
     }
@@ -865,6 +952,7 @@ impl ClientV2 {
                 field_name: vector_field.to_owned(),
                 index_name: String::new(),
                 timestamp: 0,
+                ..Default::default()
             }
         )?;
         status_to_result(&response.status)?;
@@ -1136,6 +1224,7 @@ fn set_param(params: &mut Vec<common::KeyValuePair>, key: &str, value: String) {
         params.push(common::KeyValuePair {
             key: key.into(),
             value,
+            ..Default::default()
         });
     }
 }
@@ -1390,6 +1479,7 @@ mod search_iterator_v2_tests {
                 search_iterator_v2_results: Some(schema::SearchIteratorV2Results {
                     token: token.into(),
                     last_bound: 0.5,
+                    ..Default::default()
                 }),
                 ..Default::default()
             }),
@@ -1430,6 +1520,7 @@ mod search_iterator_v2_tests {
         let mut params = vec![common::KeyValuePair {
             key: "params".into(),
             value: r#"{"nprobe":"16"}"#.into(),
+            ..Default::default()
         }];
         set_search_extra_param(&mut params, "search_iter_v2", "True");
 

@@ -491,6 +491,7 @@ impl FunctionScore {
                     },
                 })
                 .collect(),
+            ..Default::default()
         }
     }
 }
@@ -647,6 +648,7 @@ impl Highlighter {
                 .into_iter()
                 .map(|(key, value)| common::KeyValuePair { key, value })
                 .collect(),
+            ..Default::default()
         }
     }
 }

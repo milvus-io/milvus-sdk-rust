@@ -74,6 +74,7 @@ impl Client {
                     db_name: "".to_string(), // reserved
                     collection_name,
                     partition_name,
+                    ..Default::default()
                 })
                 .await?
                 .into_inner(),
@@ -103,6 +104,7 @@ impl Client {
                     db_name: "".to_string(), // reserved
                     collection_name,
                     partition_name,
+                    ..Default::default()
                 })
                 .await?
                 .into_inner(),
@@ -131,6 +133,7 @@ impl Client {
                     collection_id: 0,        // reserved
                     partition_names: vec![], // reserved
                     r#type: 0,               // reserved
+                    ..Default::default()
                 },
             )
             .await?
@@ -162,6 +165,7 @@ impl Client {
                 db_name: "".to_string(), // reserved
                 collection_name,
                 partition_name,
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -192,6 +196,7 @@ impl Client {
                 db_name: "".to_string(), // reserved
                 collection_name,
                 partition_name,
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -240,6 +245,7 @@ impl Client {
                     load_fields: options.load_fields,
                     skip_load_dynamic_field: options.skip_load_dynamic_field,
                     load_params: options.load_params,
+                    ..Default::default()
                 })
                 .await?
                 .into_inner(),
@@ -287,6 +293,7 @@ impl Client {
                     db_name: "".to_string(),
                     collection_name: collection_name.into(),
                     partition_names: names,
+                    ..Default::default()
                 })
                 .await?
                 .into_inner(),

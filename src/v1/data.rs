@@ -152,6 +152,7 @@ impl FieldColumn {
                 Value::SparseFloat(Cow::Owned(schema::SparseFloatArray {
                     contents: vec![content],
                     dim: v.dim,
+                    ..Default::default()
                 }))
             }
             ValueVec::StructArray(v) => {
@@ -164,6 +165,7 @@ impl FieldColumn {
                     dim: v.dim,
                     data: vec![entry],
                     element_type: v.element_type,
+                    ..Default::default()
                 }))
             }
         })
@@ -252,15 +254,20 @@ impl FieldColumn {
                 ValueVec::SparseFloat(crate::proto::schema::SparseFloatArray {
                     contents: Vec::new(),
                     dim: v.dim,
+                    ..Default::default()
                 })
             }
             ValueVec::StructArray(_) => {
-                ValueVec::StructArray(crate::proto::schema::StructArrayField { fields: Vec::new() })
+                ValueVec::StructArray(crate::proto::schema::StructArrayField {
+                    fields: Vec::new(),
+                    ..Default::default()
+                })
             }
             ValueVec::VectorArray(v) => ValueVec::VectorArray(crate::proto::schema::VectorArray {
                 dim: v.dim,
                 data: Vec::new(),
                 element_type: v.element_type,
+                ..Default::default()
             }),
         };
         Self {
@@ -315,7 +322,10 @@ fn struct_array_get_row(
         .iter()
         .map(|fd| field_data_get_row(fd, idx))
         .collect::<Option<Vec<_>>>()?;
-    Some(crate::proto::schema::StructArrayField { fields })
+    Some(crate::proto::schema::StructArrayField {
+        fields,
+        ..Default::default()
+    })
 }
 
 /// Extract row `idx` from a single FieldData column.
@@ -326,7 +336,10 @@ fn field_data_get_row(
     let field = match fd.field.as_ref()? {
         Field::Scalars(s) => {
             let data = scalar_data_get_row(s.data.as_ref()?, idx)?;
-            Field::Scalars(ScalarField { data: Some(data) })
+            Field::Scalars(ScalarField {
+                valid_data: Vec::new(),
+                data: Some(data),
+            })
         }
         Field::Vectors(v) => Field::Vectors(vector_field_get_row(v, idx)?),
         Field::StructArrays(sa) => Field::StructArrays(struct_array_get_row(sa, idx)?),
@@ -342,6 +355,7 @@ fn field_data_get_row(
             vec![]
         },
         field: Some(field),
+        ..Default::default()
     })
 }
 
@@ -349,52 +363,68 @@ fn scalar_data_get_row(sd: &ScalarData, idx: usize) -> Option<ScalarData> {
     Some(match sd {
         ScalarData::BoolData(v) => ScalarData::BoolData(schema::BoolArray {
             data: vec![*v.data.get(idx)?],
+            ..Default::default()
         }),
         ScalarData::IntData(v) => ScalarData::IntData(schema::IntArray {
             data: vec![*v.data.get(idx)?],
+            ..Default::default()
         }),
         ScalarData::LongData(v) => ScalarData::LongData(schema::LongArray {
             data: vec![*v.data.get(idx)?],
+            ..Default::default()
         }),
         ScalarData::FloatData(v) => ScalarData::FloatData(schema::FloatArray {
             data: vec![*v.data.get(idx)?],
+            ..Default::default()
         }),
         ScalarData::DoubleData(v) => ScalarData::DoubleData(schema::DoubleArray {
             data: vec![*v.data.get(idx)?],
+            ..Default::default()
         }),
         ScalarData::StringData(v) => ScalarData::StringData(schema::StringArray {
             data: vec![v.data.get(idx)?.clone()],
+            ..Default::default()
         }),
         ScalarData::BytesData(v) => ScalarData::BytesData(schema::BytesArray {
             data: vec![v.data.get(idx)?.clone()],
+            ..Default::default()
         }),
         ScalarData::ArrayData(v) => ScalarData::ArrayData(schema::ArrayArray {
             data: vec![v.data.get(idx)?.clone()],
             element_type: v.element_type,
+            ..Default::default()
         }),
         ScalarData::JsonData(v) => ScalarData::JsonData(schema::JsonArray {
             data: vec![v.data.get(idx)?.clone()],
+            ..Default::default()
         }),
         ScalarData::GeometryData(v) => ScalarData::GeometryData(schema::GeometryArray {
             data: vec![v.data.get(idx)?.clone()],
+            ..Default::default()
         }),
         ScalarData::TimestamptzData(v) => ScalarData::TimestamptzData(schema::TimestamptzArray {
             data: vec![*v.data.get(idx)?],
+            ..Default::default()
         }),
         ScalarData::GeometryWktData(v) => ScalarData::GeometryWktData(schema::GeometryWktArray {
             data: vec![v.data.get(idx)?.clone()],
+            ..Default::default()
         }),
         ScalarData::MolData(v) => ScalarData::MolData(schema::MolArray {
             data: vec![v.data.get(idx)?.clone()],
+            ..Default::default()
         }),
         ScalarData::MolSmilesData(v) => ScalarData::MolSmilesData(schema::MolSmilesArray {
             data: vec![v.data.get(idx)?.clone()],
+            ..Default::default()
         }),
         ScalarData::DateData(v) => ScalarData::DateData(schema::DateArray {
             data: vec![*v.data.get(idx)?],
+            ..Default::default()
         }),
         ScalarData::TimeData(v) => ScalarData::TimeData(schema::TimeArray {
             data: vec![*v.data.get(idx)?],
+            ..Default::default()
         }),
     })
 }
@@ -442,6 +472,7 @@ fn vector_field_get_row(vf: &VectorField, idx: usize) -> Option<VectorField> {
             VectorData::SparseFloatVector(schema::SparseFloatArray {
                 contents: vec![content],
                 dim: v.dim,
+                ..Default::default()
             })
         }
         VectorData::Int8Vector(v) => {
@@ -458,10 +489,12 @@ fn vector_field_get_row(vf: &VectorField, idx: usize) -> Option<VectorField> {
                 dim: v.dim,
                 data: vec![entry],
                 element_type: v.element_type,
+                ..Default::default()
             })
         }
     };
     Some(VectorField {
+        valid_data: Vec::new(),
         dim,
         data: Some(data),
     })
@@ -559,45 +592,59 @@ impl From<FieldColumn> for schema::FieldData {
             valid_data: vec![],
             r#type: this.dtype as _,
             field: Some(match this.value {
-                ValueVec::None => Field::Scalars(ScalarField { data: None }),
+                ValueVec::None => Field::Scalars(ScalarField {
+                    valid_data: Vec::new(),
+                    data: None,
+                }),
                 ValueVec::Bool(v) => Field::Scalars(ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(ScalarData::BoolData(schema::BoolArray { data: v })),
                 }),
                 ValueVec::Int(v) => Field::Scalars(ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(ScalarData::IntData(schema::IntArray { data: v })),
                 }),
                 ValueVec::Long(v) => match this.dtype {
                     DataType::Timestamptz => Field::Scalars(ScalarField {
+                        valid_data: Vec::new(),
                         data: Some(ScalarData::TimestamptzData(schema::TimestamptzArray {
                             data: v,
                         })),
                     }),
                     _ => Field::Scalars(ScalarField {
+                        valid_data: Vec::new(),
                         data: Some(ScalarData::LongData(schema::LongArray { data: v })),
                     }),
                 },
                 ValueVec::Float(v) => match this.dtype {
                     DataType::Float => Field::Scalars(ScalarField {
+                        valid_data: Vec::new(),
                         data: Some(ScalarData::FloatData(schema::FloatArray { data: v })),
                     }),
                     DataType::FloatVector => Field::Vectors(VectorField {
+                        valid_data: Vec::new(),
                         data: Some(VectorData::FloatVector(schema::FloatArray { data: v })),
                         dim: this.dim,
                     }),
                     _ => Field::Scalars(ScalarField {
+                        valid_data: Vec::new(),
                         data: Some(ScalarData::FloatData(schema::FloatArray { data: v })),
                     }),
                 },
                 ValueVec::Double(v) => Field::Scalars(ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(ScalarData::DoubleData(schema::DoubleArray { data: v })),
                 }),
                 ValueVec::String(v) => Field::Scalars(ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(ScalarData::StringData(schema::StringArray { data: v })),
                 }),
                 ValueVec::Json(v) => Field::Scalars(ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(ScalarData::JsonData(schema::JsonArray { data: v })),
                 }),
                 ValueVec::Array(v) => Field::Scalars(ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(ScalarData::ArrayData(schema::ArrayArray {
                         data: v,
                         element_type: this.dtype as _,
@@ -605,46 +652,56 @@ impl From<FieldColumn> for schema::FieldData {
                 }),
                 ValueVec::Binary(v) => match this.dtype {
                     DataType::Int8Vector => Field::Vectors(VectorField {
+                        valid_data: Vec::new(),
                         data: Some(VectorData::Int8Vector(v)),
                         dim: this.dim,
                     }),
                     DataType::Float16Vector => Field::Vectors(VectorField {
+                        valid_data: Vec::new(),
                         data: Some(VectorData::Float16Vector(v)),
                         dim: this.dim,
                     }),
                     DataType::BFloat16Vector => Field::Vectors(VectorField {
+                        valid_data: Vec::new(),
                         data: Some(VectorData::Bfloat16Vector(v)),
                         dim: this.dim,
                     }),
                     _ => Field::Vectors(VectorField {
+                        valid_data: Vec::new(),
                         data: Some(VectorData::BinaryVector(v)),
                         dim: this.dim,
                     }),
                 },
                 ValueVec::Geometry(v) => Field::Scalars(ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(ScalarData::GeometryData(schema::GeometryArray { data: v })),
                 }),
                 ValueVec::GeometryWkt(v) => Field::Scalars(ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(ScalarData::GeometryWktData(schema::GeometryWktArray {
                         data: v,
                     })),
                 }),
                 ValueVec::Timestamptz(v) => Field::Scalars(ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(ScalarData::TimestamptzData(schema::TimestamptzArray {
                         data: v,
                     })),
                 }),
                 ValueVec::SparseFloat(v) => Field::Vectors(VectorField {
+                    valid_data: Vec::new(),
                     data: Some(VectorData::SparseFloatVector(v)),
                     dim: this.dim,
                 }),
                 ValueVec::StructArray(v) => Field::StructArrays(v),
                 ValueVec::VectorArray(v) => Field::Vectors(VectorField {
+                    valid_data: Vec::new(),
                     data: Some(VectorData::VectorArray(v)),
                     dim: this.dim,
                 }),
             }),
             is_dynamic: false,
+            ..Default::default()
         }
     }
 }
@@ -728,15 +785,19 @@ mod test {
     #[test]
     fn vector_array_get_returns_single_entry() {
         let vf0 = VectorField {
+            valid_data: Vec::new(),
             dim: 4,
             data: Some(VectorData::FloatVector(schema::FloatArray {
                 data: vec![1.0, 2.0, 3.0, 4.0],
+                ..Default::default()
             })),
         };
         let vf1 = VectorField {
+            valid_data: Vec::new(),
             dim: 4,
             data: Some(VectorData::FloatVector(schema::FloatArray {
                 data: vec![5.0, 6.0, 7.0, 8.0],
+                ..Default::default()
             })),
         };
 
@@ -747,6 +808,7 @@ mod test {
                 dim: 4,
                 data: vec![vf0, vf1],
                 element_type: DataType::FloatVector as i32,
+                ..Default::default()
             }),
             dim: 4,
             max_length: 0,
@@ -775,21 +837,27 @@ mod test {
     #[test]
     fn vector_array_push_appends_entries() {
         let vf0 = VectorField {
+            valid_data: Vec::new(),
             dim: 2,
             data: Some(VectorData::FloatVector(schema::FloatArray {
                 data: vec![1.0, 2.0],
+                ..Default::default()
             })),
         };
         let vf1 = VectorField {
+            valid_data: Vec::new(),
             dim: 2,
             data: Some(VectorData::FloatVector(schema::FloatArray {
                 data: vec![3.0, 4.0],
+                ..Default::default()
             })),
         };
         let vf2 = VectorField {
+            valid_data: Vec::new(),
             dim: 2,
             data: Some(VectorData::FloatVector(schema::FloatArray {
                 data: vec![5.0, 6.0],
+                ..Default::default()
             })),
         };
 
@@ -800,6 +868,7 @@ mod test {
                 dim: 2,
                 data: vec![vf0, vf1, vf2],
                 element_type: DataType::FloatVector as i32,
+                ..Default::default()
             }),
             dim: 2,
             max_length: 0,
@@ -842,10 +911,12 @@ mod test {
             is_dynamic: false,
             valid_data: vec![],
             field: Some(Field::Scalars(ScalarField {
+                valid_data: Vec::new(),
                 data: Some(ScalarData::IntData(schema::IntArray {
                     data: vec![10, 20, 30],
                 })),
             })),
+            ..Default::default()
         };
         let str_field = schema::FieldData {
             r#type: DataType::String as i32,
@@ -854,10 +925,12 @@ mod test {
             is_dynamic: false,
             valid_data: vec![],
             field: Some(Field::Scalars(ScalarField {
+                valid_data: Vec::new(),
                 data: Some(ScalarData::StringData(schema::StringArray {
                     data: vec!["a".into(), "b".into(), "c".into()],
                 })),
             })),
+            ..Default::default()
         };
 
         let column = FieldColumn {
@@ -865,6 +938,7 @@ mod test {
             dtype: DataType::Array,
             value: ValueVec::StructArray(schema::StructArrayField {
                 fields: vec![int_field, str_field],
+                ..Default::default()
             }),
             dim: 1,
             max_length: 0,
@@ -907,10 +981,12 @@ mod test {
             is_dynamic: false,
             valid_data: vec![],
             field: Some(Field::Scalars(ScalarField {
+                valid_data: Vec::new(),
                 data: Some(ScalarData::IntData(schema::IntArray {
                     data: vec![10, 20, 30],
                 })),
             })),
+            ..Default::default()
         };
         let str_field = schema::FieldData {
             r#type: DataType::String as i32,
@@ -919,10 +995,12 @@ mod test {
             is_dynamic: false,
             valid_data: vec![],
             field: Some(Field::Scalars(ScalarField {
+                valid_data: Vec::new(),
                 data: Some(ScalarData::StringData(schema::StringArray {
                     data: vec!["a".into(), "b".into(), "c".into()],
                 })),
             })),
+            ..Default::default()
         };
 
         let source = FieldColumn {
@@ -930,6 +1008,7 @@ mod test {
             dtype: DataType::Array,
             value: ValueVec::StructArray(schema::StructArrayField {
                 fields: vec![int_field, str_field],
+                ..Default::default()
             }),
             dim: 1,
             max_length: 0,
@@ -977,11 +1056,13 @@ mod test {
             is_dynamic: false,
             valid_data: vec![true, false, true],
             field: Some(Field::Vectors(VectorField {
+                valid_data: Vec::new(),
                 dim: 2,
                 data: Some(VectorData::FloatVector(schema::FloatArray {
                     data: vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
                 })),
             })),
+            ..Default::default()
         };
 
         let source = FieldColumn {
@@ -989,6 +1070,7 @@ mod test {
             dtype: DataType::ArrayOfStruct,
             value: ValueVec::StructArray(schema::StructArrayField {
                 fields: vec![vector_field],
+                ..Default::default()
             }),
             dim: 1,
             max_length: 0,
@@ -1040,10 +1122,12 @@ mod test {
             is_dynamic: false,
             valid_data: vec![true, false, true],
             field: Some(Field::Scalars(ScalarField {
+                valid_data: Vec::new(),
                 data: Some(ScalarData::StringData(schema::StringArray {
                     data: vec!["a".into(), "".into(), "c".into()],
                 })),
             })),
+            ..Default::default()
         };
 
         let source = FieldColumn {
@@ -1051,6 +1135,7 @@ mod test {
             dtype: DataType::ArrayOfStruct,
             value: ValueVec::StructArray(schema::StructArrayField {
                 fields: vec![nullable_field],
+                ..Default::default()
             }),
             dim: 1,
             max_length: 0,
@@ -1116,18 +1201,21 @@ mod test {
                 dim: 2,
                 data: vec![
                     VectorField {
+                        valid_data: Vec::new(),
                         dim: 2,
                         data: Some(VectorData::FloatVector(schema::FloatArray {
                             data: vec![1.0, 2.0],
                         })),
                     },
                     VectorField {
+                        valid_data: Vec::new(),
                         dim: 2,
                         data: Some(VectorData::FloatVector(schema::FloatArray {
                             data: vec![3.0, 4.0],
                         })),
                     },
                     VectorField {
+                        valid_data: Vec::new(),
                         dim: 2,
                         data: Some(VectorData::FloatVector(schema::FloatArray {
                             data: vec![5.0, 6.0],
@@ -1135,6 +1223,7 @@ mod test {
                     },
                 ],
                 element_type: DataType::FloatVector as i32,
+                ..Default::default()
             }),
             dim: 1,
             max_length: 0,
@@ -1171,11 +1260,13 @@ mod test {
                     is_dynamic: false,
                     valid_data: vec![true, true, true],
                     field: Some(Field::Scalars(ScalarField {
+                        valid_data: Vec::new(),
                         data: Some(ScalarData::StringData(schema::StringArray {
                             data: vec!["a".into(), "b".into(), "c".into()],
                         })),
                     })),
                 }],
+                ..Default::default()
             }),
             dim: 1,
             max_length: 0,
@@ -1217,13 +1308,13 @@ macro_rules! impl_from_field {
 }
 
 impl_from_field! {
-    Vec<bool>[Field::Scalars(ScalarField {data: Some(ScalarData::BoolData(schema::BoolArray { data }))}) => Some(data)],
-    Vec<i8>[Field::Scalars(ScalarField {data: Some(ScalarData::IntData(schema::IntArray { data }))}) => Some(data.into_iter().map(|x|x as _).collect())],
-    Vec<i16>[Field::Scalars(ScalarField {data: Some(ScalarData::IntData(schema::IntArray { data }))}) => Some(data.into_iter().map(|x|x as _).collect())],
-    Vec<i32>[Field::Scalars(ScalarField {data: Some(ScalarData::IntData(schema::IntArray { data }))}) => Some(data)],
-    Vec<i64>[Field::Scalars(ScalarField {data: Some(ScalarData::LongData(schema::LongArray { data }))}) => Some(data)],
-    Vec<String>[Field::Scalars(ScalarField {data: Some(ScalarData::StringData(schema::StringArray { data }))}) => Some(data)],
-    Vec<f64>[Field::Scalars(ScalarField {data: Some(ScalarData::DoubleData(schema::DoubleArray { data }))}) => Some(data)],
+    Vec<bool>[Field::Scalars(ScalarField {data: Some(ScalarData::BoolData(schema::BoolArray { data })), ..}) => Some(data)],
+    Vec<i8>[Field::Scalars(ScalarField {data: Some(ScalarData::IntData(schema::IntArray { data })), ..}) => Some(data.into_iter().map(|x|x as _).collect())],
+    Vec<i16>[Field::Scalars(ScalarField {data: Some(ScalarData::IntData(schema::IntArray { data })), ..}) => Some(data.into_iter().map(|x|x as _).collect())],
+    Vec<i32>[Field::Scalars(ScalarField {data: Some(ScalarData::IntData(schema::IntArray { data })), ..}) => Some(data)],
+    Vec<i64>[Field::Scalars(ScalarField {data: Some(ScalarData::LongData(schema::LongArray { data })), ..}) => Some(data)],
+    Vec<String>[Field::Scalars(ScalarField {data: Some(ScalarData::StringData(schema::StringArray { data })), ..}) => Some(data)],
+    Vec<f64>[Field::Scalars(ScalarField {data: Some(ScalarData::DoubleData(schema::DoubleArray { data })), ..}) => Some(data)],
     Vec<u8>[Field::Vectors(VectorField {data: Some(VectorData::BinaryVector(data)), ..}) => Some(data)]
 }
 
@@ -1232,6 +1323,7 @@ impl FromField for Vec<f32> {
         match field {
             Field::Scalars(ScalarField {
                 data: Some(ScalarData::FloatData(schema::FloatArray { data })),
+                ..
             }) => Some(data),
 
             Field::Vectors(VectorField {
@@ -1246,7 +1338,7 @@ impl FromField for Vec<f32> {
 
 fn get_dim_max_length(field: &Field) -> (Option<i64>, Option<i32>) {
     let dim = match field {
-        Field::Scalars(ScalarField { data: Some(_) }) => 1i64,
+        Field::Scalars(ScalarField { data: Some(_), .. }) => 1i64,
         Field::Vectors(VectorField { dim, .. }) => *dim,
         Field::StructArrays(_) => 1i64,
         _ => 0i64,

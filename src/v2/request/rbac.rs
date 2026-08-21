@@ -89,6 +89,7 @@ impl CreateUserRequest {
             created_utc_timestamps: 0,
             modified_utc_timestamps: 0,
             description: self.description,
+            ..Default::default()
         }
     }
 }
@@ -352,6 +353,7 @@ impl DropUserRequest {
         milvus::DeleteCredentialRequest {
             base: None,
             username: self.username,
+            ..Default::default()
         }
     }
 }
@@ -441,6 +443,7 @@ impl ListRolesRequest {
             base: None,
             role: None,
             include_user_info: false,
+            ..Default::default()
         }
     }
 }
@@ -507,6 +510,7 @@ impl CreateRoleRequest {
                 name: self.role_name,
                 description: self.description,
             }),
+            ..Default::default()
         }
     }
 }
@@ -586,6 +590,7 @@ impl AlterRoleRequest {
             base: None,
             role_name: self.role_name,
             description: self.description,
+            ..Default::default()
         }
     }
 }
@@ -665,6 +670,7 @@ impl DropRoleRequest {
             base: None,
             role_name: self.role_name,
             force_drop: self.force,
+            ..Default::default()
         }
     }
 }
@@ -745,6 +751,7 @@ impl GrantRoleRequest {
             username: self.username,
             role_name: self.role_name,
             r#type: milvus::OperateUserRoleType::AddUserToRole as i32,
+            ..Default::default()
         }
     }
 }
@@ -825,6 +832,7 @@ impl RevokeRoleRequest {
             username: self.username,
             role_name: self.role_name,
             r#type: milvus::OperateUserRoleType::RemoveUserFromRole as i32,
+            ..Default::default()
         }
     }
 }
@@ -910,6 +918,7 @@ impl DescribeRoleRequest {
         let role = milvus::RoleEntity {
             name: role_name.clone(),
             description: String::new(),
+            ..Default::default()
         };
         (
             role_name,
@@ -922,11 +931,13 @@ impl DescribeRoleRequest {
                     grantor: None,
                     db_name: self.database_name,
                 }),
+                ..Default::default()
             },
             milvus::SelectRoleRequest {
                 base: None,
                 role: Some(role),
                 include_user_info: false,
+                ..Default::default()
             },
         )
     }
@@ -1002,6 +1013,7 @@ impl DescribeUserRequest {
                 name: self.username,
             }),
             include_role_info: self.include_roles,
+            ..Default::default()
         }
     }
 }
@@ -1115,6 +1127,7 @@ impl GrantPrivilegeRequest {
             r#type: milvus::OperatePrivilegeType::Grant as i32,
             db_name: self.database_name,
             collection_name: self.collection_name,
+            ..Default::default()
         }
     }
 }
@@ -1236,6 +1249,7 @@ impl RevokePrivilegeRequest {
             r#type: milvus::OperatePrivilegeType::Revoke as i32,
             db_name: self.database_name,
             collection_name: self.collection_name,
+            ..Default::default()
         }
     }
 }
@@ -1324,6 +1338,7 @@ impl CreatePrivilegeGroupRequest {
         milvus::CreatePrivilegeGroupRequest {
             base: None,
             group_name: self.group_name,
+            ..Default::default()
         }
     }
 }
@@ -1389,6 +1404,7 @@ impl DropPrivilegeGroupRequest {
         milvus::DropPrivilegeGroupRequest {
             base: None,
             group_name: self.group_name,
+            ..Default::default()
         }
     }
 }
@@ -1505,6 +1521,7 @@ impl AddPrivilegesToGroupRequest {
                 .map(|name| milvus::PrivilegeEntity { name })
                 .collect(),
             r#type: milvus::OperatePrivilegeGroupType::AddPrivilegesToGroup as i32,
+            ..Default::default()
         }
     }
 }
@@ -1595,6 +1612,7 @@ impl RemovePrivilegesFromGroupRequest {
                 .map(|name| milvus::PrivilegeEntity { name })
                 .collect(),
             r#type: milvus::OperatePrivilegeGroupType::RemovePrivilegesFromGroup as i32,
+            ..Default::default()
         }
     }
 }

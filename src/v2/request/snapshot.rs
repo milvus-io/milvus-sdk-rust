@@ -90,6 +90,7 @@ impl CreateSnapshotRequest {
             db_name: self.database_name.unwrap_or_else(|| default_db.to_owned()),
             collection_name: self.collection_name,
             compaction_protection_seconds: self.compaction_protection_seconds,
+            ..Default::default()
         }
     }
 }
@@ -200,6 +201,7 @@ impl DropSnapshotRequest {
             name: self.snapshot_name,
             db_name: self.database_name.unwrap_or_else(|| default_db.to_owned()),
             collection_name: self.collection_name,
+            ..Default::default()
         }
     }
 }
@@ -288,6 +290,7 @@ impl ListSnapshotsRequest {
             base: None,
             db_name: self.database_name.unwrap_or_else(|| default_db.to_owned()),
             collection_name: self.collection_name,
+            ..Default::default()
         }
     }
 }
@@ -374,6 +377,7 @@ impl DescribeSnapshotRequest {
             name: self.snapshot_name,
             db_name: self.database_name.unwrap_or_else(|| default_db.to_owned()),
             collection_name: self.collection_name,
+            ..Default::default()
         }
     }
 }
@@ -489,6 +493,7 @@ impl RestoreSnapshotRequest {
                 .target_database_name
                 .unwrap_or_else(|| default_db.to_owned()),
             target_collection_name: self.target_collection_name,
+            ..Default::default()
         }
     }
 }
@@ -578,6 +583,7 @@ impl GetRestoreSnapshotStateRequest {
         milvus::GetRestoreSnapshotStateRequest {
             base: None,
             job_id: self.job_id,
+            ..Default::default()
         }
     }
 }
@@ -654,6 +660,7 @@ impl ListRestoreSnapshotJobsRequest {
             base: None,
             db_name: self.database_name.unwrap_or_else(|| default_db.to_owned()),
             collection_name: self.collection_name,
+            ..Default::default()
         }
     }
 }
@@ -748,6 +755,7 @@ impl PinSnapshotDataRequest {
             db_name: self.database_name.unwrap_or_else(|| default_db.to_owned()),
             collection_name: self.collection_name,
             ttl_seconds: self.ttl_seconds,
+            ..Default::default()
         }
     }
 }
@@ -831,6 +839,7 @@ impl UnpinSnapshotDataRequest {
         milvus::UnpinSnapshotDataRequest {
             base: None,
             pin_id: self.pin_id,
+            ..Default::default()
         }
     }
 }

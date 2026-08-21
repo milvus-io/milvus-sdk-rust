@@ -78,7 +78,7 @@ impl ClientV2 {
                 &resolved.canonical_collection_name,
                 response.timestamp,
             );
-            return Ok(response::dml::DmlResponse::from_proto(response));
+            return response::dml::DmlResponse::from_proto(response);
         }
         unreachable!("insert schema-mismatch retry loop always returns")
     }
@@ -141,6 +141,7 @@ impl ClientV2 {
                                 .cloned()
                                 .map(crate::v2::types::FieldPartialUpdateOp::into_proto)
                                 .collect(),
+                            ..Default::default()
                         })
                     },
                     RetrySemantics::NonIdempotent,
@@ -158,7 +159,7 @@ impl ClientV2 {
                 &resolved.canonical_collection_name,
                 response.timestamp,
             );
-            return Ok(response::dml::DmlResponse::from_proto(response));
+            return response::dml::DmlResponse::from_proto(response);
         }
         unreachable!("upsert schema-mismatch retry loop always returns")
     }
@@ -209,7 +210,7 @@ impl ClientV2 {
             .await?;
         status_to_result(&response.status)?;
         self.update_dml_timestamp(&database, &canonical_collection_name, response.timestamp);
-        Ok(response::dml::DmlResponse::from_proto(response))
+        response::dml::DmlResponse::from_proto(response)
     }
 }
 

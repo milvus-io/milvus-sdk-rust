@@ -112,6 +112,7 @@ impl Client {
                 created_utc_timestamps: 0, // Server will set the actual timestamp
                 modified_utc_timestamps: 0, // Server will set the actual timestamp
                 description: None,
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -192,6 +193,7 @@ impl Client {
             .clone()
             .list_cred_users(crate::proto::milvus::ListCredUsersRequest {
                 base: Some(MsgBase::new(MsgType::ListCredUsernames)),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -244,6 +246,7 @@ impl Client {
                     name: user_name.into(),
                 }),
                 include_role_info: true, // Include role information in the response
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -297,6 +300,7 @@ impl Client {
                     name: role_name.into(),
                     description: String::new(),
                 }),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -343,6 +347,7 @@ impl Client {
                 base: Some(MsgBase::new(MsgType::DropRole)),
                 role_name: role_name.into(),
                 force_drop,
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -390,6 +395,7 @@ impl Client {
                 r#type: proto::milvus::OperateUserRoleType::AddUserToRole as i32,
                 username: user_name.into(),
                 role_name: role_name.into(),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -429,6 +435,7 @@ impl Client {
                 base: Some(MsgBase::new(MsgType::SelectRole)),
                 role: None,               // None means select all roles
                 include_user_info: false, // Don't include user information
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -503,6 +510,7 @@ impl Client {
                 db_name: "".to_string(),     // Empty string for default database
                 grantor: None,
             }),
+            ..Default::default()
         };
 
         // Call the SelectGrant RPC to get privilege information
@@ -588,6 +596,7 @@ impl Client {
                 r#type: proto::milvus::OperateUserRoleType::RemoveUserFromRole as i32,
                 username: user_name.into(),
                 role_name: role_name.into(),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -630,6 +639,7 @@ impl Client {
             .create_privilege_group(proto::milvus::CreatePrivilegeGroupRequest {
                 base: Some(MsgBase::new(MsgType::CreatePrivilegeGroup)),
                 group_name: group_name.into(),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -684,6 +694,7 @@ impl Client {
                     .iter()
                     .map(|p| proto::milvus::PrivilegeEntity { name: p.clone() })
                     .collect(),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -725,6 +736,7 @@ impl Client {
             .clone()
             .list_privilege_groups(proto::milvus::ListPrivilegeGroupsRequest {
                 base: Some(MsgBase::new(MsgType::ListPrivilegeGroups)),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -774,6 +786,7 @@ impl Client {
             .drop_privilege_group(proto::milvus::DropPrivilegeGroupRequest {
                 base: Some(MsgBase::new(MsgType::DropPrivilegeGroup)),
                 group_name: group_name.into(),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -848,6 +861,7 @@ impl Client {
                 }),
                 r#type: proto::milvus::OperatePrivilegeType::Revoke as i32,
                 version: "".to_string(),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -914,6 +928,7 @@ impl Client {
                     }),
                 }),
                 r#type: proto::milvus::OperatePrivilegeType::Revoke as i32,
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -968,6 +983,7 @@ impl Client {
                     .iter()
                     .map(|p| proto::milvus::PrivilegeEntity { name: p.clone() })
                     .collect(),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -1042,6 +1058,7 @@ impl Client {
                 }),
                 r#type: proto::milvus::OperatePrivilegeType::Grant as i32,
                 version: "".to_string(),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -1108,6 +1125,7 @@ impl Client {
                 r#type: proto::milvus::OperatePrivilegeType::Grant as i32,
                 db_name: db_name.map(|d| d.into()).unwrap_or_default(),
                 collection_name: collection_name.into(),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -1135,6 +1153,7 @@ impl Client {
                 created_utc_timestamps: 0,
                 modified_utc_timestamps: 0,
                 description: Some(description.into()),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -1197,6 +1216,7 @@ impl Client {
                 created_utc_timestamps: 0, // Server will set the actual timestamp
                 modified_utc_timestamps: 0, // Server will set the actual timestamp
                 description: None,
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -1220,6 +1240,7 @@ impl Client {
                 base: Some(MsgBase::new(MsgType::AlterRole)),
                 role_name: role_name.into(),
                 description: description.into(),
+                ..Default::default()
             })
             .await?
             .into_inner();

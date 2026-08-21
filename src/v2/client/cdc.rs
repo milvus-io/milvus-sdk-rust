@@ -78,7 +78,7 @@ impl ClientV2 {
     {
         use crate::proto::milvus::dump_messages_response::Response;
 
-        let mut service = self.service.clone();
+        let mut service = self.service.read().clone();
         let mut stream = service
             .dump_messages(tonic::Request::new(request.into_proto()))
             .await?

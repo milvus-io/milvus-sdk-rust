@@ -94,7 +94,10 @@ impl DefaultValue {
             Self::Bytes(v) => Data::BytesData(v),
             Self::TimestampTz(v) => Data::TimestamptzData(v),
         };
-        schema::ValueField { data: Some(data) }
+        schema::ValueField {
+            data: Some(data),
+            ..Default::default()
+        }
     }
 
     fn from_proto(value: schema::ValueField) -> Result<Self> {
@@ -970,6 +973,7 @@ impl StructFieldSchema {
                 .collect(),
             type_params: Vec::new(),
             nullable: false,
+            ..Default::default()
         }
     }
 
@@ -2360,6 +2364,7 @@ mod collection_schema_tests {
                     type_params: vec![common::KeyValuePair {
                         key: "max_capacity".into(),
                         value: "16".into(),
+                        ..Default::default()
                     }],
                     ..Default::default()
                 }],
