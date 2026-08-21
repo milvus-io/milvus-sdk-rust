@@ -52,6 +52,9 @@ lazy_static = "1.4"
 lru = "0.12"
 parking_lot = "0.12"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+webpki-roots = "1.0"
+tokio-util = "0.7"
 tracing = { version = "0.1", optional = true }
 
 [build-dependencies]

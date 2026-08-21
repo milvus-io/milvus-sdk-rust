@@ -335,6 +335,7 @@ impl IndexParam {
             field_name: self.field_name,
             extra_params,
             index_name: self.index_name,
+            ..Default::default()
         }
     }
 }

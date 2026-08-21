@@ -106,6 +106,7 @@ impl FieldPartialUpdateOp {
         schema::FieldPartialUpdateOp {
             field_name: self.field_name,
             op: self.op_type.into_proto() as i32,
+            ..Default::default()
         }
     }
 }

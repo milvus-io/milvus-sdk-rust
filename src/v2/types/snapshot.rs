@@ -325,6 +325,7 @@ mod tests {
             reason: "boom".into(),
             start_time: 11,
             time_cost: 22,
+            ..Default::default()
         });
         assert_eq!(value.get_job_id(), 3);
         assert_eq!(value.get_state(), RestoreSnapshotStateCode::Failed);

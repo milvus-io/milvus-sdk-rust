@@ -512,6 +512,7 @@ impl QueryIterator {
                 collection_name: self.collection_name.clone(),
                 collection_id: 0,
                 time_stamp: 0,
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -532,6 +533,7 @@ impl QueryIterator {
                 collection_name: self.collection_name.clone(),
                 collection_id: 0,
                 time_stamp: 0,
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -598,6 +600,7 @@ impl QueryIterator {
                 use_default_consistency: self.options.consistency_level.is_none(),
                 expr_template_values: self.options.expr_template_values.clone(),
                 namespace: self.options.namespace.clone(),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -754,6 +757,7 @@ impl QueryIterator {
                 use_default_consistency: self.options.consistency_level.is_none(),
                 expr_template_values: self.options.expr_template_values.clone(),
                 namespace: self.options.namespace.clone(),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -998,6 +1002,7 @@ impl QueryIterator {
                     use_default_consistency: self.options.consistency_level.is_none(),
                     expr_template_values: self.options.expr_template_values.clone(),
                     namespace: self.options.namespace.clone(),
+                    ..Default::default()
                 })
                 .await?
                 .into_inner();
@@ -1227,6 +1232,7 @@ impl SearchIterator {
                 collection_name: self.collection_name.clone(),
                 collection_id: 0,
                 time_stamp: 0,
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -1546,6 +1552,11 @@ impl SearchIterator {
                     Vec::<Value>::from_iter(
                         d.data[offset..offset + k].iter().map(|x| x.clone().into()),
                     )
+                }
+                crate::proto::schema::i_ds::IdField::UuidId(_) => {
+                    return Err(Error::Unexpected(
+                        "uuid primary keys are not supported by V1 search".to_string(),
+                    ));
                 }
             };
 

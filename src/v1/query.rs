@@ -722,6 +722,7 @@ impl QueryOptions {
     pub fn add_template_bool(mut self, key: String, value: bool) -> Self {
         let template_value = crate::proto::schema::TemplateValue {
             val: Some(crate::proto::schema::template_value::Val::BoolVal(value)),
+            ..Default::default()
         };
         self.expr_template_values.insert(key, template_value);
         self
@@ -740,6 +741,7 @@ impl QueryOptions {
     pub fn add_template_int64(mut self, key: String, value: i64) -> Self {
         let template_value = crate::proto::schema::TemplateValue {
             val: Some(crate::proto::schema::template_value::Val::Int64Val(value)),
+            ..Default::default()
         };
         self.expr_template_values.insert(key, template_value);
         self
@@ -758,6 +760,7 @@ impl QueryOptions {
     pub fn template_float(mut self, key: String, value: f64) -> Self {
         let template_value = crate::proto::schema::TemplateValue {
             val: Some(crate::proto::schema::template_value::Val::FloatVal(value)),
+            ..Default::default()
         };
         self.expr_template_values.insert(key, template_value);
         self
@@ -776,6 +779,7 @@ impl QueryOptions {
     pub fn template_string(mut self, key: String, value: String) -> Self {
         let template_value = crate::proto::schema::TemplateValue {
             val: Some(crate::proto::schema::template_value::Val::StringVal(value)),
+            ..Default::default()
         };
         self.expr_template_values.insert(key, template_value);
         self
@@ -1131,6 +1135,7 @@ impl SearchOptions {
     pub fn add_template_bool(mut self, key: String, value: bool) -> Self {
         let template_value = crate::proto::schema::TemplateValue {
             val: Some(crate::proto::schema::template_value::Val::BoolVal(value)),
+            ..Default::default()
         };
         self.expr_template_values.insert(key, template_value);
         self
@@ -1149,6 +1154,7 @@ impl SearchOptions {
     pub fn add_template_int64(mut self, key: String, value: i64) -> Self {
         let template_value = crate::proto::schema::TemplateValue {
             val: Some(crate::proto::schema::template_value::Val::Int64Val(value)),
+            ..Default::default()
         };
         self.expr_template_values.insert(key, template_value);
         self
@@ -1167,6 +1173,7 @@ impl SearchOptions {
     pub fn add_template_float(mut self, key: String, value: f64) -> Self {
         let template_value = crate::proto::schema::TemplateValue {
             val: Some(crate::proto::schema::template_value::Val::FloatVal(value)),
+            ..Default::default()
         };
         self.expr_template_values.insert(key, template_value);
         self
@@ -1185,6 +1192,7 @@ impl SearchOptions {
     pub fn add_template_string(mut self, key: String, value: String) -> Self {
         let template_value = crate::proto::schema::TemplateValue {
             val: Some(crate::proto::schema::template_value::Val::StringVal(value)),
+            ..Default::default()
         };
         self.expr_template_values.insert(key, template_value);
         self
@@ -1280,6 +1288,7 @@ impl Client {
                 use_default_consistency: options.consistency_level.is_none(),
                 expr_template_values: options.expr_template_values.clone(),
                 namespace: options.namespace.clone(),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -1554,6 +1563,11 @@ impl Client {
                 proto::schema::i_ds::IdField::StrId(ref d) => Vec::<Value>::from_iter(
                     d.data[offset..offset + k].iter().map(|x| x.clone().into()),
                 ),
+                proto::schema::i_ds::IdField::UuidId(_) => {
+                    return Err(SuperError::Unexpected(
+                        "uuid primary keys are not supported by V1 search".to_string(),
+                    ));
+                }
             };
 
             let highlights = if !all_highlights.is_empty() && offset + k <= all_highlights.len() {
@@ -1823,6 +1837,11 @@ impl Client {
                 proto::schema::i_ds::IdField::StrId(ref d) => Vec::<Value>::from_iter(
                     d.data[offset..offset + k].iter().map(|x| x.clone().into()),
                 ),
+                proto::schema::i_ds::IdField::UuidId(_) => {
+                    return Err(SuperError::Unexpected(
+                        "uuid primary keys are not supported by V1 search".to_string(),
+                    ));
+                }
             };
 
             let highlights = if !all_highlights.is_empty() && offset + k <= all_highlights.len() {

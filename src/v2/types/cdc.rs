@@ -144,6 +144,7 @@ impl ReplicateCluster {
                 token: self.token,
             }),
             pchannels: self.physical_channels,
+            ..Default::default()
         }
     }
 }
@@ -317,6 +318,7 @@ impl ReplicateConfiguration {
                     target_cluster_id: v.target_cluster_id,
                 })
                 .collect(),
+            ..Default::default()
         }
     }
 }
@@ -838,6 +840,7 @@ mod tests {
                 wal_name: common::WalName::Kafka as i32,
             }),
             time_tick: 100,
+            ..Default::default()
         });
         assert_eq!(converted.unwrap(), value);
     }
@@ -896,6 +899,7 @@ mod tests {
             }),
             payload: vec![1, 2, 3],
             properties,
+            ..Default::default()
         })
         .expect("dumped message has an ID");
         assert_eq!(converted, value);
@@ -908,7 +912,7 @@ mod tests {
                 id: None,
                 payload: vec![1, 2, 3],
                 properties: HashMap::new(),
-            }),
+             ..Default::default()}),
             Err(Error::MalformedResponse(message))
                 if message.contains("missing its message ID")
         ));

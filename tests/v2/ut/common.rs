@@ -340,6 +340,7 @@ fn mock_schema() -> schema::CollectionSchema {
                 type_params: vec![common::KeyValuePair {
                     key: "max_length".into(),
                     value: "128".into(),
+                    ..Default::default()
                 }],
                 ..Default::default()
             },
@@ -350,6 +351,7 @@ fn mock_schema() -> schema::CollectionSchema {
                 type_params: vec![common::KeyValuePair {
                     key: "dim".into(),
                     value: "2".into(),
+                    ..Default::default()
                 }],
                 ..Default::default()
             },
@@ -363,10 +365,12 @@ fn mock_schema() -> schema::CollectionSchema {
                     common::KeyValuePair {
                         key: "max_capacity".into(),
                         value: "32".into(),
+                        ..Default::default()
                     },
                     common::KeyValuePair {
                         key: "max_length".into(),
                         value: "128".into(),
+                        ..Default::default()
                     },
                 ],
                 ..Default::default()
@@ -393,6 +397,7 @@ fn describe_collection_response() -> pb::DescribeCollectionResponse {
         properties: vec![common::KeyValuePair {
             key: "retention".into(),
             value: "3600".into(),
+            ..Default::default()
         }],
         ..Default::default()
     }
@@ -410,10 +415,12 @@ fn index_description() -> pb::IndexDescription {
             common::KeyValuePair {
                 key: "index_type".into(),
                 value: "HNSW".into(),
+                ..Default::default()
             },
             common::KeyValuePair {
                 key: "metric_type".into(),
                 value: "COSINE".into(),
+                ..Default::default()
             },
         ],
         ..Default::default()
@@ -425,9 +432,11 @@ fn int64_field(name: &str, values: Vec<i64>) -> schema::FieldData {
         r#type: schema::DataType::Int64 as i32,
         field_name: name.into(),
         field: Some(schema::field_data::Field::Scalars(schema::ScalarField {
+            valid_data: Vec::new(),
             data: Some(schema::scalar_field::Data::LongData(schema::LongArray {
                 data: values,
             })),
+            ..Default::default()
         })),
         ..Default::default()
     }
@@ -438,11 +447,13 @@ fn string_field(name: &str, values: Vec<&str>) -> schema::FieldData {
         r#type: schema::DataType::VarChar as i32,
         field_name: name.into(),
         field: Some(schema::field_data::Field::Scalars(schema::ScalarField {
+            valid_data: Vec::new(),
             data: Some(schema::scalar_field::Data::StringData(
                 schema::StringArray {
                     data: values.into_iter().map(str::to_owned).collect(),
                 },
             )),
+            ..Default::default()
         })),
         ..Default::default()
     }
@@ -470,6 +481,7 @@ fn search_response() -> pb::SearchResults {
                 id_field: Some(schema::i_ds::IdField::IntId(schema::LongArray {
                     data: vec![1],
                 })),
+                ..Default::default()
             }),
             fields_data: vec![string_field("text", vec!["book"])],
             output_fields: vec!["text".into()],
@@ -477,6 +489,7 @@ fn search_response() -> pb::SearchResults {
             search_iterator_v2_results: Some(schema::SearchIteratorV2Results {
                 token: "mock-search-iterator".into(),
                 last_bound: 0.0,
+                ..Default::default()
             }),
             ..Default::default()
         }),
@@ -908,6 +921,7 @@ impl MilvusService for MockMilvus {
                         node_id: 8,
                         address: "127.0.0.1:21123".into(),
                         hostname: "query-node".into(),
+                        ..Default::default()
                     }],
                 },
             );
@@ -1182,6 +1196,7 @@ impl MilvusService for MockMilvus {
             stats: vec![common::KeyValuePair {
                 key: "row_count".into(),
                 value: "1".into(),
+                ..Default::default()
             }],
         }
     );
@@ -1291,6 +1306,7 @@ impl MilvusService for MockMilvus {
             stats: vec![common::KeyValuePair {
                 key: "row_count".into(),
                 value: "1".into(),
+                ..Default::default()
             }],
         }
     );
@@ -1455,6 +1471,7 @@ impl MilvusService for MockMilvus {
                 id_field: Some(schema::i_ds::IdField::IntId(schema::LongArray {
                     data: vec![1],
                 })),
+                ..Default::default()
             }),
             succ_index: vec![0],
             acknowledged: true,
@@ -1473,6 +1490,7 @@ impl MilvusService for MockMilvus {
                 id_field: Some(schema::i_ds::IdField::IntId(schema::LongArray {
                     data: vec![1],
                 })),
+                ..Default::default()
             }),
             succ_index: vec![0],
             acknowledged: true,
@@ -1491,6 +1509,7 @@ impl MilvusService for MockMilvus {
                 id_field: Some(schema::i_ds::IdField::IntId(schema::LongArray {
                     data: vec![1],
                 })),
+                ..Default::default()
             }),
             succ_index: vec![0],
             acknowledged: true,
@@ -1570,11 +1589,13 @@ impl MilvusService for MockMilvus {
                             r#type: schema::DataType::Json as i32,
                             field_name: "invalid_json".into(),
                             field: Some(schema::field_data::Field::Scalars(schema::ScalarField {
+                                valid_data: Vec::new(),
                                 data: Some(schema::scalar_field::Data::JsonData(
                                     schema::JsonArray {
                                         data: vec![b"not-json".to_vec()],
                                     },
                                 )),
+                                ..Default::default()
                             })),
                             ..Default::default()
                         },
@@ -1654,6 +1675,7 @@ impl MilvusService for MockMilvus {
                         id_field: Some(schema::i_ds::IdField::IntId(schema::LongArray {
                             data: ids,
                         })),
+                        ..Default::default()
                     });
                     results.fields_data = vec![string_field(
                         "text",
@@ -1683,6 +1705,7 @@ impl MilvusService for MockMilvus {
                         id_field: Some(schema::i_ds::IdField::IntId(schema::LongArray {
                             data: ids,
                         })),
+                        ..Default::default()
                     });
                     results.fields_data = vec![string_field("text", vec!["book", "book"])];
                     results.search_iterator_v2_results = None;
@@ -1698,9 +1721,11 @@ impl MilvusService for MockMilvus {
                         r#type: schema::DataType::Json as i32,
                         field_name: "invalid_json".into(),
                         field: Some(schema::field_data::Field::Scalars(schema::ScalarField {
+                            valid_data: Vec::new(),
                             data: Some(schema::scalar_field::Data::JsonData(schema::JsonArray {
                                 data: vec![b"not-json".to_vec()],
                             })),
+                            ..Default::default()
                         })),
                         ..Default::default()
                     }];
@@ -1767,7 +1792,13 @@ impl MilvusService for MockMilvus {
                 db_name: database_name(request.db_name),
                 coll_seg_i_ds: segment_id
                     .map(|id| {
-                        HashMap::from([(collection.clone(), schema::LongArray { data: vec![id] })])
+                        HashMap::from([(
+                            collection.clone(),
+                            schema::LongArray {
+                                data: vec![id],
+                                ..Default::default()
+                            },
+                        )])
                     })
                     .unwrap_or_default(),
                 coll_flush_ts: (collection != "missing_flush_timestamp")
@@ -2172,7 +2203,11 @@ impl MilvusService for MockMilvus {
                 created_timestamp: 200,
                 properties: properties
                     .into_iter()
-                    .map(|(key, value)| common::KeyValuePair { key, value })
+                    .map(|(key, value)| common::KeyValuePair {
+                        key,
+                        value,
+                        ..Default::default()
+                    })
                     .collect(),
             }
         }
@@ -2272,6 +2307,7 @@ impl MilvusService for MockMilvus {
                     wal_name: common::WalName::Pulsar as i32,
                 }),
                 time_tick: 500,
+                ..Default::default()
             };
             pb::GetReplicateInfoResponse {
                 checkpoint: Some(checkpoint.clone()),
@@ -2318,6 +2354,7 @@ impl MilvusService for MockMilvus {
                         ),
                         payload: vec![1, 2, 3],
                         properties: HashMap::from([("key".into(), "value".into())]),
+                        ..Default::default()
                     },
                 )),
             };
@@ -2425,6 +2462,8 @@ pub struct MockServer {
     pub uri: String,
     shutdown: Option<oneshot::Sender<()>>,
     task: tokio::task::JoinHandle<()>,
+    _topology_shutdown: Option<oneshot::Sender<()>>,
+    _topology_task: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl MockServer {
@@ -2453,6 +2492,88 @@ impl MockServer {
             uri,
             shutdown: Some(shutdown),
             task,
+            _topology_shutdown: None,
+            _topology_task: None,
+        }
+    }
+
+    /// Starts a mock server whose client connects through a global-cluster endpoint.
+    ///
+    /// A topology REST server advertises a single writable primary pointing at the mock gRPC
+    /// server, so `ClientV2::new` exercises the real discovery + `wait_for_server` handshake
+    /// path and any DQL/DML call routes to the mock gRPC server through the primary endpoint.
+    pub async fn start_global(topology: String) -> Self {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let incoming = TcpListenerStream::new(listener);
+        let (shutdown, shutdown_rx) = oneshot::channel();
+        let service = MockMilvus::default();
+        let server_service = service.clone();
+        let grpc_task = tokio::spawn(async move {
+            tonic::transport::Server::builder()
+                .add_service(MilvusServiceServer::new(server_service))
+                .serve_with_incoming_shutdown(incoming, async {
+                    let _ = shutdown_rx.await;
+                })
+                .await
+                .unwrap();
+        });
+        let grpc_uri = format!("http://{address}");
+
+        // Serve the global-cluster topology REST endpoint. The topology body is parameterized
+        // with the mock gRPC server's address as the primary endpoint.
+        let topology_body = topology.replace("{endpoint}", &grpc_uri);
+        let topology_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let topology_address = topology_listener.local_addr().unwrap();
+        let (topology_shutdown, topology_shutdown_rx) = oneshot::channel::<()>();
+        let topology_task = tokio::spawn(async move {
+            let mut topology_shutdown_rx = topology_shutdown_rx;
+            loop {
+                tokio::select! {
+                    _ = &mut topology_shutdown_rx => {
+                        break;
+                    }
+                    accepted = topology_listener.accept() => {
+                        let (mut stream, _) = accepted.expect("accept topology request");
+                        let mut buffer = Vec::new();
+                        loop {
+                            let mut chunk = [0_u8; 4096];
+                            let count = stream.read(&mut chunk).await.expect("read topology request");
+                            if count == 0 {
+                                break;
+                            }
+                            buffer.extend_from_slice(&chunk[..count]);
+                            if buffer.windows(4).any(|window| window == b"\r\n\r\n") {
+                                break;
+                            }
+                        }
+                        let body = topology_body.clone();
+                        let response = format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                            body.len(),
+                            body
+                        );
+                        let _ = stream.write_all(response.as_bytes()).await;
+                    }
+                }
+            }
+        });
+
+        let global_uri = format!("http://{topology_address}/global-cluster");
+        let config = ConnectConfig::new().uri(&global_uri).database("default");
+        let client = ClientV2::new(&config).await.unwrap();
+        Self {
+            client,
+            service,
+            uri: grpc_uri,
+            shutdown: Some(shutdown),
+            task: grpc_task,
+            // Keep the topology server alive for the duration of the test; it is detached and
+            // stops when the runtime is torn down.
+            _topology_shutdown: Some(topology_shutdown),
+            _topology_task: Some(topology_task),
         }
     }
 
@@ -2492,6 +2613,12 @@ impl MockServer {
         if let Some(shutdown) = self.shutdown.take() {
             let _ = shutdown.send(());
         }
+        if let Some(topology_shutdown) = self._topology_shutdown.take() {
+            let _ = topology_shutdown.send(());
+        }
         self.task.await.unwrap();
+        if let Some(topology_task) = self._topology_task.take() {
+            topology_task.await.unwrap();
+        }
     }
 }

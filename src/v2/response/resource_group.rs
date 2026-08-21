@@ -236,6 +236,7 @@ mod tests {
                         node_id: 10,
                         address: "127.0.0.1".into(),
                         hostname: "node".into(),
+                        ..Default::default()
                     }],
                     ..Default::default()
                 }),

@@ -161,6 +161,7 @@ impl ClientV2 {
                 collection_name: collection.to_owned(),
                 collection_id: 0,
                 time_stamp: 0,
+                ..Default::default()
             }
         )?;
         status_to_result(&response.status)?;
@@ -946,18 +947,22 @@ fn struct_column_to_proto(
             let dimension = vector_dimension.unwrap_or_default();
             field_data::Field::Vectors(schema::VectorField {
                 dim: dimension,
+                valid_data: Vec::new(),
                 data: Some(vector_field::Data::VectorArray(schema::VectorArray {
                     dim: dimension,
                     data: vector_rows,
                     element_type: element_type as i32,
                 })),
+                ..Default::default()
             })
         } else {
             field_data::Field::Scalars(schema::ScalarField {
+                valid_data: Vec::new(),
                 data: Some(schema::scalar_field::Data::ArrayData(schema::ArrayArray {
                     data: scalar_rows,
                     element_type: element_type as i32,
                 })),
+                ..Default::default()
             })
         };
         proto_fields.push(schema::FieldData {
@@ -975,6 +980,7 @@ fn struct_column_to_proto(
                 valid_data
             },
             field: Some(field),
+            ..Default::default()
         });
     }
 
@@ -987,6 +993,7 @@ fn struct_column_to_proto(
         field: Some(field_data::Field::StructArrays(schema::StructArrayField {
             fields: proto_fields,
         })),
+        ..Default::default()
     })
 }
 
@@ -1444,6 +1451,7 @@ mod tests {
         vector.type_params.push(common::KeyValuePair {
             key: "dim".into(),
             value: "2".into(),
+            ..Default::default()
         });
         let mut optional = field(102, "note", schema::DataType::VarChar);
         optional.nullable = true;
@@ -1582,18 +1590,21 @@ mod tests {
         label.type_params.push(common::KeyValuePair {
             key: "max_capacity".into(),
             value: "4".into(),
+            ..Default::default()
         });
         let mut nested_location = field(202, "location", schema::DataType::Array);
         nested_location.element_type = schema::DataType::Geometry as i32;
         nested_location.type_params.push(common::KeyValuePair {
             key: "max_capacity".into(),
             value: "4".into(),
+            ..Default::default()
         });
         let mut nested_time = field(203, "observed_at", schema::DataType::Array);
         nested_time.element_type = schema::DataType::Timestamptz as i32;
         nested_time.type_params.push(common::KeyValuePair {
             key: "max_capacity".into(),
             value: "4".into(),
+            ..Default::default()
         });
         let mut embedding = field(204, "embedding", schema::DataType::ArrayOfVector);
         embedding.element_type = schema::DataType::FloatVector as i32;
@@ -1601,10 +1612,12 @@ mod tests {
             common::KeyValuePair {
                 key: "max_capacity".into(),
                 value: "4".into(),
+                ..Default::default()
             },
             common::KeyValuePair {
                 key: "dim".into(),
                 value: "2".into(),
+                ..Default::default()
             },
         ]);
         schema::CollectionSchema {
@@ -1616,6 +1629,7 @@ mod tests {
                 fields: vec![label, nested_location, nested_time, embedding],
                 type_params: Vec::new(),
                 nullable: false,
+                ..Default::default()
             }],
             ..Default::default()
         }
@@ -1730,6 +1744,7 @@ mod tests {
         schema.properties.push(common::KeyValuePair {
             key: ALLOW_INSERT_AUTO_ID.into(),
             value: "False".into(),
+            ..Default::default()
         });
         assert!(validate_columns_against_schema(&columns, &schema, false, false).is_err());
 
@@ -1891,6 +1906,7 @@ mod tests {
         let struct_schema = &mut schema.struct_array_fields[0];
         struct_schema.fields[0].default_value = Some(schema::ValueField {
             data: Some(schema::value_field::Data::StringData("default".into())),
+            ..Default::default()
         });
         struct_schema.fields[1].nullable = true;
         let values = vec![vec![[
@@ -2012,6 +2028,7 @@ mod tests {
         let mut schema = collection_schema();
         schema.fields[2].default_value = Some(schema::ValueField {
             data: Some(schema::value_field::Data::StringData("default note".into())),
+            ..Default::default()
         });
         let mut tags = field(103, "tags", schema::DataType::Array);
         tags.element_type = schema::DataType::Int64 as i32;

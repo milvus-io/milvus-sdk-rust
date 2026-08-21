@@ -539,6 +539,7 @@ mod decoding_tests {
             partition_names: vec!["p1".into(), "p2".into()],
             create_ts: 123,
             s3_location: "s3://bucket/export".into(),
+            ..Default::default()
         });
         assert_eq!(response.name(), "snap-1");
         assert_eq!(response.description(), "backup");
@@ -557,6 +558,7 @@ mod decoding_tests {
             GetRestoreSnapshotStateResponse::from_proto(milvus::GetRestoreSnapshotStateResponse {
                 status: None,
                 info: None,
+                ..Default::default()
             })
             .unwrap_err();
         assert!(matches!(error, Error::MalformedResponse(_)));
@@ -578,6 +580,7 @@ mod decoding_tests {
                     start_time: 10,
                     time_cost: 20,
                 }),
+                ..Default::default()
             })
             .expect("valid job info");
         assert_eq!(response.job_info().get_job_id(), 7);

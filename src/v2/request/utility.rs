@@ -177,6 +177,7 @@ impl FlushRequest {
             base: None,
             db_name: self.database_name.unwrap_or_else(|| default_db.to_owned()),
             collection_names: self.collection_names,
+            ..Default::default()
         }
     }
 }
@@ -839,6 +840,7 @@ impl GetCompactionStateRequest {
     pub(crate) fn into_proto(self) -> milvus::GetCompactionStateRequest {
         milvus::GetCompactionStateRequest {
             compaction_id: self.compaction_id,
+            ..Default::default()
         }
     }
 }
@@ -903,6 +905,7 @@ impl GetCompactionPlansRequest {
     pub(crate) fn into_proto(self) -> milvus::GetCompactionPlansRequest {
         milvus::GetCompactionPlansRequest {
             compaction_id: self.compaction_id,
+            ..Default::default()
         }
     }
 }
@@ -1024,6 +1027,7 @@ impl RunAnalyzerRequest {
             collection_name: self.collection_name,
             field_name: self.field_name,
             analyzer_names: self.analyzer_names,
+            ..Default::default()
         }
     }
 }
@@ -1168,6 +1172,7 @@ impl RefreshExternalCollectionRequest {
                 .as_ref()
                 .map(serde_json::Value::to_string)
                 .unwrap_or_default(),
+            ..Default::default()
         }
     }
 }
@@ -1249,6 +1254,7 @@ impl GetRefreshExternalCollectionProgressRequest {
         milvus::GetRefreshExternalCollectionProgressRequest {
             base: None,
             job_id: self.job_id,
+            ..Default::default()
         }
     }
 }
@@ -1325,6 +1331,7 @@ impl ListRefreshExternalCollectionJobsRequest {
             base: None,
             db_name: self.database_name.unwrap_or_else(|| default_db.to_owned()),
             collection_name: self.collection_name,
+            ..Default::default()
         }
     }
 }
@@ -1403,6 +1410,7 @@ impl AddFileResourceRequest {
             base: None,
             name: self.name,
             path: self.path,
+            ..Default::default()
         }
     }
 }
@@ -1475,6 +1483,7 @@ impl RemoveFileResourceRequest {
         milvus::RemoveFileResourceRequest {
             base: None,
             name: self.name,
+            ..Default::default()
         }
     }
 }
@@ -1522,7 +1531,10 @@ impl ListFileResourcesRequest {
     }
 
     pub(crate) fn into_proto(self) -> milvus::ListFileResourcesRequest {
-        milvus::ListFileResourcesRequest { base: None }
+        milvus::ListFileResourcesRequest {
+            base: None,
+            ..Default::default()
+        }
     }
 }
 
@@ -2041,7 +2053,10 @@ mod external_collection_request_tests {
                 .build()
                 .expect("valid request")
                 .into_proto(),
-            milvus::ListFileResourcesRequest { base: None }
+            milvus::ListFileResourcesRequest {
+                base: None,
+                ..Default::default()
+            }
         );
     }
 }

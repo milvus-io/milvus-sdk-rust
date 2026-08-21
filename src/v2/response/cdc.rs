@@ -217,6 +217,7 @@ mod decoding_tests {
             message_id: Some(common::MessageId {
                 id: "message-1".into(),
                 wal_name: common::WalName::Pulsar as i32,
+                ..Default::default()
             }),
             ..Default::default()
         }
@@ -242,6 +243,7 @@ mod decoding_tests {
         let response = GetReplicateInfoResponse::from_proto(milvus::GetReplicateInfoResponse {
             checkpoint: Some(checkpoint()),
             salvage_checkpoint: None,
+            ..Default::default()
         })
         .expect("salvage checkpoint is optional");
         assert!(response.salvage_checkpoint().is_none());
@@ -267,6 +269,7 @@ mod dump_message_tests {
             }),
             payload: vec![1, 2, 3],
             properties: HashMap::from([("key".into(), "value".into())]),
+            ..Default::default()
         })
         .expect("dumped message has an ID");
         assert_eq!(message.message_id.wal_name, WalName::Pulsar);

@@ -136,12 +136,16 @@ mod tests {
             database: Arc::clone(&database),
         };
         ClientV2 {
-            service: MilvusServiceClient::with_interceptor(channel, interceptor),
+            service: Arc::new(RwLock::new(MilvusServiceClient::with_interceptor(
+                channel,
+                interceptor,
+            ))),
             database,
             rpc_timeout: Arc::new(RwLock::new(Duration::from_secs(1))),
             retry: Arc::new(RwLock::new(RetryConfig::new())),
             cache_endpoint: Arc::new("database-tests".to_owned()),
             schema_load_scope: Arc::new(super::super::cache::SchemaLoadScope::new()),
+            global_cluster: None,
         }
     }
 

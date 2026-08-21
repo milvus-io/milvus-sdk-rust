@@ -119,6 +119,7 @@ impl CreateCollectionRequest {
                 .map(|(key, value)| common::KeyValuePair { key, value })
                 .collect(),
             num_partitions: self.num_partitions,
+            ..Default::default()
         })
     }
 }
@@ -1189,6 +1190,7 @@ impl BatchDescribeCollectionsRequest {
             db_name: self.database_name.unwrap_or_default(),
             collection_name: self.collection_names,
             collection_id: self.collection_ids,
+            ..Default::default()
         }
     }
 }
@@ -1462,6 +1464,7 @@ impl GetLoadStateRequest {
             collection_name: self.collection_name,
             partition_names: self.partition_names,
             db_name: self.database_name.unwrap_or_else(|| default_db.to_owned()),
+            ..Default::default()
         }
     }
 }
@@ -1575,6 +1578,7 @@ impl AlterCollectionPropertiesRequest {
             collection_id: 0,
             properties: kv(self.properties),
             delete_keys: Vec::new(),
+            ..Default::default()
         }
     }
 }
@@ -1685,6 +1689,7 @@ impl DropCollectionPropertiesRequest {
             collection_id: 0,
             properties: Vec::new(),
             delete_keys: self.property_keys.into_iter().collect(),
+            ..Default::default()
         }
     }
 }
@@ -1802,6 +1807,7 @@ impl AlterCollectionFieldPropertiesRequest {
             field_name: self.field_name,
             properties: kv(self.properties),
             delete_keys: Vec::new(),
+            ..Default::default()
         }
     }
 }
@@ -1926,6 +1932,7 @@ impl DropCollectionFieldPropertiesRequest {
             field_name: self.field_name,
             properties: Vec::new(),
             delete_keys: self.property_keys.into_iter().collect(),
+            ..Default::default()
         }
     }
 }
@@ -2045,6 +2052,7 @@ impl AddCollectionFieldRequest {
                 .field
                 .ok_or_else(|| Error::validation("field".into(), "must be specified".into()))?
                 .encode()?,
+            ..Default::default()
         })
     }
 }
@@ -2155,6 +2163,7 @@ impl AddCollectionFunctionRequest {
             collection_name: self.collection_name,
             collection_id: 0,
             function_schema: self.function.map(Function::into_proto),
+            ..Default::default()
         }
     }
 }
@@ -2263,6 +2272,7 @@ impl AlterCollectionFunctionRequest {
             collection_id: 0,
             function_name,
             function_schema: Some(function.into_proto()),
+            ..Default::default()
         }
     }
 }
@@ -2366,6 +2376,7 @@ impl DropCollectionFunctionRequest {
             collection_name: self.collection_name,
             collection_id: 0,
             function_name: self.function_name,
+            ..Default::default()
         }
     }
 }
@@ -2545,6 +2556,7 @@ impl DescribeReplicasRequest {
             with_shard_nodes: self.with_shard_nodes,
             collection_name: self.collection_name,
             db_name: self.database_name.unwrap_or_default(),
+            ..Default::default()
         }
     }
 }
@@ -2657,6 +2669,7 @@ impl RenameCollectionRequest {
             old_name: self.collection_name,
             new_name: self.new_collection_name,
             new_db_name,
+            ..Default::default()
         }
     }
 }
@@ -2713,7 +2726,11 @@ fn validate_collection_name(_database_name: Option<&str>, collection_name: &str)
 fn kv(values: HashMap<String, String>) -> Vec<common::KeyValuePair> {
     values
         .into_iter()
-        .map(|(key, value)| common::KeyValuePair { key, value })
+        .map(|(key, value)| common::KeyValuePair {
+            key,
+            value,
+            ..Default::default()
+        })
         .collect()
 }
 
