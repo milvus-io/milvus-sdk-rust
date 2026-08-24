@@ -29,6 +29,7 @@ mod iterator;
 mod partition;
 mod rbac;
 mod resource_group;
+mod session;
 mod snapshot;
 mod utility;
 

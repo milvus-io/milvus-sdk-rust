@@ -686,6 +686,7 @@ impl ClientV2 {
                 flush_ts: flush_timestamp,
                 db_name: database.to_owned(),
                 collection_name: String::new(),
+                ..Default::default()
             }
         )?;
         status_to_result(&response.status)?;
@@ -778,6 +779,7 @@ impl ClientV2 {
                         db_name: database.to_owned(),
                         flush_targets: Vec::new(),
                         flush_all_tss: HashMap::new(),
+                        ..Default::default()
                     }
                 )
             };

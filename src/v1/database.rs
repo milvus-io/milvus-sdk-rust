@@ -272,6 +272,7 @@ impl Client {
                 db_id,
                 properties,
                 delete_keys: Vec::new(),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -329,6 +330,7 @@ impl Client {
                 db_id,
                 properties: Vec::new(),
                 delete_keys: property_keys,
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -388,6 +390,7 @@ impl Client {
                 base: Some(MsgBase::new(MsgType::CreateDatabase)),
                 db_name,
                 properties,
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -434,6 +437,7 @@ impl Client {
             .describe_database(proto::milvus::DescribeDatabaseRequest {
                 base: Some(MsgBase::new(MsgType::DescribeDatabase)),
                 db_name,
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -485,6 +489,7 @@ impl Client {
             .drop_database(proto::milvus::DropDatabaseRequest {
                 base: Some(MsgBase::new(MsgType::DropDatabase)),
                 db_name,
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -520,6 +525,7 @@ impl Client {
             .clone()
             .list_databases(proto::milvus::ListDatabasesRequest {
                 base: Some(MsgBase::new(MsgType::ListDatabases)),
+                ..Default::default()
             })
             .await?
             .into_inner();

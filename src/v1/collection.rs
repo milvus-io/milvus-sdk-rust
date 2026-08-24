@@ -582,6 +582,7 @@ impl Client {
                 old_name: name,
                 new_name: new_name,
                 new_db_name: new_db_name,
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -608,6 +609,7 @@ impl Client {
                 base: Some(MsgBase::new(MsgType::GetCollectionStatistics)),
                 db_name: "".into(),
                 collection_name: name.to_owned(),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -635,6 +637,7 @@ impl Client {
                 db_name: "".to_string(),
                 collection_name: collection_name.into(),
                 partition_names,
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -765,6 +768,7 @@ impl Client {
                 db_name: "".into(),
                 collection_name: collection_name.into(),
                 partition_names: options.partition_names,
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -832,6 +836,7 @@ impl Client {
             .map(|(k, v)| crate::proto::common::KeyValuePair {
                 key: k.clone(),
                 value: v.clone(),
+                ..Default::default()
             })
             .collect();
 
@@ -911,6 +916,7 @@ impl Client {
             .map(|(k, v)| crate::proto::common::KeyValuePair {
                 key: k.clone(),
                 value: v.clone(),
+                ..Default::default()
             })
             .collect();
 
@@ -993,6 +999,7 @@ impl Client {
                 base: Some(MsgBase::new(MsgType::TruncateCollection)),
                 db_name: "".to_string(),
                 collection_name: collection_name.clone(),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -1018,6 +1025,7 @@ impl Client {
                 db_name: "".to_string(),
                 collection_name: collection_names.into_iter().map(Into::into).collect(),
                 collection_id: vec![],
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -1049,6 +1057,7 @@ impl Client {
                 collection_name: collection_name.into(),
                 collection_id: 0,
                 schema: buf.to_vec(),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -1075,6 +1084,7 @@ impl Client {
                 collection_name: collection_name.into(),
                 collection_id: 0,
                 function_schema: Some(function),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -1104,6 +1114,7 @@ impl Client {
                 collection_id: 0,
                 function_name: function_name.into(),
                 function_schema: Some(function),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -1131,6 +1142,7 @@ impl Client {
                 collection_name: collection_name.into(),
                 collection_id: 0,
                 function_name: function_name.into(),
+                ..Default::default()
             })
             .await?
             .into_inner();

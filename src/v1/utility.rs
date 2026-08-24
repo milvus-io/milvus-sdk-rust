@@ -329,6 +329,7 @@ impl Client {
                 collection_name: "".to_string(),
                 field_name: "".to_string(),
                 analyzer_names: vec![],
+                ..Default::default()
             })
             .await?
             .into_inner();

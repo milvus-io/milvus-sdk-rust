@@ -691,6 +691,7 @@ mod tests {
             properties: vec![common::KeyValuePair {
                 key: "collection.ttl.seconds".into(),
                 value: "60".into(),
+                ..Default::default()
             }],
             schema: Some(schema::CollectionSchema {
                 description: "book catalog".into(),
@@ -724,6 +725,7 @@ mod tests {
                             type_params: vec![common::KeyValuePair {
                                 key: "max_capacity".into(),
                                 value: "16".into(),
+                                ..Default::default()
                             }],
                             ..Default::default()
                         },
@@ -735,10 +737,12 @@ mod tests {
                                 common::KeyValuePair {
                                     key: "max_capacity".into(),
                                     value: "16".into(),
+                                    ..Default::default()
                                 },
                                 common::KeyValuePair {
                                     key: "dim".into(),
                                     value: "4".into(),
+                                    ..Default::default()
                                 },
                             ],
                             ..Default::default()

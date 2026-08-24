@@ -446,6 +446,7 @@ impl Function {
             output_field_names: self.output_fields,
             output_field_ids: Vec::new(),
             params: pairs(self.params),
+            ..Default::default()
         }
     }
 
@@ -577,11 +578,14 @@ impl Default for Ids {
 }
 
 impl Ids {
-    pub(crate) fn from_proto(ids: Option<schema::IDs>) -> Self {
+    pub(crate) fn from_proto(ids: Option<schema::IDs>) -> Result<Self> {
         match ids.and_then(|ids| ids.id_field) {
-            Some(schema::i_ds::IdField::IntId(values)) => Self::Int64(values.data),
-            Some(schema::i_ds::IdField::StrId(values)) => Self::VarChar(values.data),
-            None => Self::default(),
+            Some(schema::i_ds::IdField::IntId(values)) => Ok(Self::Int64(values.data)),
+            Some(schema::i_ds::IdField::StrId(values)) => Ok(Self::VarChar(values.data)),
+            Some(schema::i_ds::IdField::UuidId(_)) => Err(Error::MalformedResponse(
+                "uuid primary keys are not supported".into(),
+            )),
+            None => Ok(Self::default()),
         }
     }
 }
@@ -1804,6 +1808,17 @@ impl FieldData {
                 ));
             }
             let mut proto = data.into_proto()?;
+            // Prefer the field-specific validity channel and keep the legacy
+            // top-level field for older readers.
+            match proto.field.as_mut() {
+                Some(field_data::Field::Scalars(scalars)) => {
+                    scalars.valid_data = valid_data.clone();
+                }
+                Some(field_data::Field::Vectors(vectors)) => {
+                    vectors.valid_data = valid_data.clone();
+                }
+                _ => {}
+            }
             proto.valid_data = valid_data;
             return Ok(proto);
         }
@@ -1812,109 +1827,134 @@ impl FieldData {
                 name,
                 schema::DataType::Bool,
                 field_data::Field::Scalars(schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(scalar_field::Data::BoolData(schema::BoolArray {
                         data: values,
                     })),
+                    ..Default::default()
                 }),
             ),
             Self::Int8 { name, values } => (
                 name,
                 schema::DataType::Int8,
                 field_data::Field::Scalars(schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(scalar_field::Data::IntData(schema::IntArray {
                         data: values.into_iter().map(i32::from).collect(),
                     })),
+                    ..Default::default()
                 }),
             ),
             Self::Int16 { name, values } => (
                 name,
                 schema::DataType::Int16,
                 field_data::Field::Scalars(schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(scalar_field::Data::IntData(schema::IntArray {
                         data: values.into_iter().map(i32::from).collect(),
                     })),
+                    ..Default::default()
                 }),
             ),
             Self::Int32 { name, values } => (
                 name,
                 schema::DataType::Int32,
                 field_data::Field::Scalars(schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(scalar_field::Data::IntData(schema::IntArray {
                         data: values,
                     })),
+                    ..Default::default()
                 }),
             ),
             Self::Int64 { name, values } => (
                 name,
                 schema::DataType::Int64,
                 field_data::Field::Scalars(schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(scalar_field::Data::LongData(schema::LongArray {
                         data: values,
                     })),
+                    ..Default::default()
                 }),
             ),
             Self::Float { name, values } => (
                 name,
                 schema::DataType::Float,
                 field_data::Field::Scalars(schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(scalar_field::Data::FloatData(schema::FloatArray {
                         data: values,
                     })),
+                    ..Default::default()
                 }),
             ),
             Self::Double { name, values } => (
                 name,
                 schema::DataType::Double,
                 field_data::Field::Scalars(schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(scalar_field::Data::DoubleData(schema::DoubleArray {
                         data: values,
                     })),
+                    ..Default::default()
                 }),
             ),
             Self::VarChar { name, values } => (
                 name,
                 schema::DataType::VarChar,
                 field_data::Field::Scalars(schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(scalar_field::Data::StringData(schema::StringArray {
                         data: values,
                     })),
+                    ..Default::default()
                 }),
             ),
             Self::Json { name, values } => (
                 name,
                 schema::DataType::Json,
                 field_data::Field::Scalars(schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(scalar_field::Data::JsonData(schema::JsonArray {
                         data: values
                             .into_iter()
                             .map(|value| serde_json::to_vec(&value))
                             .collect::<std::result::Result<Vec<_>, _>>()?,
                     })),
+                    ..Default::default()
                 }),
             ),
             Self::Geometry { name, values } => (
                 name,
                 schema::DataType::Geometry,
                 field_data::Field::Scalars(schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(scalar_field::Data::GeometryWktData(
                         schema::GeometryWktArray { data: values },
                     )),
+                    ..Default::default()
                 }),
             ),
             Self::Timestamptz { name, values } => (
                 name,
                 schema::DataType::Timestamptz,
                 field_data::Field::Scalars(schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(scalar_field::Data::StringData(schema::StringArray {
                         data: values,
                     })),
+                    ..Default::default()
                 }),
             ),
             Self::ArrayBool { name, values } => (
                 name,
                 schema::DataType::Array,
                 array_proto_field(DataType::Bool, values, |data| {
-                    scalar_field::Data::BoolData(schema::BoolArray { data })
+                    scalar_field::Data::BoolData(schema::BoolArray {
+                        data,
+                        ..Default::default()
+                    })
                 }),
             ),
             Self::ArrayInt8 { name, values } => (
@@ -1923,6 +1963,7 @@ impl FieldData {
                 array_proto_field(DataType::Int8, values, |data| {
                     scalar_field::Data::IntData(schema::IntArray {
                         data: data.into_iter().map(i32::from).collect(),
+                        ..Default::default()
                     })
                 }),
             ),
@@ -1932,6 +1973,7 @@ impl FieldData {
                 array_proto_field(DataType::Int16, values, |data| {
                     scalar_field::Data::IntData(schema::IntArray {
                         data: data.into_iter().map(i32::from).collect(),
+                        ..Default::default()
                     })
                 }),
             ),
@@ -1939,35 +1981,50 @@ impl FieldData {
                 name,
                 schema::DataType::Array,
                 array_proto_field(DataType::Int32, values, |data| {
-                    scalar_field::Data::IntData(schema::IntArray { data })
+                    scalar_field::Data::IntData(schema::IntArray {
+                        data,
+                        ..Default::default()
+                    })
                 }),
             ),
             Self::ArrayInt64 { name, values } => (
                 name,
                 schema::DataType::Array,
                 array_proto_field(DataType::Int64, values, |data| {
-                    scalar_field::Data::LongData(schema::LongArray { data })
+                    scalar_field::Data::LongData(schema::LongArray {
+                        data,
+                        ..Default::default()
+                    })
                 }),
             ),
             Self::ArrayFloat { name, values } => (
                 name,
                 schema::DataType::Array,
                 array_proto_field(DataType::Float, values, |data| {
-                    scalar_field::Data::FloatData(schema::FloatArray { data })
+                    scalar_field::Data::FloatData(schema::FloatArray {
+                        data,
+                        ..Default::default()
+                    })
                 }),
             ),
             Self::ArrayDouble { name, values } => (
                 name,
                 schema::DataType::Array,
                 array_proto_field(DataType::Double, values, |data| {
-                    scalar_field::Data::DoubleData(schema::DoubleArray { data })
+                    scalar_field::Data::DoubleData(schema::DoubleArray {
+                        data,
+                        ..Default::default()
+                    })
                 }),
             ),
             Self::ArrayVarChar { name, values } => (
                 name,
                 schema::DataType::Array,
                 array_proto_field(DataType::VarChar, values, |data| {
-                    scalar_field::Data::StringData(schema::StringArray { data })
+                    scalar_field::Data::StringData(schema::StringArray {
+                        data,
+                        ..Default::default()
+                    })
                 }),
             ),
             Self::Struct { name, .. } => {
@@ -1983,8 +2040,10 @@ impl FieldData {
                     name,
                     schema::DataType::FloatVector,
                     field_data::Field::Vectors(schema::VectorField {
+                        valid_data: Vec::new(),
                         dim: dimension as i64,
                         data: Some(vector_field::Data::FloatVector(schema::FloatArray { data })),
+                        ..Default::default()
                     }),
                 )
             }
@@ -1997,10 +2056,12 @@ impl FieldData {
                     name,
                     schema::DataType::BinaryVector,
                     field_data::Field::Vectors(schema::VectorField {
+                        valid_data: Vec::new(),
                         dim: dimension as i64,
                         data: Some(vector_field::Data::BinaryVector(
                             values.into_iter().flatten().collect(),
                         )),
+                        ..Default::default()
                     }),
                 )
             }
@@ -2011,8 +2072,10 @@ impl FieldData {
                     name,
                     schema::DataType::Float16Vector,
                     field_data::Field::Vectors(schema::VectorField {
+                        valid_data: Vec::new(),
                         dim: dimension as i64,
                         data: Some(vector_field::Data::Float16Vector(data)),
+                        ..Default::default()
                     }),
                 )
             }
@@ -2023,8 +2086,10 @@ impl FieldData {
                     name,
                     schema::DataType::BFloat16Vector,
                     field_data::Field::Vectors(schema::VectorField {
+                        valid_data: Vec::new(),
                         dim: dimension as i64,
                         data: Some(vector_field::Data::Bfloat16Vector(data)),
+                        ..Default::default()
                     }),
                 )
             }
@@ -2042,6 +2107,7 @@ impl FieldData {
                     name,
                     schema::DataType::SparseFloatVector,
                     field_data::Field::Vectors(schema::VectorField {
+                        valid_data: Vec::new(),
                         dim: dimension,
                         data: Some(vector_field::Data::SparseFloatVector(
                             schema::SparseFloatArray {
@@ -2049,6 +2115,7 @@ impl FieldData {
                                 dim: dimension,
                             },
                         )),
+                        ..Default::default()
                     }),
                 )
             }
@@ -2058,6 +2125,7 @@ impl FieldData {
                     name,
                     schema::DataType::Int8Vector,
                     field_data::Field::Vectors(schema::VectorField {
+                        valid_data: Vec::new(),
                         dim: dimension as i64,
                         data: Some(vector_field::Data::Int8Vector(
                             values
@@ -2066,6 +2134,7 @@ impl FieldData {
                                 .map(|value| value as u8)
                                 .collect(),
                         )),
+                        ..Default::default()
                     }),
                 )
             }
@@ -2079,6 +2148,7 @@ impl FieldData {
             is_dynamic: false,
             valid_data: Vec::new(),
             field: Some(field),
+            ..Default::default()
         })
     }
 
@@ -2097,6 +2167,17 @@ impl FieldData {
                 ));
             }
             let mut proto = data.to_proto()?;
+            // Prefer the field-specific validity channel and keep the legacy
+            // top-level field for older readers.
+            match proto.field.as_mut() {
+                Some(field_data::Field::Scalars(scalars)) => {
+                    scalars.valid_data = valid_data.clone();
+                }
+                Some(field_data::Field::Vectors(vectors)) => {
+                    vectors.valid_data = valid_data.clone();
+                }
+                _ => {}
+            }
             proto.valid_data = valid_data.clone();
             return Ok(proto);
         }
@@ -2105,111 +2186,136 @@ impl FieldData {
                 name.clone(),
                 schema::DataType::Bool,
                 field_data::Field::Scalars(schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(scalar_field::Data::BoolData(schema::BoolArray {
                         data: values.clone(),
                     })),
+                    ..Default::default()
                 }),
             ),
             Self::Int8 { name, values } => (
                 name.clone(),
                 schema::DataType::Int8,
                 field_data::Field::Scalars(schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(scalar_field::Data::IntData(schema::IntArray {
                         data: values.iter().copied().map(i32::from).collect(),
                     })),
+                    ..Default::default()
                 }),
             ),
             Self::Int16 { name, values } => (
                 name.clone(),
                 schema::DataType::Int16,
                 field_data::Field::Scalars(schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(scalar_field::Data::IntData(schema::IntArray {
                         data: values.iter().copied().map(i32::from).collect(),
                     })),
+                    ..Default::default()
                 }),
             ),
             Self::Int32 { name, values } => (
                 name.clone(),
                 schema::DataType::Int32,
                 field_data::Field::Scalars(schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(scalar_field::Data::IntData(schema::IntArray {
                         data: values.clone(),
                     })),
+                    ..Default::default()
                 }),
             ),
             Self::Int64 { name, values } => (
                 name.clone(),
                 schema::DataType::Int64,
                 field_data::Field::Scalars(schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(scalar_field::Data::LongData(schema::LongArray {
                         data: values.clone(),
                     })),
+                    ..Default::default()
                 }),
             ),
             Self::Float { name, values } => (
                 name.clone(),
                 schema::DataType::Float,
                 field_data::Field::Scalars(schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(scalar_field::Data::FloatData(schema::FloatArray {
                         data: values.clone(),
                     })),
+                    ..Default::default()
                 }),
             ),
             Self::Double { name, values } => (
                 name.clone(),
                 schema::DataType::Double,
                 field_data::Field::Scalars(schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(scalar_field::Data::DoubleData(schema::DoubleArray {
                         data: values.clone(),
                     })),
+                    ..Default::default()
                 }),
             ),
             Self::VarChar { name, values } => (
                 name.clone(),
                 schema::DataType::VarChar,
                 field_data::Field::Scalars(schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(scalar_field::Data::StringData(schema::StringArray {
                         data: values.clone(),
                     })),
+                    ..Default::default()
                 }),
             ),
             Self::Json { name, values } => (
                 name.clone(),
                 schema::DataType::Json,
                 field_data::Field::Scalars(schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(scalar_field::Data::JsonData(schema::JsonArray {
                         data: values
                             .iter()
                             .map(serde_json::to_vec)
                             .collect::<std::result::Result<Vec<_>, _>>()?,
                     })),
+                    ..Default::default()
                 }),
             ),
             Self::Geometry { name, values } => (
                 name.clone(),
                 schema::DataType::Geometry,
                 field_data::Field::Scalars(schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(scalar_field::Data::GeometryWktData(
                         schema::GeometryWktArray {
                             data: values.clone(),
                         },
                     )),
+                    ..Default::default()
                 }),
             ),
             Self::Timestamptz { name, values } => (
                 name.clone(),
                 schema::DataType::Timestamptz,
                 field_data::Field::Scalars(schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(scalar_field::Data::StringData(schema::StringArray {
                         data: values.clone(),
                     })),
+                    ..Default::default()
                 }),
             ),
             Self::ArrayBool { name, values } => (
                 name.clone(),
                 schema::DataType::Array,
                 array_proto_field_by_ref(DataType::Bool, values, |data| {
-                    scalar_field::Data::BoolData(schema::BoolArray { data })
+                    scalar_field::Data::BoolData(schema::BoolArray {
+                        data,
+                        ..Default::default()
+                    })
                 }),
             ),
             Self::ArrayInt8 { name, values } => (
@@ -2218,6 +2324,7 @@ impl FieldData {
                 array_proto_field_by_ref(DataType::Int8, values, |data| {
                     scalar_field::Data::IntData(schema::IntArray {
                         data: data.into_iter().map(i32::from).collect(),
+                        ..Default::default()
                     })
                 }),
             ),
@@ -2227,6 +2334,7 @@ impl FieldData {
                 array_proto_field_by_ref(DataType::Int16, values, |data| {
                     scalar_field::Data::IntData(schema::IntArray {
                         data: data.into_iter().map(i32::from).collect(),
+                        ..Default::default()
                     })
                 }),
             ),
@@ -2234,35 +2342,50 @@ impl FieldData {
                 name.clone(),
                 schema::DataType::Array,
                 array_proto_field_by_ref(DataType::Int32, values, |data| {
-                    scalar_field::Data::IntData(schema::IntArray { data })
+                    scalar_field::Data::IntData(schema::IntArray {
+                        data,
+                        ..Default::default()
+                    })
                 }),
             ),
             Self::ArrayInt64 { name, values } => (
                 name.clone(),
                 schema::DataType::Array,
                 array_proto_field_by_ref(DataType::Int64, values, |data| {
-                    scalar_field::Data::LongData(schema::LongArray { data })
+                    scalar_field::Data::LongData(schema::LongArray {
+                        data,
+                        ..Default::default()
+                    })
                 }),
             ),
             Self::ArrayFloat { name, values } => (
                 name.clone(),
                 schema::DataType::Array,
                 array_proto_field_by_ref(DataType::Float, values, |data| {
-                    scalar_field::Data::FloatData(schema::FloatArray { data })
+                    scalar_field::Data::FloatData(schema::FloatArray {
+                        data,
+                        ..Default::default()
+                    })
                 }),
             ),
             Self::ArrayDouble { name, values } => (
                 name.clone(),
                 schema::DataType::Array,
                 array_proto_field_by_ref(DataType::Double, values, |data| {
-                    scalar_field::Data::DoubleData(schema::DoubleArray { data })
+                    scalar_field::Data::DoubleData(schema::DoubleArray {
+                        data,
+                        ..Default::default()
+                    })
                 }),
             ),
             Self::ArrayVarChar { name, values } => (
                 name.clone(),
                 schema::DataType::Array,
                 array_proto_field_by_ref(DataType::VarChar, values, |data| {
-                    scalar_field::Data::StringData(schema::StringArray { data })
+                    scalar_field::Data::StringData(schema::StringArray {
+                        data,
+                        ..Default::default()
+                    })
                 }),
             ),
             Self::Struct { name, .. } => {
@@ -2278,8 +2401,10 @@ impl FieldData {
                     name.clone(),
                     schema::DataType::FloatVector,
                     field_data::Field::Vectors(schema::VectorField {
+                        valid_data: Vec::new(),
                         dim: dimension as i64,
                         data: Some(vector_field::Data::FloatVector(schema::FloatArray { data })),
+                        ..Default::default()
                     }),
                 )
             }
@@ -2292,10 +2417,12 @@ impl FieldData {
                     name.clone(),
                     schema::DataType::BinaryVector,
                     field_data::Field::Vectors(schema::VectorField {
+                        valid_data: Vec::new(),
                         dim: dimension as i64,
                         data: Some(vector_field::Data::BinaryVector(
                             values.iter().flatten().copied().collect(),
                         )),
+                        ..Default::default()
                     }),
                 )
             }
@@ -2306,8 +2433,10 @@ impl FieldData {
                     name.clone(),
                     schema::DataType::Float16Vector,
                     field_data::Field::Vectors(schema::VectorField {
+                        valid_data: Vec::new(),
                         dim: dimension as i64,
                         data: Some(vector_field::Data::Float16Vector(data)),
+                        ..Default::default()
                     }),
                 )
             }
@@ -2318,8 +2447,10 @@ impl FieldData {
                     name.clone(),
                     schema::DataType::BFloat16Vector,
                     field_data::Field::Vectors(schema::VectorField {
+                        valid_data: Vec::new(),
                         dim: dimension as i64,
                         data: Some(vector_field::Data::Bfloat16Vector(data)),
+                        ..Default::default()
                     }),
                 )
             }
@@ -2337,6 +2468,7 @@ impl FieldData {
                     name.clone(),
                     schema::DataType::SparseFloatVector,
                     field_data::Field::Vectors(schema::VectorField {
+                        valid_data: Vec::new(),
                         dim: dimension,
                         data: Some(vector_field::Data::SparseFloatVector(
                             schema::SparseFloatArray {
@@ -2344,6 +2476,7 @@ impl FieldData {
                                 dim: dimension,
                             },
                         )),
+                        ..Default::default()
                     }),
                 )
             }
@@ -2353,6 +2486,7 @@ impl FieldData {
                     name.clone(),
                     schema::DataType::Int8Vector,
                     field_data::Field::Vectors(schema::VectorField {
+                        valid_data: Vec::new(),
                         dim: dimension as i64,
                         data: Some(vector_field::Data::Int8Vector(
                             values
@@ -2362,6 +2496,7 @@ impl FieldData {
                                 .map(|value| value as u8)
                                 .collect(),
                         )),
+                        ..Default::default()
                     }),
                 )
             }
@@ -2375,6 +2510,7 @@ impl FieldData {
             is_dynamic: false,
             valid_data: Vec::new(),
             field: Some(field),
+            ..Default::default()
         })
     }
 
@@ -2659,6 +2795,21 @@ impl ConnectConfig {
         &self.token
     }
 
+    /// Returns the raw (pre-encoding) token, if one was configured.
+    ///
+    /// The [`Self::token`] setter base64-encodes the credential for the gRPC `authorization`
+    /// metadata. REST endpoints authenticate with the plain credential, so this decodes the
+    /// stored value back to the raw token.
+    pub(crate) fn raw_token(&self) -> Option<String> {
+        use base64::Engine;
+        self.token.as_ref().and_then(|token| {
+            base64::engine::general_purpose::STANDARD
+                .decode(token)
+                .ok()
+                .and_then(|bytes| String::from_utf8(bytes).ok())
+        })
+    }
+
     /// Overrides the DNS name used to verify the Milvus server's TLS certificate.
     pub fn tls_server_name(mut self, value: impl Into<String>) -> Self {
         self.tls_server_name = optional_config_string(value);
@@ -2860,7 +3011,11 @@ fn optional_config_string(value: impl Into<String>) -> Option<String> {
 pub(super) fn pairs(values: HashMap<String, String>) -> Vec<common::KeyValuePair> {
     values
         .into_iter()
-        .map(|(key, value)| common::KeyValuePair { key, value })
+        .map(|(key, value)| common::KeyValuePair {
+            key,
+            value,
+            ..Default::default()
+        })
         .collect()
 }
 
@@ -2898,15 +3053,18 @@ fn array_proto_field<T>(
     encode: impl Fn(Vec<T>) -> schema::scalar_field::Data,
 ) -> schema::field_data::Field {
     schema::field_data::Field::Scalars(schema::ScalarField {
+        valid_data: Vec::new(),
         data: Some(schema::scalar_field::Data::ArrayData(schema::ArrayArray {
             data: values
                 .into_iter()
                 .map(|values| schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(encode(values)),
                 })
                 .collect(),
             element_type: element_type.into_proto() as i32,
         })),
+        ..Default::default()
     })
 }
 
@@ -2916,15 +3074,18 @@ fn array_proto_field_by_ref<T: Clone>(
     encode: impl Fn(Vec<T>) -> schema::scalar_field::Data,
 ) -> schema::field_data::Field {
     schema::field_data::Field::Scalars(schema::ScalarField {
+        valid_data: Vec::new(),
         data: Some(schema::scalar_field::Data::ArrayData(schema::ArrayArray {
             data: values
                 .iter()
                 .map(|values| schema::ScalarField {
+                    valid_data: Vec::new(),
                     data: Some(encode(values.clone())),
                 })
                 .collect(),
             element_type: element_type.into_proto() as i32,
         })),
+        ..Default::default()
     })
 }
 
@@ -3146,7 +3307,8 @@ mod field_data_tests {
         assert!(matches!(
             geometry.field,
             Some(field_data::Field::Scalars(schema::ScalarField {
-                data: Some(scalar_field::Data::GeometryWktData(_))
+                data: Some(scalar_field::Data::GeometryWktData(_)),
+                ..
             }))
         ));
 
@@ -3160,7 +3322,8 @@ mod field_data_tests {
         assert!(matches!(
             timestamptz.field,
             Some(field_data::Field::Scalars(schema::ScalarField {
-                data: Some(scalar_field::Data::StringData(_))
+                data: Some(scalar_field::Data::StringData(_)),
+                ..
             }))
         ));
     }
@@ -3189,6 +3352,7 @@ mod field_data_tests {
             assert_eq!(encoded.r#type, expected_type as i32);
             let Some(field_data::Field::Scalars(schema::ScalarField {
                 data: Some(scalar_field::Data::IntData(values)),
+                ..
             })) = encoded.field
             else {
                 panic!("expected integer scalar data")
@@ -3264,6 +3428,7 @@ mod field_data_tests {
             assert_eq!(encoded.r#type, schema::DataType::Array as i32);
             let Some(field_data::Field::Scalars(schema::ScalarField {
                 data: Some(scalar_field::Data::ArrayData(values)),
+                ..
             })) = encoded.field
             else {
                 panic!("expected array scalar data")
@@ -3336,6 +3501,7 @@ mod field_data_tests {
             type_params: vec![crate::proto::common::KeyValuePair {
                 key: "dim".into(),
                 value: "4".into(),
+                ..Default::default()
             }],
             ..Default::default()
         };
@@ -3346,6 +3512,18 @@ mod field_data_tests {
         };
         assert_eq!(vectors.dim, 4);
         assert_eq!(encoded.valid_data, vec![false, false]);
+    }
+
+    #[test]
+    fn nullable_encoding_populates_field_specific_validity() {
+        let data = FieldData::nullable(FieldData::int64("id", vec![1, 3]), vec![true, false, true])
+            .unwrap();
+        let proto = data.into_proto().unwrap();
+        assert_eq!(proto.valid_data, vec![true, false, true]);
+        let Some(field_data::Field::Scalars(scalars)) = proto.field else {
+            panic!("expected scalar field")
+        };
+        assert_eq!(scalars.valid_data, vec![true, false, true]);
     }
 }
 
@@ -3745,7 +3923,8 @@ mod enum_conversion_tests {
                     data: vec![1, 2],
                     ..Default::default()
                 })),
-            })),
+            }))
+            .unwrap(),
             integer
         );
 
@@ -3757,9 +3936,24 @@ mod enum_conversion_tests {
                     data: vec!["a".to_owned(), "b".to_owned()],
                     ..Default::default()
                 })),
-            })),
+            }))
+            .unwrap(),
             strings
         );
+    }
+
+    #[test]
+    fn ids_from_proto_rejects_uuid_primary_keys() {
+        let error = Ids::from_proto(Some(schema::IDs {
+            id_field: Some(schema::i_ds::IdField::UuidId(schema::UuidArray {
+                data: vec![vec![1u8; 16]],
+            })),
+        }))
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            Error::MalformedResponse(message) if message.contains("uuid primary keys are not supported")
+        ));
     }
 
     #[test]

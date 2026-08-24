@@ -223,6 +223,7 @@ impl Client {
                 hash_keys: Vec::new(),
                 schema_timestamp: 0,
                 namespace: options.namespace,
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -357,6 +358,7 @@ impl Client {
                 partial_update: options.partial_update,
                 namespace: options.namespace,
                 field_ops: Vec::new(),
+                ..Default::default()
             })
             .await?
             .into_inner();

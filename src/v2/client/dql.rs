@@ -17,6 +17,7 @@
 //! ClientV2 query and search operations.
 
 use super::ClientV2;
+use crate::proto::common;
 use crate::v2::error::status_to_result;
 use crate::v2::error::{Error, Result};
 use crate::v2::{request, response};
@@ -32,6 +33,14 @@ impl ClientV2 {
         &self,
         request: request::dql::QueryRequest,
     ) -> Result<response::dql::QueryResponse> {
+        self.query_with_cluster(request, "").await
+    }
+
+    pub(super) async fn query_with_cluster(
+        &self,
+        request: request::dql::QueryRequest,
+        cluster_id: &str,
+    ) -> Result<response::dql::QueryResponse> {
         let database = self.effective_database(request.database_name.as_deref());
         let collection = request.collection_name.clone();
         let guarantee = self
@@ -42,7 +51,8 @@ impl ClientV2 {
         } else {
             Some(self.primary_field_name(&database, &collection).await?)
         };
-        let raw = request.into_proto(&database, primary_field.as_deref(), guarantee)?;
+        let mut raw = request.into_proto(&database, primary_field.as_deref(), guarantee)?;
+        set_cluster_param(&mut raw.query_params, cluster_id);
         let response = rpc_with_retry!(self, query, raw)?;
         status_to_result(&response.status)?;
         response::dql::QueryResponse::from_proto(response)
@@ -57,13 +67,22 @@ impl ClientV2 {
         &self,
         request: request::dql::GetRequest,
     ) -> Result<response::dql::GetResponse> {
+        self.get_with_cluster(request, "").await
+    }
+
+    pub(super) async fn get_with_cluster(
+        &self,
+        request: request::dql::GetRequest,
+        cluster_id: &str,
+    ) -> Result<response::dql::GetResponse> {
         let database = self.effective_database(request.database_name.as_deref());
         let collection = request.collection_name.clone();
         let guarantee = self
             .deduce_guarantee_timestamp(&database, &collection, request.consistency_level)
             .await?;
         let primary_field = self.primary_field_name(&database, &collection).await?;
-        let raw = request.into_proto(&database, &primary_field, guarantee)?;
+        let mut raw = request.into_proto(&database, &primary_field, guarantee)?;
+        set_cluster_param(&mut raw.query_params, cluster_id);
         let response = rpc_with_retry!(self, query, raw)?;
         status_to_result(&response.status)?;
         response::dql::QueryResponse::from_proto(response)
@@ -78,12 +97,21 @@ impl ClientV2 {
         &self,
         request: request::dql::SearchRequest,
     ) -> Result<response::dql::SearchResponse> {
+        self.search_with_cluster(request, "").await
+    }
+
+    pub(super) async fn search_with_cluster(
+        &self,
+        request: request::dql::SearchRequest,
+        cluster_id: &str,
+    ) -> Result<response::dql::SearchResponse> {
         let database = self.effective_database(request.database_name.as_deref());
         let collection = request.collection_name.clone();
         let guarantee = self
             .deduce_guarantee_timestamp(&database, &collection, request.consistency_level)
             .await?;
-        let raw = request.into_proto(&database, guarantee)?;
+        let mut raw = request.into_proto(&database, guarantee)?;
+        set_cluster_param(&mut raw.search_params, cluster_id);
         let response = rpc_with_retry!(self, search, raw)?;
         status_to_result(&response.status)?;
         response::dql::SearchResponse::from_proto(response)
@@ -97,12 +125,21 @@ impl ClientV2 {
         &self,
         request: request::dql::HybridSearchRequest,
     ) -> Result<response::dql::HybridSearchResponse> {
+        self.hybrid_search_with_cluster(request, "").await
+    }
+
+    pub(super) async fn hybrid_search_with_cluster(
+        &self,
+        request: request::dql::HybridSearchRequest,
+        cluster_id: &str,
+    ) -> Result<response::dql::HybridSearchResponse> {
         let database = self.effective_database(request.database_name.as_deref());
         let collection = request.collection_name.clone();
         let guarantee = self
             .deduce_guarantee_timestamp(&database, &collection, request.consistency_level)
             .await?;
-        let raw = request.into_proto(&database, guarantee)?;
+        let mut raw = request.into_proto(&database, guarantee)?;
+        set_cluster_param(&mut raw.rank_params, cluster_id);
         let response = rpc_with_retry!(self, hybrid_search, raw)?;
         status_to_result(&response.status)?;
         response::dql::SearchResponse::from_proto(response)
@@ -119,4 +156,18 @@ impl ClientV2 {
             .map(|field| field.name.clone())
             .ok_or_else(|| Error::MalformedResponse("collection schema has no primary key".into()))
     }
+}
+
+pub(super) fn set_cluster_param(params: &mut Vec<common::KeyValuePair>, cluster_id: &str) {
+    // Only touch params when a session actually provides a cluster id. On the
+    // plain (non-session) path cluster_id is empty, so any user-supplied
+    // `cluster_id` param is left verbatim.
+    if cluster_id.is_empty() {
+        return;
+    }
+    params.retain(|pair| pair.key != "cluster_id");
+    params.push(common::KeyValuePair {
+        key: "cluster_id".into(),
+        value: cluster_id.to_owned(),
+    });
 }

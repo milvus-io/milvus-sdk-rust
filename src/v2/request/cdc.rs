@@ -70,6 +70,7 @@ impl UpdateReplicateConfigurationRequest {
         milvus::UpdateReplicateConfigurationRequest {
             replicate_configuration: Some(self.configuration.into_proto()),
             force_promote: self.force_promote,
+            ..Default::default()
         }
     }
 }
@@ -122,7 +123,9 @@ impl GetReplicateConfigurationRequest {
     }
 
     pub(crate) fn into_proto(self) -> milvus::GetReplicateConfigurationRequest {
-        milvus::GetReplicateConfigurationRequest {}
+        milvus::GetReplicateConfigurationRequest {
+            ..Default::default()
+        }
     }
 }
 
@@ -185,6 +188,7 @@ impl GetReplicateInfoRequest {
         milvus::GetReplicateInfoRequest {
             source_cluster_id: self.source_cluster_id,
             target_pchannel: self.target_physical_channel,
+            ..Default::default()
         }
     }
 }
@@ -296,6 +300,7 @@ impl DumpMessagesRequest {
             start_timetick: self.start_time_tick,
             end_timetick: self.end_time_tick,
             include_start_message: self.include_start_message,
+            ..Default::default()
         }
     }
 }

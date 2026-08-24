@@ -203,7 +203,11 @@ impl QueryRequest {
             guarantee_timestamp,
             query_params: params
                 .into_iter()
-                .map(|(key, value)| common::KeyValuePair { key, value })
+                .map(|(key, value)| common::KeyValuePair {
+                    key,
+                    value,
+                    ..Default::default()
+                })
                 .collect(),
             not_return_all_meta: false,
             consistency_level: self
@@ -216,6 +220,7 @@ impl QueryRequest {
                 .map(|(key, value)| Ok((key, json_template(value)?)))
                 .collect::<Result<_>>()?,
             namespace: None,
+            ..Default::default()
         })
     }
 }
@@ -413,6 +418,7 @@ impl GetRequest {
             use_default_consistency: self.consistency_level.is_none(),
             expr_template_values: HashMap::from([(template_name.to_owned(), json_template(ids)?)]),
             namespace: None,
+            ..Default::default()
         })
     }
 }
@@ -669,11 +675,13 @@ impl SearchRequest {
                     id_field: Some(schema::i_ds::IdField::IntId(schema::LongArray {
                         data: values,
                     })),
+                    ..Default::default()
                 },
                 Ids::VarChar(values) => schema::IDs {
                     id_field: Some(schema::i_ds::IdField::StrId(schema::StringArray {
                         data: values,
                     })),
+                    ..Default::default()
                 },
             };
             (milvus::search_request::SearchInput::Ids(ids), nq)
@@ -768,6 +776,7 @@ impl SearchRequest {
                     values,
                     element_level: false,
                 }],
+                ..Default::default()
             };
             let mut bytes = Vec::new();
             group.encode(&mut bytes)?;
@@ -784,7 +793,11 @@ impl SearchRequest {
         let mut search_params = self
             .extra_params
             .into_iter()
-            .map(|(key, value)| common::KeyValuePair { key, value })
+            .map(|(key, value)| common::KeyValuePair {
+                key,
+                value,
+                ..Default::default()
+            })
             .collect::<Vec<_>>();
         if !self.vector_field.is_empty() {
             set_search_param(&mut search_params, "anns_field", self.vector_field);
@@ -1472,7 +1485,11 @@ impl HybridSearchRequest {
             requests,
             rank_params: rank_params
                 .into_iter()
-                .map(|(key, value)| common::KeyValuePair { key, value })
+                .map(|(key, value)| common::KeyValuePair {
+                    key,
+                    value,
+                    ..Default::default()
+                })
                 .collect(),
             travel_timestamp: 0,
             guarantee_timestamp,
@@ -1984,6 +2001,7 @@ fn set_search_param(params: &mut Vec<common::KeyValuePair>, key: &str, value: im
         params.push(common::KeyValuePair {
             key: key.into(),
             value,
+            ..Default::default()
         });
     }
 }
@@ -2213,7 +2231,7 @@ mod search_request_tests {
             else {
                 panic!("expected ID search input")
             };
-            assert_eq!(Ids::from_proto(Some(ids)), expected);
+            assert_eq!(Ids::from_proto(Some(ids)).unwrap(), expected);
             assert_eq!(request.nq, 2);
         }
     }

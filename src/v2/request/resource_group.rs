@@ -70,6 +70,7 @@ impl CreateResourceGroupRequest {
             base: None,
             resource_group: self.name,
             config: Some(self.config.into_proto()),
+            ..Default::default()
         }
     }
 }
@@ -141,6 +142,7 @@ impl DropResourceGroupRequest {
         milvus::DropResourceGroupRequest {
             base: None,
             resource_group: self.group_name,
+            ..Default::default()
         }
     }
 }
@@ -210,6 +212,7 @@ impl UpdateResourceGroupsRequest {
                 .into_iter()
                 .map(|(n, c)| (n, c.into_proto()))
                 .collect(),
+            ..Default::default()
         }
     }
 }
@@ -302,6 +305,7 @@ impl TransferNodeRequest {
             source_resource_group: self.source_group,
             target_resource_group: self.target_group,
             num_node: self.node_count,
+            ..Default::default()
         }
     }
 }
@@ -403,6 +407,7 @@ impl TransferReplicaRequest {
             collection_name: self.collection_name,
             num_replica: self.replica_count,
             db_name: self.database_name,
+            ..Default::default()
         }
     }
 }
@@ -545,6 +550,7 @@ impl DescribeResourceGroupRequest {
         milvus::DescribeResourceGroupRequest {
             base: None,
             resource_group: self.group_name,
+            ..Default::default()
         }
     }
 }

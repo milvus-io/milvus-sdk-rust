@@ -275,21 +275,27 @@ impl ValueVec {
             DataType::Mol => Self::Binary(Vec::new()),
             DataType::Date => Self::Int(Vec::new()),
             DataType::Time => Self::Long(Vec::new()),
+            DataType::Decimal => Self::Long(Vec::new()),
+            DataType::Uuid => Self::String(Vec::new()),
             DataType::SparseFloatVector => Self::SparseFloat(proto::schema::SparseFloatArray {
                 contents: Vec::new(),
                 dim: 0,
+                ..Default::default()
             }),
             DataType::ArrayOfVector => Self::VectorArray(proto::schema::VectorArray {
                 dim: 0,
                 data: Vec::new(),
                 element_type: 0,
+                ..Default::default()
             }),
-            DataType::ArrayOfStruct => {
-                Self::StructArray(proto::schema::StructArrayField { fields: Vec::new() })
-            }
-            DataType::Struct => {
-                Self::StructArray(proto::schema::StructArrayField { fields: Vec::new() })
-            }
+            DataType::ArrayOfStruct => Self::StructArray(proto::schema::StructArrayField {
+                fields: Vec::new(),
+                ..Default::default()
+            }),
+            DataType::Struct => Self::StructArray(proto::schema::StructArrayField {
+                fields: Vec::new(),
+                ..Default::default()
+            }),
         }
     }
 

@@ -74,6 +74,7 @@ impl CreatePartitionRequest {
             db_name: self.database_name.unwrap_or_else(|| default_db.to_owned()),
             collection_name: self.collection_name,
             partition_name: self.partition_name,
+            ..Default::default()
         }
     }
 }
@@ -171,6 +172,7 @@ impl DropPartitionRequest {
             db_name: self.database_name.unwrap_or_else(|| default_db.to_owned()),
             collection_name: self.collection_name,
             partition_name: self.partition_name,
+            ..Default::default()
         }
     }
 }
@@ -268,6 +270,7 @@ impl HasPartitionRequest {
             db_name: self.database_name.unwrap_or_else(|| default_db.to_owned()),
             collection_name: self.collection_name,
             partition_name: self.partition_name,
+            ..Default::default()
         }
     }
 }
@@ -365,6 +368,7 @@ impl GetPartitionStatsRequest {
             db_name: self.database_name.unwrap_or_else(|| default_db.to_owned()),
             collection_name: self.collection_name,
             partition_name: self.partition_name,
+            ..Default::default()
         }
     }
 }
@@ -785,6 +789,7 @@ impl ReleasePartitionsRequest {
             db_name: self.database_name.unwrap_or_else(|| default_db.to_owned()),
             collection_name: self.collection_name,
             partition_names: self.partition_names,
+            ..Default::default()
         }
     }
 }
