@@ -40,9 +40,14 @@ const DEFAULT_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(10);
 const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_UNSUPPORTED_BACKOFF: Duration = Duration::from_secs(30 * 60);
 const LATENCY_SAMPLE_CAPACITY: usize = 1000;
+// Retaining all 1000 live-ring values in every one-second history window would
+// exceed 200 MiB. Preserve 128 sorted, equidistant quantiles including min/max;
+// seven operations across the 4096-window hard cap use about 28 MiB of raw i64s.
+const HISTORY_LATENCY_SAMPLE_CAPACITY: usize = 128;
 const MAX_REPLY_PAYLOAD_SIZE: usize = 1024 * 1024;
 const HISTORY_RETENTION: Duration = Duration::from_secs(60 * 60);
-const MAX_HISTORY_SNAPSHOTS: usize = 3600;
+// A one-second heartbeat produces 3601 boundary-inclusive windows in an hour.
+const MAX_HISTORY_SNAPSHOTS: usize = 4096;
 const SAMPLING_SCALE: u64 = 1_000_000_000;
 
 tokio::task_local! {
@@ -251,6 +256,23 @@ impl MetricBucket {
         *self = Self::default();
         Some(metrics)
     }
+
+    fn history_samples(&self) -> Vec<i64> {
+        let mut samples: Vec<_> = self.samples.iter().copied().collect();
+        samples.sort_unstable();
+        if samples.len() <= HISTORY_LATENCY_SAMPLE_CAPACITY {
+            return samples;
+        }
+        let denominator = HISTORY_LATENCY_SAMPLE_CAPACITY - 1;
+        (0..HISTORY_LATENCY_SAMPLE_CAPACITY)
+            .map(|index| {
+                // Integer rounding selects equidistant order statistics and includes
+                // both endpoints, retaining distribution shape rather than only a tail.
+                let numerator = index * (samples.len() - 1);
+                samples[(numerator + denominator / 2) / denominator]
+            })
+            .collect()
+    }
 }
 
 #[derive(Default)]
@@ -270,7 +292,8 @@ impl OperationCollector {
         }
     }
 
-    fn take(&mut self, operation: String) -> Option<TelemetryOperationMetrics> {
+    fn take(&mut self, operation: String) -> Option<(TelemetryOperationMetrics, Vec<i64>)> {
+        let global_samples = self.global.history_samples();
         let global = self.global.take()?;
         let mut collections = BTreeMap::new();
         for (name, bucket) in &mut self.collections {
@@ -280,12 +303,23 @@ impl OperationCollector {
         }
         self.collections
             .retain(|_, bucket| bucket.request_count != 0);
-        Some(TelemetryOperationMetrics {
-            operation,
-            global,
-            collections,
-        })
+        Some((
+            TelemetryOperationMetrics {
+                operation,
+                global,
+                collections,
+            },
+            global_samples,
+        ))
     }
+}
+
+#[derive(Clone)]
+struct StoredSnapshot {
+    snapshot: TelemetrySnapshot,
+    // Internal-only global samples. They are deliberately excluded from heartbeat,
+    // detail replies, and the public TelemetrySnapshot type.
+    global_samples: BTreeMap<String, Vec<i64>>,
 }
 
 type CommandHandler = dyn Fn(&ClientTelemetryCommand) -> ClientTelemetryCommandReply + Send + Sync;
@@ -293,7 +327,7 @@ type CommandHandler = dyn Fn(&ClientTelemetryCommand) -> ClientTelemetryCommandR
 struct RuntimeState {
     config: TelemetryConfig,
     collectors: BTreeMap<String, OperationCollector>,
-    snapshots: VecDeque<TelemetrySnapshot>,
+    snapshots: VecDeque<StoredSnapshot>,
     last_snapshot_end: i64,
     errors: VecDeque<TelemetryErrorInfo>,
     enabled_collections: BTreeSet<String>,
@@ -468,7 +502,13 @@ impl ClientTelemetry {
 
     /// Returns retained metric snapshots in chronological order.
     pub fn snapshots(&self) -> Vec<TelemetrySnapshot> {
-        self.inner.state.lock().snapshots.iter().cloned().collect()
+        self.inner
+            .state
+            .lock()
+            .snapshots
+            .iter()
+            .map(|stored| stored.snapshot.clone())
+            .collect()
     }
 
     /// Registers or replaces a custom command handler.
@@ -584,22 +624,27 @@ impl TelemetryInner {
         state.last_snapshot_end = now;
 
         let mut metrics = Vec::new();
+        let mut global_samples = BTreeMap::new();
         for (operation, collector) in &mut state.collectors {
-            if let Some(metric) = collector.take(operation.clone()) {
+            if let Some((metric, samples)) = collector.take(operation.clone()) {
+                global_samples.insert(operation.clone(), samples);
                 metrics.push(metric);
             }
         }
-        state.snapshots.push_back(TelemetrySnapshot {
-            timestamp: start,
-            end_time: now,
-            metrics,
+        state.snapshots.push_back(StoredSnapshot {
+            snapshot: TelemetrySnapshot {
+                timestamp: start,
+                end_time: now,
+                metrics,
+            },
+            global_samples,
         });
 
         let oldest = now.saturating_sub(HISTORY_RETENTION.as_millis() as i64);
         while state
             .snapshots
             .front()
-            .is_some_and(|snapshot| snapshot.end_time < oldest)
+            .is_some_and(|stored| stored.snapshot.end_time < oldest)
         {
             state.snapshots.pop_front();
         }
@@ -663,8 +708,9 @@ impl TelemetryInner {
             state
                 .snapshots
                 .back()
-                .map(|snapshot| {
-                    snapshot
+                .map(|stored| {
+                    stored
+                        .snapshot
                         .metrics
                         .iter()
                         .map(|operation| common::OperationMetrics {
@@ -1094,12 +1140,15 @@ impl TelemetryInner {
             .lock()
             .snapshots
             .iter()
-            .filter(|snapshot| snapshot.end_time >= start && snapshot.timestamp <= end)
+            .filter(|stored| stored.snapshot.end_time >= start && stored.snapshot.timestamp <= end)
             .cloned()
             .collect();
         let payload_value = if detail {
             json!({
-                "snapshots": snapshots.iter().map(snapshot_json).collect::<Vec<_>>(),
+                "snapshots": snapshots
+                    .iter()
+                    .map(|stored| snapshot_json(&stored.snapshot))
+                    .collect::<Vec<_>>(),
                 "total_snapshots": snapshots.len(),
             })
         } else {
@@ -1255,33 +1304,59 @@ fn snapshot_json(snapshot: &TelemetrySnapshot) -> Value {
     })
 }
 
-fn aggregate_snapshot_json(snapshots: &[TelemetrySnapshot], start: i64, end: i64) -> Value {
+fn aggregate_snapshot_json(snapshots: &[StoredSnapshot], start: i64, end: i64) -> Value {
     #[derive(Default)]
     struct Aggregate {
         request_count: i64,
         success_count: i64,
         error_count: i64,
         weighted_avg: f64,
-        weighted_p99: f64,
         max_latency: f64,
+        latency_samples: Vec<(f64, f64)>,
     }
     let mut totals: BTreeMap<String, Aggregate> = BTreeMap::new();
-    for snapshot in snapshots {
-        for operation in &snapshot.metrics {
+    for stored in snapshots {
+        for operation in &stored.snapshot.metrics {
             let total = totals.entry(operation.operation.clone()).or_default();
             let metrics = &operation.global;
             total.request_count += metrics.request_count;
             total.success_count += metrics.success_count;
             total.error_count += metrics.error_count;
             total.weighted_avg += metrics.avg_latency_ms * metrics.request_count as f64;
-            total.weighted_p99 += metrics.p99_latency_ms * metrics.request_count as f64;
             total.max_latency = total.max_latency.max(metrics.max_latency_ms);
+            if let Some(samples) = stored.global_samples.get(&operation.operation) {
+                if !samples.is_empty() {
+                    let weight = metrics.request_count as f64 / samples.len() as f64;
+                    total.latency_samples.extend(
+                        samples
+                            .iter()
+                            .map(|latency_us| (*latency_us as f64 / 1000.0, weight)),
+                    );
+                }
+            }
         }
     }
     let metrics: Map<String, Value> = totals
         .into_iter()
-        .map(|(operation, total)| {
+        .map(|(operation, mut total)| {
             let denominator = total.request_count as f64;
+            total
+                .latency_samples
+                .sort_by(|left, right| left.0.total_cmp(&right.0));
+            let mut p99_latency_ms = total
+                .latency_samples
+                .last()
+                .map(|sample| sample.0)
+                .unwrap_or_default();
+            let target = 0.99 * denominator;
+            let mut cumulative = 0.0;
+            for &(latency, weight) in &total.latency_samples {
+                cumulative += weight;
+                if cumulative > target {
+                    p99_latency_ms = latency;
+                    break;
+                }
+            }
             (
                 operation,
                 json!({
@@ -1289,7 +1364,7 @@ fn aggregate_snapshot_json(snapshots: &[TelemetrySnapshot], start: i64, end: i64
                     "success_count": total.success_count,
                     "error_count": total.error_count,
                     "avg_latency_ms": if total.request_count == 0 { 0.0 } else { total.weighted_avg / denominator },
-                    "p99_latency_ms": if total.request_count == 0 { 0.0 } else { total.weighted_p99 / denominator },
+                    "p99_latency_ms": p99_latency_ms,
                     "max_latency_ms": total.max_latency,
                 }),
             )
@@ -1603,6 +1678,80 @@ mod tests {
         assert_eq!(metrics.error_count, 550);
         assert_eq!(metrics.p99_latency_ms, 1.09);
         assert!(bucket.take().is_none());
+    }
+
+    #[tokio::test]
+    async fn aggregates_p99_from_bounded_cross_window_latency_samples() {
+        let telemetry = manager(TelemetryConfig::new().enabled(true));
+        {
+            let mut state = telemetry.inner.state.lock();
+            let collector = state.collectors.entry("Search".to_owned()).or_default();
+            for _ in 0..256 {
+                collector.record(None, 1_000, true);
+            }
+        }
+        telemetry.inner.create_snapshot();
+        {
+            let mut state = telemetry.inner.state.lock();
+            let collector = state.collectors.entry("Search".to_owned()).or_default();
+            for _ in 0..256 {
+                collector.record(None, 100_000, true);
+            }
+        }
+        telemetry.inner.create_snapshot();
+
+        let (start, end) = {
+            let state = telemetry.inner.state.lock();
+            assert_eq!(state.snapshots.len(), 2);
+            for stored in &state.snapshots {
+                assert_eq!(stored.global_samples["Search"].len(), 128);
+                assert!(snapshot_json(&stored.snapshot)
+                    .get("global_samples")
+                    .is_none());
+            }
+            (
+                state.snapshots.front().unwrap().snapshot.timestamp - 1,
+                state.snapshots.back().unwrap().snapshot.end_time + 1,
+            )
+        };
+        let payload = serde_json::to_vec(&json!({
+            "start_time": DateTime::<Utc>::from_timestamp_millis(start)
+                .unwrap()
+                .to_rfc3339(),
+            "end_time": DateTime::<Utc>::from_timestamp_millis(end)
+                .unwrap()
+                .to_rfc3339(),
+            "detail": false,
+        }))
+        .unwrap();
+        let reply = telemetry.inner.handle_command(&command(
+            "latency-aggregate",
+            "show_latency_history",
+            &payload,
+        ));
+        assert!(reply.success, "{}", reply.error_message);
+        let body: Value = serde_json::from_slice(&reply.payload).unwrap();
+        let search = &body["aggregated"]["metrics"]["Search"];
+
+        assert_eq!(body["snapshot_count"], 2);
+        assert_eq!(search["request_count"], 512);
+        assert_eq!(search["avg_latency_ms"], 50.5);
+        // Averaging the two window p99s would produce 50.5 ms. The combined
+        // distribution's p99 belongs to the equally sized slow window.
+        assert_eq!(search["p99_latency_ms"], 100.0);
+    }
+
+    #[tokio::test]
+    async fn history_hard_cap_covers_one_second_hour_boundaries() {
+        let telemetry = manager(TelemetryConfig::new().enabled(true));
+        for _ in 0..=MAX_HISTORY_SNAPSHOTS {
+            telemetry.inner.create_snapshot();
+        }
+        assert_eq!(
+            telemetry.inner.state.lock().snapshots.len(),
+            MAX_HISTORY_SNAPSHOTS
+        );
+        assert!(MAX_HISTORY_SNAPSHOTS >= 3601);
     }
 
     #[tokio::test]
