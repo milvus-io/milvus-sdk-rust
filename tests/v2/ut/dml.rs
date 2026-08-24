@@ -14,8 +14,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::common::MockServer;
+use super::common::{wait_for_operation_totals, MockServer};
 use milvus::v2::prelude::*;
+use std::time::Duration;
+use tonic::Code;
 
 fn insert_request() -> InsertRequest {
     InsertRequest::builder()
@@ -47,6 +49,87 @@ fn zero_row_column_request() -> InsertRequest {
         }])
         .build()
         .expect("a non-empty column vector passes request-shape validation")
+}
+
+fn upsert_request(insert: InsertRequest) -> UpsertRequest {
+    UpsertRequest::builder()
+        .insert(insert)
+        .build()
+        .expect("valid upsert request")
+}
+
+fn delete_request() -> DeleteRequest {
+    DeleteRequest::builder()
+        .collection_name("books")
+        .ids(Ids::Int64(vec![1]))
+        .build()
+        .expect("valid delete request")
+}
+
+#[tokio::test]
+async fn dml_telemetry_records_each_logical_result_once() {
+    let server = MockServer::start_with_telemetry(
+        TelemetryConfig::new().heartbeat_interval(Duration::from_millis(5)),
+    )
+    .await;
+
+    server
+        .client
+        .insert(insert_request())
+        .await
+        .expect("mock insert succeeds");
+    server
+        .client
+        .insert(zero_row_column_request())
+        .await
+        .expect_err("zero-row insert fails local validation");
+
+    server
+        .client
+        .upsert(upsert_request(insert_request()))
+        .await
+        .expect("mock upsert succeeds");
+    server
+        .client
+        .upsert(upsert_request(zero_row_column_request()))
+        .await
+        .expect_err("zero-row upsert fails local validation");
+
+    server
+        .client
+        .delete(delete_request())
+        .await
+        .expect("mock delete succeeds");
+    server
+        .service
+        .fail_next_transport("delete", Code::InvalidArgument);
+    server
+        .client
+        .delete(delete_request())
+        .await
+        .expect_err("non-retriable mock delete failure reaches the caller");
+
+    for operation in ["Insert", "Upsert", "Delete"] {
+        let totals = wait_for_operation_totals(&server.client, operation, 2).await;
+        assert_eq!(totals.request_count, 2, "{operation}");
+        assert_eq!(totals.success_count, 1, "{operation}");
+        assert_eq!(totals.error_count, 1, "{operation}");
+        assert!(totals.max_latency_ms > 0.0, "{operation}");
+    }
+    assert_eq!(server.service.call_count("insert"), 1);
+    assert_eq!(server.service.call_count("upsert"), 1);
+    assert_eq!(server.service.call_count("delete"), 2);
+
+    let errors = server.client.telemetry().recent_errors(10);
+    for operation in ["Insert", "Upsert", "Delete"] {
+        let matching: Vec<_> = errors
+            .iter()
+            .filter(|error| error.operation == operation)
+            .collect();
+        assert_eq!(matching.len(), 1, "{operation}");
+        assert_eq!(matching[0].collection, "books");
+    }
+    server.shutdown().await;
 }
 
 #[tokio::test]

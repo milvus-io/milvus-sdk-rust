@@ -28,7 +28,8 @@ use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::future::Future;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio_util::sync::CancellationToken;
@@ -82,6 +83,16 @@ fn valid_trace_id(value: &str) -> bool {
 
 fn current_telemetry_trace_id() -> String {
     current_client_request_id().unwrap_or_default()
+}
+
+fn panic_payload_message(payload: &(dyn std::any::Any + Send)) -> String {
+    if let Some(message) = payload.downcast_ref::<&str>() {
+        (*message).to_owned()
+    } else if let Some(message) = payload.downcast_ref::<String>() {
+        message.clone()
+    } else {
+        "non-string panic payload".to_owned()
+    }
 }
 
 fn now_millis() -> i64 {
@@ -356,6 +367,7 @@ struct TelemetryInner {
     command_lock: Mutex<()>,
     services: SharedServices,
     database: Arc<RwLock<String>>,
+    database_explicit: Arc<AtomicBool>,
     client_config: ClientConfigSnapshot,
     client_id: String,
     client_id_stable: bool,
@@ -381,6 +393,7 @@ impl ClientTelemetry {
         config: TelemetryConfig,
         services: SharedServices,
         database: Arc<RwLock<String>>,
+        database_explicit: Arc<AtomicBool>,
         connect: &ConnectConfig,
     ) -> Self {
         let client_id_stable = !config.client_id.is_empty();
@@ -399,6 +412,7 @@ impl ClientTelemetry {
             command_lock: Mutex::new(()),
             services,
             database,
+            database_explicit,
             client_config: ClientConfigSnapshot {
                 uri: connect.uri.clone(),
                 username,
@@ -624,9 +638,11 @@ impl TelemetryInner {
             ),
         ]);
         let database = self.database.read().clone();
-        // ClientV2 normalizes an omitted database to `default` internally. Do not turn
-        // that implementation detail into an explicit database declaration on the wire.
-        if !database.is_empty() && database != "default" {
+        // ClientV2 normalizes an omitted database to `default` internally. Track whether
+        // the caller actually selected it so omitted and explicit `default` remain distinct.
+        if !database.is_empty()
+            && (database != "default" || self.database_explicit.load(Ordering::Acquire))
+        {
             reserved.insert("db_name".to_owned(), database);
         }
         common::ClientInfo {
@@ -820,12 +836,22 @@ impl TelemetryInner {
                 // Clone under the read lock, then explicitly release it before calling
                 // user code. A custom handler may register another handler itself.
                 let handler = self.command_handlers.read().get(command_type).cloned();
-                handler.map(|handler| handler(command)).unwrap_or_else(|| {
-                    ClientTelemetryCommandReply::failure(
+                match handler {
+                    Some(handler) => match catch_unwind(AssertUnwindSafe(|| handler(command))) {
+                        Ok(reply) => reply,
+                        Err(payload) => ClientTelemetryCommandReply::failure(
+                            &command.command_id,
+                            format!(
+                                "custom command handler panicked: {}",
+                                panic_payload_message(payload.as_ref())
+                            ),
+                        ),
+                    },
+                    None => ClientTelemetryCommandReply::failure(
                         &command.command_id,
                         format!("unknown command type: {command_type}"),
-                    )
-                })
+                    ),
+                }
             }
         }
     }
@@ -1461,6 +1487,7 @@ mod tests {
         generation: u64,
     ) -> ClientTelemetry {
         let database = Arc::new(RwLock::new(database_name.to_owned()));
+        let database_explicit = Arc::new(AtomicBool::new(!database_name.is_empty()));
         let connect = ConnectConfig::new()
             .uri(uri)
             .database(database_name)
@@ -1472,6 +1499,7 @@ mod tests {
                 .clone()
                 .map(|value| value.parse().expect("authorization metadata")),
             database: Arc::clone(&database),
+            database_explicit: Arc::clone(&database_explicit),
         };
         let channel = Endpoint::from_shared(uri.to_owned())
             .expect("telemetry endpoint")
@@ -1481,19 +1509,21 @@ mod tests {
             interceptor,
             generation,
         )));
-        ClientTelemetry::new(config, services, database, &connect)
+        ClientTelemetry::new(config, services, database, database_explicit, &connect)
     }
 
     fn manager(config: TelemetryConfig) -> ClientTelemetry {
         let database = Arc::new(RwLock::new("default".to_owned()));
+        let database_explicit = Arc::new(AtomicBool::new(false));
         let channel = Endpoint::from_static("http://127.0.0.1:19530").connect_lazy();
         let interceptor = V2Interceptor {
             token: None,
             database: Arc::clone(&database),
+            database_explicit: Arc::clone(&database_explicit),
         };
         let services = Arc::new(RwLock::new(service_bundle(channel, interceptor, 7)));
         let connect = ConnectConfig::new().telemetry(config.clone());
-        ClientTelemetry::new(config, services, database, &connect)
+        ClientTelemetry::new(config, services, database, database_explicit, &connect)
     }
 
     fn command(command_id: &str, command_type: &str, payload: &[u8]) -> ClientTelemetryCommand {
@@ -1538,6 +1568,27 @@ mod tests {
 
         assert!(!info.reserved.contains_key("db_name"));
         DateTime::parse_from_rfc3339(&info.local_time).expect("readable RFC3339 local_time");
+    }
+
+    #[tokio::test]
+    async fn client_info_reports_an_explicit_default_database() {
+        let telemetry = transport_manager(
+            TelemetryConfig::new(),
+            "http://127.0.0.1:19530",
+            "default",
+            "",
+            0,
+        );
+
+        assert_eq!(
+            telemetry
+                .inner
+                .build_client_info()
+                .reserved
+                .get("db_name")
+                .map(String::as_str),
+            Some("default")
+        );
     }
 
     #[test]
@@ -1614,6 +1665,45 @@ mod tests {
                 .handle_command(&command("inner", "registered-inside", &[]))
                 .success
         );
+    }
+
+    #[tokio::test]
+    async fn panicking_custom_handler_returns_failure_and_heartbeat_continues() {
+        let panic_command = common::ClientCommand {
+            command_id: "panic-command".to_owned(),
+            command_type: "panicking".to_owned(),
+            create_time: 1,
+            ..Default::default()
+        };
+        let mut server = MockTelemetryServer::start(vec![
+            HeartbeatAction::Respond(success_response(vec![panic_command])),
+            HeartbeatAction::Respond(success_response(Vec::new())),
+        ])
+        .await;
+        let telemetry = transport_manager(
+            TelemetryConfig::new().heartbeat_interval(Duration::from_millis(5)),
+            &server.uri,
+            "analytics",
+            "root:Milvus",
+            7,
+        );
+        telemetry.register_command_handler("panicking", |_| {
+            std::panic::panic_any("diagnostic panic payload".to_owned())
+        });
+
+        telemetry.start();
+        let first = server.next_capture().await;
+        assert!(first.request.command_replies.is_empty());
+        let second = server.next_capture().await;
+        assert_eq!(second.request.command_replies.len(), 1);
+        let reply = &second.request.command_replies[0];
+        assert_eq!(reply.command_id, "panic-command");
+        assert!(!reply.success);
+        assert!(reply
+            .error_message
+            .contains("custom command handler panicked"));
+        assert!(reply.error_message.contains("diagnostic panic payload"));
+        telemetry.inner.shutdown.cancel();
     }
 
     #[tokio::test]

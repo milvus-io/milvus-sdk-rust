@@ -49,6 +49,7 @@ use crate::v2::error::{Error, Result};
 use crate::v2::types::{is_global_endpoint, ConnectConfig, RetryConfig};
 use parking_lot::RwLock;
 use std::future::Future;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 use tonic::codegen::InterceptedService;
@@ -208,6 +209,7 @@ enum RetrySemantics {
 struct V2Interceptor {
     token: Option<MetadataValue<tonic::metadata::Ascii>>,
     database: Arc<RwLock<String>>,
+    database_explicit: Arc<AtomicBool>,
 }
 
 impl Interceptor for V2Interceptor {
@@ -221,7 +223,12 @@ impl Interceptor for V2Interceptor {
                 .insert("authorization", token.clone());
         }
         let database = self.database.read();
-        if !database.is_empty() && database.as_str() != "default" {
+        if !database.is_empty()
+            && (database.as_str() != "default"
+                || self
+                    .database_explicit
+                    .load(std::sync::atomic::Ordering::Acquire))
+        {
             let value = database.parse().map_err(|_| {
                 tonic::Status::invalid_argument("database name is not valid metadata")
             })?;
@@ -282,6 +289,7 @@ impl Interceptor for V2Interceptor {
 pub struct ClientV2 {
     service: SharedServices,
     database: Arc<RwLock<String>>,
+    database_explicit: Arc<AtomicBool>,
     rpc_timeout: Arc<RwLock<Duration>>,
     retry: Arc<RwLock<RetryConfig>>,
     cache_endpoint: Arc<String>,
@@ -298,6 +306,7 @@ impl ClientV2 {
 
     async fn connect(param: ConnectConfig) -> Result<Self> {
         let database = Arc::new(RwLock::new(normalize_database(param.database.clone())?));
+        let database_explicit = Arc::new(AtomicBool::new(!param.database.is_empty()));
         let token = param
             .token
             .as_deref()
@@ -314,8 +323,14 @@ impl ClientV2 {
             let topology = global_cluster::fetch_topology(&param.uri, &param).await?;
             let primary_endpoint = topology.primary()?.endpoint().to_owned();
             let primary_uri = global_cluster::cluster_endpoint_uri(&primary_endpoint, &param)?;
-            let mut services =
-                global_cluster::build_services(&primary_uri, &param, &database, 0).await?;
+            let mut services = global_cluster::build_services(
+                &primary_uri,
+                &param,
+                &database,
+                &database_explicit,
+                0,
+            )
+            .await?;
             wait_for_server(&mut services.milvus, param.connect_timeout).await?;
             let service = Arc::new(RwLock::new(services));
             // The cache endpoint is the global URI itself, resolved with the same
@@ -327,6 +342,7 @@ impl ClientV2 {
                 param.uri.clone(),
                 param.clone(),
                 Arc::clone(&database),
+                Arc::clone(&database_explicit),
                 Arc::clone(&service),
                 topology,
             ));
@@ -338,6 +354,7 @@ impl ClientV2 {
             let interceptor = V2Interceptor {
                 token,
                 database: Arc::clone(&database),
+                database_explicit: Arc::clone(&database_explicit),
             };
             let mut services = service_bundle(channel, interceptor, 0);
             wait_for_server(&mut services.milvus, param.connect_timeout).await?;
@@ -353,6 +370,7 @@ impl ClientV2 {
             param.telemetry.clone(),
             Arc::clone(&service),
             Arc::clone(&database),
+            Arc::clone(&database_explicit),
             &param,
         );
         telemetry.start();
@@ -360,6 +378,7 @@ impl ClientV2 {
         Ok(Self {
             service,
             database,
+            database_explicit,
             rpc_timeout: Arc::new(RwLock::new(param.rpc_timeout)),
             retry: Arc::new(RwLock::new(param.retry)),
             cache_endpoint,
@@ -832,10 +851,12 @@ mod retry_tests {
 
     fn client(retry: RetryConfig) -> ClientV2 {
         let database = Arc::new(RwLock::new("default".to_owned()));
+        let database_explicit = Arc::new(AtomicBool::new(false));
         let channel = Endpoint::from_static("http://127.0.0.1:19530").connect_lazy();
         let interceptor = V2Interceptor {
             token: None,
             database: Arc::clone(&database),
+            database_explicit: Arc::clone(&database_explicit),
         };
         let service = Arc::new(RwLock::new(service_bundle(channel, interceptor, 0)));
         let config = ConnectConfig::new().telemetry(TelemetryConfig::new().enabled(false));
@@ -843,11 +864,13 @@ mod retry_tests {
             config.telemetry.clone(),
             Arc::clone(&service),
             Arc::clone(&database),
+            Arc::clone(&database_explicit),
             &config,
         );
         ClientV2 {
             service,
             database,
+            database_explicit,
             rpc_timeout: Arc::new(RwLock::new(Duration::from_secs(1))),
             retry: Arc::new(RwLock::new(retry)),
             cache_endpoint: Arc::new("http://127.0.0.1:19530".to_owned()),
@@ -900,6 +923,7 @@ mod retry_tests {
         let mut interceptor = V2Interceptor {
             token,
             database: Arc::new(RwLock::new(String::new())),
+            database_explicit: Arc::new(AtomicBool::new(false)),
         };
 
         let request = interceptor.call(Request::new(())).unwrap();
@@ -911,6 +935,32 @@ mod retry_tests {
                 .to_str()
                 .unwrap(),
             "cm9vdDpNaWx2dXM="
+        );
+    }
+
+    #[test]
+    fn interceptor_distinguishes_unset_and_explicit_default_database() {
+        let database = Arc::new(RwLock::new("default".to_owned()));
+        let database_explicit = Arc::new(AtomicBool::new(false));
+        let mut interceptor = V2Interceptor {
+            token: None,
+            database,
+            database_explicit: Arc::clone(&database_explicit),
+        };
+
+        let unset = interceptor.call(Request::new(())).unwrap();
+        assert!(unset.metadata().get("dbname").is_none());
+
+        database_explicit.store(true, std::sync::atomic::Ordering::Release);
+        let explicit = interceptor.call(Request::new(())).unwrap();
+        assert_eq!(
+            explicit
+                .metadata()
+                .get("dbname")
+                .expect("explicit default database")
+                .to_str()
+                .unwrap(),
+            "default"
         );
     }
 

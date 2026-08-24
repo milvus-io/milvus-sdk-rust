@@ -14,9 +14,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::common::MockServer;
+use super::common::{wait_for_operation_totals, MockServer};
 use milvus::v2::prelude::*;
 use milvus::v2::response::dql::{QueryResponse, SearchResponse};
+use std::time::Duration;
+use tonic::Code;
 
 fn search_request() -> SearchRequest {
     SearchRequest::builder()
@@ -27,6 +29,145 @@ fn search_request() -> SearchRequest {
         .limit(5)
         .build()
         .expect("valid request")
+}
+
+fn telemetry_query_request() -> QueryRequest {
+    QueryRequest::builder()
+        .collection_name("books")
+        .filter("id > 0")
+        .build()
+        .expect("valid query request")
+}
+
+fn telemetry_get_request() -> GetRequest {
+    GetRequest::builder()
+        .collection_name("books")
+        .ids(Ids::Int64(vec![1]))
+        .build()
+        .expect("valid get request")
+}
+
+fn telemetry_hybrid_search_request() -> HybridSearchRequest {
+    HybridSearchRequest::builder()
+        .collection_name("books")
+        .sub_requests(vec![SubSearchRequest::builder()
+            .vector_field("vector")
+            .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+            .metric_type(MetricType::Cosine)
+            .limit(5)
+            .build()
+            .expect("valid sub-search request")])
+        .rerank(
+            Function::new()
+                .name("rrf")
+                .function_type(FunctionType::Rerank),
+        )
+        .limit(5)
+        .build()
+        .expect("valid hybrid-search request")
+}
+
+#[tokio::test]
+async fn dql_telemetry_records_each_logical_result_once() {
+    let server = MockServer::start_with_telemetry(
+        TelemetryConfig::new().heartbeat_interval(Duration::from_millis(5)),
+    )
+    .await;
+
+    server
+        .client
+        .query(telemetry_query_request())
+        .await
+        .expect("mock query succeeds");
+    server
+        .service
+        .fail_next_transport("query", Code::InvalidArgument);
+    server
+        .client
+        .query(telemetry_query_request())
+        .await
+        .expect_err("non-retriable mock query failure reaches the caller");
+
+    server
+        .client
+        .get(telemetry_get_request())
+        .await
+        .expect("mock get succeeds");
+    server
+        .service
+        .fail_next_transport("query", Code::InvalidArgument);
+    server
+        .client
+        .get(telemetry_get_request())
+        .await
+        .expect_err("non-retriable mock get failure reaches the caller");
+
+    server
+        .client
+        .search(search_request())
+        .await
+        .expect("mock search succeeds");
+    server
+        .service
+        .fail_next_transport("search", Code::InvalidArgument);
+    server
+        .client
+        .search(search_request())
+        .await
+        .expect_err("non-retriable mock search failure reaches the caller");
+
+    server
+        .client
+        .hybrid_search(telemetry_hybrid_search_request())
+        .await
+        .expect("mock hybrid search succeeds");
+    server
+        .service
+        .fail_next_transport("hybrid_search", Code::InvalidArgument);
+    server
+        .client
+        .hybrid_search(telemetry_hybrid_search_request())
+        .await
+        .expect_err("non-retriable mock hybrid-search failure reaches the caller");
+
+    for (operation, expected_requests, expected_successes, expected_errors) in [
+        ("Query", 4, 2, 2),
+        ("Search", 2, 1, 1),
+        ("HybridSearch", 2, 1, 1),
+    ] {
+        let totals = wait_for_operation_totals(&server.client, operation, expected_requests).await;
+        assert_eq!(totals.request_count, expected_requests, "{operation}");
+        assert_eq!(totals.success_count, expected_successes, "{operation}");
+        assert_eq!(totals.error_count, expected_errors, "{operation}");
+        assert!(totals.max_latency_ms > 0.0, "{operation}");
+    }
+    assert_eq!(server.service.call_count("query"), 4);
+    assert_eq!(server.service.call_count("search"), 2);
+    assert_eq!(server.service.call_count("hybrid_search"), 2);
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn client_request_id_reaches_query_wire_only_when_valid() {
+    const VALID: &str = "4bf92f3577b34da6a3ce929d0e0e4736";
+    let server = MockServer::start_with_telemetry(TelemetryConfig::new().enabled(false)).await;
+
+    for request_id in [
+        VALID,
+        "legacy-request-id",
+        "00000000000000000000000000000000",
+        "",
+    ] {
+        with_client_request_id(request_id, server.client.query(telemetry_query_request()))
+            .await
+            .expect("mock query succeeds");
+    }
+
+    assert_eq!(
+        server.service.client_request_ids("query"),
+        vec![Some(VALID.to_owned()), None, None, None]
+    );
+    server.shutdown().await;
 }
 
 #[test]

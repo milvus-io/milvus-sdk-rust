@@ -2742,8 +2742,9 @@ impl TelemetryConfig {
 
     /// Sets the heartbeat interval.
     ///
-    /// A zero interval is accepted here and resolved to the 10-second default,
-    /// matching a configuration assembled field by field in the Go SDK.
+    /// A zero interval is stored as configured, so [`Self::get_heartbeat_interval`]
+    /// returns [`Duration::ZERO`]. It is normalized to the 10-second default only when
+    /// a client constructs its telemetry runtime, matching the Go SDK.
     pub fn heartbeat_interval(mut self, interval: Duration) -> Self {
         self.heartbeat_interval = interval;
         self
@@ -2777,7 +2778,9 @@ impl TelemetryConfig {
 
     /// Sets the maximum number of recent errors retained by the client.
     ///
-    /// Zero resolves to the default of 100.
+    /// Zero is stored as configured, so [`Self::get_error_max_count`] returns `0`.
+    /// It is normalized to the default of 100 only when a client constructs its
+    /// telemetry runtime.
     pub fn error_max_count(mut self, count: usize) -> Self {
         self.error_max_count = count;
         self
@@ -2809,7 +2812,10 @@ impl TelemetryConfig {
         self.enabled
     }
 
-    /// Returns the configured heartbeat interval.
+    /// Returns the raw configured heartbeat interval.
+    ///
+    /// A zero value remains observable here and is normalized only when a client
+    /// constructs its telemetry runtime.
     pub fn get_heartbeat_interval(&self) -> Duration {
         self.heartbeat_interval
     }
@@ -2819,7 +2825,10 @@ impl TelemetryConfig {
         self.sampling_rate
     }
 
-    /// Returns the configured recent-error capacity.
+    /// Returns the raw configured recent-error capacity.
+    ///
+    /// A zero value remains observable here and is normalized only when a client
+    /// constructs its telemetry runtime.
     pub fn get_error_max_count(&self) -> usize {
         self.error_max_count
     }
@@ -3824,6 +3833,12 @@ mod constructor_value_tests {
         assert_eq!(actual.get_sampling_rate(), 0.25);
         assert_eq!(actual.get_error_max_count(), 12);
         assert_eq!(actual.get_client_id(), "worker-1");
+
+        let raw_zeroes = TelemetryConfig::new()
+            .heartbeat_interval(Duration::ZERO)
+            .error_max_count(0);
+        assert_eq!(raw_zeroes.get_heartbeat_interval(), Duration::ZERO);
+        assert_eq!(raw_zeroes.get_error_max_count(), 0);
     }
 
     #[test]

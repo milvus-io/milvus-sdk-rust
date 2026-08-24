@@ -27,9 +27,24 @@ impl ClientV2 {
     /// This changes client-side routing metadata; it does not create the database or verify that
     /// it exists. Use [`ClientV2::describe_database`] or a database operation to validate it.
     pub fn use_database(&self, database: impl Into<String>) -> Result<()> {
-        let database = normalize_database(database.into())?;
+        let database = database.into();
+        let explicit = !database.is_empty();
+        let database = normalize_database(database)?;
 
-        *self.database.write() = database;
+        if explicit {
+            // Publish the selected name before declaring it explicit. A concurrent
+            // reader can therefore observe only the old selection or the new one.
+            *self.database.write() = database;
+            self.database_explicit
+                .store(true, std::sync::atomic::Ordering::Release);
+        } else {
+            // Clear explicitness before publishing the normalized default. Reversing
+            // this order could transiently report an omitted database as explicit
+            // `default` while switching from a previously explicit selection.
+            self.database_explicit
+                .store(false, std::sync::atomic::Ordering::Release);
+            *self.database.write() = database;
+        }
         Ok(())
     }
 
@@ -123,16 +138,19 @@ mod tests {
     use crate::v2::error::Error;
     use crate::v2::types::RetryConfig;
     use parking_lot::RwLock;
+    use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
     use std::time::Duration;
     use tonic::transport::Endpoint;
 
     fn client() -> ClientV2 {
         let database = Arc::new(RwLock::new("default".to_owned()));
+        let database_explicit = Arc::new(AtomicBool::new(false));
         let channel = Endpoint::from_static("http://127.0.0.1:19530").connect_lazy();
         let interceptor = super::super::V2Interceptor {
             token: None,
             database: Arc::clone(&database),
+            database_explicit: Arc::clone(&database_explicit),
         };
         let service = Arc::new(RwLock::new(super::super::service_bundle(
             channel,
@@ -145,11 +163,13 @@ mod tests {
             config.telemetry.clone(),
             Arc::clone(&service),
             Arc::clone(&database),
+            Arc::clone(&database_explicit),
             &config,
         );
         ClientV2 {
             service,
             database,
+            database_explicit,
             rpc_timeout: Arc::new(RwLock::new(Duration::from_secs(1))),
             retry: Arc::new(RwLock::new(RetryConfig::new())),
             cache_endpoint: Arc::new("database-tests".to_owned()),
@@ -187,13 +207,62 @@ mod tests {
         *client.database.write() = String::new();
         assert_eq!(client.current_database(), "default");
 
+        client
+            .use_database("default")
+            .expect("select explicit default database");
+        assert!(client
+            .database_explicit
+            .load(std::sync::atomic::Ordering::Acquire));
+
         client.use_database("").expect("select default database");
         assert_eq!(client.current_database(), "default");
+        assert!(!client
+            .database_explicit
+            .load(std::sync::atomic::Ordering::Acquire));
 
         let error = client
             .use_database("invalid\nname")
             .expect_err("reject invalid database metadata");
         assert!(matches!(error, Error::Validation(_)));
         assert_eq!(client.current_database(), "default");
+    }
+
+    #[tokio::test]
+    async fn use_database_reset_clears_explicitness_before_publishing_default() {
+        let client = client();
+        client
+            .use_database("catalog")
+            .expect("select explicit database");
+
+        // Hold a reader so the reset thread blocks immediately before publishing
+        // the normalized default. It must still be able to clear explicitness first.
+        let selected_database = client.database.read();
+        let reset_client = client.clone();
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let reset = std::thread::spawn(move || {
+            started_tx.send(()).expect("signal reset start");
+            reset_client.use_database("").expect("reset database");
+        });
+        started_rx.recv().expect("reset thread started");
+
+        let deadline = std::time::Instant::now() + Duration::from_secs(1);
+        while client
+            .database_explicit
+            .load(std::sync::atomic::Ordering::Acquire)
+        {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "reset did not clear explicitness before waiting for the database lock"
+            );
+            std::thread::yield_now();
+        }
+        assert_eq!(selected_database.as_str(), "catalog");
+
+        drop(selected_database);
+        reset.join().expect("reset thread completes");
+        assert_eq!(client.current_database(), "default");
+        assert!(!client
+            .database_explicit
+            .load(std::sync::atomic::Ordering::Acquire));
     }
 }

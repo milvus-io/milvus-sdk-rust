@@ -25,6 +25,7 @@ use crate::v2::error::{Error, Result};
 use crate::v2::types::{topology_url, GlobalTopology};
 use parking_lot::RwLock;
 use reqwest::{Client, StatusCode};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -330,6 +331,7 @@ pub(crate) async fn build_services(
     endpoint_uri: &str,
     connect_config: &super::ConnectConfig,
     database: &Arc<RwLock<String>>,
+    database_explicit: &Arc<AtomicBool>,
     generation: TransportGeneration,
 ) -> Result<ServiceBundle> {
     let endpoint = super::build_endpoint(endpoint_uri, connect_config).await?;
@@ -345,6 +347,7 @@ pub(crate) async fn build_services(
     let interceptor = V2Interceptor {
         token,
         database: Arc::clone(database),
+        database_explicit: Arc::clone(database_explicit),
     };
     Ok(super::service_bundle(channel, interceptor, generation))
 }
@@ -360,6 +363,7 @@ pub(crate) struct GlobalCluster {
     global_endpoint: String,
     connect_config: super::ConnectConfig,
     database: Arc<RwLock<String>>,
+    database_explicit: Arc<AtomicBool>,
     service: SharedServices,
     topology: RwLock<GlobalTopology>,
     last_unavailable_probe: std::sync::Mutex<Option<std::time::Instant>>,
@@ -373,6 +377,7 @@ impl GlobalCluster {
         global_endpoint: String,
         connect_config: super::ConnectConfig,
         database: Arc<RwLock<String>>,
+        database_explicit: Arc<AtomicBool>,
         service: SharedServices,
         topology: GlobalTopology,
     ) -> Self {
@@ -380,6 +385,7 @@ impl GlobalCluster {
             global_endpoint,
             connect_config,
             database,
+            database_explicit,
             service,
             topology: RwLock::new(topology),
             last_unavailable_probe: std::sync::Mutex::new(None),
@@ -624,6 +630,7 @@ impl GlobalCluster {
             &endpoint_uri,
             &self.connect_config,
             &self.database,
+            &self.database_explicit,
             generation,
         )
         .await
@@ -840,6 +847,7 @@ mod tests {
     ) -> StdArc<GlobalCluster> {
         let config = super::super::ConnectConfig::new().uri("http://global:19530");
         let database = Arc::new(RwLock::new("default".to_owned()));
+        let database_explicit = Arc::new(AtomicBool::new(false));
         let topology = parse_topology_response(initial_body).expect("initial topology");
         let primary = topology
             .primary()
@@ -851,6 +859,7 @@ mod tests {
                 &cluster_endpoint_uri(&primary, &config).expect("initial primary uri"),
                 &config,
                 &database,
+                &database_explicit,
                 0,
             )
             .await
@@ -860,6 +869,7 @@ mod tests {
             server.endpoint(),
             config,
             database,
+            database_explicit,
             service,
             topology,
         ))
