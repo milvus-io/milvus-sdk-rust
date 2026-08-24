@@ -32,4 +32,7 @@ pub use crate::v2::response::{
     resource_group::*, snapshot::*, utility::*,
 };
 pub use crate::v2::types::*;
-pub use crate::v2::{ClientV2, MilvusClientV2Session, OptimizeTask, QueryIterator, SearchIterator};
+pub use crate::v2::{
+    new_client_request_id, with_client_request_id, ClientTelemetry, ClientV2,
+    MilvusClientV2Session, OptimizeTask, QueryIterator, SearchIterator,
+};

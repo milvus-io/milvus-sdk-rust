@@ -53,8 +53,10 @@ pub mod utils;
 
 pub use bulk_import::*;
 pub use client::{
-    ClientV2, MilvusClientV2Session, OptimizeTask, QueryIterator, SearchIterator, SearchIteratorV1,
-    SearchIteratorV2,
+    new_client_request_id, with_client_request_id, ClientTelemetry, ClientTelemetryCommand,
+    ClientTelemetryCommandReply, ClientV2, MilvusClientV2Session, OptimizeTask, QueryIterator,
+    SearchIterator, SearchIteratorV1, SearchIteratorV2, TelemetryErrorInfo, TelemetryMetrics,
+    TelemetryOperationMetrics, TelemetrySnapshot,
 };
 pub use types::*;
 pub use utils::*;

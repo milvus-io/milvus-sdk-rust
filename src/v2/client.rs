@@ -42,6 +42,7 @@
 //! requests use non-idempotent semantics when replaying an ambiguous transport failure could
 //! duplicate a server-side operation.
 
+use crate::proto::milvus::client_telemetry_service_client::ClientTelemetryServiceClient;
 use crate::proto::milvus::milvus_service_client::MilvusServiceClient;
 use crate::proto::{common, milvus};
 use crate::v2::error::{Error, Result};
@@ -49,7 +50,7 @@ use crate::v2::types::{is_global_endpoint, ConnectConfig, RetryConfig};
 use parking_lot::RwLock;
 use std::future::Future;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 use tonic::codegen::InterceptedService;
 use tonic::metadata::MetadataValue;
 use tonic::service::Interceptor;
@@ -137,13 +138,42 @@ mod rbac;
 mod resource_group;
 mod session;
 mod snapshot;
+mod telemetry;
 mod utility;
 
 pub use iterator::{QueryIterator, SearchIterator, SearchIteratorV1, SearchIteratorV2};
 pub use session::MilvusClientV2Session;
+pub use telemetry::{
+    new_client_request_id, with_client_request_id, ClientTelemetry, ClientTelemetryCommand,
+    ClientTelemetryCommandReply, TelemetryErrorInfo, TelemetryMetrics, TelemetryOperationMetrics,
+    TelemetrySnapshot,
+};
 pub use utility::OptimizeTask;
 
 type Service = MilvusServiceClient<InterceptedService<Channel, V2Interceptor>>;
+type TelemetryService = ClientTelemetryServiceClient<InterceptedService<Channel, V2Interceptor>>;
+pub(super) type TransportGeneration = u64;
+
+#[derive(Clone)]
+pub(super) struct ServiceBundle {
+    milvus: Service,
+    telemetry: TelemetryService,
+    generation: TransportGeneration,
+}
+
+pub(super) type SharedServices = Arc<RwLock<ServiceBundle>>;
+
+fn service_bundle(
+    channel: Channel,
+    interceptor: V2Interceptor,
+    generation: TransportGeneration,
+) -> ServiceBundle {
+    ServiceBundle {
+        milvus: MilvusServiceClient::with_interceptor(channel.clone(), interceptor.clone()),
+        telemetry: ClientTelemetryServiceClient::with_interceptor(channel, interceptor),
+        generation,
+    }
+}
 
 fn normalize_database(database: String) -> Result<String> {
     let database = if database.is_empty() {
@@ -197,6 +227,24 @@ impl Interceptor for V2Interceptor {
             })?;
             request.metadata_mut().insert("dbname", value);
         }
+        let request_millis = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map(|duration| duration.as_millis().to_string())
+            .unwrap_or_else(|_| "0".to_owned());
+        if let Ok(value) = request_millis.parse() {
+            request
+                .metadata_mut()
+                .insert("client-request-unixmsec", value);
+        }
+        // Only validated lowercase non-zero OTel TraceIDs reach this point. Malformed
+        // caller values are omitted because the server would ignore them as trace IDs.
+        if let Some(request_id) = telemetry::current_client_request_id() {
+            if !request_id.is_empty() {
+                if let Ok(value) = request_id.parse() {
+                    request.metadata_mut().insert("client_request_id", value);
+                }
+            }
+        }
         Ok(request)
     }
 }
@@ -232,13 +280,14 @@ impl Interceptor for V2Interceptor {
 ///   are required.
 #[derive(Clone)]
 pub struct ClientV2 {
-    service: Arc<RwLock<Service>>,
+    service: SharedServices,
     database: Arc<RwLock<String>>,
     rpc_timeout: Arc<RwLock<Duration>>,
     retry: Arc<RwLock<RetryConfig>>,
     cache_endpoint: Arc<String>,
     schema_load_scope: Arc<SchemaLoadScope>,
     global_cluster: Option<Arc<global_cluster::GlobalCluster>>,
+    telemetry: ClientTelemetry,
 }
 
 impl ClientV2 {
@@ -265,10 +314,10 @@ impl ClientV2 {
             let topology = global_cluster::fetch_topology(&param.uri, &param).await?;
             let primary_endpoint = topology.primary()?.endpoint().to_owned();
             let primary_uri = global_cluster::cluster_endpoint_uri(&primary_endpoint, &param)?;
-            let mut service =
-                global_cluster::build_service(&primary_uri, &param, &database).await?;
-            wait_for_server(&mut service, param.connect_timeout).await?;
-            let service = Arc::new(RwLock::new(service));
+            let mut services =
+                global_cluster::build_services(&primary_uri, &param, &database, 0).await?;
+            wait_for_server(&mut services.milvus, param.connect_timeout).await?;
+            let service = Arc::new(RwLock::new(services));
             // The cache endpoint is the global URI itself, resolved with the same
             // scheme-upgrade logic as the plain connection path (an explicit http:// global
             // URI is upgraded to https:// when TLS is enabled) rather than the member-endpoint
@@ -290,15 +339,23 @@ impl ClientV2 {
                 token,
                 database: Arc::clone(&database),
             };
-            let mut service = MilvusServiceClient::with_interceptor(channel, interceptor);
-            wait_for_server(&mut service, param.connect_timeout).await?;
+            let mut services = service_bundle(channel, interceptor, 0);
+            wait_for_server(&mut services.milvus, param.connect_timeout).await?;
             (
-                Arc::new(RwLock::new(service)),
+                Arc::new(RwLock::new(services)),
                 database,
                 Arc::new(effective_endpoint_uri),
                 None,
             )
         };
+
+        let telemetry = ClientTelemetry::new(
+            param.telemetry.clone(),
+            Arc::clone(&service),
+            Arc::clone(&database),
+            &param,
+        );
+        telemetry.start();
 
         Ok(Self {
             service,
@@ -308,6 +365,7 @@ impl ClientV2 {
             cache_endpoint,
             schema_load_scope: Arc::new(SchemaLoadScope::new()),
             global_cluster,
+            telemetry,
         })
     }
 
@@ -319,6 +377,11 @@ impl ClientV2 {
     /// Replaces the retry policy used by subsequent RPC calls.
     pub fn set_retry_param(&self, retry: RetryConfig) {
         *self.retry.write() = retry;
+    }
+
+    /// Returns the shared client-side telemetry manager.
+    pub fn telemetry(&self) -> ClientTelemetry {
+        self.telemetry.clone()
     }
 
     /// Creates a cluster-scoped session view bound to the given cluster identifier.
@@ -372,7 +435,7 @@ impl ClientV2 {
     {
         self.retry_call(
             || {
-                let service = self.service.read().clone();
+                let service = self.service.read().milvus.clone();
                 let request = self.rpc_request(make_request()?);
                 Ok(call(service, request))
             },
@@ -395,7 +458,7 @@ impl ClientV2 {
     {
         self.retry_call(
             || {
-                let service = self.service.read().clone();
+                let service = self.service.read().milvus.clone();
                 let request = if apply_rpc_timeout {
                     self.rpc_request(request.clone())
                 } else {
@@ -764,6 +827,7 @@ fn retry_attempt_timed_out(limit: Duration, attempt: u32) -> Error {
 mod retry_tests {
     use super::*;
     use crate::proto::common;
+    use crate::v2::types::TelemetryConfig;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     fn client(retry: RetryConfig) -> ClientV2 {
@@ -773,17 +837,23 @@ mod retry_tests {
             token: None,
             database: Arc::clone(&database),
         };
+        let service = Arc::new(RwLock::new(service_bundle(channel, interceptor, 0)));
+        let config = ConnectConfig::new().telemetry(TelemetryConfig::new().enabled(false));
+        let telemetry = ClientTelemetry::new(
+            config.telemetry.clone(),
+            Arc::clone(&service),
+            Arc::clone(&database),
+            &config,
+        );
         ClientV2 {
-            service: Arc::new(RwLock::new(MilvusServiceClient::with_interceptor(
-                channel,
-                interceptor,
-            ))),
+            service,
             database,
             rpc_timeout: Arc::new(RwLock::new(Duration::from_secs(1))),
             retry: Arc::new(RwLock::new(retry)),
             cache_endpoint: Arc::new("http://127.0.0.1:19530".to_owned()),
             schema_load_scope: Arc::new(SchemaLoadScope::new()),
             global_cluster: None,
+            telemetry,
         }
     }
 

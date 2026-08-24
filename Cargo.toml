@@ -43,6 +43,9 @@ thiserror = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 anyhow = "1.0"
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+hostname = "0.4"
+sha2 = "0.10"
 strum = "0.24"
 strum_macros = "0.24"
 base64 = "0.22.1"
@@ -56,6 +59,7 @@ rustls = { version = "0.23", default-features = false, features = ["ring", "std"
 webpki-roots = "1.0"
 tokio-util = "0.7"
 tracing = { version = "0.1", optional = true }
+uuid = { version = "1.11", features = ["v4"] }
 
 [build-dependencies]
 tonic-build = { version = "0.13", default-features = false, features = [
@@ -64,7 +68,6 @@ tonic-build = { version = "0.13", default-features = false, features = [
 protoc-bin-vendored = "=3.2.0"
 
 [dev-dependencies]
-chrono = { version = "0.4", default-features = false, features = ["std"] }
 rand = "0.8.5"
 tokio-stream = { version = "0.1", features = ["net"] }
 

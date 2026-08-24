@@ -119,7 +119,6 @@ impl ClientV2 {
 mod tests {
     use super::*;
     use crate::proto::milvus;
-    use crate::proto::milvus::milvus_service_client::MilvusServiceClient;
     use crate::v2::client::cache::SCHEMA_CACHE;
     use crate::v2::error::Error;
     use crate::v2::types::RetryConfig;
@@ -135,17 +134,28 @@ mod tests {
             token: None,
             database: Arc::clone(&database),
         };
+        let service = Arc::new(RwLock::new(super::super::service_bundle(
+            channel,
+            interceptor,
+            0,
+        )));
+        let config = super::super::ConnectConfig::new()
+            .telemetry(crate::v2::types::TelemetryConfig::new().enabled(false));
+        let telemetry = super::super::ClientTelemetry::new(
+            config.telemetry.clone(),
+            Arc::clone(&service),
+            Arc::clone(&database),
+            &config,
+        );
         ClientV2 {
-            service: Arc::new(RwLock::new(MilvusServiceClient::with_interceptor(
-                channel,
-                interceptor,
-            ))),
+            service,
             database,
             rpc_timeout: Arc::new(RwLock::new(Duration::from_secs(1))),
             retry: Arc::new(RwLock::new(RetryConfig::new())),
             cache_endpoint: Arc::new("database-tests".to_owned()),
             schema_load_scope: Arc::new(super::super::cache::SchemaLoadScope::new()),
             global_cluster: None,
+            telemetry,
         }
     }
 

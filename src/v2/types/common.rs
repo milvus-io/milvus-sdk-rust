@@ -2697,6 +2697,140 @@ impl RetryConfig {
 ///////////////////////////////////////////////////////////////////////////////
 // ConnectConfig
 ///////////////////////////////////////////////////////////////////////////////
+/// Client-side telemetry settings.
+///
+/// Telemetry is enabled by default. Set [`Self::enabled`] to `false` to disable
+/// heartbeat reporting and operation metrics for a connection.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct TelemetryConfig {
+    pub(crate) enabled: bool,
+    pub(crate) heartbeat_interval: Duration,
+    pub(crate) sampling_rate: f64,
+    pub(crate) error_max_count: usize,
+    pub(crate) client_id: String,
+}
+
+impl TelemetryConfig {
+    /// Creates telemetry settings initialized with the SDK defaults.
+    pub fn new() -> Self {
+        Self {
+            enabled: true,
+            heartbeat_interval: Duration::from_secs(10),
+            sampling_rate: 1.0,
+            error_max_count: 100,
+            client_id: String::new(),
+        }
+    }
+
+    /// Enables or disables telemetry.
+    pub fn enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
+    }
+
+    /// Enables or disables telemetry and returns this value for further mutation.
+    pub fn set_enabled(&mut self, enabled: bool) -> &mut Self {
+        self.enabled = enabled;
+        self
+    }
+
+    /// Sets the heartbeat interval.
+    ///
+    /// A zero interval is accepted here and resolved to the 10-second default,
+    /// matching a configuration assembled field by field in the Go SDK.
+    pub fn heartbeat_interval(mut self, interval: Duration) -> Self {
+        self.heartbeat_interval = interval;
+        self
+    }
+
+    /// Sets the heartbeat interval and returns this value for further mutation.
+    pub fn set_heartbeat_interval(&mut self, interval: Duration) -> &mut Self {
+        self.heartbeat_interval = interval;
+        self
+    }
+
+    /// Sets the operation sampling rate. Values are clamped to `0.0..=1.0`.
+    pub fn sampling_rate(mut self, rate: f64) -> Self {
+        self.sampling_rate = if rate.is_finite() {
+            rate.clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        self
+    }
+
+    /// Sets the operation sampling rate and returns this value for further mutation.
+    pub fn set_sampling_rate(&mut self, rate: f64) -> &mut Self {
+        self.sampling_rate = if rate.is_finite() {
+            rate.clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        self
+    }
+
+    /// Sets the maximum number of recent errors retained by the client.
+    ///
+    /// Zero resolves to the default of 100.
+    pub fn error_max_count(mut self, count: usize) -> Self {
+        self.error_max_count = count;
+        self
+    }
+
+    /// Sets the recent-error capacity and returns this value for further mutation.
+    pub fn set_error_max_count(&mut self, count: usize) -> &mut Self {
+        self.error_max_count = count;
+        self
+    }
+
+    /// Pins a client identifier that remains stable across process restarts.
+    ///
+    /// It must be unique per running client. An empty value asks the SDK to
+    /// generate a new process-local UUID.
+    pub fn client_id(mut self, client_id: impl Into<String>) -> Self {
+        self.client_id = client_id.into();
+        self
+    }
+
+    /// Sets the stable client identifier and returns this value for further mutation.
+    pub fn set_client_id(&mut self, client_id: impl Into<String>) -> &mut Self {
+        self.client_id = client_id.into();
+        self
+    }
+
+    /// Returns whether telemetry is enabled.
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
+    /// Returns the configured heartbeat interval.
+    pub fn get_heartbeat_interval(&self) -> Duration {
+        self.heartbeat_interval
+    }
+
+    /// Returns the effective operation sampling rate.
+    pub fn get_sampling_rate(&self) -> f64 {
+        self.sampling_rate
+    }
+
+    /// Returns the configured recent-error capacity.
+    pub fn get_error_max_count(&self) -> usize {
+        self.error_max_count
+    }
+
+    /// Returns the pinned client identifier, or an empty string when generated.
+    pub fn get_client_id(&self) -> &str {
+        &self.client_id
+    }
+}
+
+impl Default for TelemetryConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Connection settings used to create a ClientV2.
 #[derive(Clone)]
 #[non_exhaustive]
@@ -2714,6 +2848,7 @@ pub struct ConnectConfig {
     pub(crate) keepalive_while_idle: bool,
     pub(crate) database: String,
     pub(crate) retry: RetryConfig,
+    pub(crate) telemetry: TelemetryConfig,
 }
 
 impl std::fmt::Debug for ConnectConfig {
@@ -2735,6 +2870,7 @@ impl std::fmt::Debug for ConnectConfig {
             .field("keepalive_while_idle", &self.keepalive_while_idle)
             .field("database", &self.database)
             .field("retry", &self.retry)
+            .field("telemetry", &self.telemetry)
             .finish()
     }
 }
@@ -2756,6 +2892,7 @@ impl ConnectConfig {
             keepalive_while_idle: true,
             database: String::new(),
             retry: RetryConfig::new(),
+            telemetry: TelemetryConfig::new(),
         }
     }
 
@@ -2995,6 +3132,23 @@ impl ConnectConfig {
     /// Returns the configured retry.
     pub fn get_retry(&self) -> &RetryConfig {
         &self.retry
+    }
+
+    /// Sets client-side telemetry configuration.
+    pub fn telemetry(mut self, telemetry: TelemetryConfig) -> Self {
+        self.telemetry = telemetry;
+        self
+    }
+
+    /// Updates client-side telemetry configuration.
+    pub fn set_telemetry(&mut self, telemetry: TelemetryConfig) -> &mut Self {
+        self.telemetry = telemetry;
+        self
+    }
+
+    /// Returns client-side telemetry configuration.
+    pub fn get_telemetry(&self) -> &TelemetryConfig {
+        &self.telemetry
     }
 
     /// Performs the username password operation.
@@ -3641,6 +3795,30 @@ mod constructor_value_tests {
         assert_eq!(value.get_max_backoff().to_owned(), Duration::from_secs(2));
         assert_eq!(value.get_backoff_multiplier().to_owned(), 2.0);
         assert!(!value.get_retry_on_rate_limit());
+    }
+
+    #[test]
+    fn telemetry_config_builder_and_mutable_setters_match() {
+        let expected = TelemetryConfig::new()
+            .enabled(false)
+            .heartbeat_interval(Duration::from_secs(3))
+            .sampling_rate(0.25)
+            .error_max_count(12)
+            .client_id("worker-1");
+        let mut actual = TelemetryConfig::new();
+        actual
+            .set_enabled(false)
+            .set_heartbeat_interval(Duration::from_secs(3))
+            .set_sampling_rate(0.25)
+            .set_error_max_count(12)
+            .set_client_id("worker-1");
+
+        assert_eq!(actual, expected);
+        assert!(!actual.is_enabled());
+        assert_eq!(actual.get_heartbeat_interval(), Duration::from_secs(3));
+        assert_eq!(actual.get_sampling_rate(), 0.25);
+        assert_eq!(actual.get_error_max_count(), 12);
+        assert_eq!(actual.get_client_id(), "worker-1");
     }
 
     #[test]

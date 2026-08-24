@@ -581,10 +581,16 @@ impl ClientV2 {
         &self,
         request: request::utility::RunAnalyzerRequest,
     ) -> Result<response::utility::RunAnalyzerResponse> {
-        let database = self.current_database();
-        let response = rpc_with_retry!(self, run_analyzer, request.into_proto(&database))?;
-        status_to_result(&response.status)?;
-        Ok(response::utility::RunAnalyzerResponse::from_proto(response))
+        let telemetry = self.telemetry.begin_operation("RunAnalyzer", "");
+        let result = async {
+            let database = self.current_database();
+            let response = rpc_with_retry!(self, run_analyzer, request.into_proto(&database))?;
+            status_to_result(&response.status)?;
+            Ok(response::utility::RunAnalyzerResponse::from_proto(response))
+        }
+        .await;
+        telemetry.finish(&result);
+        result
     }
 
     /// Refreshes an external collection from its external data source.
