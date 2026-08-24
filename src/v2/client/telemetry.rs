@@ -643,28 +643,32 @@ impl TelemetryInner {
         let state = self.state.lock();
         let enabled_collections = &state.enabled_collections;
         let all_collections_enabled = state.all_collections_enabled;
-        let metrics = state
-            .snapshots
-            .back()
-            .map(|snapshot| {
-                snapshot
-                    .metrics
-                    .iter()
-                    .map(|operation| common::OperationMetrics {
-                        operation: operation.operation.clone(),
-                        global: Some(metrics_to_proto(&operation.global)),
-                        collection_metrics: operation
-                            .collections
-                            .iter()
-                            .filter(|(name, _)| {
-                                all_collections_enabled || enabled_collections.contains(*name)
-                            })
-                            .map(|(name, metrics)| (name.clone(), metrics_to_proto(metrics)))
-                            .collect(),
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
+        let metrics = if state.config.enabled {
+            state
+                .snapshots
+                .back()
+                .map(|snapshot| {
+                    snapshot
+                        .metrics
+                        .iter()
+                        .map(|operation| common::OperationMetrics {
+                            operation: operation.operation.clone(),
+                            global: Some(metrics_to_proto(&operation.global)),
+                            collection_metrics: operation
+                                .collections
+                                .iter()
+                                .filter(|(name, _)| {
+                                    all_collections_enabled || enabled_collections.contains(*name)
+                                })
+                                .map(|(name, metrics)| (name.clone(), metrics_to_proto(metrics)))
+                                .collect(),
+                        })
+                        .collect()
+                })
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
         milvus::ClientHeartbeatRequest {
             client_info: Some(self.build_client_info()),
             report_timestamp: now_millis(),
@@ -676,9 +680,6 @@ impl TelemetryInner {
     }
 
     async fn send_heartbeat(&self) {
-        if !self.state.lock().config.enabled {
-            return;
-        }
         let request = self.heartbeat_request();
         let reply_count = request.command_replies.len();
         let (mut service, generation) = {
@@ -1721,6 +1722,132 @@ mod tests {
         let request = telemetry.inner.heartbeat_request();
         assert_eq!(request.metrics.len(), 1);
         assert!(request.metrics[0].collection_metrics.is_empty());
+    }
+
+    #[tokio::test]
+    async fn disabled_telemetry_keeps_control_heartbeat_for_ack_and_reenable() {
+        let disable = common::ClientCommand {
+            command_id: "disable".to_owned(),
+            command_type: "push_config".to_owned(),
+            payload: br#"{"enabled":false,"heartbeat_interval_ms":50}"#.to_vec(),
+            create_time: 1,
+            persistent: true,
+            target_scope: "global".to_owned(),
+        };
+        let reenable = common::ClientCommand {
+            command_id: "reenable".to_owned(),
+            command_type: "push_config".to_owned(),
+            payload: br#"{"enabled":true}"#.to_vec(),
+            create_time: 2,
+            persistent: true,
+            target_scope: "global".to_owned(),
+        };
+        let (second_entered_tx, second_entered_rx) = oneshot::channel();
+        let (release_second_tx, release_second_rx) = oneshot::channel();
+        let mut server = MockTelemetryServer::start(vec![
+            HeartbeatAction::Respond(success_response(vec![disable])),
+            HeartbeatAction::BlockedResponse {
+                entered: second_entered_tx,
+                release: release_second_rx,
+                response: success_response(vec![reenable]),
+            },
+            HeartbeatAction::Respond(success_response(Vec::new())),
+        ])
+        .await;
+        let opted_out = transport_manager(
+            TelemetryConfig::new()
+                .enabled(false)
+                .heartbeat_interval(Duration::from_millis(5)),
+            &server.uri,
+            "analytics",
+            "root:Milvus",
+            6,
+        );
+        opted_out.start();
+        assert!(
+            tokio::time::timeout(Duration::from_millis(25), server.captures.recv())
+                .await
+                .is_err(),
+            "an initial enabled=false must not start the heartbeat control plane"
+        );
+        drop(opted_out);
+
+        let telemetry = transport_manager(
+            TelemetryConfig::new(),
+            &server.uri,
+            "analytics",
+            "root:Milvus",
+            7,
+        );
+
+        telemetry
+            .inner
+            .record_operation("Search", "books", "", Duration::from_millis(2), None);
+        telemetry.start();
+        let initial = server.next_capture().await;
+        assert_eq!(initial.request.metrics.len(), 1);
+        for _ in 0..100 {
+            if !telemetry.config().enabled
+                && telemetry.inner.state.lock().pending_replies.len() == 1
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+        assert!(!telemetry.config().enabled);
+        let (snapshot_count, disable_hash) = {
+            let state = telemetry.inner.state.lock();
+            assert_eq!(state.pending_replies.len(), 1);
+            assert_eq!(state.pending_replies[0].command_id, "disable");
+            (state.snapshots.len(), state.config_hash.clone())
+        };
+        assert!(!disable_hash.is_empty());
+
+        telemetry
+            .inner
+            .record_operation("Search", "books", "", Duration::from_millis(3), None);
+        telemetry.inner.create_snapshot();
+        assert_eq!(telemetry.inner.state.lock().snapshots.len(), snapshot_count);
+
+        let disabled = server.next_capture().await;
+        assert!(disabled.request.metrics.is_empty());
+        assert_eq!(disabled.request.config_hash, disable_hash);
+        assert_eq!(disabled.request.command_replies.len(), 1);
+        assert_eq!(disabled.request.command_replies[0].command_id, "disable");
+        tokio::time::timeout(Duration::from_secs(1), second_entered_rx)
+            .await
+            .expect("disabled control heartbeat did not reach the server")
+            .expect("disabled control heartbeat sender stopped");
+        release_second_tx
+            .send(())
+            .expect("disabled control heartbeat stopped before re-enable");
+        for _ in 0..100 {
+            if telemetry.config().enabled && telemetry.inner.state.lock().pending_replies.len() == 1
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+        assert!(telemetry.config().enabled);
+        let reenable_hash = {
+            let state = telemetry.inner.state.lock();
+            assert_eq!(state.pending_replies[0].command_id, "reenable");
+            state.config_hash.clone()
+        };
+        assert!(!reenable_hash.is_empty());
+
+        let reenabled = server.next_capture().await;
+        assert_eq!(reenabled.request.config_hash, reenable_hash);
+        assert_eq!(reenabled.request.command_replies.len(), 1);
+        assert_eq!(reenabled.request.command_replies[0].command_id, "reenable");
+        for _ in 0..100 {
+            if telemetry.inner.state.lock().pending_replies.is_empty() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+        assert!(telemetry.inner.state.lock().pending_replies.is_empty());
+        telemetry.inner.shutdown.cancel();
     }
 
     #[tokio::test]

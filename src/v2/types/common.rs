@@ -2699,8 +2699,10 @@ impl RetryConfig {
 ///////////////////////////////////////////////////////////////////////////////
 /// Client-side telemetry settings.
 ///
-/// Telemetry is enabled by default. Set [`Self::enabled`] to `false` to disable
-/// heartbeat reporting and operation metrics for a connection.
+/// Telemetry is enabled by default. An initial [`Self::enabled`] value of `false`
+/// prevents the heartbeat task from starting. If an already-running client is disabled
+/// by a server command, operation collection and metric payloads stop while its lightweight
+/// command heartbeat continues to deliver acknowledgements and receive a later re-enable.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub struct TelemetryConfig {
@@ -2723,7 +2725,10 @@ impl TelemetryConfig {
         }
     }
 
-    /// Enables or disables telemetry.
+    /// Enables or disables telemetry at connection startup.
+    ///
+    /// A server command that disables an already-running client keeps only its command
+    /// heartbeat active so acknowledgements and a later re-enable can flow.
     pub fn enabled(mut self, enabled: bool) -> Self {
         self.enabled = enabled;
         self
