@@ -20,12 +20,12 @@
 //! topology of member clusters. This module fetches that topology, resolves the writable primary,
 //! and rebuilds the gRPC channel when the primary endpoint changes.
 
-use super::{Service, V2Interceptor};
-use crate::proto::milvus::milvus_service_client::MilvusServiceClient;
+use super::{ServiceBundle, SharedServices, TransportGeneration, V2Interceptor};
 use crate::v2::error::{Error, Result};
 use crate::v2::types::{topology_url, GlobalTopology};
 use parking_lot::RwLock;
 use reqwest::{Client, StatusCode};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -327,11 +327,13 @@ async fn build_topology_tls_config(
 ///
 /// The channel is created lazily; `wait_for_server` on the caller performs the
 /// initial connectivity check.
-pub(crate) async fn build_service(
+pub(crate) async fn build_services(
     endpoint_uri: &str,
     connect_config: &super::ConnectConfig,
     database: &Arc<RwLock<String>>,
-) -> Result<Service> {
+    database_explicit: &Arc<AtomicBool>,
+    generation: TransportGeneration,
+) -> Result<ServiceBundle> {
     let endpoint = super::build_endpoint(endpoint_uri, connect_config).await?;
     let channel = endpoint.connect_lazy();
     let token = connect_config
@@ -345,8 +347,9 @@ pub(crate) async fn build_service(
     let interceptor = V2Interceptor {
         token,
         database: Arc::clone(database),
+        database_explicit: Arc::clone(database_explicit),
     };
-    Ok(MilvusServiceClient::with_interceptor(channel, interceptor))
+    Ok(super::service_bundle(channel, interceptor, generation))
 }
 
 /// Shared global-cluster state that manages topology discovery and primary failover.
@@ -360,7 +363,8 @@ pub(crate) struct GlobalCluster {
     global_endpoint: String,
     connect_config: super::ConnectConfig,
     database: Arc<RwLock<String>>,
-    service: Arc<RwLock<Service>>,
+    database_explicit: Arc<AtomicBool>,
+    service: SharedServices,
     topology: RwLock<GlobalTopology>,
     last_unavailable_probe: std::sync::Mutex<Option<std::time::Instant>>,
     probe_in_progress: std::sync::atomic::AtomicBool,
@@ -373,13 +377,15 @@ impl GlobalCluster {
         global_endpoint: String,
         connect_config: super::ConnectConfig,
         database: Arc<RwLock<String>>,
-        service: Arc<RwLock<Service>>,
+        database_explicit: Arc<AtomicBool>,
+        service: SharedServices,
         topology: GlobalTopology,
     ) -> Self {
         Self {
             global_endpoint,
             connect_config,
             database,
+            database_explicit,
             service,
             topology: RwLock::new(topology),
             last_unavailable_probe: std::sync::Mutex::new(None),
@@ -619,13 +625,22 @@ impl GlobalCluster {
                 return false;
             }
         };
-        match build_service(&endpoint_uri, &self.connect_config, &self.database).await {
-            Ok(mut service) => {
+        let generation = self.service.read().generation.saturating_add(1);
+        match build_services(
+            &endpoint_uri,
+            &self.connect_config,
+            &self.database,
+            &self.database_explicit,
+            generation,
+        )
+        .await
+        {
+            Ok(mut services) => {
                 // A TCP connect alone does not prove the endpoint is ready to serve gRPC, so
                 // perform the same bounded Connect handshake the initial connection uses before
                 // committing the new primary; a plain-HTTP load balancer or still-starting service
                 // is rejected instead of being committed and cycling UNAVAILABLE failures.
-                if super::wait_for_server(&mut service, self.connect_config.connect_timeout)
+                if super::wait_for_server(&mut services.milvus, self.connect_config.connect_timeout)
                     .await
                     .is_err()
                 {
@@ -634,7 +649,7 @@ impl GlobalCluster {
                         "member endpoint did not complete the gRPC Connect handshake; keeping previous primary");
                     return false;
                 }
-                *self.service.write() = service;
+                *self.service.write() = services;
                 true
             }
             Err(error) => {
@@ -832,6 +847,7 @@ mod tests {
     ) -> StdArc<GlobalCluster> {
         let config = super::super::ConnectConfig::new().uri("http://global:19530");
         let database = Arc::new(RwLock::new("default".to_owned()));
+        let database_explicit = Arc::new(AtomicBool::new(false));
         let topology = parse_topology_response(initial_body).expect("initial topology");
         let primary = topology
             .primary()
@@ -839,10 +855,12 @@ mod tests {
             .endpoint()
             .to_owned();
         let service = Arc::new(RwLock::new(
-            build_service(
+            build_services(
                 &cluster_endpoint_uri(&primary, &config).expect("initial primary uri"),
                 &config,
                 &database,
+                &database_explicit,
+                0,
             )
             .await
             .expect("build initial service"),
@@ -851,6 +869,7 @@ mod tests {
             server.endpoint(),
             config,
             database,
+            database_explicit,
             service,
             topology,
         ))

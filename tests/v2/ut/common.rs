@@ -15,7 +15,7 @@
 // limitations under the License.
 
 use milvus::proto::{common, milvus as pb, schema};
-use milvus::v2::{ClientV2, ConnectConfig};
+use milvus::v2::{ClientV2, ConnectConfig, TelemetryConfig};
 use pb::milvus_service_server::{MilvusService, MilvusServiceServer};
 use prost::Message;
 use std::collections::{HashMap, HashSet};
@@ -43,6 +43,7 @@ fn database_name(value: String) -> String {
 struct MockState {
     calls: HashMap<&'static str, usize>,
     requests: HashMap<&'static str, Vec<String>>,
+    client_request_ids: HashMap<&'static str, Vec<Option<String>>>,
     transport_failures: HashMap<&'static str, Vec<tonic::Code>>,
     aliases: HashMap<(String, String), String>,
     databases: HashMap<String, HashMap<String, String>>,
@@ -65,6 +66,7 @@ impl Default for MockState {
         Self {
             calls: HashMap::new(),
             requests: HashMap::new(),
+            client_request_ids: HashMap::new(),
             transport_failures: HashMap::new(),
             aliases: HashMap::new(),
             databases: HashMap::new(),
@@ -104,6 +106,21 @@ pub struct MockMilvus {
 }
 
 impl MockMilvus {
+    fn record_metadata<T>(&self, method: &'static str, request: &Request<T>) {
+        let request_id = request
+            .metadata()
+            .get("client_request_id")
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned);
+        self.state
+            .lock()
+            .unwrap()
+            .client_request_ids
+            .entry(method)
+            .or_default()
+            .push(request_id);
+    }
+
     fn record_request<T: Debug>(&self, method: &'static str, request: &T) {
         let mut state = self.state.lock().unwrap();
         *state.calls.entry(method).or_default() += 1;
@@ -140,6 +157,16 @@ impl MockMilvus {
             .lock()
             .unwrap()
             .requests
+            .get(method)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    pub fn client_request_ids(&self, method: &'static str) -> Vec<Option<String>> {
+        self.state
+            .lock()
+            .unwrap()
+            .client_request_ids
             .get(method)
             .cloned()
             .unwrap_or_default()
@@ -224,6 +251,7 @@ macro_rules! status_method {
             Self: 'async_trait,
         {
             Box::pin(async move {
+                self.record_metadata(stringify!($name), &request);
                 let request = request.into_inner();
                 self.record_request(stringify!($name), &request);
                 if let Some(status) = self.take_transport_failure(stringify!($name)) {
@@ -246,6 +274,7 @@ macro_rules! response_method {
             Self: 'async_trait,
         {
             Box::pin(async move {
+                self.record_metadata(stringify!($name), &request);
                 let request = request.into_inner();
                 self.record_request(stringify!($name), &request);
                 if let Some(status) = self.take_transport_failure(stringify!($name)) {
@@ -272,6 +301,7 @@ macro_rules! status_method_with {
             Self: 'async_trait,
         {
             Box::pin(async move {
+                self.record_metadata(stringify!($name), &request);
                 let $request = request.into_inner();
                 self.record_request(stringify!($name), &$request);
                 let $service = self;
@@ -300,8 +330,12 @@ macro_rules! response_method_with {
             Self: 'async_trait,
         {
             Box::pin(async move {
+                self.record_metadata(stringify!($name), &request);
                 let $request = request.into_inner();
                 self.record_request(stringify!($name), &$request);
+                if let Some(status) = self.take_transport_failure(stringify!($name)) {
+                    return Err(status);
+                }
                 let $service = self;
                 let response = $body;
                 Ok(Response::new(response))
@@ -2468,6 +2502,10 @@ pub struct MockServer {
 
 impl MockServer {
     pub async fn start() -> Self {
+        Self::start_with_telemetry(TelemetryConfig::new()).await
+    }
+
+    pub async fn start_with_telemetry(telemetry: TelemetryConfig) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let incoming = TcpListenerStream::new(listener);
@@ -2484,7 +2522,10 @@ impl MockServer {
                 .unwrap();
         });
         let uri = format!("http://{address}");
-        let config = ConnectConfig::new().uri(&uri).database("default");
+        let config = ConnectConfig::new()
+            .uri(&uri)
+            .database("default")
+            .telemetry(telemetry);
         let client = ClientV2::new(&config).await.unwrap();
         Self {
             client,
@@ -2621,4 +2662,48 @@ impl MockServer {
             topology_task.await.unwrap();
         }
     }
+}
+
+#[derive(Debug)]
+pub struct OperationTotals {
+    pub request_count: i64,
+    pub success_count: i64,
+    pub error_count: i64,
+    pub max_latency_ms: f64,
+}
+
+pub async fn wait_for_operation_totals(
+    client: &ClientV2,
+    operation: &str,
+    expected_requests: i64,
+) -> OperationTotals {
+    for _ in 0..200 {
+        let totals = client.telemetry().snapshots().iter().fold(
+            OperationTotals {
+                request_count: 0,
+                success_count: 0,
+                error_count: 0,
+                max_latency_ms: 0.0,
+            },
+            |mut totals, snapshot| {
+                for metrics in snapshot
+                    .metrics
+                    .iter()
+                    .filter(|metrics| metrics.operation == operation)
+                {
+                    totals.request_count += metrics.global.request_count;
+                    totals.success_count += metrics.global.success_count;
+                    totals.error_count += metrics.global.error_count;
+                    totals.max_latency_ms =
+                        totals.max_latency_ms.max(metrics.global.max_latency_ms);
+                }
+                totals
+            },
+        );
+        if totals.request_count >= expected_requests {
+            return totals;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+    }
+    panic!("timed out waiting for {expected_requests} {operation} telemetry records");
 }

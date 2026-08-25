@@ -41,21 +41,27 @@ impl ClientV2 {
         request: request::dql::QueryRequest,
         cluster_id: &str,
     ) -> Result<response::dql::QueryResponse> {
-        let database = self.effective_database(request.database_name.as_deref());
         let collection = request.collection_name.clone();
-        let guarantee = self
-            .deduce_guarantee_timestamp(&database, &collection, request.consistency_level)
-            .await?;
-        let primary_field = if request.ids.is_empty() {
-            None
-        } else {
-            Some(self.primary_field_name(&database, &collection).await?)
-        };
-        let mut raw = request.into_proto(&database, primary_field.as_deref(), guarantee)?;
-        set_cluster_param(&mut raw.query_params, cluster_id);
-        let response = rpc_with_retry!(self, query, raw)?;
-        status_to_result(&response.status)?;
-        response::dql::QueryResponse::from_proto(response)
+        let telemetry = self.telemetry.begin_operation("Query", &collection);
+        let result = async {
+            let database = self.effective_database(request.database_name.as_deref());
+            let guarantee = self
+                .deduce_guarantee_timestamp(&database, &collection, request.consistency_level)
+                .await?;
+            let primary_field = if request.ids.is_empty() {
+                None
+            } else {
+                Some(self.primary_field_name(&database, &collection).await?)
+            };
+            let mut raw = request.into_proto(&database, primary_field.as_deref(), guarantee)?;
+            set_cluster_param(&mut raw.query_params, cluster_id);
+            let response = rpc_with_retry!(self, query, raw)?;
+            status_to_result(&response.status)?;
+            response::dql::QueryResponse::from_proto(response)
+        }
+        .await;
+        telemetry.finish(&result);
+        result
     }
 
     /// Retrieves entities by their primary-key values.
@@ -75,17 +81,23 @@ impl ClientV2 {
         request: request::dql::GetRequest,
         cluster_id: &str,
     ) -> Result<response::dql::GetResponse> {
-        let database = self.effective_database(request.database_name.as_deref());
         let collection = request.collection_name.clone();
-        let guarantee = self
-            .deduce_guarantee_timestamp(&database, &collection, request.consistency_level)
-            .await?;
-        let primary_field = self.primary_field_name(&database, &collection).await?;
-        let mut raw = request.into_proto(&database, &primary_field, guarantee)?;
-        set_cluster_param(&mut raw.query_params, cluster_id);
-        let response = rpc_with_retry!(self, query, raw)?;
-        status_to_result(&response.status)?;
-        response::dql::QueryResponse::from_proto(response)
+        let telemetry = self.telemetry.begin_operation("Query", &collection);
+        let result = async {
+            let database = self.effective_database(request.database_name.as_deref());
+            let guarantee = self
+                .deduce_guarantee_timestamp(&database, &collection, request.consistency_level)
+                .await?;
+            let primary_field = self.primary_field_name(&database, &collection).await?;
+            let mut raw = request.into_proto(&database, &primary_field, guarantee)?;
+            set_cluster_param(&mut raw.query_params, cluster_id);
+            let response = rpc_with_retry!(self, query, raw)?;
+            status_to_result(&response.status)?;
+            response::dql::QueryResponse::from_proto(response)
+        }
+        .await;
+        telemetry.finish(&result);
+        result
     }
 
     /// Searches vector fields and returns ranked hits for each query vector.
@@ -105,16 +117,22 @@ impl ClientV2 {
         request: request::dql::SearchRequest,
         cluster_id: &str,
     ) -> Result<response::dql::SearchResponse> {
-        let database = self.effective_database(request.database_name.as_deref());
         let collection = request.collection_name.clone();
-        let guarantee = self
-            .deduce_guarantee_timestamp(&database, &collection, request.consistency_level)
-            .await?;
-        let mut raw = request.into_proto(&database, guarantee)?;
-        set_cluster_param(&mut raw.search_params, cluster_id);
-        let response = rpc_with_retry!(self, search, raw)?;
-        status_to_result(&response.status)?;
-        response::dql::SearchResponse::from_proto(response)
+        let telemetry = self.telemetry.begin_operation("Search", &collection);
+        let result = async {
+            let database = self.effective_database(request.database_name.as_deref());
+            let guarantee = self
+                .deduce_guarantee_timestamp(&database, &collection, request.consistency_level)
+                .await?;
+            let mut raw = request.into_proto(&database, guarantee)?;
+            set_cluster_param(&mut raw.search_params, cluster_id);
+            let response = rpc_with_retry!(self, search, raw)?;
+            status_to_result(&response.status)?;
+            response::dql::SearchResponse::from_proto(response)
+        }
+        .await;
+        telemetry.finish(&result);
+        result
     }
 
     /// Executes multiple vector searches and combines them with the requested reranking strategy.
@@ -133,16 +151,22 @@ impl ClientV2 {
         request: request::dql::HybridSearchRequest,
         cluster_id: &str,
     ) -> Result<response::dql::HybridSearchResponse> {
-        let database = self.effective_database(request.database_name.as_deref());
         let collection = request.collection_name.clone();
-        let guarantee = self
-            .deduce_guarantee_timestamp(&database, &collection, request.consistency_level)
-            .await?;
-        let mut raw = request.into_proto(&database, guarantee)?;
-        set_cluster_param(&mut raw.rank_params, cluster_id);
-        let response = rpc_with_retry!(self, hybrid_search, raw)?;
-        status_to_result(&response.status)?;
-        response::dql::SearchResponse::from_proto(response)
+        let telemetry = self.telemetry.begin_operation("HybridSearch", &collection);
+        let result = async {
+            let database = self.effective_database(request.database_name.as_deref());
+            let guarantee = self
+                .deduce_guarantee_timestamp(&database, &collection, request.consistency_level)
+                .await?;
+            let mut raw = request.into_proto(&database, guarantee)?;
+            set_cluster_param(&mut raw.rank_params, cluster_id);
+            let response = rpc_with_retry!(self, hybrid_search, raw)?;
+            status_to_result(&response.status)?;
+            response::dql::SearchResponse::from_proto(response)
+        }
+        .await;
+        telemetry.finish(&result);
+        result
     }
 
     async fn primary_field_name(&self, database: &str, collection: &str) -> Result<String> {
