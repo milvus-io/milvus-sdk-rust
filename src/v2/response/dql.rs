@@ -542,6 +542,29 @@ fn decode_sparse_vector(bytes: Vec<u8>) -> Option<SparseVector> {
 fn struct_field_data(name: String, value: schema::StructArrayField) -> Option<FieldData> {
     use schema::{field_data as proto_field_data, scalar_field, vector_field};
 
+    let mut parent_valid_data: Option<Vec<bool>> = None;
+    for field in &value.fields {
+        if !field.valid_data.is_empty() {
+            parent_valid_data = Some(match parent_valid_data.take() {
+                Some(valid_data) => {
+                    if valid_data.len() != field.valid_data.len() {
+                        return None;
+                    }
+                    valid_data
+                        .iter()
+                        .zip(&field.valid_data)
+                        .map(|(parent, sub)| *parent && *sub)
+                        .collect()
+                }
+                None => field.valid_data.clone(),
+            });
+        }
+    }
+    let parent_valid_at = |index: usize| {
+        parent_valid_data
+            .as_ref()
+            .and_then(|valid_data| valid_data.get(index).copied())
+    };
     let mut rows: Vec<Vec<crate::v2::types::StructValue>> = Vec::new();
     for field in value.fields {
         let field_name = field.field_name.clone();
@@ -550,10 +573,19 @@ fn struct_field_data(name: String, value: schema::StructArrayField) -> Option<Fi
                 let scalar_field::Data::ArrayData(array) = scalars.data? else {
                     return None;
                 };
+                if let Some(valid_data) = &parent_valid_data {
+                    if array.data.len() != valid_data.len() {
+                        return None;
+                    }
+                }
                 array
                     .data
                     .into_iter()
-                    .map(|scalars| {
+                    .enumerate()
+                    .map(|(index, scalars)| {
+                        if parent_valid_at(index) == Some(false) {
+                            return Some(Vec::new());
+                        }
                         field_data_to_json_values(decode_field_data(schema::FieldData {
                             r#type: array.element_type,
                             field_name: field_name.clone(),
@@ -570,10 +602,19 @@ fn struct_field_data(name: String, value: schema::StructArrayField) -> Option<Fi
                 let vector_field::Data::VectorArray(array) = vectors.data? else {
                     return None;
                 };
+                if let Some(valid_data) = &parent_valid_data {
+                    if array.data.len() != valid_data.len() {
+                        return None;
+                    }
+                }
                 array
                     .data
                     .into_iter()
-                    .map(|vectors| {
+                    .enumerate()
+                    .map(|(index, vectors)| {
+                        if parent_valid_at(index) == Some(false) {
+                            return Some(Vec::new());
+                        }
                         field_data_to_json_values(decode_field_data(schema::FieldData {
                             r#type: array.element_type,
                             field_name: field_name.clone(),
@@ -613,7 +654,16 @@ fn struct_field_data(name: String, value: schema::StructArrayField) -> Option<Fi
             }
         }
     }
-    Some(FieldData::Struct { name, values: rows })
+    let Some(valid_data) = parent_valid_data else {
+        return Some(FieldData::Struct { name, values: rows });
+    };
+    let values = rows
+        .into_iter()
+        .zip(&valid_data)
+        .filter_map(|(row, valid)| (*valid).then_some(row))
+        .collect();
+    let data = FieldData::Struct { name, values };
+    FieldData::nullable(data, valid_data).ok()
 }
 
 fn field_data_to_json_values(value: FieldData) -> Option<Vec<serde_json::Value>> {
@@ -2206,6 +2256,76 @@ mod tests {
         vec![geometry, timestamptz, events]
     }
 
+    fn nullable_struct_fields() -> Vec<schema::FieldData> {
+        use schema::{field_data, scalar_field};
+
+        let id = schema::FieldData {
+            r#type: schema::DataType::Int64 as i32,
+            field_name: "id".into(),
+            field: Some(field_data::Field::Scalars(schema::ScalarField {
+                data: Some(scalar_field::Data::LongData(schema::LongArray {
+                    data: vec![1, 2],
+                })),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let rating = schema::FieldData {
+            r#type: schema::DataType::Array as i32,
+            field_name: "rating".into(),
+            valid_data: vec![false, true],
+            field: Some(field_data::Field::Scalars(schema::ScalarField {
+                valid_data: vec![false, true],
+                data: Some(scalar_field::Data::ArrayData(schema::ArrayArray {
+                    element_type: schema::DataType::Int32 as i32,
+                    data: vec![
+                        schema::ScalarField::default(),
+                        schema::ScalarField {
+                            data: Some(scalar_field::Data::IntData(schema::IntArray {
+                                data: vec![5, 4],
+                            })),
+                            ..Default::default()
+                        },
+                    ],
+                })),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let tag = schema::FieldData {
+            r#type: schema::DataType::Array as i32,
+            field_name: "tag".into(),
+            valid_data: vec![false, true],
+            field: Some(field_data::Field::Scalars(schema::ScalarField {
+                valid_data: vec![false, true],
+                data: Some(scalar_field::Data::ArrayData(schema::ArrayArray {
+                    element_type: schema::DataType::VarChar as i32,
+                    data: vec![
+                        schema::ScalarField::default(),
+                        schema::ScalarField {
+                            data: Some(scalar_field::Data::StringData(schema::StringArray {
+                                data: vec!["favorite".into(), "classic".into()],
+                            })),
+                            ..Default::default()
+                        },
+                    ],
+                })),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let metadata = schema::FieldData {
+            r#type: schema::DataType::ArrayOfStruct as i32,
+            field_name: "metadata".into(),
+            field: Some(field_data::Field::StructArrays(schema::StructArrayField {
+                fields: vec![rating, tag],
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        vec![id, metadata]
+    }
+
     fn assert_advanced_fields(fields: &[FieldData]) {
         assert!(matches!(fields[0], FieldData::Geometry { .. }));
         assert!(matches!(fields[1], FieldData::Timestamptz { .. }));
@@ -2264,6 +2384,143 @@ mod tests {
         })
         .unwrap();
         assert_advanced_fields(search.results().get_results()[0].get_output_fields());
+    }
+
+    #[test]
+    fn query_decodes_nullable_struct_fields() {
+        let query = QueryResponse::from_proto(milvus::QueryResults {
+            collection_name: "ignored_collection".into(),
+            fields_data: nullable_struct_fields(),
+            output_fields: vec!["id".into(), "metadata".into()],
+            primary_field_name: "id".into(),
+            ..Default::default()
+        })
+        .unwrap();
+
+        let rows: Vec<_> = query.results().rows().unwrap().collect();
+        assert_eq!(rows.len(), 2);
+        assert!(matches!(
+            rows[0].get("metadata").unwrap(),
+            crate::v2::types::ResultValue::Null
+        ));
+        let crate::v2::types::ResultValue::Struct(values) = rows[1].get("metadata").unwrap() else {
+            panic!("expected non-null struct values");
+        };
+        assert_eq!(values.len(), 2);
+        assert_eq!(values[0].get("rating"), Some(&serde_json::json!(5)));
+        assert_eq!(values[0].get("tag"), Some(&serde_json::json!("favorite")));
+        assert_eq!(values[1].get("rating"), Some(&serde_json::json!(4)));
+        assert_eq!(values[1].get("tag"), Some(&serde_json::json!("classic")));
+    }
+
+    #[test]
+    fn query_decodes_struct_with_differing_sub_field_validity() {
+        // A nullable sub-field can be null in one row while the parent and the
+        // other sub-fields are valid, producing differing per-sub-field
+        // valid_data. Any invalid sub-field row decodes as a null struct row,
+        // matching pymilvus, instead of failing the whole query. The decode
+        // must not depend on the order of the sub-fields in the response.
+        use schema::{field_data, scalar_field};
+        let rating = schema::FieldData {
+            r#type: schema::DataType::Array as i32,
+            field_name: "rating".into(),
+            valid_data: vec![false, true],
+            field: Some(field_data::Field::Scalars(schema::ScalarField {
+                valid_data: vec![false, true],
+                data: Some(scalar_field::Data::ArrayData(schema::ArrayArray {
+                    element_type: schema::DataType::Int32 as i32,
+                    data: vec![
+                        schema::ScalarField::default(),
+                        schema::ScalarField {
+                            data: Some(scalar_field::Data::IntData(schema::IntArray {
+                                data: vec![5, 4],
+                            })),
+                            ..Default::default()
+                        },
+                    ],
+                })),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let tag = schema::FieldData {
+            r#type: schema::DataType::Array as i32,
+            field_name: "tag".into(),
+            valid_data: vec![true, true],
+            field: Some(field_data::Field::Scalars(schema::ScalarField {
+                valid_data: vec![true, true],
+                data: Some(scalar_field::Data::ArrayData(schema::ArrayArray {
+                    element_type: schema::DataType::VarChar as i32,
+                    data: vec![
+                        schema::ScalarField {
+                            data: Some(scalar_field::Data::StringData(schema::StringArray {
+                                data: vec!["obsolete".into()],
+                            })),
+                            ..Default::default()
+                        },
+                        schema::ScalarField {
+                            data: Some(scalar_field::Data::StringData(schema::StringArray {
+                                data: vec!["favorite".into(), "classic".into()],
+                            })),
+                            ..Default::default()
+                        },
+                    ],
+                })),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        for fields in [
+            vec![rating.clone(), tag.clone()],
+            vec![tag.clone(), rating.clone()],
+        ] {
+            let metadata = schema::FieldData {
+                r#type: schema::DataType::ArrayOfStruct as i32,
+                field_name: "metadata".into(),
+                field: Some(field_data::Field::StructArrays(schema::StructArrayField {
+                    fields,
+                    ..Default::default()
+                })),
+                ..Default::default()
+            };
+            let query = QueryResponse::from_proto(milvus::QueryResults {
+                collection_name: "ignored_collection".into(),
+                fields_data: vec![
+                    schema::FieldData {
+                        r#type: schema::DataType::Int64 as i32,
+                        field_name: "id".into(),
+                        field: Some(field_data::Field::Scalars(schema::ScalarField {
+                            data: Some(scalar_field::Data::LongData(schema::LongArray {
+                                data: vec![1, 2],
+                            })),
+                            ..Default::default()
+                        })),
+                        ..Default::default()
+                    },
+                    metadata,
+                ],
+                output_fields: vec!["id".into(), "metadata".into()],
+                primary_field_name: "id".into(),
+                ..Default::default()
+            })
+            .unwrap();
+
+            let rows: Vec<_> = query.results().rows().unwrap().collect();
+            assert_eq!(rows.len(), 2);
+            assert!(matches!(
+                rows[0].get("metadata").unwrap(),
+                crate::v2::types::ResultValue::Null
+            ));
+            let crate::v2::types::ResultValue::Struct(values) = rows[1].get("metadata").unwrap()
+            else {
+                panic!("expected non-null struct values");
+            };
+            assert_eq!(values.len(), 2);
+            assert_eq!(values[0].get("rating"), Some(&serde_json::json!(5)));
+            assert_eq!(values[0].get("tag"), Some(&serde_json::json!("favorite")));
+            assert_eq!(values[1].get("rating"), Some(&serde_json::json!(4)));
+            assert_eq!(values[1].get("tag"), Some(&serde_json::json!("classic")));
+        }
     }
 
     #[test]

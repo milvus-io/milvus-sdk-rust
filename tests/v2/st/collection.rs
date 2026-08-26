@@ -16,11 +16,11 @@
 
 use milvus::v2::request::alias::{CreateAliasRequest, DropAliasRequest};
 use milvus::v2::request::collection::{
-    AddCollectionFieldRequest, AddCollectionFunctionRequest, AlterCollectionFieldPropertiesRequest,
-    AlterCollectionFunctionRequest, AlterCollectionPropertiesRequest,
+    AddCollectionFieldRequest, AddCollectionStructFieldRequest,
+    AlterCollectionFieldPropertiesRequest, AlterCollectionPropertiesRequest,
     BatchDescribeCollectionsRequest, CreateCollectionRequest, CreateSimpleCollectionRequest,
     DescribeCollectionRequest, DescribeReplicasRequest, DropCollectionFieldPropertiesRequest,
-    DropCollectionFunctionRequest, DropCollectionPropertiesRequest, GetCollectionStatsRequest,
+    DropCollectionFieldRequest, DropCollectionPropertiesRequest, GetCollectionStatsRequest,
     GetLoadStateRequest, HasCollectionRequest, ListCollectionsRequest, LoadCollectionRequest,
     RefreshLoadRequest, ReleaseCollectionRequest, RenameCollectionRequest,
     TruncateCollectionRequest,
@@ -30,7 +30,7 @@ use milvus::v2::request::index::CreateIndexRequest;
 use milvus::v2::request::partition::ListPartitionsRequest;
 use milvus::v2::{
     CollectionSchema, ConsistencyLevel, DataType, FieldSchema, Function, FunctionType, IndexParam,
-    IndexType, LoadState, MetricType,
+    IndexType, LoadState, MetricType, StructFieldSchema,
 };
 use std::collections::HashMap;
 
@@ -864,11 +864,25 @@ async fn add_collection_field() {
 
 #[tokio::test]
 async fn collection_function_lifecycle() {
+    if !common::server_supports_schema_ddl().await {
+        eprintln!("skipping collection_function_lifecycle: function-field DDL requires Milvus 3.0");
+        return;
+    }
     let client = common::client().await;
     let embedding_server = common::MockEmbeddingServer::start();
     let collection = common::unique_collection_name("collection_function");
     let _cleanup = common::CollectionCleanup::new([&collection]);
     let function_name = common::unique_name("text_embedding_function");
+    // Milvus 3.0 defines TextEmbedding functions at collection creation; adding one later
+    // through AddCollectionFunction is no longer supported.
+    let function = Function::new()
+        .name(&function_name)
+        .function_type(FunctionType::TextEmbedding)
+        .description("text embedding function")
+        .input_fields(["document"])
+        .output_fields(["dense_vector"])
+        .param("provider", "tei")
+        .param("endpoint", embedding_server.endpoint());
     let schema = CollectionSchema::new()
         .enable_dynamic_field(false)
         .add_field(
@@ -888,7 +902,16 @@ async fn collection_function_lifecycle() {
                 .name("dense_vector")
                 .data_type(DataType::FloatVector)
                 .dimension(4),
-        );
+        )
+        // A collection must keep at least one vector field after the function output field is
+        // dropped, so provide an unrelated spare vector field.
+        .add_field(
+            FieldSchema::new()
+                .name(common::VECTOR_FIELD)
+                .data_type(DataType::FloatVector)
+                .dimension(4),
+        )
+        .add_function(function);
     client
         .create_collection(
             CreateCollectionRequest::builder()
@@ -900,24 +923,6 @@ async fn collection_function_lifecycle() {
         .await
         .expect("create function collection");
 
-    let function = Function::new()
-        .name(&function_name)
-        .function_type(FunctionType::TextEmbedding)
-        .description("initial text embedding function")
-        .input_fields(["document"])
-        .output_fields(["dense_vector"])
-        .param("provider", "tei")
-        .param("endpoint", embedding_server.endpoint());
-    client
-        .add_collection_function(
-            AddCollectionFunctionRequest::builder()
-                .collection_name(&collection)
-                .function(function)
-                .build()
-                .expect("valid request"),
-        )
-        .await
-        .expect("add collection function");
     let description = client
         .describe_collection(
             DescribeCollectionRequest::builder()
@@ -932,55 +937,23 @@ async fn collection_function_lifecycle() {
         .get_schema()
         .get_functions()
         .iter()
-        .any(|function| function.get_name() == function_name));
-
-    let altered_function = Function::new()
-        .name(&function_name)
-        .function_type(FunctionType::TextEmbedding)
-        .description("altered text embedding function")
-        .input_fields(["document"])
-        .output_fields(["dense_vector"])
-        .param("provider", "tei")
-        .param("endpoint", embedding_server.endpoint());
-    client
-        .alter_collection_function(
-            AlterCollectionFunctionRequest::builder()
-                .collection_name(&collection)
-                .function(altered_function)
-                .build()
-                .expect("valid request"),
-        )
-        .await
-        .expect("alter collection function");
-    let description = client
-        .describe_collection(
-            DescribeCollectionRequest::builder()
-                .collection_name(&collection)
-                .build()
-                .expect("valid request"),
-        )
-        .await
-        .expect("describe altered collection function");
-    assert!(description
-        .description()
-        .get_schema()
-        .get_functions()
-        .iter()
         .any(|function| {
             function.get_name() == function_name
-                && function.get_description() == "altered text embedding function"
+                && function.get_description() == "text embedding function"
         }));
 
+    // Dropping the function through DropFunctionField also removes its output field.
     client
-        .drop_collection_function(
-            DropCollectionFunctionRequest::builder()
+        .drop_function_field(
+            milvus::v2::request::collection::DropFunctionFieldRequest::builder()
                 .collection_name(&collection)
                 .function_name(&function_name)
                 .build()
                 .expect("valid request"),
         )
         .await
-        .expect("drop collection function");
+        .expect("drop function field");
+
     let description = client
         .describe_collection(
             DescribeCollectionRequest::builder()
@@ -990,14 +963,329 @@ async fn collection_function_lifecycle() {
         )
         .await
         .expect("describe collection after dropping function");
-    assert!(!description
-        .description()
-        .get_schema()
+    let schema = description.description().get_schema();
+    assert!(!schema
         .get_functions()
         .iter()
         .any(|function| function.get_name() == function_name));
+    assert!(!schema
+        .get_fields()
+        .iter()
+        .any(|field| field.get_name() == "dense_vector"));
 
     common::drop_collection(&client, &collection)
         .await
         .expect("drop function collection");
+}
+
+#[tokio::test]
+async fn add_collection_struct_field() {
+    if !common::server_supports_schema_ddl().await {
+        eprintln!("skipping add_collection_struct_field: struct-field DDL requires Milvus 3.0");
+        return;
+    }
+    let client = common::client().await;
+    let collection = common::unique_collection_name("collection_add_struct_field");
+    let _cleanup = common::CollectionCleanup::new([&collection]);
+    let schema = CollectionSchema::new()
+        .add_field(
+            FieldSchema::new()
+                .name(common::ID_FIELD)
+                .data_type(DataType::Int64)
+                .primary_key(true),
+        )
+        .add_field(
+            FieldSchema::new()
+                .name(common::VECTOR_FIELD)
+                .data_type(DataType::FloatVector)
+                .dimension(common::VECTOR_DIMENSION as u32),
+        );
+    client
+        .create_collection(
+            CreateCollectionRequest::builder()
+                .collection_name(&collection)
+                .schema(schema)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("create struct-field collection");
+
+    let struct_name = common::unique_name("added_struct_field");
+    client
+        .add_collection_struct_field(
+            AddCollectionStructFieldRequest::builder()
+                .collection_name(&collection)
+                .struct_field(
+                    StructFieldSchema::new()
+                        .name(&struct_name)
+                        .max_capacity(8)
+                        .nullable(true)
+                        .add_field(
+                            FieldSchema::new()
+                                .name("tag")
+                                .data_type(DataType::VarChar)
+                                .max_length(128),
+                        )
+                        .add_field(FieldSchema::new().name("score").data_type(DataType::Int32)),
+                )
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("add collection struct field");
+
+    let description = client
+        .describe_collection(
+            DescribeCollectionRequest::builder()
+                .collection_name(&collection)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("describe collection after adding struct field");
+    let added = description
+        .description()
+        .get_schema()
+        .get_struct_fields()
+        .iter()
+        .find(|field| field.get_name() == struct_name)
+        .expect("added struct field")
+        .to_owned();
+    assert_eq!(added.get_max_capacity(), 8);
+    assert!(added.is_nullable());
+    assert_eq!(
+        added
+            .get_fields()
+            .iter()
+            .map(|field| field.get_name().to_owned())
+            .collect::<Vec<_>>(),
+        vec!["tag".to_owned(), "score".to_owned()]
+    );
+
+    common::drop_collection(&client, &collection)
+        .await
+        .expect("drop struct-field collection");
+}
+
+#[tokio::test]
+async fn add_and_drop_function_field() {
+    use milvus::v2::request::collection::{AddFunctionFieldRequest, DropFunctionFieldRequest};
+
+    if !common::server_supports_schema_ddl().await {
+        eprintln!("skipping add_and_drop_function_field: function-field DDL requires Milvus 3.0");
+        return;
+    }
+    let client = common::client().await;
+    let collection = common::unique_collection_name("collection_function_field");
+    let _cleanup = common::CollectionCleanup::new([&collection]);
+    // BM25 requires the input text field to enable analysis.
+    let schema = CollectionSchema::new()
+        .add_field(
+            FieldSchema::new()
+                .name(common::ID_FIELD)
+                .data_type(DataType::Int64)
+                .primary_key(true),
+        )
+        .add_field(
+            FieldSchema::new()
+                .name("text")
+                .data_type(DataType::VarChar)
+                .max_length(4_096)
+                .enable_analyzer(true),
+        )
+        .add_field(
+            FieldSchema::new()
+                .name(common::VECTOR_FIELD)
+                .data_type(DataType::FloatVector)
+                .dimension(common::VECTOR_DIMENSION as u32),
+        );
+    client
+        .create_collection(
+            CreateCollectionRequest::builder()
+                .collection_name(&collection)
+                .schema(schema)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("create function-field collection");
+
+    let output_field = "sparse_vector";
+    let function_name = common::unique_name("bm25_function");
+    client
+        .add_function_field(
+            AddFunctionFieldRequest::builder()
+                .collection_name(&collection)
+                .field(
+                    FieldSchema::new()
+                        .name(output_field)
+                        .data_type(DataType::SparseFloatVector),
+                )
+                .function(
+                    Function::new()
+                        .name(&function_name)
+                        .function_type(FunctionType::Bm25)
+                        .description("bm25 function field")
+                        .input_fields(["text"])
+                        .output_fields([output_field]),
+                )
+                .index(
+                    IndexParam::new()
+                        .field_name(output_field)
+                        .index_type(IndexType::SparseInvertedIndex)
+                        .metric_type(MetricType::Bm25),
+                )
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("add function field");
+
+    let description = client
+        .describe_collection(
+            DescribeCollectionRequest::builder()
+                .collection_name(&collection)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("describe collection after adding function field");
+    let schema = description.description().get_schema();
+    assert!(schema
+        .get_functions()
+        .iter()
+        .any(|function| function.get_name() == function_name));
+    assert!(schema.get_fields().iter().any(|field| {
+        field.get_name() == output_field && field.get_data_type() == DataType::SparseFloatVector
+    }));
+
+    client
+        .drop_function_field(
+            DropFunctionFieldRequest::builder()
+                .collection_name(&collection)
+                .function_name(&function_name)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("drop function field");
+
+    let description = client
+        .describe_collection(
+            DescribeCollectionRequest::builder()
+                .collection_name(&collection)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("describe collection after dropping function field");
+    let schema = description.description().get_schema();
+    assert!(!schema
+        .get_functions()
+        .iter()
+        .any(|function| function.get_name() == function_name));
+    assert!(!schema
+        .get_fields()
+        .iter()
+        .any(|field| field.get_name() == output_field));
+
+    common::drop_collection(&client, &collection)
+        .await
+        .expect("drop function-field collection");
+}
+
+#[tokio::test]
+async fn drop_collection_field() {
+    if !common::server_supports_schema_ddl().await {
+        eprintln!("skipping drop_collection_field: field-drop DDL requires Milvus 3.0");
+        return;
+    }
+    let client = common::client().await;
+    let collection = common::unique_collection_name("collection_drop_field");
+    let _cleanup = common::CollectionCleanup::new([&collection]);
+    common::create_advanced_collection(&client, &collection).await;
+
+    // Add two droppable fields and drop them by name. (The field-id identifier is covered by
+    // request-level unit tests; described schemas do not expose server-assigned field ids.)
+    for name in ["temp_alpha", "temp_beta"] {
+        client
+            .add_collection_field(
+                AddCollectionFieldRequest::builder()
+                    .collection_name(&collection)
+                    .field(
+                        FieldSchema::new()
+                            .name(name)
+                            .data_type(DataType::Int32)
+                            .nullable(true),
+                    )
+                    .build()
+                    .expect("valid request"),
+            )
+            .await
+            .expect("add droppable field");
+    }
+
+    let schema_has = async |field_name: &str| {
+        let description = &client
+            .describe_collection(
+                DescribeCollectionRequest::builder()
+                    .collection_name(&collection)
+                    .build()
+                    .expect("valid request"),
+            )
+            .await
+            .expect("describe collection");
+        description
+            .description()
+            .get_schema()
+            .get_fields()
+            .iter()
+            .any(|field| field.get_name() == field_name)
+    };
+    assert!(schema_has("temp_alpha").await && schema_has("temp_beta").await);
+
+    client
+        .drop_collection_field(
+            DropCollectionFieldRequest::builder()
+                .collection_name(&collection)
+                .field_name("temp_alpha")
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("drop collection field temp_alpha");
+    assert!(!schema_has("temp_alpha").await);
+
+    client
+        .drop_collection_field(
+            DropCollectionFieldRequest::builder()
+                .collection_name(&collection)
+                .field_name("temp_beta")
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("drop collection field temp_beta");
+    assert!(!schema_has("temp_beta").await);
+
+    let description = client
+        .describe_collection(
+            DescribeCollectionRequest::builder()
+                .collection_name(&collection)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("describe collection after dropping fields");
+    assert!(!description
+        .description()
+        .get_schema()
+        .get_fields()
+        .iter()
+        .any(|field| field.get_name() == "temp_alpha" || field.get_name() == "temp_beta"));
+
+    common::drop_collection(&client, &collection)
+        .await
+        .expect("drop drop-field collection");
 }

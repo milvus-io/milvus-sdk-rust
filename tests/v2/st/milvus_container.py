@@ -28,11 +28,20 @@ import urllib.request
 import uuid
 
 
-DEFAULT_IMAGE = "milvusdb/milvus:v2.6.20"
+DEFAULT_IMAGE = "milvusdb/milvus:master-20260825-dd1ee671"
 DEFAULT_GRPC_PORT = 19530
 DEFAULT_HEALTH_PORT = 9091
 DEFAULT_TIMEOUT = 300
 REAP_LABEL = "milvus-sdk-rust-test"
+# The 3.0 server images cannot load segments under local storage (missing PK
+# bloom filter / json_stats meta.json), so the harness runs an object-storage
+# backend. `COMMON_STORAGETYPE=remote` with the default `aws` cloud provider
+# speaks the S3 API to this MinIO sidecar.
+MINIO_IMAGE = "minio/minio:RELEASE.2024-12-18T13-15-44Z"
+MINIO_PORT = 9000
+MINIO_ACCESS_KEY = "minioadmin"
+MINIO_SECRET_KEY = "minioadmin"
+MINIO_BUCKET = "milvus-bucket"
 
 
 def handle_termination(_signum: int, _frame: object) -> None:
@@ -124,26 +133,48 @@ def print_container_logs(container_id: str) -> None:
     )
 
 
+def remove_containers(*targets: str) -> bool:
+    """Force-remove containers, ignoring targets that do not exist."""
+    removed_any = False
+    for target in targets:
+        result = subprocess.run(
+            ["docker", "rm", "--force", target],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+        )
+        if result.returncode == 0:
+            removed_any = True
+        elif "No such container" not in result.stderr:
+            raise RuntimeError(result.stderr.strip() or f"failed to remove {target}")
+    return removed_any
+
+
 def stop_container(container_id: str) -> None:
-    """Force-remove the Milvus test container if it still exists."""
-    result = subprocess.run(
-        ["docker", "rm", "--force", container_id],
+    """Force-remove the Milvus test container and its MinIO sidecar."""
+    names = [container_id]
+    name_result = subprocess.run(
+        ["docker", "inspect", container_id, "--format", "{{.Name}}"],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True,
     )
-    if result.returncode == 0:
-        print(f"Milvus container {container_id[:12]} removed.", file=sys.stderr)
-    elif "No such container" not in result.stderr:
-        raise RuntimeError(result.stderr.strip() or f"failed to remove {container_id}")
+    if name_result.returncode == 0:
+        base = name_result.stdout.strip().lstrip("/")
+        if base:
+            names = [base, f"{base}-minio"]
+
+    if remove_containers(*names):
+        print(f"Milvus test container {container_id[:12]} removed.", file=sys.stderr)
 
 
-def cleanup_failed_start(container_name: str) -> None:
-    """Remove a container that Docker created but failed to start."""
+def cleanup_failed_start(*container_names: str) -> None:
+    """Remove every container that may exist after a failed startup."""
     try:
-        stop_container(container_name)
-    except RuntimeError as error:
-        print(f"Warning: could not clean up {container_name}: {error}", file=sys.stderr)
+        remove_containers(*container_names)
+    except (OSError, RuntimeError) as error:
+        targets = ", ".join(container_names)
+        print(f"Warning: could not clean up {targets}: {error}", file=sys.stderr)
 
 
 def reap_label(grpc_port: int, health_port: int) -> str:
@@ -185,13 +216,36 @@ def start_container(
     health_port: int,
     timeout: int,
 ) -> str:
-    """Start Milvus with embedded etcd, local storage, and the default WAL."""
+    """Start Milvus (embedded etcd, MinIO object storage) and wait for readiness."""
     docker("info", capture_output=True)
     reap_stale_containers(grpc_port, health_port)
     ensure_image(image)
+    ensure_image(MINIO_IMAGE)
 
     name = f"milvus-sdk-rust-{uuid.uuid4().hex[:12]}"
+    minio_name = f"{name}-minio"
     try:
+        minio_result = docker(
+            "run",
+            "--detach",
+            "--name",
+            minio_name,
+            "--label",
+            reap_label(grpc_port, health_port),
+            "--env",
+            f"MINIO_ROOT_USER={MINIO_ACCESS_KEY}",
+            "--env",
+            f"MINIO_ROOT_PASSWORD={MINIO_SECRET_KEY}",
+            "--publish",
+            f"{MINIO_PORT}:9000",
+            MINIO_IMAGE,
+            "server",
+            "/data",
+            capture_output=True,
+        )
+        if not minio_result.stdout.strip():
+            raise RuntimeError("docker run did not return a MinIO container ID")
+
         result = docker(
             "run",
             "--detach",
@@ -199,6 +253,8 @@ def start_container(
             name,
             "--security-opt",
             "seccomp=unconfined",
+            "--add-host",
+            "host.docker.internal:host-gateway",
             "--label",
             reap_label(grpc_port, health_port),
             "--env",
@@ -206,9 +262,21 @@ def start_container(
             "--env",
             "ETCD_DATA_DIR=/var/lib/milvus/etcd",
             "--env",
-            "COMMON_STORAGETYPE=local",
-            "--env",
             "DEPLOY_MODE=STANDALONE",
+            "--env",
+            "COMMON_STORAGETYPE=remote",
+            "--env",
+            "COMMON_STORAGE_USELOONFFI=true",
+            "--env",
+            "DATACOORD_COMPACTION_BUMPSCHEMAVERSION_ENABLED=true",
+            "--env",
+            f"MINIO_ADDRESS=host.docker.internal:{MINIO_PORT}",
+            "--env",
+            f"MINIO_BUCKET_NAME={MINIO_BUCKET}",
+            "--env",
+            f"MINIO_ROOT_USER={MINIO_ACCESS_KEY}",
+            "--env",
+            f"MINIO_ROOT_PASSWORD={MINIO_SECRET_KEY}",
             "--publish",
             f"{grpc_port}:19530",
             "--publish",
@@ -223,7 +291,7 @@ def start_container(
         if not container_id:
             raise RuntimeError("docker run did not return a container ID")
     except BaseException:
-        cleanup_failed_start(name)
+        cleanup_failed_start(name, minio_name)
         raise
 
     try:
