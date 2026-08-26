@@ -22,7 +22,6 @@ MILVUS_CONTAINER_SCRIPT="$ROOT_DIR/tests/v2/st/milvus_container.py"
 COVERAGE_DIR="$ROOT_DIR/code_coverage"
 LCOV_FILE="$COVERAGE_DIR/lcov.info"
 CODE_COV="${CODE_COV:-false}"
-MILVUS_IMAGE="${MILVUS_IMAGE:-milvusdb/milvus:v2.6.20}"
 MILVUS_CONTAINER_ID=""
 RUN_SERVER_TESTS=true
 SYSTEM_TEST_THREADS="${SYSTEM_TEST_THREADS:-2}"
@@ -123,8 +122,7 @@ start_milvus() {
   trap 'handle_signal 130' INT
   trap 'handle_signal 143' TERM
   MILVUS_CONTAINER_ID="$(
-    python3 "$MILVUS_CONTAINER_SCRIPT" start \
-      --image "$MILVUS_IMAGE"
+    python3 "$MILVUS_CONTAINER_SCRIPT" start
   )"
 }
 

@@ -28,6 +28,9 @@ async fn main() -> Result<()> {
     const CLIPS: &str = "clips";
     const SIMPLE: &str = "simplify_clips";
     const FLOAT: &str = "clip_float_embedding";
+    const METADATA: &str = "metadata";
+    const RATING: &str = "rating";
+    const TAG: &str = "tag";
     let client = client().await?;
     let clips = StructFieldSchema::new()
         .name(CLIPS)
@@ -301,6 +304,124 @@ async fn main() -> Result<()> {
         }
     }
     println!("Decoded {query_row_count} query rows.");
+
+    // Add a nullable struct field to a collection that already contains rows. Existing rows
+    // receive null in the new field; later inserts can provide an array of structs.
+    client
+        .add_collection_struct_field(
+            AddCollectionStructFieldRequest::builder()
+                .collection_name(COLLECTION)
+                .struct_field(
+                    StructFieldSchema::new()
+                        .name(METADATA)
+                        .description("additional metadata for films")
+                        .max_capacity(8)
+                        .nullable(true)
+                        .add_field(
+                            sdk::FieldSchema::new()
+                                .name(RATING)
+                                .data_type(sdk::DataType::Int32),
+                        )
+                        .add_field(
+                            sdk::FieldSchema::new()
+                                .name(TAG)
+                                .data_type(sdk::DataType::VarChar)
+                                .max_length(128),
+                        ),
+                )
+                .build()?,
+        )
+        .await?;
+
+    let description = client
+        .describe_collection(
+            DescribeCollectionRequest::builder()
+                .collection_name(COLLECTION)
+                .build()?,
+        )
+        .await?;
+    println!("\nCollection fields after adding {METADATA}:");
+    for field in description.description().get_schema().get_fields() {
+        println!("  {}", field.get_name());
+    }
+    for field in description.description().get_schema().get_struct_fields() {
+        println!("  struct: {}", field.get_name());
+    }
+
+    let existing = client
+        .query(
+            QueryRequest::builder()
+                .collection_name(COLLECTION)
+                .filter("id == 5")
+                .output_fields(["id", METADATA])
+                .consistency_level(sdk::ConsistencyLevel::Strong)
+                .build()?,
+        )
+        .await?;
+    println!("\nExisting row after add_collection_struct_field(); {METADATA} is null:");
+    print_query_results(existing.results())?;
+
+    let extra_clips = (0..5)
+        .map(|frame| {
+            json!({
+                "frame_number":frame,
+                "clip_desc":"clip_description_5000",
+                FLOAT:float_vector(16),
+            })
+        })
+        .collect::<Vec<_>>();
+    let extra_simple = (0..2)
+        .map(|_| json!({FLOAT:float_vector(32)}))
+        .collect::<Vec<_>>();
+    let extra_row = json!({
+        "id":5000,
+        "film_name":"film_5000",
+        CLIPS:extra_clips,
+        SIMPLE:extra_simple,
+        METADATA:[
+            {RATING:5,TAG:"favorite"},
+            {RATING:4,TAG:"classic"},
+        ],
+    });
+    client
+        .insert(
+            sdk::request::dml::InsertRequest::builder()
+                .collection_name(COLLECTION)
+                .row(extra_row)
+                .build()?,
+        )
+        .await?;
+
+    let inserted = client
+        .query(
+            QueryRequest::builder()
+                .collection_name(COLLECTION)
+                .filter("id == 5000")
+                .output_fields(["id", "film_name", METADATA])
+                .consistency_level(sdk::ConsistencyLevel::Strong)
+                .build()?,
+        )
+        .await?;
+    println!("\nNew row with the added struct field:");
+    print_query_results(inserted.results())?;
+
+    let projected = client
+        .query(
+            QueryRequest::builder()
+                .collection_name(COLLECTION)
+                .filter("id == 5000")
+                .output_fields([
+                    "id".to_owned(),
+                    "film_name".to_owned(),
+                    format!("{METADATA}[{RATING}]"),
+                    format!("{METADATA}[{TAG}]"),
+                ])
+                .consistency_level(sdk::ConsistencyLevel::Strong)
+                .build()?,
+        )
+        .await?;
+    println!("\nProjected subfields from the added struct field:");
+    print_query_results(projected.results())?;
 
     drop_collection(&client, COLLECTION).await;
     Ok(())

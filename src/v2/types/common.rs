@@ -274,6 +274,8 @@ pub enum FunctionType {
     TextEmbedding,
     /// Represents the Rerank case.
     Rerank,
+    /// Represents the MinHash case.
+    MinHash,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -440,6 +442,7 @@ impl Function {
                 FunctionType::Bm25 => schema::FunctionType::Bm25,
                 FunctionType::TextEmbedding => schema::FunctionType::TextEmbedding,
                 FunctionType::Rerank => schema::FunctionType::Rerank,
+                FunctionType::MinHash => schema::FunctionType::MinHash,
             } as i32,
             input_field_names: self.input_fields,
             input_field_ids: Vec::new(),
@@ -460,6 +463,7 @@ impl Function {
                 schema::FunctionType::Bm25 => FunctionType::Bm25,
                 schema::FunctionType::TextEmbedding => FunctionType::TextEmbedding,
                 schema::FunctionType::Rerank => FunctionType::Rerank,
+                schema::FunctionType::MinHash => FunctionType::MinHash,
                 _ => FunctionType::Unknown,
             },
             input_fields: value.input_field_names,
@@ -4100,6 +4104,7 @@ mod enum_conversion_tests {
             FunctionType::Bm25,
             FunctionType::TextEmbedding,
             FunctionType::Rerank,
+            FunctionType::MinHash,
         ];
 
         for value in values {

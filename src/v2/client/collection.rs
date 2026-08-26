@@ -505,6 +505,10 @@ impl ClientV2 {
     }
 
     /// Add a function to an existing collection.
+    #[deprecated(
+        note = "Milvus 3.0 and later do not support adding a function separately; use add_function_field instead"
+    )]
+    #[allow(deprecated)]
     pub async fn add_collection_function(
         &self,
         request: request::collection::AddCollectionFunctionRequest,
@@ -541,6 +545,10 @@ impl ClientV2 {
     }
 
     /// Drop a function of an existing collection.
+    #[deprecated(
+        note = "Milvus 3.0 and later do not support dropping a function separately; use drop_function_field instead"
+    )]
+    #[allow(deprecated)]
     pub async fn drop_collection_function(
         &self,
         request: request::collection::DropCollectionFunctionRequest,
@@ -554,6 +562,90 @@ impl ClientV2 {
             request.into_proto()
         )?;
         self.status(status)?;
+        self.remove_collection_description(&database, &collection);
+        Ok(())
+    }
+
+    /// Add a nullable struct field to an existing collection.
+    pub async fn add_collection_struct_field(
+        &self,
+        request: request::collection::AddCollectionStructFieldRequest,
+    ) -> Result<()> {
+        let database = self.effective_database(request.database_name.as_deref());
+        let collection = request.collection_name.clone();
+        let status = status_rpc_with_retry!(
+            Idempotent,
+            self,
+            add_collection_struct_field,
+            request.into_proto()?
+        )?;
+        self.status(status)?;
+        self.remove_collection_description(&database, &collection);
+        Ok(())
+    }
+
+    /// Add a function-backed field (e.g. BM25 sparse vector) to an existing collection.
+    ///
+    /// The request commits the new output field together with the function definition and the
+    /// index bound to that output field in one schema change.
+    pub async fn add_function_field(
+        &self,
+        request: request::collection::AddFunctionFieldRequest,
+    ) -> Result<()> {
+        let database = self.effective_database(request.database_name.as_deref());
+        let collection = request.collection_name.clone();
+        let proto = request.into_proto()?;
+        let response = self
+            .retry_rpc(
+                || Ok(proto.clone()),
+                super::RetrySemantics::Idempotent,
+                |mut service, request| async move { service.alter_collection_schema(request).await },
+                |response| response.alter_status.clone(),
+            )
+            .await?;
+        self.status(response.alter_status.unwrap_or_default())?;
+        self.remove_collection_description(&database, &collection);
+        Ok(())
+    }
+
+    /// Drop a function and its output field from an existing collection.
+    pub async fn drop_function_field(
+        &self,
+        request: request::collection::DropFunctionFieldRequest,
+    ) -> Result<()> {
+        let database = self.effective_database(request.database_name.as_deref());
+        let collection = request.collection_name.clone();
+        let proto = request.into_proto()?;
+        let response = self
+            .retry_rpc(
+                || Ok(proto.clone()),
+                super::RetrySemantics::Idempotent,
+                |mut service, request| async move { service.alter_collection_schema(request).await },
+                |response| response.alter_status.clone(),
+            )
+            .await?;
+        self.status(response.alter_status.unwrap_or_default())?;
+        self.remove_collection_description(&database, &collection);
+        Ok(())
+    }
+
+    /// Drop a field from an existing collection.
+    pub async fn drop_collection_field(
+        &self,
+        request: request::collection::DropCollectionFieldRequest,
+    ) -> Result<()> {
+        let database = self.effective_database(request.database_name.as_deref());
+        let collection = request.collection_name.clone();
+        let proto = request.into_proto()?;
+        let response = self
+            .retry_rpc(
+                || Ok(proto.clone()),
+                super::RetrySemantics::Idempotent,
+                |mut service, request| async move { service.alter_collection_schema(request).await },
+                |response| response.alter_status.clone(),
+            )
+            .await?;
+        self.status(response.alter_status.unwrap_or_default())?;
         self.remove_collection_description(&database, &collection);
         Ok(())
     }

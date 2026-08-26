@@ -312,6 +312,7 @@ async fn collection_property_mutations_invalidate_cached_auto_id_policy() {
 }
 
 #[tokio::test]
+#[allow(deprecated)]
 async fn collection_function_mutations_invalidate_the_cached_schema() {
     let server = MockServer::start().await;
 
@@ -380,6 +381,7 @@ async fn collection_function_mutations_invalidate_the_cached_schema() {
 }
 
 #[tokio::test]
+#[allow(deprecated)]
 async fn collection_interfaces_reach_rpc_server() {
     let server = MockServer::start().await;
     let client = &server.client;

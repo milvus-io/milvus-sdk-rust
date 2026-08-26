@@ -759,6 +759,7 @@ pub struct StructFieldSchema {
     pub(crate) description: String,
     pub(crate) max_capacity: u32,
     pub(crate) fields: Vec<FieldSchema>,
+    pub(crate) nullable: bool,
 }
 
 impl StructFieldSchema {
@@ -769,6 +770,7 @@ impl StructFieldSchema {
             description: String::new(),
             max_capacity: 0,
             fields: Vec::new(),
+            nullable: false,
         }
     }
 
@@ -844,6 +846,23 @@ impl StructFieldSchema {
     pub fn add_field(mut self, field: FieldSchema) -> Self {
         self.fields.push(field);
         self
+    }
+
+    /// Sets whether the struct field is nullable and returns the updated value.
+    pub fn nullable(mut self, value: bool) -> Self {
+        self.nullable = value;
+        self
+    }
+
+    /// Sets whether the struct field is nullable and returns this value for further mutation.
+    pub fn set_nullable(&mut self, value: bool) -> &mut Self {
+        self.nullable = value;
+        self
+    }
+
+    /// Returns whether the struct field is nullable.
+    pub fn is_nullable(&self) -> bool {
+        self.nullable
     }
 
     pub(crate) fn validate(&self) -> Result<()> {
@@ -928,7 +947,7 @@ impl StructFieldSchema {
                     "struct sub-fields cannot be clustering keys".into(),
                 ));
             }
-            if field.nullable {
+            if !self.nullable && field.nullable {
                 return Err(Error::validation(
                     field.name.clone(),
                     "sub-fields of a non-nullable struct cannot be nullable".into(),
@@ -972,7 +991,7 @@ impl StructFieldSchema {
                 })
                 .collect(),
             type_params: Vec::new(),
-            nullable: false,
+            nullable: self.nullable,
             ..Default::default()
         }
     }
@@ -1013,6 +1032,7 @@ impl StructFieldSchema {
             name: value.name,
             description: value.description,
             max_capacity,
+            nullable: value.nullable,
             fields: value
                 .fields
                 .into_iter()
@@ -3061,16 +3081,47 @@ mod constructor_value_tests {
             .name("items")
             .description("description")
             .max_capacity(16)
+            .nullable(true)
             .add_field(field.clone());
 
         assert_eq!(value.get_name().to_owned(), "items");
         assert_eq!(value.get_description().to_owned(), "description");
         assert_eq!(value.get_max_capacity().to_owned(), 16);
+        assert!(value.is_nullable());
         assert_eq!(value.get_fields().to_owned(), [field]);
         assert_eq!(
             StructFieldSchema::from_proto(value.clone().into_proto()).unwrap(),
             value
         );
+    }
+
+    #[test]
+    fn struct_field_schema_nullable_parent_allows_nullable_subfields() {
+        let nullable_parent = StructFieldSchema::new()
+            .name("items")
+            .max_capacity(8)
+            .nullable(true)
+            .add_field(
+                FieldSchema::new()
+                    .name("note")
+                    .data_type(DataType::VarChar)
+                    .max_length(64)
+                    .nullable(true),
+            );
+        assert!(nullable_parent.validate().is_ok());
+
+        let non_nullable_parent = StructFieldSchema::new()
+            .name("items")
+            .max_capacity(8)
+            .add_field(
+                FieldSchema::new()
+                    .name("note")
+                    .data_type(DataType::VarChar)
+                    .max_length(64)
+                    .nullable(true),
+            );
+        let error = non_nullable_parent.validate().unwrap_err();
+        assert!(error.to_string().contains("non-nullable struct"));
     }
 
     #[test]

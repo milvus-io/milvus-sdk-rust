@@ -20,7 +20,7 @@ use milvus::v2::request::collection::{
 };
 use milvus::v2::request::dml::{EntityRow, InsertRequest};
 use milvus::v2::request::index::CreateIndexRequest;
-use milvus::v2::request::utility::FlushRequest;
+use milvus::v2::request::utility::{FlushRequest, GetServerVersionRequest};
 use milvus::v2::{
     ClientV2, CollectionSchema, ConnectConfig, ConsistencyLevel, DataType, DefaultValue, FieldData,
     FieldSchema, IndexParam, IndexType, MetricType, StructFieldSchema, StructValue,
@@ -51,7 +51,7 @@ pub(super) const DOUBLE_ARRAY_FIELD: &str = "double_array";
 pub(super) const VARCHAR_ARRAY_FIELD: &str = "varchar_array";
 const STRUCT_LABEL_FIELD: &str = "label";
 const STRUCT_SCORE_FIELD: &str = "score";
-const VECTOR_DIMENSION: usize = 4;
+pub(super) const VECTOR_DIMENSION: usize = 4;
 
 static COLLECTION_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -211,6 +211,35 @@ pub(super) async fn client() -> ClientV2 {
     let uri = std::env::var("MILVUS_URI").unwrap_or_else(|_| "http://localhost:19530".to_owned());
     let config = ConnectConfig::new().uri(uri);
     ClientV2::new(&config).await.expect("connect to Milvus")
+}
+
+/// Returns the connected server's major version. Unparseable version strings (for example
+/// master snapshots) are treated as new enough to carry Milvus 3.0 schema-DDL features.
+pub(super) async fn server_major_version() -> u32 {
+    let client = client().await;
+    let request = GetServerVersionRequest::builder()
+        .build()
+        .expect("valid request");
+    match client.server_version(request).await {
+        Ok(response) => {
+            let version = response.version();
+            version
+                .chars()
+                .skip_while(|c| !c.is_ascii_digit())
+                .take_while(|c| c.is_ascii_digit())
+                .collect::<String>()
+                .parse()
+                .unwrap_or(3)
+        }
+        Err(_) => 3,
+    }
+}
+
+/// Whether the connected server supports function-field and struct-field DDL
+/// (`add_function_field` / `drop_collection_field` / `add_collection_struct_field`),
+/// which are Milvus 3.0 features.
+pub(super) async fn server_supports_schema_ddl() -> bool {
+    server_major_version().await >= 3
 }
 
 pub(super) fn unique_collection_name(area: &str) -> String {

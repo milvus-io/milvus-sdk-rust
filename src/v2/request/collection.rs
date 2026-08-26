@@ -20,8 +20,8 @@ use crate::proto::{common, milvus};
 use crate::v2::error::{Error, Result};
 use crate::v2::request::validation::{non_empty_strings, positive_i32, required};
 use crate::v2::types::{
-    CollectionSchema, ConsistencyLevel, DataType, FieldSchema, Function, IndexParam, IndexType,
-    MetricType,
+    CollectionSchema, ConsistencyLevel, DataType, FieldSchema, Function, FunctionType, IndexParam,
+    IndexType, MetricType, StructFieldSchema,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -2114,12 +2114,16 @@ impl AddCollectionFieldRequestBuilder {
 /// Parameters for the ClientV2 add_collection_function operation.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
+#[deprecated(
+    note = "Milvus 3.0 and later do not support adding a function separately; use AddFunctionFieldRequest instead"
+)]
 pub struct AddCollectionFunctionRequest {
     pub(crate) database_name: Option<String>,
     pub(crate) collection_name: String,
     pub(crate) function: Option<Function>,
 }
 
+#[allow(deprecated)]
 impl AddCollectionFunctionRequest {
     fn empty() -> Self {
         Self {
@@ -2173,10 +2177,15 @@ impl AddCollectionFunctionRequest {
 ///////////////////////////////////////////////////////////////////////////////
 /// Builder for AddCollectionFunctionRequest.
 #[derive(Debug, Clone)]
+#[deprecated(
+    note = "Milvus 3.0 and later do not support adding a function separately; use AddFunctionFieldRequestBuilder instead"
+)]
 pub struct AddCollectionFunctionRequestBuilder {
+    #[allow(deprecated)]
     value: AddCollectionFunctionRequest,
 }
 
+#[allow(deprecated)]
 impl AddCollectionFunctionRequestBuilder {
     /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
@@ -2327,12 +2336,16 @@ impl AlterCollectionFunctionRequestBuilder {
 /// Parameters for the ClientV2 drop_collection_function operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
+#[deprecated(
+    note = "Milvus 3.0 and later do not support dropping a function separately; use DropFunctionFieldRequest instead"
+)]
 pub struct DropCollectionFunctionRequest {
     pub(crate) database_name: Option<String>,
     pub(crate) collection_name: String,
     pub(crate) function_name: String,
 }
 
+#[allow(deprecated)]
 impl DropCollectionFunctionRequest {
     fn empty() -> Self {
         Self {
@@ -2386,10 +2399,15 @@ impl DropCollectionFunctionRequest {
 ///////////////////////////////////////////////////////////////////////////////
 /// Builder for DropCollectionFunctionRequest.
 #[derive(Debug, Clone)]
+#[deprecated(
+    note = "Milvus 3.0 and later do not support dropping a function separately; use DropFunctionFieldRequestBuilder instead"
+)]
 pub struct DropCollectionFunctionRequestBuilder {
+    #[allow(deprecated)]
     value: DropCollectionFunctionRequest,
 }
 
+#[allow(deprecated)]
 impl DropCollectionFunctionRequestBuilder {
     /// Sets the database name and returns the updated value.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
@@ -2732,6 +2750,618 @@ fn kv(values: HashMap<String, String>) -> Vec<common::KeyValuePair> {
             ..Default::default()
         })
         .collect()
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// AddCollectionStructFieldRequest
+///////////////////////////////////////////////////////////////////////////////
+/// Parameters for the ClientV2 add_collection_struct_field operation.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct AddCollectionStructFieldRequest {
+    pub(crate) database_name: Option<String>,
+    pub(crate) collection_name: String,
+    pub(crate) struct_field: Option<StructFieldSchema>,
+}
+
+impl AddCollectionStructFieldRequest {
+    fn empty() -> Self {
+        Self {
+            database_name: Default::default(),
+            collection_name: Default::default(),
+            struct_field: Default::default(),
+        }
+    }
+
+    /// Creates a builder for this request.
+    pub fn builder() -> AddCollectionStructFieldRequestBuilder {
+        AddCollectionStructFieldRequestBuilder {
+            value: Self::empty(),
+        }
+    }
+
+    /// Converts this request back into a builder while preserving its current values.
+    pub fn into_builder(self) -> AddCollectionStructFieldRequestBuilder {
+        AddCollectionStructFieldRequestBuilder { value: self }
+    }
+
+    /// Returns the database name.
+    pub fn database_name(&self) -> &Option<String> {
+        &self.database_name
+    }
+
+    /// Returns the collection name.
+    pub fn collection_name(&self) -> &str {
+        &self.collection_name
+    }
+
+    /// Returns the struct field schema.
+    pub fn struct_field(&self) -> Option<&StructFieldSchema> {
+        self.struct_field.as_ref()
+    }
+
+    pub(crate) fn into_proto(self) -> Result<milvus::AddCollectionStructFieldRequest> {
+        Ok(milvus::AddCollectionStructFieldRequest {
+            base: None,
+            db_name: self.database_name.unwrap_or_default(),
+            collection_name: self.collection_name,
+            collection_id: 0,
+            struct_array_field_schema: Some(
+                self.struct_field
+                    .ok_or_else(|| {
+                        Error::validation("struct_field".into(), "must be specified".into())
+                    })?
+                    .into_proto(),
+            ),
+            ..Default::default()
+        })
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// AddCollectionStructFieldRequestBuilder
+///////////////////////////////////////////////////////////////////////////////
+/// Builder for AddCollectionStructFieldRequest.
+#[derive(Debug, Clone)]
+pub struct AddCollectionStructFieldRequestBuilder {
+    value: AddCollectionStructFieldRequest,
+}
+
+impl AddCollectionStructFieldRequestBuilder {
+    /// Sets the database name and returns the updated value.
+    pub fn database_name(mut self, value: impl Into<String>) -> Self {
+        self.value.database_name = Some(value.into());
+        self
+    }
+
+    /// Sets the collection name and returns the updated value.
+    pub fn collection_name(mut self, value: impl Into<String>) -> Self {
+        self.value.collection_name = value.into();
+        self
+    }
+
+    /// Sets the struct field schema and returns the updated value.
+    pub fn struct_field(mut self, value: StructFieldSchema) -> Self {
+        self.value.struct_field = Some(value);
+        self
+    }
+
+    /// Validates the configured values and builds the request.
+    pub fn build(self) -> Result<AddCollectionStructFieldRequest> {
+        validate_collection_name(
+            self.value.database_name.as_deref(),
+            &self.value.collection_name,
+        )?;
+        let struct_field =
+            self.value.struct_field.as_ref().ok_or_else(|| {
+                Error::validation("struct_field".into(), "must be specified".into())
+            })?;
+        if struct_field.get_name().is_empty() {
+            return Err(Error::validation(
+                "struct_field.name".into(),
+                "must be specified".into(),
+            ));
+        }
+        struct_field.validate()?;
+        // The server only accepts a nullable struct field when adding it to an existing
+        // collection; reject a non-nullable schema up front.
+        if !struct_field.is_nullable() {
+            return Err(Error::validation(
+                "struct_field.nullable".into(),
+                "must be true when adding a struct field to an existing collection".into(),
+            ));
+        }
+        Ok(self.value)
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// AddFunctionFieldRequest
+///////////////////////////////////////////////////////////////////////////////
+/// Parameters for the ClientV2 add_function_field operation.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct AddFunctionFieldRequest {
+    pub(crate) database_name: Option<String>,
+    pub(crate) collection_name: String,
+    pub(crate) field: Option<FieldSchema>,
+    pub(crate) function: Option<Function>,
+    pub(crate) index: Option<IndexParam>,
+}
+
+impl AddFunctionFieldRequest {
+    fn empty() -> Self {
+        Self {
+            database_name: Default::default(),
+            collection_name: Default::default(),
+            field: Default::default(),
+            function: Default::default(),
+            index: Default::default(),
+        }
+    }
+
+    /// Creates a builder for this request.
+    pub fn builder() -> AddFunctionFieldRequestBuilder {
+        AddFunctionFieldRequestBuilder {
+            value: Self::empty(),
+        }
+    }
+
+    /// Converts this request back into a builder while preserving its current values.
+    pub fn into_builder(self) -> AddFunctionFieldRequestBuilder {
+        AddFunctionFieldRequestBuilder { value: self }
+    }
+
+    /// Returns the database name.
+    pub fn database_name(&self) -> &Option<String> {
+        &self.database_name
+    }
+
+    /// Returns the collection name.
+    pub fn collection_name(&self) -> &str {
+        &self.collection_name
+    }
+
+    /// Returns the output field schema.
+    pub fn field(&self) -> Option<&FieldSchema> {
+        self.field.as_ref()
+    }
+
+    /// Returns the function definition.
+    pub fn function(&self) -> Option<&Function> {
+        self.function.as_ref()
+    }
+
+    /// Returns the bound index parameter.
+    pub fn index(&self) -> Option<&IndexParam> {
+        self.index.as_ref()
+    }
+
+    /// Returns the index definition bound to the output field, as `index_name` + `extra_params`.
+    fn bound_index(&self) -> Result<(String, Vec<common::KeyValuePair>)> {
+        let index = self
+            .index
+            .as_ref()
+            .ok_or_else(|| Error::validation("index".into(), "must be specified".into()))?;
+        let output_name = self
+            .field
+            .as_ref()
+            .map(|field| field.get_name())
+            .unwrap_or_default();
+        // The bound index must target the output field and use an explicit index type, matching
+        // pymilvus's add_function_field validation.
+        let index_field = index.get_field_name();
+        if !index_field.is_empty() && index_field != output_name {
+            return Err(Error::validation(
+                "index.field_name".into(),
+                "must match the function output field name".into(),
+            ));
+        }
+        if index.get_index_type() == IndexType::Invalid {
+            return Err(Error::validation(
+                "index.index_type".into(),
+                "an explicit index type is required".into(),
+            ));
+        }
+        let mut extra_params = index.get_extra_params().clone();
+        extra_params.remove("index_type");
+        extra_params.remove("metric_type");
+        let mut pairs = kv(extra_params);
+        pairs.push(common::KeyValuePair {
+            key: "index_type".into(),
+            value: index.get_index_type().as_str().into(),
+            ..Default::default()
+        });
+        if let Some(metric_type) = index
+            .get_metric_type()
+            .filter(|value| *value != MetricType::Default)
+        {
+            pairs.push(common::KeyValuePair {
+                key: "metric_type".into(),
+                value: metric_type.as_str().into(),
+                ..Default::default()
+            });
+        }
+        Ok((index.get_index_name().to_owned(), pairs))
+    }
+
+    pub(crate) fn into_proto(self) -> Result<milvus::AlterCollectionSchemaRequest> {
+        use crate::proto::milvus::alter_collection_schema_request::{self as req};
+
+        let (index_name, extra_params) = self.bound_index()?;
+        let field_schema = self
+            .field
+            .ok_or_else(|| Error::validation("field".into(), "must be specified".into()))?;
+        let function = self
+            .function
+            .ok_or_else(|| Error::validation("function".into(), "must be specified".into()))?;
+
+        let add_request = req::AddRequest {
+            field_infos: vec![req::FieldInfo {
+                field_schema: Some(field_schema.into_proto()),
+                index_name,
+                extra_params,
+            }],
+            func_schema: vec![function.into_proto()],
+            do_physical_backfill: false,
+        };
+        Ok(milvus::AlterCollectionSchemaRequest {
+            base: None,
+            db_name: self.database_name.unwrap_or_default(),
+            collection_name: self.collection_name,
+            collection_id: 0,
+            action: Some(req::Action {
+                op: Some(req::action::Op::AddRequest(add_request)),
+            }),
+        })
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// AddFunctionFieldRequestBuilder
+///////////////////////////////////////////////////////////////////////////////
+/// Builder for AddFunctionFieldRequest.
+#[derive(Debug, Clone)]
+pub struct AddFunctionFieldRequestBuilder {
+    value: AddFunctionFieldRequest,
+}
+
+impl AddFunctionFieldRequestBuilder {
+    /// Sets the database name and returns the updated value.
+    pub fn database_name(mut self, value: impl Into<String>) -> Self {
+        self.value.database_name = Some(value.into());
+        self
+    }
+
+    /// Sets the collection name and returns the updated value.
+    pub fn collection_name(mut self, value: impl Into<String>) -> Self {
+        self.value.collection_name = value.into();
+        self
+    }
+
+    /// Sets the output field schema and returns the updated value.
+    pub fn field(mut self, value: FieldSchema) -> Self {
+        self.value.field = Some(value);
+        self
+    }
+
+    /// Sets the function definition and returns the updated value.
+    pub fn function(mut self, value: Function) -> Self {
+        self.value.function = Some(value);
+        self
+    }
+
+    /// Sets the bound index parameter and returns the updated value.
+    pub fn index(mut self, value: IndexParam) -> Self {
+        self.value.index = Some(value);
+        self
+    }
+
+    /// Validates the configured values and builds the request.
+    pub fn build(self) -> Result<AddFunctionFieldRequest> {
+        validate_collection_name(
+            self.value.database_name.as_deref(),
+            &self.value.collection_name,
+        )?;
+        let field = self
+            .value
+            .field
+            .as_ref()
+            .ok_or_else(|| Error::validation("field".into(), "must be specified".into()))?;
+        let function = self
+            .value
+            .function
+            .as_ref()
+            .ok_or_else(|| Error::validation("function".into(), "must be specified".into()))?;
+        required("field.name", field.get_name())?;
+        if field.get_data_type() == DataType::Unknown {
+            return Err(Error::validation(
+                "field.data_type".into(),
+                "must be specified".into(),
+            ));
+        }
+        field.validate()?;
+        required("function.name", function.get_name())?;
+
+        // Only BM25 and MinHash function fields can be added to an existing collection; other
+        // function types are defined at collection creation, as in pymilvus.
+        let expected = match function.get_function_type() {
+            FunctionType::Bm25 => Some(DataType::SparseFloatVector),
+            FunctionType::MinHash => Some(DataType::BinaryVector),
+            _ => {
+                return Err(Error::validation(
+                    "function.function_type".into(),
+                    format!(
+                        "{:?} functions cannot be added to an existing collection",
+                        function.get_function_type()
+                    ),
+                ));
+            }
+        };
+        if let Some(expected) = expected {
+            if field.get_data_type() != expected {
+                return Err(Error::validation(
+                    "field.data_type".into(),
+                    format!(
+                        "must be {expected:?} for a {:?} function",
+                        function.get_function_type()
+                    ),
+                ));
+            }
+        }
+
+        // Validate the bound index up front so the request fails before RPC.
+        self.value.bound_index()?;
+        Ok(self.value)
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// DropFunctionFieldRequest
+///////////////////////////////////////////////////////////////////////////////
+/// Parameters for the ClientV2 drop_function_field operation.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct DropFunctionFieldRequest {
+    pub(crate) database_name: Option<String>,
+    pub(crate) collection_name: String,
+    pub(crate) function_name: String,
+}
+
+impl DropFunctionFieldRequest {
+    fn empty() -> Self {
+        Self {
+            database_name: Default::default(),
+            collection_name: Default::default(),
+            function_name: Default::default(),
+        }
+    }
+
+    /// Creates a builder for this request.
+    pub fn builder() -> DropFunctionFieldRequestBuilder {
+        DropFunctionFieldRequestBuilder {
+            value: Self::empty(),
+        }
+    }
+
+    /// Converts this request back into a builder while preserving its current values.
+    pub fn into_builder(self) -> DropFunctionFieldRequestBuilder {
+        DropFunctionFieldRequestBuilder { value: self }
+    }
+
+    /// Returns the database name.
+    pub fn database_name(&self) -> &Option<String> {
+        &self.database_name
+    }
+
+    /// Returns the collection name.
+    pub fn collection_name(&self) -> &str {
+        &self.collection_name
+    }
+
+    /// Returns the function name.
+    pub fn function_name(&self) -> &str {
+        &self.function_name
+    }
+
+    pub(crate) fn into_proto(self) -> Result<milvus::AlterCollectionSchemaRequest> {
+        use crate::proto::milvus::alter_collection_schema_request::{self as req};
+
+        let drop_request = req::DropRequest {
+            drop_function_output_fields: true,
+            identifier: Some(req::drop_request::Identifier::FunctionName(
+                self.function_name,
+            )),
+        };
+        Ok(milvus::AlterCollectionSchemaRequest {
+            base: None,
+            db_name: self.database_name.unwrap_or_default(),
+            collection_name: self.collection_name,
+            collection_id: 0,
+            action: Some(req::Action {
+                op: Some(req::action::Op::DropRequest(drop_request)),
+            }),
+        })
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// DropFunctionFieldRequestBuilder
+///////////////////////////////////////////////////////////////////////////////
+/// Builder for DropFunctionFieldRequest.
+#[derive(Debug, Clone)]
+pub struct DropFunctionFieldRequestBuilder {
+    value: DropFunctionFieldRequest,
+}
+
+impl DropFunctionFieldRequestBuilder {
+    /// Sets the database name and returns the updated value.
+    pub fn database_name(mut self, value: impl Into<String>) -> Self {
+        self.value.database_name = Some(value.into());
+        self
+    }
+
+    /// Sets the collection name and returns the updated value.
+    pub fn collection_name(mut self, value: impl Into<String>) -> Self {
+        self.value.collection_name = value.into();
+        self
+    }
+
+    /// Sets the function name and returns the updated value.
+    pub fn function_name(mut self, value: impl Into<String>) -> Self {
+        self.value.function_name = value.into();
+        self
+    }
+
+    /// Validates the configured values and builds the request.
+    pub fn build(self) -> Result<DropFunctionFieldRequest> {
+        validate_collection_name(
+            self.value.database_name.as_deref(),
+            &self.value.collection_name,
+        )?;
+        required("function_name", &self.value.function_name)?;
+        Ok(self.value)
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// DropCollectionFieldRequest
+///////////////////////////////////////////////////////////////////////////////
+/// Parameters for the ClientV2 drop_collection_field operation.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct DropCollectionFieldRequest {
+    pub(crate) database_name: Option<String>,
+    pub(crate) collection_name: String,
+    pub(crate) field_name: Option<String>,
+    pub(crate) field_id: Option<i64>,
+}
+
+impl DropCollectionFieldRequest {
+    fn empty() -> Self {
+        Self {
+            database_name: Default::default(),
+            collection_name: Default::default(),
+            field_name: Default::default(),
+            field_id: Default::default(),
+        }
+    }
+
+    /// Creates a builder for this request.
+    pub fn builder() -> DropCollectionFieldRequestBuilder {
+        DropCollectionFieldRequestBuilder {
+            value: Self::empty(),
+        }
+    }
+
+    /// Converts this request back into a builder while preserving its current values.
+    pub fn into_builder(self) -> DropCollectionFieldRequestBuilder {
+        DropCollectionFieldRequestBuilder { value: self }
+    }
+
+    /// Returns the database name.
+    pub fn database_name(&self) -> &Option<String> {
+        &self.database_name
+    }
+
+    /// Returns the collection name.
+    pub fn collection_name(&self) -> &str {
+        &self.collection_name
+    }
+
+    /// Returns the field name, if specified.
+    pub fn field_name(&self) -> Option<&str> {
+        self.field_name.as_deref()
+    }
+
+    /// Returns the field id, if specified.
+    pub fn field_id(&self) -> Option<i64> {
+        self.field_id
+    }
+
+    pub(crate) fn into_proto(self) -> Result<milvus::AlterCollectionSchemaRequest> {
+        use crate::proto::milvus::alter_collection_schema_request::{self as req};
+
+        let identifier = if let Some(name) = self.field_name.filter(|name| !name.is_empty()) {
+            req::drop_request::Identifier::FieldName(name)
+        } else if let Some(id) = self.field_id {
+            req::drop_request::Identifier::FieldId(id)
+        } else {
+            return Err(Error::validation(
+                "field_name/field_id".into(),
+                "exactly one of field_name or field_id must be specified".into(),
+            ));
+        };
+        let drop_request = req::DropRequest {
+            drop_function_output_fields: false,
+            identifier: Some(identifier),
+        };
+        Ok(milvus::AlterCollectionSchemaRequest {
+            base: None,
+            db_name: self.database_name.unwrap_or_default(),
+            collection_name: self.collection_name,
+            collection_id: 0,
+            action: Some(req::Action {
+                op: Some(req::action::Op::DropRequest(drop_request)),
+            }),
+        })
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// DropCollectionFieldRequestBuilder
+///////////////////////////////////////////////////////////////////////////////
+/// Builder for DropCollectionFieldRequest.
+#[derive(Debug, Clone)]
+pub struct DropCollectionFieldRequestBuilder {
+    value: DropCollectionFieldRequest,
+}
+
+impl DropCollectionFieldRequestBuilder {
+    /// Sets the database name and returns the updated value.
+    pub fn database_name(mut self, value: impl Into<String>) -> Self {
+        self.value.database_name = Some(value.into());
+        self
+    }
+
+    /// Sets the collection name and returns the updated value.
+    pub fn collection_name(mut self, value: impl Into<String>) -> Self {
+        self.value.collection_name = value.into();
+        self
+    }
+
+    /// Sets the field name and returns the updated value.
+    pub fn field_name(mut self, value: impl Into<String>) -> Self {
+        self.value.field_name = Some(value.into());
+        self
+    }
+
+    /// Sets the field id and returns the updated value.
+    pub fn field_id(mut self, value: i64) -> Self {
+        self.value.field_id = Some(value);
+        self
+    }
+
+    /// Validates the configured values and builds the request.
+    pub fn build(self) -> Result<DropCollectionFieldRequest> {
+        validate_collection_name(
+            self.value.database_name.as_deref(),
+            &self.value.collection_name,
+        )?;
+        let has_name = self
+            .value
+            .field_name
+            .as_deref()
+            .is_some_and(|name| !name.is_empty());
+        let has_id = self.value.field_id.is_some_and(|id| id > 0);
+        if has_name == has_id {
+            return Err(Error::validation(
+                "field_name/field_id".into(),
+                "exactly one of field_name or field_id must be specified".into(),
+            ));
+        }
+        Ok(self.value)
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -3804,6 +4434,7 @@ mod builder_value_tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn add_collection_function_request_default_values() {
         let value = AddCollectionFunctionRequest::empty();
         let expected_database_name: Option<String> = None;
@@ -3816,6 +4447,7 @@ mod builder_value_tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn add_collection_function_request_populated_values() {
         let database_name = "database_name-value".to_owned();
         let collection_name = "collection_name-value".to_owned();
@@ -3867,6 +4499,7 @@ mod builder_value_tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn drop_collection_function_request_default_values() {
         let value = DropCollectionFunctionRequest::empty();
         let expected_database_name: Option<String> = None;
@@ -3879,6 +4512,7 @@ mod builder_value_tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn drop_collection_function_request_populated_values() {
         let database_name = "database_name-value".to_owned();
         let collection_name = "collection_name-value".to_owned();
@@ -4007,5 +4641,297 @@ mod builder_value_tests {
 
         assert_eq!(proto.db_name, "catalog");
         assert_eq!(proto.new_db_name, "catalog");
+    }
+}
+
+#[cfg(test)]
+mod function_struct_field_request_tests {
+    use super::*;
+    use crate::proto::milvus::alter_collection_schema_request as req;
+    use crate::v2::types::{DataType, FieldSchema, Function, IndexParam, IndexType, MetricType};
+
+    #[test]
+    fn add_collection_struct_field_requires_nullable() {
+        let struct_field = StructFieldSchema::new()
+            .name("obj")
+            .max_capacity(10)
+            .add_field(FieldSchema::new().name("a").data_type(DataType::Int64));
+
+        let error = AddCollectionStructFieldRequest::builder()
+            .collection_name("books")
+            .struct_field(struct_field)
+            .build()
+            .expect_err("non-nullable struct field must be rejected");
+        assert!(matches!(error, Error::Validation(_)));
+    }
+
+    #[test]
+    fn add_collection_struct_field_builds_proto() {
+        let struct_field = StructFieldSchema::new()
+            .name("obj")
+            .max_capacity(10)
+            .nullable(true)
+            .add_field(FieldSchema::new().name("a").data_type(DataType::Int64));
+
+        let value = AddCollectionStructFieldRequest::builder()
+            .collection_name("books")
+            .struct_field(struct_field)
+            .build()
+            .expect("valid request");
+
+        let proto = value.into_proto().expect("proto");
+        assert_eq!(proto.collection_name, "books");
+        let schema = proto.struct_array_field_schema.expect("struct schema");
+        assert_eq!(schema.name, "obj");
+        assert!(schema.nullable);
+    }
+
+    #[test]
+    fn add_function_field_rejects_mismatched_output_type() {
+        let field = FieldSchema::new()
+            .name("sparse")
+            .data_type(DataType::FloatVector);
+        let function = Function::new()
+            .name("f")
+            .function_type(FunctionType::Bm25)
+            .input_fields(vec!["text".to_owned()]);
+        let index = IndexParam::new()
+            .field_name("sparse")
+            .index_type(IndexType::SparseInvertedIndex)
+            .metric_type(MetricType::Bm25);
+
+        let error = AddFunctionFieldRequest::builder()
+            .collection_name("books")
+            .field(field)
+            .function(function)
+            .index(index)
+            .build()
+            .expect_err("mismatched output type must be rejected");
+        assert!(matches!(error, Error::Validation(_)));
+    }
+
+    #[test]
+    fn add_function_field_rejects_unsupported_function_type() {
+        let function = Function::new()
+            .name("f")
+            .function_type(FunctionType::TextEmbedding)
+            .input_fields(vec!["text".to_owned()]);
+        let index = IndexParam::new()
+            .field_name("dense")
+            .index_type(IndexType::AutoIndex)
+            .metric_type(MetricType::L2);
+
+        let error = AddFunctionFieldRequest::builder()
+            .collection_name("books")
+            .field(
+                FieldSchema::new()
+                    .name("dense")
+                    .data_type(DataType::FloatVector)
+                    .dimension(4),
+            )
+            .function(function)
+            .index(index)
+            .build()
+            .expect_err("unsupported function type must be rejected");
+        assert!(matches!(error, Error::Validation(_)));
+    }
+
+    #[test]
+    fn add_function_field_rejects_invalid_field() {
+        let field = FieldSchema::new()
+            .name("sparse")
+            .data_type(DataType::BinaryVector)
+            .primary_key(true);
+        let function = Function::new()
+            .name("f")
+            .function_type(FunctionType::MinHash)
+            .input_fields(vec!["text".to_owned()]);
+        let index = IndexParam::new().field_name("sparse");
+
+        let error = AddFunctionFieldRequest::builder()
+            .collection_name("books")
+            .field(field)
+            .function(function)
+            .index(index)
+            .build()
+            .expect_err("invalid field must be rejected in build()");
+        assert!(matches!(error, Error::Validation(_)));
+    }
+
+    #[test]
+    fn add_function_field_requires_explicit_index_type() {
+        let field = FieldSchema::new()
+            .name("sparse")
+            .data_type(DataType::SparseFloatVector);
+        let function = Function::new()
+            .name("f")
+            .function_type(FunctionType::Bm25)
+            .input_fields(vec!["text".to_owned()]);
+        let index = IndexParam::new().field_name("sparse");
+
+        let error = AddFunctionFieldRequest::builder()
+            .collection_name("books")
+            .field(field)
+            .function(function)
+            .index(index)
+            .build()
+            .expect_err("missing index type must be rejected");
+        assert!(matches!(error, Error::Validation(_)));
+    }
+
+    #[test]
+    fn add_function_field_builds_proto() {
+        let field = FieldSchema::new()
+            .name("sparse")
+            .data_type(DataType::SparseFloatVector);
+        let function = Function::new()
+            .name("f")
+            .function_type(FunctionType::Bm25)
+            .input_fields(vec!["text".to_owned()])
+            .output_fields(vec!["sparse".to_owned()]);
+        let index = IndexParam::new()
+            .field_name("sparse")
+            .index_name("sparse_idx")
+            .index_type(IndexType::SparseInvertedIndex)
+            .metric_type(MetricType::Bm25);
+
+        let value = AddFunctionFieldRequest::builder()
+            .collection_name("books")
+            .field(field)
+            .function(function)
+            .index(index)
+            .build()
+            .expect("valid request");
+
+        let proto = value.into_proto().expect("proto");
+        assert_eq!(proto.collection_name, "books");
+        let action = proto.action.expect("action");
+        match action.op.expect("op") {
+            req::action::Op::AddRequest(add) => {
+                assert_eq!(add.field_infos.len(), 1);
+                assert_eq!(add.field_infos[0].index_name, "sparse_idx");
+                assert!(add.field_infos[0]
+                    .extra_params
+                    .iter()
+                    .any(|pair| pair.key == "index_type" && pair.value == "SPARSE_INVERTED_INDEX"));
+                assert_eq!(add.func_schema.len(), 1);
+                assert_eq!(add.func_schema[0].name, "f");
+            }
+            req::action::Op::DropRequest(_) => panic!("expected add action"),
+        }
+    }
+
+    #[test]
+    fn drop_function_field_builds_proto() {
+        let value = DropFunctionFieldRequest::builder()
+            .collection_name("books")
+            .function_name("f")
+            .build()
+            .expect("valid request");
+
+        let proto = value.into_proto().expect("proto");
+        let action = proto.action.expect("action");
+        match action.op.expect("op") {
+            req::action::Op::DropRequest(drop) => {
+                assert!(drop.drop_function_output_fields);
+                assert!(matches!(
+                    drop.identifier,
+                    Some(req::drop_request::Identifier::FunctionName(ref name)) if name == "f"
+                ));
+            }
+            req::action::Op::AddRequest(_) => panic!("expected drop action"),
+        }
+    }
+
+    #[test]
+    fn drop_collection_field_requires_exactly_one_identifier() {
+        let error = DropCollectionFieldRequest::builder()
+            .collection_name("books")
+            .build()
+            .expect_err("no identifier must be rejected");
+        assert!(matches!(error, Error::Validation(_)));
+
+        let error = DropCollectionFieldRequest::builder()
+            .collection_name("books")
+            .field_name("a")
+            .field_id(1)
+            .build()
+            .expect_err("both identifiers must be rejected");
+        assert!(matches!(error, Error::Validation(_)));
+    }
+
+    #[test]
+    fn drop_collection_field_builds_proto() {
+        let by_name = DropCollectionFieldRequest::builder()
+            .collection_name("books")
+            .field_name("a")
+            .build()
+            .expect("valid request");
+        match by_name
+            .into_proto()
+            .expect("proto")
+            .action
+            .expect("action")
+            .op
+            .expect("op")
+        {
+            req::action::Op::DropRequest(drop) => {
+                assert!(matches!(
+                    drop.identifier,
+                    Some(req::drop_request::Identifier::FieldName(ref name)) if name == "a"
+                ));
+            }
+            req::action::Op::AddRequest(_) => panic!("expected drop action"),
+        }
+
+        let by_id = DropCollectionFieldRequest::builder()
+            .collection_name("books")
+            .field_id(7)
+            .build()
+            .expect("valid request");
+        match by_id
+            .into_proto()
+            .expect("proto")
+            .action
+            .expect("action")
+            .op
+            .expect("op")
+        {
+            req::action::Op::DropRequest(drop) => {
+                assert!(matches!(
+                    drop.identifier,
+                    Some(req::drop_request::Identifier::FieldId(7))
+                ));
+            }
+            req::action::Op::AddRequest(_) => panic!("expected drop action"),
+        }
+    }
+
+    #[test]
+    fn drop_collection_field_empty_name_falls_back_to_field_id() {
+        // build() treats an empty field_name as absent; into_proto() must agree so the
+        // wire identifier matches the validated field_id.
+        let value = DropCollectionFieldRequest::builder()
+            .collection_name("books")
+            .field_name("")
+            .field_id(7)
+            .build()
+            .expect("empty name counts as absent");
+        match value
+            .into_proto()
+            .expect("proto")
+            .action
+            .expect("action")
+            .op
+            .expect("op")
+        {
+            req::action::Op::DropRequest(drop) => {
+                assert!(matches!(
+                    drop.identifier,
+                    Some(req::drop_request::Identifier::FieldId(7))
+                ));
+            }
+            req::action::Op::AddRequest(_) => panic!("expected drop action"),
+        }
     }
 }

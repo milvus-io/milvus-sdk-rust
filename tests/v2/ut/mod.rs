@@ -70,6 +70,7 @@ fn create_collection_accepts_full_and_simple_requests() {
 }
 
 #[test]
+#[allow(deprecated)]
 fn v2_prelude_exposes_all_request_and_response_areas() {
     use milvus::v2::prelude::*;
 
