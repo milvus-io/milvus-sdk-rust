@@ -18,7 +18,7 @@
 
 use super::ClientV2;
 use crate::v2::error::status_to_result;
-use crate::v2::error::Result;
+use crate::v2::error::{Error, Result};
 use crate::v2::{request, response};
 
 impl ClientV2 {
@@ -34,13 +34,35 @@ impl ClientV2 {
     }
 
     /// Changes an existing user's password.
+    ///
+    /// When the request sets `reset_connection`, the client re-establishes its connection using
+    /// the updated username/password credentials, mirroring the pymilvus `reset_connection`
+    /// convenience, so subsequent requests authenticate with the new password.
+    ///
+    /// The password change is applied server-side before the connection is reset. If the reset
+    /// fails, the returned error states that the password was changed but the connection could not
+    /// be re-established; callers should re-authenticate with the new password rather than retry
+    /// the update with the old one.
     pub async fn update_password(
         &self,
         request: request::rbac::UpdatePasswordRequest,
     ) -> Result<()> {
+        let reset_connection = request.should_reset_connection();
+        let username = request.username().to_owned();
+        let new_password = request.new_password().to_owned();
         let status =
             status_rpc_with_retry!(NonIdempotent, self, update_credential, request.into_proto())?;
-        self.status(status)
+        self.status(status)?;
+        if reset_connection {
+            let mut config = self.connect_config.read().clone();
+            config.set_token(format!("{username}:{new_password}"));
+            self.reset_connection(config).await.map_err(|error| {
+                Error::Unexpected(format!(
+                    "password changed but connection reset failed: {error}"
+                ))
+            })?;
+        }
+        Ok(())
     }
 
     /// Updates mutable properties of a user account.
@@ -134,31 +156,58 @@ impl ClientV2 {
     }
 
     /// Grants a privilege on a resource to a role.
+    ///
+    /// Collection-scoped grants use the v2 privilege RPC; grants configured with the legacy
+    /// `object_type`/`object_name` surface (for example USER objects or explicit GLOBAL scope)
+    /// use the v1 `OperatePrivilege` RPC.
     pub async fn grant_privilege(
         &self,
         request: request::rbac::GrantPrivilegeRequest,
     ) -> Result<()> {
-        let status = status_rpc_with_retry!(
-            NonIdempotent,
-            self,
-            operate_privilege_v2,
-            request.into_proto()
-        )?;
-        self.status(status)
+        if request.uses_legacy_object() {
+            let status = status_rpc_with_retry!(
+                NonIdempotent,
+                self,
+                operate_privilege,
+                request.into_legacy_proto()
+            )?;
+            self.status(status)
+        } else {
+            let status = status_rpc_with_retry!(
+                NonIdempotent,
+                self,
+                operate_privilege_v2,
+                request.into_proto()
+            )?;
+            self.status(status)
+        }
     }
 
     /// Revokes a privilege from a role.
+    ///
+    /// Collection-scoped revokes use the v2 privilege RPC; revokes configured with the legacy
+    /// `object_type`/`object_name` surface use the v1 `OperatePrivilege` RPC.
     pub async fn revoke_privilege(
         &self,
         request: request::rbac::RevokePrivilegeRequest,
     ) -> Result<()> {
-        let status = status_rpc_with_retry!(
-            NonIdempotent,
-            self,
-            operate_privilege_v2,
-            request.into_proto()
-        )?;
-        self.status(status)
+        if request.uses_legacy_object() {
+            let status = status_rpc_with_retry!(
+                NonIdempotent,
+                self,
+                operate_privilege,
+                request.into_legacy_proto()
+            )?;
+            self.status(status)
+        } else {
+            let status = status_rpc_with_retry!(
+                NonIdempotent,
+                self,
+                operate_privilege_v2,
+                request.into_proto()
+            )?;
+            self.status(status)
+        }
     }
 
     /// Creates a named group of privileges.

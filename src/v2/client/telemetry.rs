@@ -388,7 +388,7 @@ impl RuntimeState {
 
 struct ClientConfigSnapshot {
     uri: String,
-    username: String,
+    username: RwLock<String>,
     initial_database: String,
     tls_enabled: bool,
     retry_max_attempts: u32,
@@ -449,7 +449,7 @@ impl ClientTelemetry {
             database_explicit,
             client_config: ClientConfigSnapshot {
                 uri: connect.uri.clone(),
-                username,
+                username: RwLock::new(username),
                 initial_database: connect.database.clone(),
                 tls_enabled: super::tls_enabled(connect),
                 retry_max_attempts: connect.retry.max_attempts,
@@ -470,6 +470,15 @@ impl ClientTelemetry {
     /// Returns the stable runtime client identifier sent in heartbeats.
     pub fn client_id(&self) -> &str {
         &self.inner.client_id
+    }
+
+    /// Updates the identity reported by heartbeats and `get_config`.
+    ///
+    /// Used after a credential reset (for example `update_password` with `reset_connection`) so
+    /// telemetry keeps reporting the currently authenticated username instead of the one captured
+    /// at connection time.
+    pub(super) fn update_username(&self, username: String) {
+        *self.inner.client_config.username.write() = username;
     }
 
     /// Returns the current effective telemetry configuration.
@@ -694,7 +703,7 @@ impl TelemetryInner {
             sdk_type: "RustMilvusClient".to_owned(),
             sdk_version: env!("CARGO_PKG_VERSION").to_owned(),
             local_time: DateTime::<Utc>::from(SystemTime::now()).to_rfc3339(),
-            user: self.client_config.username.clone(),
+            user: self.client_config.username.read().clone(),
             host,
             reserved,
         }
@@ -1174,7 +1183,7 @@ impl TelemetryInner {
         let payload = serde_json::to_vec(&json!({
             "user_config": {
                 "address": self.client_config.uri,
-                "username": self.client_config.username,
+                "username": self.client_config.username.read().clone(),
                 "db_name": self.client_config.initial_database,
                 "enable_tls_auth": self.client_config.tls_enabled,
                 "retry_max_retry": self.client_config.retry_max_attempts,
@@ -1664,6 +1673,21 @@ mod tests {
                 .map(String::as_str),
             Some("default")
         );
+    }
+
+    #[tokio::test]
+    async fn reset_connection_updates_reported_telemetry_username() {
+        let telemetry = transport_manager(
+            TelemetryConfig::new(),
+            "http://127.0.0.1:19530",
+            "default",
+            "old-user:old-password",
+            0,
+        );
+        assert_eq!(telemetry.inner.build_client_info().user, "old-user");
+
+        telemetry.update_username("new-user".to_owned());
+        assert_eq!(telemetry.inner.build_client_info().user, "new-user");
     }
 
     #[test]

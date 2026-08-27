@@ -44,6 +44,7 @@ struct MockState {
     calls: HashMap<&'static str, usize>,
     requests: HashMap<&'static str, Vec<String>>,
     client_request_ids: HashMap<&'static str, Vec<Option<String>>>,
+    authorization_headers: HashMap<&'static str, Vec<Option<String>>>,
     transport_failures: HashMap<&'static str, Vec<tonic::Code>>,
     aliases: HashMap<(String, String), String>,
     databases: HashMap<String, HashMap<String, String>>,
@@ -67,6 +68,7 @@ impl Default for MockState {
             calls: HashMap::new(),
             requests: HashMap::new(),
             client_request_ids: HashMap::new(),
+            authorization_headers: HashMap::new(),
             transport_failures: HashMap::new(),
             aliases: HashMap::new(),
             databases: HashMap::new(),
@@ -112,13 +114,22 @@ impl MockMilvus {
             .get("client_request_id")
             .and_then(|value| value.to_str().ok())
             .map(str::to_owned);
-        self.state
-            .lock()
-            .unwrap()
+        let authorization = request
+            .metadata()
+            .get("authorization")
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned);
+        let mut state = self.state.lock().unwrap();
+        state
             .client_request_ids
             .entry(method)
             .or_default()
             .push(request_id);
+        state
+            .authorization_headers
+            .entry(method)
+            .or_default()
+            .push(authorization);
     }
 
     fn record_request<T: Debug>(&self, method: &'static str, request: &T) {
@@ -167,6 +178,16 @@ impl MockMilvus {
             .lock()
             .unwrap()
             .client_request_ids
+            .get(method)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    pub fn authorization_headers(&self, method: &'static str) -> Vec<Option<String>> {
+        self.state
+            .lock()
+            .unwrap()
+            .authorization_headers
             .get(method)
             .cloned()
             .unwrap_or_default()
@@ -887,6 +908,21 @@ impl MilvusService for MockMilvus {
                 state.grants.push(entity);
             } else {
                 state.grants.retain(|grant| grant != &entity);
+            }
+            success_status()
+        }
+    );
+    status_method_with!(
+        operate_privilege,
+        pb::OperatePrivilegeRequest,
+        |service, request| {
+            let mut state = service.state.lock().unwrap();
+            if let Some(entity) = request.entity {
+                if request.r#type == pb::OperatePrivilegeType::Grant as i32 {
+                    state.grants.push(entity);
+                } else {
+                    state.grants.retain(|grant| grant != &entity);
+                }
             }
             success_status()
         }

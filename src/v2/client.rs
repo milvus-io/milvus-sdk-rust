@@ -281,10 +281,10 @@ impl Interceptor for V2Interceptor {
 /// - DDL operations that change a database, collection identity, schema, or alias should be
 ///   serialized with DML and DQL calls targeting the affected objects. Results are not guaranteed
 ///   when those operations overlap.
-/// - [`ClientV2::use_database`], [`ClientV2::set_rpc_deadline`], and
-///   [`ClientV2::set_retry_param`] are internally synchronized but update state shared by every
-///   clone. Serialize configuration changes with RPC creation when deterministic request settings
-///   are required.
+/// - [`ClientV2::use_database`], [`ClientV2::set_rpc_deadline`], [`ClientV2::set_retry_param`],
+///   and `update_password` with `reset_connection` (which re-establishes the shared channel and
+///   credentials) are internally synchronized but update state shared by every clone. Serialize
+///   configuration changes with RPC creation when deterministic request settings are required.
 #[derive(Clone)]
 pub struct ClientV2 {
     service: SharedServices,
@@ -296,6 +296,7 @@ pub struct ClientV2 {
     schema_load_scope: Arc<SchemaLoadScope>,
     global_cluster: Option<Arc<global_cluster::GlobalCluster>>,
     telemetry: ClientTelemetry,
+    connect_config: Arc<RwLock<ConnectConfig>>,
 }
 
 impl ClientV2 {
@@ -318,6 +319,7 @@ impl ClientV2 {
 
         validate_client_identity(&param)?;
 
+        let shared_config = Arc::new(RwLock::new(param.clone()));
         let (service, database, cache_endpoint, global_cluster) = if is_global_endpoint(&param.uri)
         {
             let topology = global_cluster::fetch_topology(&param.uri, &param).await?;
@@ -340,7 +342,7 @@ impl ClientV2 {
             let cache_endpoint = Arc::new(tls_endpoint_uri(&param.uri, tls_enabled(&param))?);
             let global = Arc::new(global_cluster::GlobalCluster::new(
                 param.uri.clone(),
-                param.clone(),
+                Arc::clone(&shared_config),
                 Arc::clone(&database),
                 Arc::clone(&database_explicit),
                 Arc::clone(&service),
@@ -385,6 +387,7 @@ impl ClientV2 {
             schema_load_scope: Arc::new(SchemaLoadScope::new()),
             global_cluster,
             telemetry,
+            connect_config: shared_config,
         })
     }
 
@@ -396,6 +399,53 @@ impl ClientV2 {
     /// Replaces the retry policy used by subsequent RPC calls.
     pub fn set_retry_param(&self, retry: RetryConfig) {
         *self.retry.write() = retry;
+    }
+
+    /// Re-establishes the connection using the supplied configuration.
+    ///
+    /// Swaps in a freshly built gRPC channel and authorization interceptor, preserving the
+    /// selected database and caches. On a global-cluster connection the shared configuration is
+    /// updated and the primary channel is rebuilt from it. Used by `update_password` with
+    /// `reset_connection` to re-arm the interceptor with the new credentials. On success the
+    /// telemetry-reported identity is updated to the configured username so heartbeats keep
+    /// matching the currently authenticated credentials.
+    pub(crate) async fn reset_connection(&self, config: ConnectConfig) -> Result<()> {
+        let username = config
+            .raw_token()
+            .and_then(|token| token.split_once(':').map(|(user, _)| user.to_owned()))
+            .unwrap_or_default();
+        if let Some(global) = &self.global_cluster {
+            // `reset_connection` commits the configuration to the shared slot only after the
+            // primary channel has been rebuilt, so stored credentials always match the active
+            // channel.
+            let result = global.reset_connection(config).await;
+            if result.is_ok() {
+                self.telemetry.update_username(username);
+            }
+            return result;
+        }
+        let (endpoint, _) = configured_endpoint(&config).await?;
+        let channel = endpoint.connect_lazy();
+        let token = config
+            .token
+            .as_deref()
+            .map(|value| value.parse())
+            .transpose()
+            .map_err(|_| {
+                Error::validation("token".into(), "token is not valid HTTP metadata".into())
+            })?;
+        let interceptor = V2Interceptor {
+            token,
+            database: Arc::clone(&self.database),
+            database_explicit: Arc::clone(&self.database_explicit),
+        };
+        let generation = self.service.read().generation.saturating_add(1);
+        let mut services = service_bundle(channel, interceptor, generation);
+        wait_for_server(&mut services.milvus, config.connect_timeout).await?;
+        *self.connect_config.write() = config;
+        *self.service.write() = services;
+        self.telemetry.update_username(username);
+        Ok(())
     }
 
     /// Returns the shared client-side telemetry manager.
@@ -877,6 +927,9 @@ mod retry_tests {
             schema_load_scope: Arc::new(SchemaLoadScope::new()),
             global_cluster: None,
             telemetry,
+            connect_config: Arc::new(RwLock::new(
+                ConnectConfig::new().uri("http://127.0.0.1:19530"),
+            )),
         }
     }
 

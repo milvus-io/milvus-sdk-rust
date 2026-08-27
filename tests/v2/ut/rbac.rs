@@ -368,3 +368,183 @@ async fn rbac_interfaces_reach_rpc_server() {
     }
     server.shutdown().await;
 }
+
+#[tokio::test]
+async fn update_password_carries_description_to_server() {
+    let server = MockServer::start().await;
+    server
+        .client
+        .update_password(
+            UpdatePasswordRequest::builder()
+                .username("alice")
+                .old_password("old-password")
+                .new_password("new-password")
+                .description("rotated credentials")
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("password update");
+    server.assert_any_request_contains(
+        "update_credential",
+        &[
+            "username: \"alice\"",
+            "description: Some(\"rotated credentials\")",
+        ],
+    );
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn update_password_reset_connection_rearms_credentials() {
+    let server = MockServer::start().await;
+    server
+        .client
+        .update_password(
+            UpdatePasswordRequest::builder()
+                .username("alice")
+                .old_password("old-password")
+                .new_password("new-password")
+                .reset_connection(true)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("password update with connection reset");
+
+    // A subsequent RPC must authenticate with the updated username/password credentials.
+    server
+        .client
+        .list_users(ListUsersRequest::builder().build().expect("valid request"))
+        .await
+        .expect("list users after connection reset");
+    let headers = server.service.authorization_headers("list_cred_users");
+    let last = headers.last().expect("captured authorization header");
+    let token = last.as_deref().expect("authorization header present");
+    use base64::Engine;
+    let raw = base64::engine::general_purpose::STANDARD
+        .decode(token)
+        .expect("base64 authorization token");
+    assert_eq!(
+        String::from_utf8(raw).expect("utf-8 token"),
+        "alice:new-password"
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn update_password_reset_connection_rearms_global_cluster_primary() {
+    let topology = r#"{"code":0,"data":{"version":1,"clusters":[
+        {"clusterId":"primary","endpoint":"{endpoint}","capability":3},
+        {"clusterId":"replica","endpoint":"{endpoint}","capability":1}
+    ]}}"#
+        .to_owned();
+    let server = MockServer::start_global(topology).await;
+
+    server
+        .client
+        .update_password(
+            UpdatePasswordRequest::builder()
+                .username("alice")
+                .old_password("old-password")
+                .new_password("new-password")
+                .reset_connection(true)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("global password update with connection reset");
+
+    // A subsequent RPC must authenticate with the updated credentials through the rebuilt primary
+    // channel, proving `GlobalCluster::reset_connection` rebuilt the channel with the fresh
+    // configuration.
+    server
+        .client
+        .list_users(ListUsersRequest::builder().build().expect("valid request"))
+        .await
+        .expect("list users after global connection reset");
+    let headers = server.service.authorization_headers("list_cred_users");
+    let last = headers.last().expect("captured authorization header");
+    let token = last.as_deref().expect("authorization header present");
+    use base64::Engine;
+    let raw = base64::engine::general_purpose::STANDARD
+        .decode(token)
+        .expect("base64 authorization token");
+    assert_eq!(
+        String::from_utf8(raw).expect("utf-8 token"),
+        "alice:new-password"
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn legacy_grant_and_revoke_privilege_use_v1_rpc() {
+    let server = MockServer::start().await;
+    let client = &server.client;
+
+    client
+        .create_role(
+            CreateRoleRequest::builder()
+                .role_name("reader")
+                .description("read access")
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("create role");
+
+    client
+        .grant_privilege(
+            GrantPrivilegeRequest::builder()
+                .role_name("reader")
+                .database_name("default")
+                .object_type("Collection")
+                .object_name("books")
+                .privilege("Query")
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("legacy v1 privilege grant");
+    server.assert_any_request_contains(
+        "operate_privilege",
+        &["object_name: \"books\"", "name: \"Collection\""],
+    );
+    assert_eq!(server.service.call_count("operate_privilege_v2"), 0);
+
+    let role = client
+        .describe_role(
+            DescribeRoleRequest::builder()
+                .role_name("reader")
+                .database_name("default")
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("describe role after v1 grant");
+    assert_eq!(role.description().get_grant_items().len().to_owned(), 1);
+    let grant = &role.description().get_grant_items()[0];
+    assert_eq!(grant.get_object_type().to_owned(), "Collection");
+    assert_eq!(grant.get_object_name().to_owned(), "books");
+    assert_eq!(grant.get_privilege().to_owned(), "Query");
+
+    client
+        .revoke_privilege(
+            RevokePrivilegeRequest::builder()
+                .role_name("reader")
+                .database_name("default")
+                .object_type("Collection")
+                .object_name("books")
+                .privilege("Query")
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("legacy v1 privilege revoke");
+    assert_eq!(server.service.call_count("operate_privilege"), 2);
+    assert_eq!(server.service.call_count("operate_privilege_v2"), 0);
+
+    server.shutdown().await;
+}

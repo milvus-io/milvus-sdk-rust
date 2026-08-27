@@ -176,6 +176,9 @@ mod tests {
             schema_load_scope: Arc::new(super::super::cache::SchemaLoadScope::new()),
             global_cluster: None,
             telemetry,
+            connect_config: Arc::new(RwLock::new(
+                super::super::ConnectConfig::new().uri("http://127.0.0.1:19530"),
+            )),
         }
     }
 
