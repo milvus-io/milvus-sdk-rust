@@ -361,7 +361,7 @@ pub(crate) async fn build_services(
 ///////////////////////////////////////////////////////////////////////////////
 pub(crate) struct GlobalCluster {
     global_endpoint: String,
-    connect_config: super::ConnectConfig,
+    connect_config: Arc<RwLock<super::ConnectConfig>>,
     database: Arc<RwLock<String>>,
     database_explicit: Arc<AtomicBool>,
     service: SharedServices,
@@ -375,7 +375,7 @@ pub(crate) struct GlobalCluster {
 impl GlobalCluster {
     pub(crate) fn new(
         global_endpoint: String,
-        connect_config: super::ConnectConfig,
+        connect_config: Arc<RwLock<super::ConnectConfig>>,
         database: Arc<RwLock<String>>,
         database_explicit: Arc<AtomicBool>,
         service: SharedServices,
@@ -439,7 +439,8 @@ impl GlobalCluster {
     }
 
     async fn refresh(&self) {
-        let topology = match fetch_topology(&self.global_endpoint, &self.connect_config).await {
+        let config = self.connect_config.read().clone();
+        let topology = match fetch_topology(&self.global_endpoint, &config).await {
             Ok(topology) => topology,
             Err(error) => {
                 trace_warn!(target: "milvus_sdk::global_cluster", error = %error, "global topology refresh failed; keeping cached topology");
@@ -471,7 +472,8 @@ impl GlobalCluster {
             .primary()
             .ok()
             .map(|primary| primary.endpoint().to_owned());
-        let topology = match fetch_topology(&self.global_endpoint, &self.connect_config).await {
+        let config = self.connect_config.read().clone();
+        let topology = match fetch_topology(&self.global_endpoint, &config).await {
             Ok(topology) => topology,
             Err(error) => {
                 trace_warn!(target: "milvus_sdk::global_cluster", error = %error, "topology refresh on UNAVAILABLE failed; recovering to current primary");
@@ -493,7 +495,8 @@ impl GlobalCluster {
                         .ok()
                         .map(|primary| primary.endpoint().to_owned());
                     if current_primary.as_deref() == Some(endpoint.as_str()) {
-                        self.rebuild_to(endpoint).await;
+                        let config = self.connect_config.read().clone();
+                        self.rebuild_to(endpoint, &config).await;
                     }
                 }
                 return;
@@ -577,7 +580,8 @@ impl GlobalCluster {
                 version = topology.version(),
                 "global cluster primary changed; rebuilding channel"
             );
-            if self.rebuild_to(new_primary.endpoint()).await {
+            let config = self.connect_config.read().clone();
+            if self.rebuild_to(new_primary.endpoint(), &config).await {
                 self.commit_applied(topology, true);
             }
         } else if version_newer {
@@ -616,8 +620,8 @@ impl GlobalCluster {
     /// after the endpoint completes a gRPC Connect handshake (the same verification the initial
     /// connection performs). Returns whether the channel was rebuilt; on failure the previous
     /// channel is kept.
-    async fn rebuild_to(&self, endpoint: &str) -> bool {
-        let endpoint_uri = match cluster_endpoint_uri(endpoint, &self.connect_config) {
+    async fn rebuild_to(&self, endpoint: &str, config: &super::ConnectConfig) -> bool {
+        let endpoint_uri = match cluster_endpoint_uri(endpoint, config) {
             Ok(uri) => uri,
             Err(error) => {
                 trace_warn!(target: "milvus_sdk::global_cluster", error = %error, "refused insecure member endpoint; keeping previous primary");
@@ -628,7 +632,7 @@ impl GlobalCluster {
         let generation = self.service.read().generation.saturating_add(1);
         match build_services(
             &endpoint_uri,
-            &self.connect_config,
+            config,
             &self.database,
             &self.database_explicit,
             generation,
@@ -640,7 +644,7 @@ impl GlobalCluster {
                 // perform the same bounded Connect handshake the initial connection uses before
                 // committing the new primary; a plain-HTTP load balancer or still-starting service
                 // is rejected instead of being committed and cycling UNAVAILABLE failures.
-                if super::wait_for_server(&mut services.milvus, self.connect_config.connect_timeout)
+                if super::wait_for_server(&mut services.milvus, config.connect_timeout)
                     .await
                     .is_err()
                 {
@@ -657,6 +661,36 @@ impl GlobalCluster {
                 let _ = error;
                 false
             }
+        }
+    }
+
+    /// Rebuilds the channel to the current primary with the supplied configuration.
+    ///
+    /// Unlike a topology refresh, the rebuild always happens even when the primary is unchanged,
+    /// so credential changes (for example after `update_password` with `reset_connection`) take
+    /// effect on the next request. The shared configuration is updated only after the channel has
+    /// been rebuilt successfully, so stored credentials always match the active channel. A failed
+    /// rebuild returns an error and leaves both the configuration and channel untouched.
+    pub(crate) async fn reset_connection(&self, config: super::ConnectConfig) -> Result<()> {
+        let _guard = self.apply_lock.lock().await;
+        let endpoint = self
+            .topology
+            .read()
+            .primary()
+            .ok()
+            .map(|primary| primary.endpoint().to_owned());
+        match endpoint {
+            Some(endpoint) if self.rebuild_to(&endpoint, &config).await => {
+                *self.connect_config.write() = config;
+                Ok(())
+            }
+            Some(_) => Err(Error::Unexpected(
+                "failed to re-establish the global-cluster connection with the updated credentials"
+                    .into(),
+            )),
+            None => Err(Error::Unexpected(
+                "no global-cluster primary available to reconnect to".into(),
+            )),
         }
     }
 }
@@ -845,7 +879,9 @@ mod tests {
         server: &TopologyServer,
         initial_body: &str,
     ) -> StdArc<GlobalCluster> {
-        let config = super::super::ConnectConfig::new().uri("http://global:19530");
+        let config = StdArc::new(RwLock::new(
+            super::super::ConnectConfig::new().uri("http://global:19530"),
+        ));
         let database = Arc::new(RwLock::new("default".to_owned()));
         let database_explicit = Arc::new(AtomicBool::new(false));
         let topology = parse_topology_response(initial_body).expect("initial topology");
@@ -854,10 +890,11 @@ mod tests {
             .expect("initial primary")
             .endpoint()
             .to_owned();
+        let current_config = config.read().clone();
         let service = Arc::new(RwLock::new(
             build_services(
-                &cluster_endpoint_uri(&primary, &config).expect("initial primary uri"),
-                &config,
+                &cluster_endpoint_uri(&primary, &current_config).expect("initial primary uri"),
+                &current_config,
                 &database,
                 &database_explicit,
                 0,
@@ -873,6 +910,105 @@ mod tests {
             service,
             topology,
         ))
+    }
+
+    #[tokio::test]
+    async fn reset_connection_rebuilds_the_primary_channel_and_commits_credentials() {
+        let endpoint = ReachableEndpoint::start().await;
+        let config = StdArc::new(RwLock::new(
+            super::super::ConnectConfig::new()
+                .uri("http://global:19530")
+                .token("old-token"),
+        ));
+        let database = Arc::new(RwLock::new("default".to_owned()));
+        let database_explicit = Arc::new(AtomicBool::new(false));
+        let current_config = config.read().clone();
+        let topology = parse_topology_response(&topology_body_with_primary(&endpoint.endpoint, 1))
+            .expect("initial topology");
+        let service = Arc::new(RwLock::new(
+            build_services(
+                &cluster_endpoint_uri(&endpoint.endpoint, &current_config)
+                    .expect("initial primary uri"),
+                &current_config,
+                &database,
+                &database_explicit,
+                0,
+            )
+            .await
+            .expect("build initial service"),
+        ));
+        let cluster = StdArc::new(GlobalCluster::new(
+            "http://global:19530".into(),
+            Arc::clone(&config),
+            database,
+            database_explicit,
+            service,
+            topology,
+        ));
+
+        let mut fresh = config.read().clone();
+        fresh.set_token("alice:new-password");
+        cluster
+            .reset_connection(fresh)
+            .await
+            .expect("reset_connection rebuilds the primary channel");
+
+        let committed = config.read();
+        use base64::Engine;
+        let raw = base64::engine::general_purpose::STANDARD
+            .decode(committed.get_token().as_ref().expect("committed token"))
+            .expect("base64 token");
+        assert_eq!(
+            String::from_utf8(raw).expect("utf-8 token"),
+            "alice:new-password"
+        );
+    }
+
+    #[tokio::test]
+    async fn reset_connection_propagates_failure_without_committing_credentials() {
+        // A primary on a closed port: the rebuild Connect handshake must fail quickly.
+        let unreachable = "127.0.0.1:1";
+        let mut base = super::super::ConnectConfig::new().uri("http://global:19530");
+        base.set_token("old-token");
+        base.set_connect_timeout(Duration::from_millis(100));
+        let config = StdArc::new(RwLock::new(base));
+        let database = Arc::new(RwLock::new("default".to_owned()));
+        let database_explicit = Arc::new(AtomicBool::new(false));
+        let current_config = config.read().clone();
+        let topology = parse_topology_response(&topology_body_with_primary(unreachable, 1))
+            .expect("initial topology");
+        let service = Arc::new(RwLock::new(
+            build_services(
+                &cluster_endpoint_uri(unreachable, &current_config).expect("initial primary uri"),
+                &current_config,
+                &database,
+                &database_explicit,
+                0,
+            )
+            .await
+            .expect("lazy initial service build"),
+        ));
+        let cluster = StdArc::new(GlobalCluster::new(
+            "http://global:19530".into(),
+            Arc::clone(&config),
+            database,
+            database_explicit,
+            service,
+            topology,
+        ));
+
+        let mut fresh = config.read().clone();
+        fresh.set_token("alice:new-password");
+        let error = cluster
+            .reset_connection(fresh)
+            .await
+            .expect_err("an unreachable primary must fail the connection reset");
+        assert!(
+            error.to_string().contains("re-establish"),
+            "unexpected error: {error}"
+        );
+        // Credentials must not be committed when the rebuild failed.
+        assert_eq!(config.read().raw_token().as_deref(), Some("old-token"));
     }
 
     #[test]

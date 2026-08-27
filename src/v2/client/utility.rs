@@ -20,7 +20,7 @@ use super::ClientV2;
 use crate::proto::{milvus, schema};
 use crate::v2::error::status_to_result;
 use crate::v2::error::{Error, Result};
-use crate::v2::types::{CompactionStateCode, IndexStateCode, LoadState};
+use crate::v2::types::{CompactionStateCode, IndexStateCode, LoadState, TargetSizeUnit};
 use crate::v2::{request, response};
 use parking_lot::RwLock;
 use std::collections::HashMap;
@@ -274,7 +274,7 @@ impl ClientV2 {
         let description = self
             .describe_collection_uncached(&database, &collection)
             .await?;
-        let mut raw = request.into_proto(&database);
+        let mut raw = request.into_proto(&database)?;
         raw.db_name = database;
         raw.collection_id = description.collection_id;
         let response = rpc_with_retry!(self, manual_compaction, raw)?;
@@ -874,13 +874,15 @@ fn parse_target_size_mb(target_size: &str) -> Result<(i64, String)> {
         .filter(|ch| !ch.is_whitespace())
         .flat_map(char::to_uppercase)
         .collect();
+    // Reuse `TargetSizeUnit::bytes_per_unit` so the unit-to-bytes mapping stays consistent with
+    // `CompactRequest::target_size_unit` as unit semantics evolve.
     let multiplier = match unit.as_str() {
-        "" | "B" => 1.0,
-        "KB" => 1024.0,
-        "MB" => 1024.0_f64.powi(2),
-        "GB" => 1024.0_f64.powi(3),
-        "TB" => 1024.0_f64.powi(4),
-        "PB" => 1024.0_f64.powi(5),
+        "" | "B" => TargetSizeUnit::B.bytes_per_unit() as f64,
+        "KB" => TargetSizeUnit::KB.bytes_per_unit() as f64,
+        "MB" => TargetSizeUnit::MB.bytes_per_unit() as f64,
+        "GB" => TargetSizeUnit::GB.bytes_per_unit() as f64,
+        "TB" => TargetSizeUnit::TB.bytes_per_unit() as f64,
+        "PB" => TargetSizeUnit::PB.bytes_per_unit() as f64,
         _ => {
             return Err(Error::validation(
                 "target_size".into(),

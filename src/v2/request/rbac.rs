@@ -140,6 +140,8 @@ pub struct UpdatePasswordRequest {
     pub(crate) username: String,
     pub(crate) old_password: String,
     pub(crate) new_password: String,
+    pub(crate) description: Option<String>,
+    pub(crate) reset_connection: bool,
 }
 
 impl std::fmt::Debug for UpdatePasswordRequest {
@@ -149,6 +151,8 @@ impl std::fmt::Debug for UpdatePasswordRequest {
             .field("username", &self.username)
             .field("old_password", &"[REDACTED]")
             .field("new_password", &"[REDACTED]")
+            .field("description", &self.description)
+            .field("reset_connection", &self.reset_connection)
             .finish()
     }
 }
@@ -159,6 +163,8 @@ impl UpdatePasswordRequest {
             username: Default::default(),
             old_password: Default::default(),
             new_password: Default::default(),
+            description: Default::default(),
+            reset_connection: Default::default(),
         }
     }
 
@@ -189,12 +195,25 @@ impl UpdatePasswordRequest {
         &self.new_password
     }
 
+    /// Returns the description.
+    pub fn description(&self) -> &Option<String> {
+        &self.description
+    }
+
+    /// Returns whether the connection should be re-established with the new credentials.
+    pub fn should_reset_connection(&self) -> bool {
+        self.reset_connection
+    }
+
     pub(crate) fn into_proto(self) -> milvus::UpdateCredentialRequest {
-        let mut v = milvus::UpdateCredentialRequest::default();
-        v.username = self.username;
-        v.old_password = base64::engine::general_purpose::STANDARD.encode(self.old_password);
-        v.new_password = base64::engine::general_purpose::STANDARD.encode(self.new_password);
-        v
+        milvus::UpdateCredentialRequest {
+            base: None,
+            username: self.username,
+            old_password: base64::engine::general_purpose::STANDARD.encode(self.old_password),
+            new_password: base64::engine::general_purpose::STANDARD.encode(self.new_password),
+            description: self.description,
+            ..Default::default()
+        }
     }
 }
 
@@ -223,6 +242,18 @@ impl UpdatePasswordRequestBuilder {
     /// Sets the new password and returns the updated value.
     pub fn new_password(mut self, value: impl Into<String>) -> Self {
         self.value.new_password = value.into();
+        self
+    }
+
+    /// Sets the description and returns the updated value.
+    pub fn description(mut self, value: impl Into<String>) -> Self {
+        self.value.description = Some(value.into());
+        self
+    }
+
+    /// Re-establishes the connection with the new credentials after the password update.
+    pub fn reset_connection(mut self, value: bool) -> Self {
+        self.value.reset_connection = value;
         self
     }
 
@@ -1067,6 +1098,8 @@ pub struct GrantPrivilegeRequest {
     pub(crate) database_name: String,
     pub(crate) collection_name: String,
     pub(crate) privilege: String,
+    pub(crate) object_type: Option<String>,
+    pub(crate) object_name: Option<String>,
 }
 
 impl GrantPrivilegeRequest {
@@ -1076,6 +1109,8 @@ impl GrantPrivilegeRequest {
             database_name: Default::default(),
             collection_name: Default::default(),
             privilege: Default::default(),
+            object_type: Default::default(),
+            object_name: Default::default(),
         }
     }
 
@@ -1111,6 +1146,16 @@ impl GrantPrivilegeRequest {
         &self.privilege
     }
 
+    /// Returns the legacy object type, if configured.
+    pub fn object_type(&self) -> Option<&str> {
+        self.object_type.as_deref()
+    }
+
+    /// Returns the legacy object name, if configured.
+    pub fn object_name(&self) -> Option<&str> {
+        self.object_name.as_deref()
+    }
+
     pub(crate) fn into_proto(self) -> milvus::OperatePrivilegeV2Request {
         milvus::OperatePrivilegeV2Request {
             base: None,
@@ -1127,6 +1172,37 @@ impl GrantPrivilegeRequest {
             r#type: milvus::OperatePrivilegeType::Grant as i32,
             db_name: self.database_name,
             collection_name: self.collection_name,
+            ..Default::default()
+        }
+    }
+
+    /// Returns whether the legacy v1 `object_type`/`object_name` surface is configured.
+    pub(crate) fn uses_legacy_object(&self) -> bool {
+        self.object_type.is_some() || self.object_name.is_some()
+    }
+
+    pub(crate) fn into_legacy_proto(self) -> milvus::OperatePrivilegeRequest {
+        milvus::OperatePrivilegeRequest {
+            base: None,
+            entity: Some(milvus::GrantEntity {
+                role: Some(milvus::RoleEntity {
+                    name: self.role_name,
+                    description: String::new(),
+                }),
+                object: Some(milvus::ObjectEntity {
+                    name: self.object_type.unwrap_or_default(),
+                }),
+                object_name: self.object_name.unwrap_or_default(),
+                grantor: Some(milvus::GrantorEntity {
+                    user: None,
+                    privilege: Some(milvus::PrivilegeEntity {
+                        name: self.privilege,
+                    }),
+                }),
+                db_name: self.database_name,
+            }),
+            r#type: milvus::OperatePrivilegeType::Grant as i32,
+            version: String::new(),
             ..Default::default()
         }
     }
@@ -1166,13 +1242,33 @@ impl GrantPrivilegeRequestBuilder {
         self
     }
 
+    /// Sets the legacy v1 object type and returns the updated value.
+    ///
+    /// Must be paired with [`Self::object_name`]; grants scoped this way use the legacy
+    /// `OperatePrivilege` RPC and are mutually exclusive with [`Self::collection_name`].
+    pub fn object_type(mut self, value: impl Into<String>) -> Self {
+        self.value.object_type = Some(value.into());
+        self
+    }
+
+    /// Sets the legacy v1 object name and returns the updated value.
+    ///
+    /// Must be paired with [`Self::object_type`]; grants scoped this way use the legacy
+    /// `OperatePrivilege` RPC and are mutually exclusive with [`Self::collection_name`].
+    pub fn object_name(mut self, value: impl Into<String>) -> Self {
+        self.value.object_name = Some(value.into());
+        self
+    }
+
     /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<GrantPrivilegeRequest> {
-        validate_privilege(
+        validate_privilege_request(
             &self.value.role_name,
             &self.value.database_name,
             &self.value.collection_name,
             &self.value.privilege,
+            self.value.object_type.as_deref(),
+            self.value.object_name.as_deref(),
         )?;
         Ok(self.value)
     }
@@ -1189,6 +1285,8 @@ pub struct RevokePrivilegeRequest {
     pub(crate) database_name: String,
     pub(crate) collection_name: String,
     pub(crate) privilege: String,
+    pub(crate) object_type: Option<String>,
+    pub(crate) object_name: Option<String>,
 }
 
 impl RevokePrivilegeRequest {
@@ -1198,6 +1296,8 @@ impl RevokePrivilegeRequest {
             database_name: Default::default(),
             collection_name: Default::default(),
             privilege: Default::default(),
+            object_type: Default::default(),
+            object_name: Default::default(),
         }
     }
 
@@ -1233,6 +1333,16 @@ impl RevokePrivilegeRequest {
         &self.privilege
     }
 
+    /// Returns the legacy object type, if configured.
+    pub fn object_type(&self) -> Option<&str> {
+        self.object_type.as_deref()
+    }
+
+    /// Returns the legacy object name, if configured.
+    pub fn object_name(&self) -> Option<&str> {
+        self.object_name.as_deref()
+    }
+
     pub(crate) fn into_proto(self) -> milvus::OperatePrivilegeV2Request {
         milvus::OperatePrivilegeV2Request {
             base: None,
@@ -1249,6 +1359,37 @@ impl RevokePrivilegeRequest {
             r#type: milvus::OperatePrivilegeType::Revoke as i32,
             db_name: self.database_name,
             collection_name: self.collection_name,
+            ..Default::default()
+        }
+    }
+
+    /// Returns whether the legacy v1 `object_type`/`object_name` surface is configured.
+    pub(crate) fn uses_legacy_object(&self) -> bool {
+        self.object_type.is_some() || self.object_name.is_some()
+    }
+
+    pub(crate) fn into_legacy_proto(self) -> milvus::OperatePrivilegeRequest {
+        milvus::OperatePrivilegeRequest {
+            base: None,
+            entity: Some(milvus::GrantEntity {
+                role: Some(milvus::RoleEntity {
+                    name: self.role_name,
+                    description: String::new(),
+                }),
+                object: Some(milvus::ObjectEntity {
+                    name: self.object_type.unwrap_or_default(),
+                }),
+                object_name: self.object_name.unwrap_or_default(),
+                grantor: Some(milvus::GrantorEntity {
+                    user: None,
+                    privilege: Some(milvus::PrivilegeEntity {
+                        name: self.privilege,
+                    }),
+                }),
+                db_name: self.database_name,
+            }),
+            r#type: milvus::OperatePrivilegeType::Revoke as i32,
+            version: String::new(),
             ..Default::default()
         }
     }
@@ -1288,13 +1429,33 @@ impl RevokePrivilegeRequestBuilder {
         self
     }
 
+    /// Sets the legacy v1 object type and returns the updated value.
+    ///
+    /// Must be paired with [`Self::object_name`]; revokes scoped this way use the legacy
+    /// `OperatePrivilege` RPC and are mutually exclusive with [`Self::collection_name`].
+    pub fn object_type(mut self, value: impl Into<String>) -> Self {
+        self.value.object_type = Some(value.into());
+        self
+    }
+
+    /// Sets the legacy v1 object name and returns the updated value.
+    ///
+    /// Must be paired with [`Self::object_type`]; revokes scoped this way use the legacy
+    /// `OperatePrivilege` RPC and are mutually exclusive with [`Self::collection_name`].
+    pub fn object_name(mut self, value: impl Into<String>) -> Self {
+        self.value.object_name = Some(value.into());
+        self
+    }
+
     /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<RevokePrivilegeRequest> {
-        validate_privilege(
+        validate_privilege_request(
             &self.value.role_name,
             &self.value.database_name,
             &self.value.collection_name,
             &self.value.privilege,
+            self.value.object_type.as_deref(),
+            self.value.object_name.as_deref(),
         )?;
         Ok(self.value)
     }
@@ -1657,16 +1818,44 @@ fn validate_user_role(username: &str, role_name: &str) -> Result<()> {
     required("role_name", role_name)
 }
 
-fn validate_privilege(
+fn validate_privilege_request(
     role_name: &str,
     database_name: &str,
     collection_name: &str,
     privilege: &str,
+    object_type: Option<&str>,
+    object_name: Option<&str>,
 ) -> Result<()> {
     required("role_name", role_name)?;
     required("database_name", database_name)?;
-    required("collection_name", collection_name)?;
-    required("privilege", privilege)
+    required("privilege", privilege)?;
+    match (object_type, object_name) {
+        (None, None) => required("collection_name", collection_name)?,
+        (Some(object_type), Some(object_name)) => {
+            if collection_name.is_empty() {
+                required("object_type", object_type)?;
+                required("object_name", object_name)?;
+            } else {
+                return Err(Error::validation(
+                    "object_type".into(),
+                    "cannot be combined with collection_name".into(),
+                ));
+            }
+        }
+        (None, Some(_)) => {
+            return Err(Error::validation(
+                "object_type".into(),
+                "must be configured together with object_name".into(),
+            ));
+        }
+        (Some(_), None) => {
+            return Err(Error::validation(
+                "object_name".into(),
+                "must be configured together with object_type".into(),
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn validate_privilege_group_members(group_name: &str, privileges: &HashSet<String>) -> Result<()> {
@@ -1727,6 +1916,35 @@ mod update_user_tests {
             .into_proto();
         assert_eq!(update.old_password, "b2xk");
         assert_eq!(update.new_password, "bmV3");
+    }
+
+    #[test]
+    fn update_password_carries_description_and_reset_connection() {
+        let request = UpdatePasswordRequest::builder()
+            .username("alice")
+            .old_password("old")
+            .new_password("new")
+            .description("rotated credentials")
+            .reset_connection(true)
+            .build()
+            .expect("valid request");
+        assert_eq!(
+            request.description().as_deref(),
+            Some("rotated credentials")
+        );
+        assert!(request.should_reset_connection());
+
+        let proto = request.into_proto();
+        assert_eq!(proto.description.as_deref(), Some("rotated credentials"));
+
+        let without_description = UpdatePasswordRequest::builder()
+            .username("alice")
+            .old_password("old")
+            .new_password("new")
+            .build()
+            .expect("valid request")
+            .into_proto();
+        assert_eq!(without_description.description, None);
     }
 
     #[test]
@@ -1862,6 +2080,85 @@ mod dedicated_operation_tests {
             .expect("valid request")
             .into_proto();
         assert_eq!(revoke.r#type, milvus::OperatePrivilegeType::Revoke as i32);
+    }
+
+    #[test]
+    fn privilege_requests_encode_legacy_v1_object_surface() {
+        let grant = GrantPrivilegeRequest::builder()
+            .role_name("analyst")
+            .database_name("catalog")
+            .object_type("User")
+            .object_name("alice")
+            .privilege("SelectOwnership")
+            .build()
+            .expect("valid request");
+        assert!(grant.uses_legacy_object());
+        assert_eq!(grant.object_type(), Some("User"));
+        assert_eq!(grant.object_name(), Some("alice"));
+
+        let proto = grant.into_legacy_proto();
+        assert_eq!(proto.r#type, milvus::OperatePrivilegeType::Grant as i32);
+        let entity = proto.entity.expect("grant entity");
+        assert_eq!(entity.role.expect("role").name, "analyst");
+        assert_eq!(entity.object.expect("object").name, "User");
+        assert_eq!(entity.object_name, "alice");
+        assert_eq!(entity.db_name, "catalog");
+        assert_eq!(
+            entity
+                .grantor
+                .expect("grantor")
+                .privilege
+                .expect("privilege")
+                .name,
+            "SelectOwnership"
+        );
+
+        let revoke = RevokePrivilegeRequest::builder()
+            .role_name("analyst")
+            .database_name("catalog")
+            .object_type("Global")
+            .object_name("*")
+            .privilege("CreateOwnership")
+            .build()
+            .expect("valid request")
+            .into_legacy_proto();
+        assert_eq!(revoke.r#type, milvus::OperatePrivilegeType::Revoke as i32);
+        assert_eq!(
+            revoke.entity.expect("entity").object.expect("object").name,
+            "Global"
+        );
+    }
+
+    #[test]
+    fn privilege_requests_validate_legacy_and_v2_surfaces_are_mutually_exclusive() {
+        let both = GrantPrivilegeRequest::builder()
+            .role_name("analyst")
+            .database_name("catalog")
+            .collection_name("books")
+            .object_type("User")
+            .object_name("alice")
+            .privilege("SelectOwnership")
+            .build()
+            .expect_err("collection_name and object_type must be mutually exclusive");
+        assert!(both.to_string().contains("collection_name"));
+
+        let missing_name = GrantPrivilegeRequest::builder()
+            .role_name("analyst")
+            .database_name("catalog")
+            .object_type("User")
+            .privilege("SelectOwnership")
+            .build()
+            .expect_err("object_type without object_name must be rejected");
+        assert!(missing_name.to_string().contains("object_name"));
+
+        let missing_type = RevokePrivilegeRequest::builder()
+            .role_name("analyst")
+            .database_name("catalog")
+            .object_name("alice")
+            .privilege("SelectOwnership")
+            .build()
+            .expect_err("object_name without object_type must be rejected");
+        assert!(missing_type.to_string().contains("object_type"));
     }
 
     #[test]

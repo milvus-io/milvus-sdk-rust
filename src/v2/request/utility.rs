@@ -19,6 +19,7 @@
 use crate::proto::milvus;
 use crate::v2::error::{Error, Result};
 use crate::v2::request::validation::{non_empty_strings, positive_i64, required, required_slice};
+use crate::v2::types::TargetSizeUnit;
 use std::collections::HashMap;
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -579,8 +580,13 @@ impl ListQuerySegmentsRequestBuilder {
 pub struct CompactRequest {
     pub(crate) database_name: Option<String>,
     pub(crate) collection_name: String,
+    /// Target segment size after compaction, expressed in `target_size_unit`.
+    /// Zero means the server chooses its default target size.
     pub(crate) target_size: i64,
+    /// Unit of [`Self::target_size`]; the value is converted to MB before being sent to Milvus.
+    pub(crate) target_size_unit: TargetSizeUnit,
     pub(crate) clustering_compaction: bool,
+    pub(crate) is_l0: bool,
 }
 
 impl CompactRequest {
@@ -589,7 +595,9 @@ impl CompactRequest {
             database_name: Default::default(),
             collection_name: Default::default(),
             target_size: Default::default(),
+            target_size_unit: Default::default(),
             clustering_compaction: Default::default(),
+            is_l0: Default::default(),
         }
     }
 
@@ -615,9 +623,14 @@ impl CompactRequest {
         &self.collection_name
     }
 
-    /// Returns the target size.
+    /// Returns the target size in the configured unit.
     pub fn target_size(&self) -> i64 {
         self.target_size
+    }
+
+    /// Returns the target size unit.
+    pub fn target_size_unit(&self) -> TargetSizeUnit {
+        self.target_size_unit
     }
 
     /// Returns whether clustering compaction.
@@ -625,13 +638,36 @@ impl CompactRequest {
         self.clustering_compaction
     }
 
-    pub(crate) fn into_proto(self, default_db: &str) -> milvus::ManualCompactionRequest {
-        let mut value = milvus::ManualCompactionRequest::default();
-        value.db_name = self.database_name.unwrap_or_else(|| default_db.to_owned());
-        value.collection_name = self.collection_name;
-        value.target_size = self.target_size;
-        value.major_compaction = self.clustering_compaction;
-        value
+    /// Returns whether L0 compaction.
+    pub fn is_l0(&self) -> bool {
+        self.is_l0
+    }
+
+    /// Returns the effective target size in megabytes, `None` when no target size was set.
+    pub(crate) fn target_size_mb(&self) -> Result<Option<i64>> {
+        if self.target_size == 0 {
+            return Ok(None);
+        }
+        let mb = target_size_to_mb(self.target_size, self.target_size_unit)?;
+        if mb < 1 {
+            return Err(Error::validation(
+                "target_size".into(),
+                "target size is too small and rounds to zero MB".into(),
+            ));
+        }
+        Ok(Some(mb))
+    }
+
+    pub(crate) fn into_proto(self, default_db: &str) -> Result<milvus::ManualCompactionRequest> {
+        let target_size = self.target_size_mb()?.unwrap_or_default();
+        Ok(milvus::ManualCompactionRequest {
+            db_name: self.database_name.unwrap_or_else(|| default_db.to_owned()),
+            collection_name: self.collection_name,
+            target_size,
+            major_compaction: self.clustering_compaction,
+            l0_compaction: self.is_l0,
+            ..Default::default()
+        })
     }
 }
 
@@ -658,14 +694,29 @@ impl CompactRequestBuilder {
     }
 
     /// Sets the target size and returns the updated value.
+    ///
+    /// The value is interpreted in the configured [`Self::target_size_unit`] (MB by default) and
+    /// converted to MB before being sent to Milvus. Zero lets the server choose its default.
     pub fn target_size(mut self, value: i64) -> Self {
         self.value.target_size = value;
+        self
+    }
+
+    /// Sets the target size unit and returns the updated value.
+    pub fn target_size_unit(mut self, value: TargetSizeUnit) -> Self {
+        self.value.target_size_unit = value;
         self
     }
 
     /// Sets the clustering compaction and returns the updated value.
     pub fn clustering_compaction(mut self, value: bool) -> Self {
         self.value.clustering_compaction = value;
+        self
+    }
+
+    /// Sets the L0 compaction and returns the updated value.
+    pub fn is_l0(mut self, value: bool) -> Self {
+        self.value.is_l0 = value;
         self
     }
 
@@ -681,8 +732,24 @@ impl CompactRequestBuilder {
                 "must not be negative".into(),
             ));
         }
+        self.value.target_size_mb()?;
         Ok(self.value)
     }
+}
+
+/// Converts a target size in the given unit to megabytes, matching pymilvus's
+/// `b/kb/mb/gb/tb/pb` to MB conversion. Returns an error when the value is out of range.
+fn target_size_to_mb(target_size: i64, unit: TargetSizeUnit) -> Result<i64> {
+    const MB_BYTES: i64 = 1024 * 1024;
+    let bytes = i128::from(target_size) * i128::from(unit.bytes_per_unit());
+    let megabytes = bytes / i128::from(MB_BYTES);
+    if megabytes > i128::from(i64::MAX) {
+        return Err(Error::validation(
+            "target_size".into(),
+            "target size is too large".into(),
+        ));
+    }
+    Ok(megabytes as i64)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1782,14 +1849,17 @@ mod builder_value_tests {
         let expected_collection_name: String = String::new();
         let expected_target_size: i64 = 0;
         let expected_clustering_compaction: bool = false;
+        let expected_is_l0: bool = false;
 
         assert_eq!(value.database_name().to_owned(), expected_database_name);
         assert_eq!(value.collection_name().to_owned(), expected_collection_name);
         assert_eq!(value.target_size().to_owned(), expected_target_size);
+        assert_eq!(value.target_size_unit(), TargetSizeUnit::MB);
         assert_eq!(
             value.is_clustering_compaction(),
             expected_clustering_compaction
         );
+        assert_eq!(value.is_l0(), expected_is_l0);
     }
 
     #[test]
@@ -1798,21 +1868,94 @@ mod builder_value_tests {
         let collection_name = "collection_name-value".to_owned();
         let target_size = 7;
         let clustering_compaction = true;
+        let is_l0 = true;
         let value = CompactRequest::builder()
             .database_name(database_name.clone())
             .collection_name(collection_name.clone())
             .target_size(target_size.clone())
+            .target_size_unit(TargetSizeUnit::GB)
             .clustering_compaction(clustering_compaction.clone())
+            .is_l0(is_l0.clone())
             .build()
             .expect("valid request");
 
         assert_eq!(value.database_name().to_owned(), Some(database_name));
         assert_eq!(value.collection_name().to_owned(), collection_name);
         assert_eq!(value.target_size().to_owned(), target_size);
+        assert_eq!(value.target_size_unit(), TargetSizeUnit::GB);
         assert_eq!(
             value.is_clustering_compaction().to_owned(),
             clustering_compaction
         );
+        assert_eq!(value.is_l0().to_owned(), is_l0);
+    }
+
+    #[test]
+    fn compact_request_target_size_converts_units_to_megabytes() {
+        let in_mb = CompactRequest::builder()
+            .collection_name("books")
+            .target_size(512)
+            .target_size_unit(TargetSizeUnit::MB)
+            .build()
+            .expect("valid request");
+        assert_eq!(in_mb.target_size_mb().expect("convert"), Some(512));
+
+        let in_gb = CompactRequest::builder()
+            .collection_name("books")
+            .target_size(2)
+            .target_size_unit(TargetSizeUnit::GB)
+            .build()
+            .expect("valid request");
+        assert_eq!(in_gb.target_size_mb().expect("convert"), Some(2048));
+
+        let in_kb = CompactRequest::builder()
+            .collection_name("books")
+            .target_size(1024)
+            .target_size_unit(TargetSizeUnit::KB)
+            .build()
+            .expect("valid request");
+        assert_eq!(in_kb.target_size_mb().expect("convert"), Some(1));
+
+        let in_bytes = CompactRequest::builder()
+            .collection_name("books")
+            .target_size(1024 * 1024)
+            .target_size_unit(TargetSizeUnit::B)
+            .build()
+            .expect("valid request");
+        assert_eq!(in_bytes.target_size_mb().expect("convert"), Some(1));
+
+        let unset = CompactRequest::builder()
+            .collection_name("books")
+            .build()
+            .expect("valid request");
+        assert_eq!(unset.target_size_mb().expect("convert"), None);
+    }
+
+    #[test]
+    fn compact_request_target_size_rejects_sub_megabyte_values() {
+        let too_small = CompactRequest::builder()
+            .collection_name("books")
+            .target_size(1)
+            .target_size_unit(TargetSizeUnit::B)
+            .build()
+            .expect_err("a sub-megabyte target size must be rejected");
+        assert!(too_small.to_string().contains("zero MB"));
+    }
+
+    #[test]
+    fn compact_request_encodes_l0_and_target_size_flags() {
+        let proto = CompactRequest::builder()
+            .collection_name("books")
+            .target_size(1)
+            .target_size_unit(TargetSizeUnit::GB)
+            .is_l0(true)
+            .build()
+            .expect("valid request")
+            .into_proto("default")
+            .expect("valid conversion");
+        assert_eq!(proto.l0_compaction, true);
+        assert_eq!(proto.target_size, 1024);
+        assert_eq!(proto.major_compaction, false);
     }
 
     #[test]
