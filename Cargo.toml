@@ -168,6 +168,10 @@ name = "v2_filter_template"
 path = "examples/v2/filter_template.rs"
 
 [[example]]
+name = "v2_function_chain"
+path = "examples/v2/function_chain.rs"
+
+[[example]]
 name = "v2_full_text_match"
 path = "examples/v2/full_text_match.rs"
 

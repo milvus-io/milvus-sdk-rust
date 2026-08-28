@@ -23,7 +23,7 @@
 use crate::proto::{milvus, schema};
 use crate::v2::error::{Error, Result};
 use crate::v2::types::Ids;
-use crate::v2::types::{DataType, FieldData, SparseVector};
+use crate::v2::types::{group_aggregation_buckets, DataType, FieldData, SparseVector};
 pub use crate::v2::types::{HighlightResult, QueryResults, SearchResults, SingleResult};
 use std::collections::{HashMap, HashSet};
 
@@ -1085,6 +1085,11 @@ impl SearchResponse {
             results: SearchResults {
                 results: single_results,
                 recalls: result.recalls,
+                agg_buckets: group_aggregation_buckets(
+                    result.agg_buckets,
+                    result.agg_topks,
+                    result.num_queries,
+                )?,
             },
         })
     }
@@ -1114,6 +1119,7 @@ impl SearchResponse {
             results: SearchResults {
                 results: vec![remaining],
                 recalls: self.results.recalls.clone(),
+                agg_buckets: self.results.agg_buckets.clone(),
             },
             session_timestamp: self.session_timestamp,
             cost: self.cost,
@@ -1739,7 +1745,7 @@ pub type HybridSearchResponse = SearchResponse;
 mod tests {
     use super::{field_data, split_field_data, QueryResponse, SearchResponse};
     use crate::proto::{common, milvus, schema};
-    use crate::v2::types::{DataType, FieldData};
+    use crate::v2::types::{AggregationBucketValue, DataType, FieldData};
 
     #[test]
     fn decode_field_data_prefers_field_specific_validity() {
@@ -3098,6 +3104,49 @@ mod tests {
 
         assert_eq!(search.results().len().to_owned(), 1);
         assert!(search.results().get_results()[0].is_empty());
+    }
+
+    #[test]
+    fn search_response_groups_aggregation_buckets_per_query() {
+        // nq=2 with zero result rows; the first query owns one top-level bucket (agg_topks=[1, 0]).
+        let search = SearchResponse::from_proto(milvus::SearchResults {
+            results: Some(schema::SearchResultData {
+                num_queries: 2,
+                top_k: 0,
+                topks: vec![0, 0],
+                scores: vec![],
+                ids: Some(schema::IDs::default()),
+                primary_field_name: "id".into(),
+                agg_buckets: vec![schema::AggBucket {
+                    key: vec![schema::BucketKeyEntry {
+                        field_id: 1,
+                        field_name: "category".into(),
+                        value: Some(schema::bucket_key_entry::Value::StringVal("tech".into())),
+                    }],
+                    count: 3,
+                    metrics: std::collections::HashMap::new(),
+                    hits: vec![],
+                    sub_groups: vec![],
+                }],
+                agg_topks: vec![1, 0],
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
+        .expect("decode aggregation search response");
+
+        assert_eq!(search.results().get_agg_buckets().len(), 2);
+        assert_eq!(search.results().get_agg_buckets()[0].len(), 1);
+        let bucket = &search.results().get_agg_buckets()[0][0];
+        assert_eq!(bucket.get_count(), 3);
+        assert_eq!(bucket.get_key()[0].get_field_name(), "category");
+        assert_eq!(
+            bucket.get_key()[0].get_value(),
+            &AggregationBucketValue::String("tech".to_owned())
+        );
+        assert!(search.results().get_agg_buckets()[1].is_empty());
+        assert!(search.results().get_results()[0].is_empty());
+        assert!(search.results().get_results()[1].is_empty());
     }
 }
 
