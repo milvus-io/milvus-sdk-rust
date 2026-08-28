@@ -29,8 +29,8 @@ use crate::v2::request::validation::{
 };
 pub use crate::v2::types::Ids;
 use crate::v2::types::{
-    encode_sparse_vector, validate_sparse_vector, ConsistencyLevel, Function, FunctionScore,
-    MetricType,
+    encode_sparse_vector, validate_sparse_vector, ConsistencyLevel, Function, FunctionChain,
+    FunctionScore, MetricType, SearchAggregation,
 };
 pub use crate::v2::types::{
     EmbeddingList, HighlightQuery, HighlightType, Highlighter, LexicalHighlighter, SearchVectors,
@@ -514,6 +514,8 @@ pub struct SearchRequest {
     pub(crate) timezone: String,
     pub(crate) highlighter: Option<Highlighter>,
     pub(crate) consistency_level: Option<ConsistencyLevel>,
+    pub(crate) function_chains: Vec<FunctionChain>,
+    pub(crate) search_aggregation: Option<SearchAggregation>,
 }
 
 impl SearchRequest {
@@ -647,6 +649,16 @@ impl SearchRequest {
     /// Returns the consistency level.
     pub fn consistency_level(&self) -> Option<ConsistencyLevel> {
         self.consistency_level
+    }
+
+    /// Returns the function chains.
+    pub fn function_chains(&self) -> &[FunctionChain] {
+        &self.function_chains
+    }
+
+    /// Returns the search aggregation.
+    pub fn search_aggregation(&self) -> &Option<SearchAggregation> {
+        &self.search_aggregation
     }
 
     #[allow(deprecated)]
@@ -896,6 +908,15 @@ impl SearchRequest {
             namespace: None,
             highlighter: self.highlighter.map(Highlighter::into_proto),
             search_input: Some(search_input),
+            search_aggregation: self
+                .search_aggregation
+                .map(|aggregation| aggregation.into_proto())
+                .transpose()?,
+            function_chains: self
+                .function_chains
+                .into_iter()
+                .map(FunctionChain::into_proto)
+                .collect(),
             ..Default::default()
         })
     }
@@ -928,6 +949,8 @@ impl SearchRequest {
             timezone: String::new(),
             highlighter: None,
             consistency_level: None,
+            function_chains: Vec::new(),
+            search_aggregation: None,
         }
     }
 }
@@ -1085,6 +1108,30 @@ impl SearchRequestBuilder {
     /// Sets the consistency level and returns the updated value.
     pub fn consistency_level(mut self, value: ConsistencyLevel) -> Self {
         self.value.consistency_level = Some(value);
+        self
+    }
+
+    /// Sets the function chains and returns the updated value.
+    ///
+    /// Mutually exclusive with [`Self::rerank`]; Milvus rejects a search carrying both.
+    pub fn function_chains(mut self, values: impl IntoIterator<Item = FunctionChain>) -> Self {
+        self.value.function_chains = values.into_iter().collect();
+        self
+    }
+
+    /// Adds a function chain and returns the updated value.
+    pub fn add_function_chain(mut self, value: FunctionChain) -> Self {
+        self.value.function_chains.push(value);
+        self
+    }
+
+    /// Sets the hierarchical bucket aggregation and returns the updated value.
+    ///
+    /// Mutually exclusive with [`Self::group_by_field`] and [`Self::highlighter`]; when set,
+    /// `limit` is ignored, `SearchAggregation.size` controls the top-level bucket count, and
+    /// `offset` must remain zero.
+    pub fn search_aggregation(mut self, value: SearchAggregation) -> Self {
+        self.value.search_aggregation = Some(value);
         self
     }
 
@@ -1871,6 +1918,36 @@ fn validate_search_request(value: &SearchRequest) -> Result<()> {
     validate_search_extra_params(&value.extra_params)?;
     validate_finite_range_parameter("radius", value.radius)?;
     validate_finite_range_parameter("range_filter", value.range_filter)?;
+    if !value.function_chains.is_empty() && value.rerank.is_some() {
+        return Err(Error::validation(
+            "function_chains".into(),
+            "cannot be used together with rerank".into(),
+        ));
+    }
+    for chain in &value.function_chains {
+        chain.validate()?;
+    }
+    if let Some(aggregation) = &value.search_aggregation {
+        aggregation.validate()?;
+        if !value.group_by_field.is_empty() {
+            return Err(Error::validation(
+                "search_aggregation".into(),
+                "cannot be used together with group_by_field".into(),
+            ));
+        }
+        if value.offset > 0 {
+            return Err(Error::validation(
+                "offset".into(),
+                "cannot be used together with search_aggregation".into(),
+            ));
+        }
+        if value.highlighter.is_some() {
+            return Err(Error::validation(
+                "highlighter".into(),
+                "cannot be used together with search_aggregation".into(),
+            ));
+        }
+    }
     if !value.ids.is_empty() {
         if search_vectors_are_empty(&value.vectors) {
             return Ok(());
@@ -2013,13 +2090,14 @@ fn set_search_param(params: &mut Vec<common::KeyValuePair>, key: &str, value: im
 #[cfg(test)]
 mod search_request_tests {
     use super::{
-        EmbeddingList, HighlightQuery, HybridSearchRequest, LexicalHighlighter, SearchRequest,
-        SearchVectors, SubSearchRequest,
+        EmbeddingList, HighlightQuery, Highlighter, HybridSearchRequest, LexicalHighlighter,
+        SearchRequest, SearchVectors, SubSearchRequest,
     };
     use crate::proto::{common, milvus};
     use crate::v2::types::{
-        BoostRerank, DecayRerank, FunctionScore, Ids, MetricType, ModelRerank, SparseVector,
-        WeightedRerank,
+        col, fn_, BoostRerank, DecayRerank, FunctionChain, FunctionChainStage, FunctionScore,
+        HighlightType, Ids, MetricOp, MetricSpec, MetricType, ModelRerank, OrderSpec,
+        SearchAggregation, SortDirection, SparseVector, WeightedRerank,
     };
     use prost::Message;
     use serde_json::json;
@@ -2248,6 +2326,151 @@ mod search_request_tests {
             result,
             Err(crate::v2::error::Error::Validation(error)) if error.parameter() == "ids"
         ));
+    }
+
+    #[test]
+    fn search_rejects_function_chains_combined_with_rerank() {
+        let chain = FunctionChain::new()
+            .stage(FunctionChainStage::L2Rerank)
+            .map(
+                "$score",
+                fn_::num_combine(vec![col("$score"), col("popularity")], "sum", None),
+            );
+        let result = SearchRequest::builder()
+            .collection_name("books")
+            .vector_field("embedding")
+            .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+            .function_chains([chain])
+            .rerank(FunctionScore::new().add_function(BoostRerank::new().name("boost").weight(2.0)))
+            .build();
+
+        assert!(matches!(
+            result,
+            Err(crate::v2::error::Error::Validation(error))
+                if error.parameter() == "function_chains"
+        ));
+    }
+
+    #[test]
+    fn search_rejects_aggregation_combined_with_group_by_field() {
+        let aggregation = SearchAggregation::new()
+            .fields(["category"])
+            .size(10)
+            .add_metric(
+                "total",
+                MetricSpec::new().op(MetricOp::Sum).field_name("price"),
+            )
+            .add_order(
+                OrderSpec::new()
+                    .key("_count")
+                    .direction(SortDirection::Desc),
+            );
+        let result = SearchRequest::builder()
+            .collection_name("books")
+            .vector_field("embedding")
+            .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+            .group_by_field("category")
+            .search_aggregation(aggregation)
+            .build();
+
+        assert!(matches!(
+            result,
+            Err(crate::v2::error::Error::Validation(error))
+                if error.parameter() == "search_aggregation"
+        ));
+    }
+
+    #[test]
+    fn search_rejects_aggregation_combined_with_nonzero_offset() {
+        let aggregation = SearchAggregation::new()
+            .fields(["category"])
+            .size(10)
+            .add_metric(
+                "total",
+                MetricSpec::new().op(MetricOp::Sum).field_name("price"),
+            )
+            .add_order(
+                OrderSpec::new()
+                    .key("_count")
+                    .direction(SortDirection::Desc),
+            );
+        let result = SearchRequest::builder()
+            .collection_name("books")
+            .vector_field("embedding")
+            .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+            .offset(1)
+            .search_aggregation(aggregation)
+            .build();
+
+        assert!(matches!(
+            result,
+            Err(crate::v2::error::Error::Validation(error))
+                if error.parameter() == "offset"
+        ));
+    }
+
+    #[test]
+    fn search_rejects_aggregation_combined_with_highlighter() {
+        let aggregation = SearchAggregation::new()
+            .fields(["category"])
+            .size(10)
+            .add_metric(
+                "total",
+                MetricSpec::new().op(MetricOp::Sum).field_name("price"),
+            )
+            .add_order(
+                OrderSpec::new()
+                    .key("_count")
+                    .direction(SortDirection::Desc),
+            );
+        let result = SearchRequest::builder()
+            .collection_name("books")
+            .vector_field("embedding")
+            .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+            .highlighter(Highlighter::new().highlight_type(HighlightType::Lexical))
+            .search_aggregation(aggregation)
+            .build();
+
+        assert!(matches!(
+            result,
+            Err(crate::v2::error::Error::Validation(error))
+                if error.parameter() == "highlighter"
+        ));
+    }
+
+    #[test]
+    fn search_encodes_function_chains_and_aggregation_on_the_happy_path() {
+        let chain = FunctionChain::new()
+            .stage(FunctionChainStage::L2Rerank)
+            .sort("$score", true, None)
+            .limit(10, 0);
+        let aggregation = SearchAggregation::new()
+            .fields(["category"])
+            .size(10)
+            .add_metric(
+                "total",
+                MetricSpec::new().op(MetricOp::Sum).field_name("price"),
+            )
+            .add_order(
+                OrderSpec::new()
+                    .key("_count")
+                    .direction(SortDirection::Desc),
+            );
+        let request = SearchRequest::builder()
+            .collection_name("books")
+            .vector_field("embedding")
+            .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+            .function_chains([chain])
+            .search_aggregation(aggregation)
+            .build()
+            .expect("valid request with function chains and aggregation")
+            .into_proto("default", 0)
+            .expect("encode request");
+
+        assert_eq!(request.function_chains.len(), 1);
+        assert_eq!(request.function_chains[0].ops.len(), 2);
+        assert_eq!(request.function_chains[0].ops[0].op, "sort");
+        assert!(request.search_aggregation.is_some());
     }
 
     #[test]

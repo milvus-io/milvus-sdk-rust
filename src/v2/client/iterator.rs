@@ -1043,6 +1043,18 @@ fn validate_search_iterator_input(
             ));
         }
     }
+    if !search.function_chains.is_empty() {
+        return Err(Error::validation(
+            "function_chains".into(),
+            "search iterator does not support function chains".into(),
+        ));
+    }
+    if search.search_aggregation.is_some() {
+        return Err(Error::validation(
+            "search_aggregation".into(),
+            "search iterator does not support search aggregation".into(),
+        ));
+    }
     Ok(())
 }
 
@@ -1435,6 +1447,7 @@ mod search_iterator_v2_tests {
     };
     use crate::proto::{common, milvus, schema};
     use crate::v2::request::dql::{SearchRequest, SearchVectors};
+    use crate::v2::types::FunctionChain;
     use crate::v2::MetricType;
 
     #[test]
@@ -1568,5 +1581,28 @@ mod search_iterator_v2_tests {
             MetricType::L2
         )
         .is_ok());
+    }
+
+    #[test]
+    fn v2_input_rejects_function_chains_and_search_aggregation() {
+        let mut request = SearchRequest::builder()
+            .collection_name("books")
+            .vectors(SearchVectors::Float(vec![vec![0.0]]))
+            .build()
+            .expect("valid request");
+        assert!(validate_search_iterator_input(&request, 100).is_ok());
+
+        request
+            .function_chains
+            .push(FunctionChain::new().stage(crate::v2::types::FunctionChainStage::L2Rerank));
+        assert!(validate_search_iterator_input(&request, 100).is_err());
+        request.function_chains.clear();
+
+        request.search_aggregation = Some(
+            crate::v2::types::SearchAggregation::new()
+                .fields(["category"])
+                .size(10),
+        );
+        assert!(validate_search_iterator_input(&request, 100).is_err());
     }
 }

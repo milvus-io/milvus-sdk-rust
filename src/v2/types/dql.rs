@@ -2348,6 +2348,636 @@ fn result_json_kind(value: &Value) -> &'static str {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// AggregationBucketValue
+///////////////////////////////////////////////////////////////////////////////
+/// Typed grouping-key value of an aggregation bucket.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum AggregationBucketValue {
+    /// Represents an integer value.
+    Int(i64),
+    /// Represents a string value.
+    String(String),
+    /// Represents a boolean value.
+    Bool(bool),
+}
+
+impl AggregationBucketValue {
+    pub(crate) fn from_proto(value: Option<schema::bucket_key_entry::Value>) -> Result<Self> {
+        use schema::bucket_key_entry::Value;
+        match value {
+            Some(Value::IntVal(value)) => Ok(Self::Int(value)),
+            Some(Value::StringVal(value)) => Ok(Self::String(value)),
+            Some(Value::BoolVal(value)) => Ok(Self::Bool(value)),
+            None => Err(Error::MalformedResponse(
+                "aggregation bucket key contains no value".into(),
+            )),
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// AggregationMetricValue
+///////////////////////////////////////////////////////////////////////////////
+/// Typed metric result of an aggregation bucket.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum AggregationMetricValue {
+    /// Represents an integer value.
+    Int(i64),
+    /// Represents a floating-point value.
+    Double(f64),
+    /// Represents a string value.
+    String(String),
+    /// Represents a boolean value.
+    Bool(bool),
+}
+
+impl AggregationMetricValue {
+    pub(crate) fn from_proto(value: Option<schema::metric_value::Value>) -> Result<Self> {
+        use schema::metric_value::Value;
+        match value {
+            Some(Value::IntVal(value)) => Ok(Self::Int(value)),
+            Some(Value::DoubleVal(value)) => Ok(Self::Double(value)),
+            Some(Value::StringVal(value)) => Ok(Self::String(value)),
+            Some(Value::BoolVal(value)) => Ok(Self::Bool(value)),
+            None => Err(Error::MalformedResponse(
+                "aggregation bucket metric contains no value".into(),
+            )),
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// AggregationHitFieldValue
+///////////////////////////////////////////////////////////////////////////////
+/// Typed field value of an aggregation hit.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum AggregationHitFieldValue {
+    /// Represents an integer value.
+    Int(i64),
+    /// Represents a boolean value.
+    Bool(bool),
+    /// Represents a float value.
+    Float(f32),
+    /// Represents a double value.
+    Double(f64),
+    /// Represents a string value.
+    String(String),
+    /// Represents a bytes value.
+    Bytes(Vec<u8>),
+}
+
+impl AggregationHitFieldValue {
+    pub(crate) fn from_proto(value: Option<schema::agg_hit_field::Value>) -> Result<Self> {
+        use schema::agg_hit_field::Value;
+        match value {
+            Some(Value::IntVal(value)) => Ok(Self::Int(value)),
+            Some(Value::BoolVal(value)) => Ok(Self::Bool(value)),
+            Some(Value::FloatVal(value)) => Ok(Self::Float(value)),
+            Some(Value::DoubleVal(value)) => Ok(Self::Double(value)),
+            Some(Value::StringVal(value)) => Ok(Self::String(value)),
+            Some(Value::BytesVal(value)) => Ok(Self::Bytes(value)),
+            None => Err(Error::MalformedResponse(
+                "aggregation hit field contains no value".into(),
+            )),
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// AggregationHitPk
+///////////////////////////////////////////////////////////////////////////////
+/// Primary key of an aggregation hit.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum AggregationHitPk {
+    /// Represents an integer primary key.
+    Int(i64),
+    /// Represents a string primary key.
+    String(String),
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// AggregationHitField
+///////////////////////////////////////////////////////////////////////////////
+/// One returned field of an aggregation hit.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct AggregationHitField {
+    pub(crate) field_id: i64,
+    pub(crate) field_name: String,
+    pub(crate) value: AggregationHitFieldValue,
+}
+
+impl AggregationHitField {
+    /// Creates a value initialized with its SDK defaults.
+    pub fn new() -> Self {
+        Self {
+            field_id: 0,
+            field_name: String::new(),
+            value: AggregationHitFieldValue::Int(0),
+        }
+    }
+
+    /// Sets the field id and returns the updated value.
+    pub fn field_id(mut self, value: i64) -> Self {
+        self.field_id = value;
+        self
+    }
+
+    /// Sets the field id and returns this value for further mutation.
+    pub fn set_field_id(&mut self, value: i64) -> &mut Self {
+        self.field_id = value;
+        self
+    }
+
+    /// Returns the field id.
+    pub fn get_field_id(&self) -> i64 {
+        self.field_id
+    }
+
+    /// Sets the field name and returns the updated value.
+    pub fn field_name(mut self, value: impl Into<String>) -> Self {
+        self.field_name = value.into();
+        self
+    }
+
+    /// Sets the field name and returns this value for further mutation.
+    pub fn set_field_name(&mut self, value: impl Into<String>) -> &mut Self {
+        self.field_name = value.into();
+        self
+    }
+
+    /// Returns the field name.
+    pub fn get_field_name(&self) -> &str {
+        &self.field_name
+    }
+
+    /// Sets the field value and returns the updated value.
+    pub fn value(mut self, value: AggregationHitFieldValue) -> Self {
+        self.value = value;
+        self
+    }
+
+    /// Sets the field value and returns this value for further mutation.
+    pub fn set_value(&mut self, value: AggregationHitFieldValue) -> &mut Self {
+        self.value = value;
+        self
+    }
+
+    /// Returns the field value.
+    pub fn get_value(&self) -> &AggregationHitFieldValue {
+        &self.value
+    }
+
+    pub(crate) fn from_proto(value: schema::AggHitField) -> Result<Self> {
+        Ok(Self {
+            field_id: value.field_id,
+            field_name: if value.field_name.is_empty() {
+                value.field_id.to_string()
+            } else {
+                value.field_name
+            },
+            value: AggregationHitFieldValue::from_proto(value.value)?,
+        })
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// AggregationHit
+///////////////////////////////////////////////////////////////////////////////
+/// One document inside an aggregation bucket.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct AggregationHit {
+    pub(crate) pk: Option<AggregationHitPk>,
+    pub(crate) score: f32,
+    pub(crate) fields: Vec<AggregationHitField>,
+}
+
+impl AggregationHit {
+    /// Creates a value initialized with its SDK defaults.
+    pub fn new() -> Self {
+        Self {
+            pk: None,
+            score: 0.0,
+            fields: Vec::new(),
+        }
+    }
+
+    /// Sets the primary key and returns the updated value.
+    pub fn pk(mut self, value: AggregationHitPk) -> Self {
+        self.pk = Some(value);
+        self
+    }
+
+    /// Sets the primary key and returns this value for further mutation.
+    pub fn set_pk(&mut self, value: AggregationHitPk) -> &mut Self {
+        self.pk = Some(value);
+        self
+    }
+
+    /// Returns the primary key.
+    pub fn get_pk(&self) -> Option<&AggregationHitPk> {
+        self.pk.as_ref()
+    }
+
+    /// Sets the score and returns the updated value.
+    pub fn score(mut self, value: f32) -> Self {
+        self.score = value;
+        self
+    }
+
+    /// Sets the score and returns this value for further mutation.
+    pub fn set_score(&mut self, value: f32) -> &mut Self {
+        self.score = value;
+        self
+    }
+
+    /// Returns the score.
+    pub fn get_score(&self) -> f32 {
+        self.score
+    }
+
+    /// Sets the returned fields and returns the updated value.
+    pub fn fields(mut self, values: impl IntoIterator<Item = AggregationHitField>) -> Self {
+        self.fields = values.into_iter().collect();
+        self
+    }
+
+    /// Sets the returned fields and returns this value for further mutation.
+    pub fn set_fields(
+        &mut self,
+        values: impl IntoIterator<Item = AggregationHitField>,
+    ) -> &mut Self {
+        self.fields = values.into_iter().collect();
+        self
+    }
+
+    /// Returns the returned fields.
+    pub fn get_fields(&self) -> &[AggregationHitField] {
+        &self.fields
+    }
+
+    /// Appends a returned field and returns the updated value.
+    pub fn add_field(mut self, value: AggregationHitField) -> Self {
+        self.fields.push(value);
+        self
+    }
+
+    pub(crate) fn from_proto(value: schema::AggHit) -> Result<Self> {
+        use schema::agg_hit::Pk;
+        let pk = match value.pk {
+            Some(Pk::IntPk(value)) => Some(AggregationHitPk::Int(value)),
+            Some(Pk::StrPk(value)) => Some(AggregationHitPk::String(value)),
+            None => None,
+        };
+        let fields = value
+            .fields
+            .into_iter()
+            .map(AggregationHitField::from_proto)
+            .collect::<Result<_>>()?;
+        Ok(Self {
+            pk,
+            score: value.score,
+            fields,
+        })
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// BucketKeyEntry
+///////////////////////////////////////////////////////////////////////////////
+/// One entry of a composite grouping key in an aggregation bucket.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct BucketKeyEntry {
+    pub(crate) field_id: i64,
+    pub(crate) field_name: String,
+    pub(crate) value: AggregationBucketValue,
+}
+
+impl BucketKeyEntry {
+    /// Creates a value initialized with its SDK defaults.
+    pub fn new() -> Self {
+        Self {
+            field_id: 0,
+            field_name: String::new(),
+            value: AggregationBucketValue::Int(0),
+        }
+    }
+
+    /// Sets the field id and returns the updated value.
+    pub fn field_id(mut self, value: i64) -> Self {
+        self.field_id = value;
+        self
+    }
+
+    /// Sets the field id and returns this value for further mutation.
+    pub fn set_field_id(&mut self, value: i64) -> &mut Self {
+        self.field_id = value;
+        self
+    }
+
+    /// Returns the field id.
+    pub fn get_field_id(&self) -> i64 {
+        self.field_id
+    }
+
+    /// Sets the field name and returns the updated value.
+    pub fn field_name(mut self, value: impl Into<String>) -> Self {
+        self.field_name = value.into();
+        self
+    }
+
+    /// Sets the field name and returns this value for further mutation.
+    pub fn set_field_name(&mut self, value: impl Into<String>) -> &mut Self {
+        self.field_name = value.into();
+        self
+    }
+
+    /// Returns the field name.
+    pub fn get_field_name(&self) -> &str {
+        &self.field_name
+    }
+
+    /// Sets the field value and returns the updated value.
+    pub fn value(mut self, value: AggregationBucketValue) -> Self {
+        self.value = value;
+        self
+    }
+
+    /// Sets the field value and returns this value for further mutation.
+    pub fn set_value(&mut self, value: AggregationBucketValue) -> &mut Self {
+        self.value = value;
+        self
+    }
+
+    /// Returns the field value.
+    pub fn get_value(&self) -> &AggregationBucketValue {
+        &self.value
+    }
+
+    pub(crate) fn from_proto(value: schema::BucketKeyEntry) -> Result<Self> {
+        Ok(Self {
+            field_id: value.field_id,
+            field_name: if value.field_name.is_empty() {
+                value.field_id.to_string()
+            } else {
+                value.field_name
+            },
+            value: AggregationBucketValue::from_proto(value.value)?,
+        })
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// AggregationBucket
+///////////////////////////////////////////////////////////////////////////////
+/// One bucket in the hierarchical aggregation result tree.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct AggregationBucket {
+    pub(crate) key: Vec<BucketKeyEntry>,
+    pub(crate) count: i64,
+    pub(crate) metrics: HashMap<String, AggregationMetricValue>,
+    pub(crate) hits: Vec<AggregationHit>,
+    pub(crate) sub_groups: Vec<AggregationBucket>,
+}
+
+impl AggregationBucket {
+    /// Creates a value initialized with its SDK defaults.
+    pub fn new() -> Self {
+        Self {
+            key: Vec::new(),
+            count: 0,
+            metrics: HashMap::new(),
+            hits: Vec::new(),
+            sub_groups: Vec::new(),
+        }
+    }
+
+    /// Sets the composite grouping key and returns the updated value.
+    pub fn key(mut self, values: impl IntoIterator<Item = BucketKeyEntry>) -> Self {
+        self.key = values.into_iter().collect();
+        self
+    }
+
+    /// Sets the composite grouping key and returns this value for further mutation.
+    pub fn set_key(&mut self, values: impl IntoIterator<Item = BucketKeyEntry>) -> &mut Self {
+        self.key = values.into_iter().collect();
+        self
+    }
+
+    /// Returns the composite grouping key.
+    pub fn get_key(&self) -> &[BucketKeyEntry] {
+        &self.key
+    }
+
+    /// Appends a grouping-key entry and returns the updated value.
+    pub fn add_key(mut self, value: BucketKeyEntry) -> Self {
+        self.key.push(value);
+        self
+    }
+
+    /// Sets the number of documents in this bucket and returns the updated value.
+    pub fn count(mut self, value: i64) -> Self {
+        self.count = value;
+        self
+    }
+
+    /// Sets the number of documents in this bucket and returns this value for further mutation.
+    pub fn set_count(&mut self, value: i64) -> &mut Self {
+        self.count = value;
+        self
+    }
+
+    /// Returns the number of documents in this bucket.
+    pub fn get_count(&self) -> i64 {
+        self.count
+    }
+
+    /// Sets the metric results keyed by alias and returns the updated value.
+    pub fn metrics(
+        mut self,
+        values: impl IntoIterator<Item = (String, AggregationMetricValue)>,
+    ) -> Self {
+        self.metrics = values.into_iter().collect();
+        self
+    }
+
+    /// Sets the metric results keyed by alias and returns this value for further mutation.
+    pub fn set_metrics(
+        &mut self,
+        values: impl IntoIterator<Item = (String, AggregationMetricValue)>,
+    ) -> &mut Self {
+        self.metrics = values.into_iter().collect();
+        self
+    }
+
+    /// Returns the metric results keyed by alias.
+    pub fn get_metrics(&self) -> &HashMap<String, AggregationMetricValue> {
+        &self.metrics
+    }
+
+    /// Adds a metric result under `alias` and returns the updated value.
+    pub fn add_metric(mut self, alias: impl Into<String>, value: AggregationMetricValue) -> Self {
+        self.metrics.insert(alias.into(), value);
+        self
+    }
+
+    /// Sets the top-hits documents and returns the updated value.
+    pub fn hits(mut self, values: impl IntoIterator<Item = AggregationHit>) -> Self {
+        self.hits = values.into_iter().collect();
+        self
+    }
+
+    /// Sets the top-hits documents and returns this value for further mutation.
+    pub fn set_hits(&mut self, values: impl IntoIterator<Item = AggregationHit>) -> &mut Self {
+        self.hits = values.into_iter().collect();
+        self
+    }
+
+    /// Returns the top-hits documents.
+    pub fn get_hits(&self) -> &[AggregationHit] {
+        &self.hits
+    }
+
+    /// Appends a top-hits document and returns the updated value.
+    pub fn add_hit(mut self, value: AggregationHit) -> Self {
+        self.hits.push(value);
+        self
+    }
+
+    /// Sets the nested child buckets and returns the updated value.
+    pub fn sub_groups(mut self, values: impl IntoIterator<Item = AggregationBucket>) -> Self {
+        self.sub_groups = values.into_iter().collect();
+        self
+    }
+
+    /// Sets the nested child buckets and returns this value for further mutation.
+    pub fn set_sub_groups(
+        &mut self,
+        values: impl IntoIterator<Item = AggregationBucket>,
+    ) -> &mut Self {
+        self.sub_groups = values.into_iter().collect();
+        self
+    }
+
+    /// Returns the nested child buckets.
+    pub fn get_sub_groups(&self) -> &[AggregationBucket] {
+        &self.sub_groups
+    }
+
+    /// Appends a nested child bucket and returns the updated value.
+    pub fn add_sub_group(mut self, value: AggregationBucket) -> Self {
+        self.sub_groups.push(value);
+        self
+    }
+
+    pub(crate) fn from_proto(value: schema::AggBucket) -> Result<Self> {
+        let key = value
+            .key
+            .into_iter()
+            .map(BucketKeyEntry::from_proto)
+            .collect::<Result<_>>()?;
+        let metrics = value
+            .metrics
+            .into_iter()
+            .map(|(alias, metric)| Ok((alias, AggregationMetricValue::from_proto(metric.value)?)))
+            .collect::<Result<_>>()?;
+        let hits = value
+            .hits
+            .into_iter()
+            .map(AggregationHit::from_proto)
+            .collect::<Result<_>>()?;
+        let sub_groups = value
+            .sub_groups
+            .into_iter()
+            .map(AggregationBucket::from_proto)
+            .collect::<Result<_>>()?;
+        Ok(Self {
+            key,
+            count: value.count,
+            metrics,
+            hits,
+            sub_groups,
+        })
+    }
+}
+
+/// Groups a flat aggregation bucket list into per-query lists using `agg_topks`.
+///
+/// The server flattens buckets for all query vectors into one `repeated` list and records the
+/// number of top-level buckets per query in `agg_topks`. Both lists being empty means no
+/// aggregation is present. Otherwise a `MalformedResponse` is returned when `agg_topks` is
+/// missing for a multi-query response, when its length does not match `num_queries`, or when the
+/// counts are negative, overflow `usize`, or do not add up to the number of parsed buckets. Each
+/// query vector receives its own group, which may be empty when a query produced no buckets.
+pub(crate) fn group_aggregation_buckets(
+    buckets: Vec<schema::AggBucket>,
+    topks: Vec<i64>,
+    num_queries: i64,
+) -> Result<Vec<Vec<AggregationBucket>>> {
+    if buckets.is_empty() && topks.is_empty() {
+        return Ok(Vec::new());
+    }
+    let parsed: Vec<AggregationBucket> = buckets
+        .into_iter()
+        .map(AggregationBucket::from_proto)
+        .collect::<Result<_>>()?;
+    if topks.is_empty() {
+        if num_queries > 1 {
+            return Err(Error::MalformedResponse(
+                "aggregation buckets returned without agg_topks for a multi-query search".into(),
+            ));
+        }
+        return Ok(vec![parsed]);
+    }
+    let num_queries = usize::try_from(num_queries).map_err(|_| {
+        Error::MalformedResponse(format!(
+            "aggregation num_queries value {num_queries} does not fit usize"
+        ))
+    })?;
+    if topks.len() != num_queries {
+        return Err(Error::MalformedResponse(format!(
+            "aggregation agg_topks length {} does not match num_queries {num_queries}",
+            topks.len()
+        )));
+    }
+    let total = parsed.len();
+    let mut remaining = parsed;
+    let mut groups = Vec::with_capacity(topks.len());
+    for topk in topks {
+        if topk < 0 {
+            return Err(Error::MalformedResponse(format!(
+                "aggregation response contains a negative agg_topks value {topk}"
+            )));
+        }
+        let size = usize::try_from(topk).map_err(|_| {
+            Error::MalformedResponse(format!(
+                "aggregation agg_topks value {topk} does not fit usize"
+            ))
+        })?;
+        if size > remaining.len() {
+            return Err(Error::MalformedResponse(format!(
+                "aggregation bucket count mismatch: agg_topks sum exceeds {total} parsed buckets"
+            )));
+        }
+        groups.push(remaining.drain(..size).collect());
+    }
+    if !remaining.is_empty() {
+        return Err(Error::MalformedResponse(format!(
+            "aggregation bucket count mismatch: agg_topks sum={}, parsed={total}",
+            total - remaining.len()
+        )));
+    }
+    Ok(groups)
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // SearchResults
 ///////////////////////////////////////////////////////////////////////////////
 /// Search results for all query vectors, with one [`SingleResult`] per query vector.
@@ -2356,6 +2986,7 @@ fn result_json_kind(value: &Value) -> &'static str {
 pub struct SearchResults {
     pub(crate) results: Vec<SingleResult>,
     pub(crate) recalls: Vec<f32>,
+    pub(crate) agg_buckets: Vec<Vec<AggregationBucket>>,
 }
 
 impl SearchResults {
@@ -2364,6 +2995,7 @@ impl SearchResults {
         Self {
             results: Vec::new(),
             recalls: Vec::new(),
+            agg_buckets: Vec::new(),
         }
     }
 
@@ -2425,6 +3057,32 @@ impl SearchResults {
     /// Adds one add recall to the existing values.
     pub fn add_recall(mut self, value: f32) -> Self {
         self.recalls.push(value);
+        self
+    }
+
+    /// Sets the hierarchical aggregation buckets, grouped per query vector, and returns the
+    /// updated value.
+    pub fn agg_buckets(mut self, value: Vec<Vec<AggregationBucket>>) -> Self {
+        self.agg_buckets = value;
+        self
+    }
+
+    /// Sets the hierarchical aggregation buckets, grouped per query vector, and returns this value
+    /// for further mutation.
+    pub fn set_agg_buckets(&mut self, value: Vec<Vec<AggregationBucket>>) -> &mut Self {
+        self.agg_buckets = value;
+        self
+    }
+
+    /// Returns the hierarchical aggregation buckets, one inner list per query vector, when a
+    /// search aggregation was requested.
+    pub fn get_agg_buckets(&self) -> &[Vec<AggregationBucket>] {
+        &self.agg_buckets
+    }
+
+    /// Appends one query vector's aggregation buckets and returns the updated value.
+    pub fn add_agg_bucket(mut self, value: Vec<AggregationBucket>) -> Self {
+        self.agg_buckets.push(value);
         self
     }
 }
@@ -3598,5 +4256,314 @@ mod enum_conversion_tests {
 
         assert_eq!(lexical.r#type, common::HighlightType::Lexical as i32);
         assert_eq!(semantic.r#type, common::HighlightType::Semantic as i32);
+    }
+}
+
+#[cfg(test)]
+mod aggregation_decoding_tests {
+    use super::*;
+    use schema::{
+        agg_hit, agg_hit_field, bucket_key_entry, metric_value, AggBucket, AggHit, AggHitField,
+        BucketKeyEntry, MetricValue,
+    };
+
+    fn key(field_id: i64, field_name: &str, value: bucket_key_entry::Value) -> BucketKeyEntry {
+        BucketKeyEntry {
+            field_id,
+            field_name: field_name.to_owned(),
+            value: Some(value),
+        }
+    }
+
+    fn metrics(values: Vec<(String, MetricValue)>) -> HashMap<String, MetricValue> {
+        values.into_iter().collect()
+    }
+
+    fn metric(alias: &str, value: metric_value::Value) -> (String, MetricValue) {
+        (alias.to_owned(), MetricValue { value: Some(value) })
+    }
+
+    fn hit(pk: Option<agg_hit::Pk>, fields: Vec<AggHitField>) -> AggHit {
+        AggHit {
+            pk,
+            score: 0.5,
+            fields,
+        }
+    }
+
+    #[test]
+    fn aggregation_bucket_decodes_nested_structure() {
+        let proto = AggBucket {
+            key: vec![
+                key(
+                    1,
+                    "category",
+                    bucket_key_entry::Value::StringVal("tech".to_owned()),
+                ),
+                key(2, "year", bucket_key_entry::Value::IntVal(2026)),
+            ],
+            count: 42,
+            metrics: metrics(vec![
+                metric("total", metric_value::Value::DoubleVal(99.5)),
+                metric("min_rating", metric_value::Value::IntVal(4)),
+                metric("tag", metric_value::Value::StringVal("hot".to_owned())),
+            ]),
+            hits: vec![hit(
+                Some(agg_hit::Pk::IntPk(7)),
+                vec![AggHitField {
+                    field_id: 1,
+                    field_name: "title".to_owned(),
+                    value: Some(agg_hit_field::Value::StringVal("milvus".to_owned())),
+                }],
+            )],
+            sub_groups: vec![AggBucket {
+                key: vec![key(3, "sub", bucket_key_entry::Value::BoolVal(true))],
+                count: 1,
+                metrics: metrics(vec![metric("total", metric_value::Value::IntVal(1))]),
+                hits: vec![],
+                sub_groups: vec![],
+            }],
+        };
+
+        let bucket = AggregationBucket::from_proto(proto).expect("valid bucket");
+        assert_eq!(bucket.get_count(), 42);
+        assert_eq!(bucket.get_key().len(), 2);
+        assert_eq!(bucket.get_key()[0].get_field_name(), "category");
+        assert_eq!(
+            bucket.get_key()[0].get_value(),
+            &AggregationBucketValue::String("tech".to_owned())
+        );
+        assert_eq!(
+            bucket.get_key()[1].get_value(),
+            &AggregationBucketValue::Int(2026)
+        );
+        assert_eq!(
+            bucket.get_metrics().get("total"),
+            Some(&AggregationMetricValue::Double(99.5))
+        );
+        assert_eq!(
+            bucket.get_metrics().get("min_rating"),
+            Some(&AggregationMetricValue::Int(4))
+        );
+        assert_eq!(
+            bucket.get_metrics().get("tag"),
+            Some(&AggregationMetricValue::String("hot".to_owned()))
+        );
+        assert_eq!(bucket.get_hits().len(), 1);
+        assert_eq!(
+            bucket.get_hits()[0].get_pk(),
+            Some(&AggregationHitPk::Int(7))
+        );
+        assert_eq!(bucket.get_hits()[0].get_score(), 0.5);
+        assert_eq!(
+            bucket.get_hits()[0].get_fields()[0].get_value(),
+            &AggregationHitFieldValue::String("milvus".to_owned())
+        );
+        let sub = &bucket.get_sub_groups()[0];
+        assert_eq!(sub.get_count(), 1);
+        assert_eq!(
+            sub.get_key()[0].get_value(),
+            &AggregationBucketValue::Bool(true)
+        );
+    }
+
+    #[test]
+    fn aggregation_bucket_rejects_missing_key_value() {
+        let proto = AggBucket {
+            key: vec![BucketKeyEntry {
+                field_id: 1,
+                field_name: "category".to_owned(),
+                value: None,
+            }],
+            count: 1,
+            metrics: metrics(vec![]),
+            hits: vec![],
+            sub_groups: vec![],
+        };
+        let error =
+            AggregationBucket::from_proto(proto).expect_err("missing key value must be rejected");
+        assert!(matches!(error, Error::MalformedResponse(_)));
+        assert!(error.to_string().contains("bucket key"));
+    }
+
+    #[test]
+    fn empty_field_names_fall_back_to_field_id() {
+        let bucket = AggregationBucket::from_proto(AggBucket {
+            key: vec![key(
+                5,
+                "",
+                bucket_key_entry::Value::StringVal("x".to_owned()),
+            )],
+            count: 1,
+            metrics: metrics(vec![]),
+            hits: vec![hit(
+                Some(agg_hit::Pk::IntPk(7)),
+                vec![AggHitField {
+                    field_id: 9,
+                    field_name: String::new(),
+                    value: Some(agg_hit_field::Value::StringVal("v".to_owned())),
+                }],
+            )],
+            sub_groups: vec![],
+        })
+        .expect("valid bucket");
+
+        // Both the grouping key and hit fields substitute the numeric field id when the
+        // server omits the field name, mirroring pymilvus.
+        assert_eq!(bucket.get_key()[0].get_field_name(), "5");
+        assert_eq!(bucket.get_hits()[0].get_fields()[0].get_field_name(), "9");
+        assert_eq!(bucket.get_key()[0].get_field_id(), 5);
+        assert_eq!(bucket.get_hits()[0].get_fields()[0].get_field_id(), 9);
+    }
+
+    #[test]
+    fn aggregation_bucket_rejects_missing_metric_value() {
+        let proto = AggBucket {
+            key: vec![],
+            count: 1,
+            metrics: metrics(vec![("total".to_owned(), MetricValue { value: None })]),
+            hits: vec![],
+            sub_groups: vec![],
+        };
+        let error = AggregationBucket::from_proto(proto)
+            .expect_err("missing metric value must be rejected");
+        assert!(matches!(error, Error::MalformedResponse(_)));
+        assert!(error.to_string().contains("metric"));
+    }
+
+    #[test]
+    fn aggregation_bucket_rejects_missing_hit_field_value() {
+        let proto = AggBucket {
+            key: vec![],
+            count: 1,
+            metrics: metrics(vec![]),
+            hits: vec![hit(
+                Some(agg_hit::Pk::StrPk("doc".to_owned())),
+                vec![AggHitField {
+                    field_id: 1,
+                    field_name: "title".to_owned(),
+                    value: None,
+                }],
+            )],
+            sub_groups: vec![],
+        };
+        let error = AggregationBucket::from_proto(proto)
+            .expect_err("missing hit field value must be rejected");
+        assert!(matches!(error, Error::MalformedResponse(_)));
+    }
+
+    #[test]
+    fn search_results_exposes_grouped_aggregation_accessors() {
+        let bucket = || {
+            AggregationBucket::from_proto(AggBucket {
+                key: vec![],
+                count: 1,
+                metrics: metrics(vec![]),
+                hits: vec![],
+                sub_groups: vec![],
+            })
+            .expect("valid bucket")
+        };
+        let results =
+            SearchResults::new().agg_buckets(vec![vec![bucket(), bucket()], vec![bucket()]]);
+        assert_eq!(results.get_agg_buckets().len(), 2);
+        assert_eq!(results.get_agg_buckets()[0].len(), 2);
+        assert_eq!(results.get_agg_buckets()[1].len(), 1);
+    }
+
+    fn agg_bucket() -> schema::AggBucket {
+        schema::AggBucket {
+            key: vec![],
+            count: 1,
+            metrics: HashMap::new(),
+            hits: vec![],
+            sub_groups: vec![],
+        }
+    }
+
+    #[test]
+    fn groups_aggregation_buckets_per_query() {
+        let grouped = group_aggregation_buckets(
+            vec![agg_bucket(), agg_bucket(), agg_bucket()],
+            vec![2, 1],
+            2,
+        )
+        .expect("valid grouping");
+        assert_eq!(grouped.len(), 2);
+        assert_eq!(grouped[0].len(), 2);
+        assert_eq!(grouped[1].len(), 1);
+        assert_eq!(grouped[0][0].get_count(), 1);
+    }
+
+    #[test]
+    fn grouping_recovers_single_query_without_topks() {
+        let grouped =
+            group_aggregation_buckets(vec![agg_bucket()], Vec::new(), 1).expect("nq==1 recovery");
+        assert_eq!(grouped.len(), 1);
+        assert_eq!(grouped[0].len(), 1);
+    }
+
+    #[test]
+    fn grouping_rejects_missing_topks_for_multi_query() {
+        let error = group_aggregation_buckets(vec![agg_bucket()], Vec::new(), 2)
+            .expect_err("multi-query without agg_topks must be rejected");
+        assert!(matches!(error, Error::MalformedResponse(_)));
+        assert!(error.to_string().contains("agg_topks"));
+    }
+
+    #[test]
+    fn grouping_rejects_negative_topk() {
+        let error = group_aggregation_buckets(vec![agg_bucket()], vec![-1], 1)
+            .expect_err("negative agg_topks must be rejected");
+        assert!(matches!(error, Error::MalformedResponse(_)));
+    }
+
+    #[test]
+    fn grouping_rejects_count_mismatch() {
+        let error = group_aggregation_buckets(vec![agg_bucket(), agg_bucket()], vec![1], 1)
+            .expect_err("agg_topks sum below bucket count must be rejected");
+        assert!(matches!(error, Error::MalformedResponse(_)));
+        assert!(error.to_string().contains("mismatch"));
+
+        let error = group_aggregation_buckets(vec![agg_bucket()], vec![2], 1)
+            .expect_err("agg_topks sum above bucket count must be rejected");
+        assert!(matches!(error, Error::MalformedResponse(_)));
+        assert!(error.to_string().contains("mismatch"));
+    }
+
+    #[test]
+    fn grouping_builds_empty_groups_per_query() {
+        let grouped =
+            group_aggregation_buckets(Vec::new(), vec![0, 0], 2).expect("zero-bucket grouping");
+        assert_eq!(grouped.len(), 2);
+        assert_eq!(grouped[0].len(), 0);
+        assert_eq!(grouped[1].len(), 0);
+    }
+
+    #[test]
+    fn grouping_treats_both_empty_as_no_aggregation() {
+        let grouped = group_aggregation_buckets(Vec::new(), Vec::new(), 2).expect("no aggregation");
+        assert_eq!(grouped.len(), 0);
+    }
+
+    #[test]
+    fn grouping_rejects_topks_arity_mismatch() {
+        let error = group_aggregation_buckets(vec![agg_bucket()], vec![1], 2)
+            .expect_err("agg_topks arity must match num_queries");
+        assert!(matches!(error, Error::MalformedResponse(_)));
+        assert!(error.to_string().contains("num_queries"));
+
+        let error = group_aggregation_buckets(Vec::new(), vec![0], 2)
+            .expect_err("zero-bucket topks arity must match num_queries");
+        assert!(matches!(error, Error::MalformedResponse(_)));
+        assert!(error.to_string().contains("num_queries"));
+    }
+
+    #[test]
+    fn grouping_rejects_zero_bucket_count_exceeding_queries() {
+        let error = group_aggregation_buckets(Vec::new(), vec![1], 1)
+            .expect_err("agg_topks exceeding buckets must be rejected");
+        assert!(matches!(error, Error::MalformedResponse(_)));
+        assert!(error.to_string().contains("mismatch"));
     }
 }

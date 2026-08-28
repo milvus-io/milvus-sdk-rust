@@ -16,11 +16,13 @@
 
 //! Shared SDK-owned domain types used by the V2 client.
 
+mod aggregation;
 mod cdc;
 mod collection;
 mod common;
 mod dml;
 mod dql;
+mod function_chain;
 mod global_cluster;
 mod index;
 mod partition;
@@ -29,11 +31,13 @@ mod resource_group;
 mod snapshot;
 mod utility;
 
+pub use aggregation::*;
 pub use cdc::*;
 pub use collection::*;
 pub use common::*;
 pub use dml::*;
 pub use dql::*;
+pub use function_chain::*;
 pub(crate) use global_cluster::*;
 pub use index::*;
 pub use partition::*;
