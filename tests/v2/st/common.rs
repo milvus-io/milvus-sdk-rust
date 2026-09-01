@@ -72,7 +72,7 @@ impl CollectionCleanup {
         let database_name = database_name.into();
         Self {
             uri: std::env::var("MILVUS_URI")
-                .unwrap_or_else(|_| "http://localhost:19530".to_owned()),
+                .unwrap_or_else(|_| "http://localhost:29830".to_owned()),
             collections: collection_names
                 .into_iter()
                 .map(|name| (database_name.clone(), name.into()))
@@ -208,7 +208,7 @@ fn host_address() -> std::net::IpAddr {
 }
 
 pub(super) async fn client() -> ClientV2 {
-    let uri = std::env::var("MILVUS_URI").unwrap_or_else(|_| "http://localhost:19530".to_owned());
+    let uri = std::env::var("MILVUS_URI").unwrap_or_else(|_| "http://localhost:29830".to_owned());
     let config = ConnectConfig::new().uri(uri);
     ClientV2::new(&config).await.expect("connect to Milvus")
 }

@@ -30,7 +30,7 @@ use crate::v2::request::validation::{
 pub use crate::v2::types::Ids;
 use crate::v2::types::{
     encode_sparse_vector, validate_sparse_vector, ConsistencyLevel, Function, FunctionChain,
-    FunctionScore, MetricType, SearchAggregation,
+    FunctionScore, MetricType, QueryCursor, SearchAggregation,
 };
 pub use crate::v2::types::{
     EmbeddingList, HighlightQuery, HighlightType, Highlighter, LexicalHighlighter, SearchVectors,
@@ -1683,6 +1683,7 @@ pub struct QueryIteratorRequest {
     pub(crate) query: QueryRequest,
     pub(crate) batch_size: usize,
     pub(crate) reduce_stop_for_best: bool,
+    pub(crate) cursor: Option<QueryCursor>,
 }
 
 impl QueryIteratorRequest {
@@ -1717,6 +1718,11 @@ impl QueryIteratorRequest {
     pub fn should_reduce_stop_for_best(&self) -> bool {
         self.reduce_stop_for_best
     }
+
+    /// Returns the resumable primary-key cursor the iterator starts from, if configured.
+    pub fn cursor(&self) -> &Option<QueryCursor> {
+        &self.cursor
+    }
 }
 
 impl QueryIteratorRequest {
@@ -1725,6 +1731,7 @@ impl QueryIteratorRequest {
             query: QueryRequest::empty(),
             batch_size: 1_000,
             reduce_stop_for_best: true,
+            cursor: None,
         }
     }
 }
@@ -1760,6 +1767,23 @@ impl QueryIteratorRequestBuilder {
     /// Sets the reduce stop for best and returns the updated value.
     pub fn reduce_stop_for_best(mut self, value: bool) -> Self {
         self.value.reduce_stop_for_best = value;
+        self
+    }
+
+    /// Resumes pagination from a previously captured primary-key cursor and returns the updated
+    /// value.
+    ///
+    /// The cursor type must match the collection primary key (`Int64` for Int64 keys,
+    /// `VarChar` for VarChar keys). A plain cursor resumes strictly after the cursor value
+    /// (`pk > value`); an `element_filter` cursor resumes at the cursor value from the recorded
+    /// element offset (`pk >= value`). A request `offset` is ignored on resume.
+    ///
+    /// The cursor must carry a real primary-key position: a freshly constructed
+    /// [`QueryCursor::new`](crate::v2::types::QueryCursor::new) (which defaults to `Int64(0)`)
+    /// would silently skip every row with `pk <= 0`, so resume only with a cursor captured from
+    /// [`QueryIterator::cursor`](crate::v2::QueryIterator::cursor).
+    pub fn cursor(mut self, value: QueryCursor) -> Self {
+        self.value.cursor = Some(value);
         self
     }
 
@@ -2693,8 +2717,8 @@ mod search_request_tests {
 #[cfg(test)]
 mod query_request_tests {
     use super::{
-        GetRequest, HybridSearchRequest, Ids, QueryIteratorRequest, QueryRequest, SearchRequest,
-        SearchVectors, SubSearchRequest,
+        GetRequest, HybridSearchRequest, Ids, QueryCursor, QueryIteratorRequest, QueryRequest,
+        SearchRequest, SearchVectors, SubSearchRequest,
     };
     use crate::proto::schema::{template_array_value, template_value};
     use std::collections::HashMap;
@@ -2852,6 +2876,34 @@ mod query_request_tests {
         assert_eq!(get.namespace, None);
         assert_eq!(search.namespace, None);
         assert_eq!(hybrid.namespace, None);
+    }
+
+    #[test]
+    fn query_iterator_request_carries_a_resumable_cursor() {
+        let request = QueryIteratorRequest::builder()
+            .query(
+                QueryRequest::builder()
+                    .collection_name("books")
+                    .build()
+                    .expect("valid query"),
+            )
+            .batch_size(100)
+            .cursor(QueryCursor::int64(1_000, 42))
+            .build()
+            .expect("valid request");
+        assert_eq!(request.cursor(), &Some(QueryCursor::int64(1_000, 42)));
+        assert_eq!(request.batch_size(), 100);
+
+        let without = QueryIteratorRequest::builder()
+            .query(
+                QueryRequest::builder()
+                    .collection_name("books")
+                    .build()
+                    .expect("valid query"),
+            )
+            .build()
+            .expect("valid request");
+        assert_eq!(without.cursor(), &None);
     }
 }
 

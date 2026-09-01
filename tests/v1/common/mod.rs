@@ -93,7 +93,7 @@ impl Drop for CollectionCleanup {
 pub const DEFAULT_DIM: i64 = 128;
 pub const DEFAULT_VEC_FIELD: &str = "feature";
 pub const DEFAULT_INDEX_NAME: &str = "feature_index";
-pub const URL: &str = "http://localhost:19530";
+pub const URL: &str = "http://localhost:29830";
 pub const ENTITYNUM: i64 = 1000;
 
 pub async fn run_with_collection_cleanup<F, Fut>(

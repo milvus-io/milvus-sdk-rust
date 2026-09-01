@@ -91,6 +91,107 @@ async fn query_iterator_applies_filter() {
 }
 
 #[tokio::test]
+async fn query_iterator_cursor_resumes_without_gaps_or_duplicates() {
+    let client = common::client().await;
+    let collection = common::unique_collection_name("query_iterator_cursor");
+    let _cleanup = common::CollectionCleanup::new([&collection]);
+    prepare_iterator_collection(&client, &collection).await;
+
+    let filter = format!("{AGE_FIELD} <= 40");
+    let batch_size = 23;
+
+    // Reference: every matching primary key in iteration order from a cursor-less full iteration.
+    let reference = collect_query_iterator_ids(&client, &collection, &filter, batch_size).await;
+    assert!(!reference.is_empty());
+    assert!(reference.len() < TOTAL_COUNT);
+
+    // Read a few pages, capture the cursor, then close the iterator.
+    let query = QueryRequest::builder()
+        .collection_name(&collection)
+        .filter(&filter)
+        .output_fields([ID_FIELD])
+        .consistency_level(ConsistencyLevel::Strong)
+        .build()
+        .expect("valid query request");
+    let mut iterator = client
+        .query_iterator(
+            QueryIteratorRequest::builder()
+                .query(query.clone())
+                .batch_size(batch_size)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("create query iterator");
+
+    let mut before = Vec::new();
+    for _ in 0..4 {
+        let Some(response) = iterator.next().await.expect("fetch query iterator batch") else {
+            break;
+        };
+        let rows = response
+            .results()
+            .get_output_rows()
+            .expect("materialize query iterator rows");
+        before.extend(
+            rows.iter()
+                .map(|row| row[ID_FIELD].as_i64().expect("primary key is an integer")),
+        );
+    }
+    assert!(!before.is_empty() && before.len() < reference.len());
+    let cursor = iterator.cursor().expect("captured query cursor");
+    iterator
+        .close()
+        .await
+        .expect("close query iterator after cursor capture");
+
+    // Resume from the captured cursor in a brand-new iterator.
+    let mut resumed = client
+        .query_iterator(
+            QueryIteratorRequest::builder()
+                .query(query)
+                .batch_size(batch_size)
+                .cursor(cursor)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("create resumed query iterator");
+    let mut after = Vec::new();
+    while let Some(response) = resumed
+        .next()
+        .await
+        .expect("fetch resumed query iterator batch")
+    {
+        let rows = response
+            .results()
+            .get_output_rows()
+            .expect("materialize resumed query iterator rows");
+        after.extend(
+            rows.iter()
+                .map(|row| row[ID_FIELD].as_i64().expect("primary key is an integer")),
+        );
+    }
+    resumed.close().await.expect("close resumed query iterator");
+
+    // The records read before the cursor capture followed by those read after the resume must
+    // exactly reproduce the reference sequence: same order, no missing rows, no duplicates.
+    let combined = before
+        .iter()
+        .chain(after.iter())
+        .copied()
+        .collect::<Vec<_>>();
+    assert_eq!(
+        combined, reference,
+        "resumed query cursor must reproduce the full result set exactly"
+    );
+
+    common::drop_collection(&client, &collection)
+        .await
+        .expect("drop query-cursor collection");
+}
+
+#[tokio::test]
 async fn search_iterator_batches_and_limits() {
     let client = common::client().await;
     let collection = common::unique_collection_name("search_iterator");
@@ -300,6 +401,47 @@ async fn collect_query_rows(
         .expect("query iterator remains finished")
         .is_none());
     rows
+}
+
+/// Collects every primary key matching `filter`, in iteration order, from a cursor-less full
+/// iteration. Used as the reference sequence for cursor-resume verification.
+async fn collect_query_iterator_ids(
+    client: &ClientV2,
+    collection: &str,
+    filter: &str,
+    batch_size: usize,
+) -> Vec<i64> {
+    let query = QueryRequest::builder()
+        .collection_name(collection)
+        .filter(filter)
+        .output_fields([ID_FIELD])
+        .consistency_level(ConsistencyLevel::Strong)
+        .build()
+        .expect("valid query request");
+    let mut iterator = client
+        .query_iterator(
+            QueryIteratorRequest::builder()
+                .query(query)
+                .batch_size(batch_size)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("create query iterator");
+
+    let mut ids = Vec::new();
+    while let Some(response) = iterator.next().await.expect("fetch query iterator batch") {
+        let rows = response
+            .results()
+            .get_output_rows()
+            .expect("materialize query iterator rows");
+        ids.extend(
+            rows.iter()
+                .map(|row| row[ID_FIELD].as_i64().expect("primary key is an integer")),
+        );
+    }
+    iterator.close().await.expect("close query iterator");
+    ids
 }
 
 async fn collect_search_rows(

@@ -29,8 +29,8 @@ import uuid
 
 
 DEFAULT_IMAGE = "milvusdb/milvus:master-20260825-dd1ee671"
-DEFAULT_GRPC_PORT = 19530
-DEFAULT_HEALTH_PORT = 9091
+DEFAULT_GRPC_PORT = 29830
+DEFAULT_HEALTH_PORT = 19391
 DEFAULT_TIMEOUT = 300
 REAP_LABEL = "milvus-sdk-rust-test"
 # The 3.0 server images cannot load segments under local storage (missing PK
@@ -38,7 +38,7 @@ REAP_LABEL = "milvus-sdk-rust-test"
 # backend. `COMMON_STORAGETYPE=remote` with the default `aws` cloud provider
 # speaks the S3 API to this MinIO sidecar.
 MINIO_IMAGE = "minio/minio:RELEASE.2024-12-18T13-15-44Z"
-MINIO_PORT = 9000
+MINIO_PORT = 19300
 MINIO_ACCESS_KEY = "minioadmin"
 MINIO_SECRET_KEY = "minioadmin"
 MINIO_BUCKET = "milvus-bucket"
