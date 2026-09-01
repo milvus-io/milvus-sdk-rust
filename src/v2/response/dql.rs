@@ -790,14 +790,33 @@ impl QueryResponse {
     }
 
     pub(crate) fn from_proto(value: milvus::QueryResults) -> Result<Self> {
+        let output_fields = value
+            .fields_data
+            .into_iter()
+            .map(field_data)
+            .collect::<Result<Vec<_>>>()?;
+        let row_count = output_fields.first().map_or(0, FieldData::len);
+        let element_indices = value
+            .element_indices
+            .into_iter()
+            .map(|indices| {
+                indices
+                    .indices
+                    .map(|indices| indices.data)
+                    .unwrap_or_default()
+            })
+            .collect::<Vec<_>>();
+        if !element_indices.is_empty() && element_indices.len() != row_count {
+            return Err(Error::MalformedResponse(format!(
+                "query response element_indices length {} does not match row count {row_count}",
+                element_indices.len()
+            )));
+        }
         Ok(Self {
             results: QueryResults {
-                output_fields: value
-                    .fields_data
-                    .into_iter()
-                    .map(field_data)
-                    .collect::<Result<Vec<_>>>()?,
+                output_fields,
                 output_field_names: value.output_fields,
+                element_indices,
             },
             session_timestamp: value.session_ts,
         })
@@ -824,6 +843,12 @@ impl QueryResponse {
             first_fields.push(fields.pop().expect("split produces the first field"));
         }
 
+        let mut element_indices = self.results.element_indices;
+        let remaining_indices = if element_indices.is_empty() {
+            Vec::new()
+        } else {
+            element_indices.split_off(count)
+        };
         let output_field_names = self.results.output_field_names;
         let session_timestamp = self.session_timestamp;
         Ok((
@@ -831,6 +856,7 @@ impl QueryResponse {
                 results: QueryResults {
                     output_fields: first_fields,
                     output_field_names: output_field_names.clone(),
+                    element_indices,
                 },
                 session_timestamp,
             },
@@ -838,6 +864,7 @@ impl QueryResponse {
                 results: QueryResults {
                     output_fields: remaining_fields,
                     output_field_names,
+                    element_indices: remaining_indices,
                 },
                 session_timestamp,
             }),
@@ -3147,6 +3174,35 @@ mod tests {
         assert!(search.results().get_agg_buckets()[1].is_empty());
         assert!(search.results().get_results()[0].is_empty());
         assert!(search.results().get_results()[1].is_empty());
+    }
+
+    #[test]
+    fn query_response_rejects_element_indices_length_mismatch() {
+        let error = QueryResponse::from_proto(milvus::QueryResults {
+            fields_data: vec![schema::FieldData {
+                r#type: schema::DataType::Int64 as i32,
+                field_name: "id".into(),
+                field: Some(schema::field_data::Field::Scalars(schema::ScalarField {
+                    data: Some(schema::scalar_field::Data::LongData(schema::LongArray {
+                        data: vec![1, 2, 3],
+                        ..Default::default()
+                    })),
+                    ..Default::default()
+                })),
+                ..Default::default()
+            }],
+            output_fields: vec!["id".into()],
+            primary_field_name: "id".into(),
+            element_indices: vec![milvus::ElementIndices {
+                indices: Some(schema::LongArray {
+                    data: vec![0],
+                    ..Default::default()
+                }),
+            }],
+            ..Default::default()
+        })
+        .expect_err("element_indices length mismatch must be rejected");
+        assert!(error.to_string().contains("element_indices"));
     }
 }
 

@@ -17,7 +17,7 @@
 use milvus::client::Client;
 use milvus::error::Result;
 
-const URL: &str = "http://localhost:19530";
+const URL: &str = "http://localhost:29830";
 
 #[tokio::test]
 async fn create_client() -> Result<()> {

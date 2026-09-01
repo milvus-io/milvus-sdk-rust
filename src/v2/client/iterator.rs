@@ -22,7 +22,7 @@ use crate::proto::{common, milvus, schema};
 use crate::v2::error::status_to_result;
 use crate::v2::error::{Error, Result};
 use crate::v2::{request, response};
-use crate::v2::{DataType, IndexDesc, MetricType};
+use crate::v2::{DataType, IndexDesc, MetricType, QueryCursor, QueryCursorPk};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -51,7 +51,9 @@ pub struct QueryIterator {
     request: milvus::QueryRequest,
     batch_size: usize,
     remaining: Option<usize>,
+    session_ts: u64,
     original_filter: String,
+    is_element_filter: bool,
     primary_field_name: String,
     primary_field_type: DataType,
     cursor: Option<QueryCursor>,
@@ -67,7 +69,9 @@ impl QueryIterator {
             request: milvus::QueryRequest::default(),
             batch_size,
             remaining: Some(0),
+            session_ts: 0,
             original_filter: String::new(),
+            is_element_filter: false,
             primary_field_name: String::new(),
             primary_field_type: DataType::Unknown,
             cursor: None,
@@ -126,6 +130,11 @@ impl QueryIterator {
             );
             set_param(&mut self.request.query_params, "offset", "0".into());
             set_param(&mut self.request.query_params, "iterator", "true".into());
+            apply_element_cursor_params(
+                self.cursor.as_ref(),
+                self.is_element_filter,
+                &mut self.request.query_params,
+            );
 
             let raw = rpc_with_retry!(self.client, query, self.request.clone())?;
             status_to_result(&raw.status)?;
@@ -135,7 +144,15 @@ impl QueryIterator {
                 self.finished = true;
                 return Ok(None);
             }
-            let source_exhausted = count < self.batch_size;
+            // The server limits element_filter pages by element count (`elementLimit = limit`),
+            // so a page of multi-element entities can contain fewer than `batch_size` entities
+            // while more matching entities remain. Judging exhaustion by entity count would
+            // terminate such an iterator early and silently drop rows.
+            let source_exhausted = if self.is_element_filter {
+                query_response_element_count(&decoded) < self.batch_size
+            } else {
+                count < self.batch_size
+            };
             // With iterator reduce_stop_for_best enabled, Milvus may return more rows than the
             // requested limit. Retain complete surplus batches so subsequent next() calls avoid
             // another RPC while advancing the cursor only through rows delivered to the caller.
@@ -155,11 +172,16 @@ impl QueryIterator {
             self.finished = true;
             return Ok(None);
         }
-        let cursor =
-            query_response_cursor(&response, &self.primary_field_name, self.primary_field_type)?;
         let next_remaining = self.remaining.map(|left| left.saturating_sub(count));
         let next_finished = next_remaining == Some(0) || (source_exhausted && next_cache.is_none());
 
+        let cursor = query_response_cursor(
+            &response,
+            &self.primary_field_name,
+            self.primary_field_type,
+            self.session_ts,
+            self.is_element_filter,
+        )?;
         self.cursor = Some(cursor);
         self.remaining = next_remaining;
         self.cache = next_cache;
@@ -174,11 +196,20 @@ impl QueryIterator {
         Ok(())
     }
 
+    /// Returns the primary-key cursor position after the last page read, if any.
+    ///
+    /// Pass the returned cursor to
+    /// [`QueryIteratorRequestBuilder::cursor`](crate::v2::request::dql::QueryIteratorRequestBuilder::cursor)
+    /// on a new iterator to resume pagination from exactly this position.
+    pub fn cursor(&self) -> Option<QueryCursor> {
+        self.cursor.clone()
+    }
+
     async fn seek_to_offset(&mut self, mut offset: usize) -> Result<()> {
         while offset > 0 {
             let size = offset.min(MAX_BATCH_SIZE);
             let mut request = self.request.clone();
-            request.expr = self.next_filter();
+            request.expr = self.next_filter_exclusive();
             request.output_fields.clear();
             set_param(&mut request.query_params, "limit", size.to_string());
             set_param(&mut request.query_params, "offset", "0".into());
@@ -191,8 +222,8 @@ impl QueryIterator {
 
             let raw = rpc_with_retry!(self.client, query, request)?;
             status_to_result(&raw.status)?;
-            let count = query_row_count(&raw);
-            if count == 0 {
+            let entity_count = query_row_count(&raw);
+            if entity_count == 0 {
                 self.finished = true;
                 break;
             }
@@ -200,9 +231,19 @@ impl QueryIterator {
                 &raw,
                 &self.primary_field_name,
                 self.primary_field_type,
+                self.session_ts,
+                self.is_element_filter,
             )?);
-            offset = offset.saturating_sub(count);
-            if count < size {
+            // The server caps element_filter seek pages by element count (`elementLimit = limit`),
+            // so a page of multi-element entities can carry fewer than `size` entities while more
+            // matching rows remain; judging exhaustion by entity count would truncate the seek.
+            let exhausted = if self.is_element_filter {
+                query_proto_element_count(&raw) < size
+            } else {
+                entity_count < size
+            };
+            offset = offset.saturating_sub(entity_count);
+            if exhausted {
                 self.finished = true;
                 break;
             }
@@ -210,14 +251,36 @@ impl QueryIterator {
         Ok(())
     }
 
+    /// Returns whether the current cursor resumes an `element_filter` iterator at an element
+    /// position, mirroring pymilvus's `_has_element_cursor`.
+    fn has_element_cursor(&self) -> bool {
+        self.is_element_filter
+            && self
+                .cursor
+                .as_ref()
+                .is_some_and(|cursor| cursor.last_element_offset.is_some())
+    }
+
     fn next_filter(&self) -> String {
+        self.build_filter(self.has_element_cursor())
+    }
+
+    /// Builds the filter with a strict-exclusive primary-key predicate (`pk > value`), used by the
+    /// `iterator=false` offset seek, where Milvus rejects the `query_iter_last_*` element-resume
+    /// params (they are only accepted when `iterator=true`).
+    fn next_filter_exclusive(&self) -> String {
+        self.build_filter(false)
+    }
+
+    fn build_filter(&self, inclusive: bool) -> String {
         let Some(cursor) = &self.cursor else {
             return self.original_filter.clone();
         };
-        let cursor_filter = match cursor {
-            QueryCursor::Int64(value) => format!("{} > {value}", self.primary_field_name),
-            QueryCursor::VarChar(value) => format!(
-                "{} > {}",
+        let op = if inclusive { ">=" } else { ">" };
+        let cursor_filter = match &cursor.pk {
+            QueryCursorPk::Int64(value) => format!("{} {op} {value}", self.primary_field_name),
+            QueryCursorPk::VarChar(value) => format!(
+                "{} {op} {}",
                 self.primary_field_name,
                 serde_json::to_string(value).expect("strings always serialize to JSON")
             ),
@@ -228,15 +291,6 @@ impl QueryIterator {
             format!("{cursor_filter} and ({})", self.original_filter)
         }
     }
-}
-
-///////////////////////////////////////////////////////////////////////////////
-// QueryCursor
-///////////////////////////////////////////////////////////////////////////////
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum QueryCursor {
-    Int64(i64),
-    VarChar(String),
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -683,6 +737,7 @@ impl ClientV2 {
             query,
             batch_size,
             reduce_stop_for_best,
+            cursor,
         } = request;
         validate_batch_size(batch_size)?;
         if query.limit == Some(0) {
@@ -716,17 +771,47 @@ impl ClientV2 {
                 "query iterator primary key must be Int64 or VarChar".into(),
             ));
         }
-        let guarantee = self
-            .deduce_guarantee_timestamp(&database, &collection, query.consistency_level)
-            .await?;
+        if let Some(cursor) = &cursor {
+            let matches = match (&cursor.pk, primary_field_type) {
+                (QueryCursorPk::Int64(_), DataType::Int64) => true,
+                (QueryCursorPk::VarChar(_), DataType::VarChar) => true,
+                _ => false,
+            };
+            if !matches {
+                return Err(Error::validation(
+                    "cursor".into(),
+                    "query iterator cursor type does not match the collection primary key".into(),
+                ));
+            }
+            if cursor.last_element_offset.is_some_and(|offset| offset < 0) {
+                return Err(Error::validation(
+                    "cursor".into(),
+                    "query iterator cursor last_element_offset must not be negative".into(),
+                ));
+            }
+        }
         let offset = query.offset.unwrap_or(0).max(0) as usize;
         let remaining = match query.limit {
             Some(value) if value >= 0 => Some(value as usize),
             Some(_) | None => None,
         };
-        let mut raw = query.into_proto(&database, None, guarantee)?;
+        // When resuming from a cursor with a captured MVCC snapshot timestamp, pin the new
+        // iterator to the same data view and skip the server-side session probe entirely.
+        let resume_ts = cursor
+            .as_ref()
+            .filter(|c| c.session_ts > 0)
+            .map(|c| c.session_ts);
+        let mut raw = if let Some(ts) = resume_ts {
+            query.into_proto(&database, None, ts)?
+        } else {
+            let guarantee = self
+                .deduce_guarantee_timestamp(&database, &collection, query.consistency_level)
+                .await?;
+            query.into_proto(&database, None, guarantee)?
+        };
         set_cluster_param(&mut raw.query_params, cluster_id);
         let original_filter = raw.expr.clone();
+        let is_element_filter = is_element_filter_expr(&original_filter);
         set_param(&mut raw.query_params, "offset", "0".into());
         set_param(
             &mut raw.query_params,
@@ -744,29 +829,42 @@ impl ClientV2 {
             .into(),
         );
 
-        let mut probe = raw.clone();
-        probe.output_fields.clear();
-        probe.partition_names.clear();
-        set_param(&mut probe.query_params, "limit", "1".into());
-        set_param(&mut probe.query_params, "iterator", "true".into());
-        let probe_response = rpc_with_retry!(self, query, probe)?;
-        status_to_result(&probe_response.status)?;
-        raw.guarantee_timestamp = iterator_session_timestamp(probe_response.session_ts);
+        let session_ts = if let Some(ts) = resume_ts {
+            ts
+        } else {
+            let mut probe = raw.clone();
+            probe.output_fields.clear();
+            probe.partition_names.clear();
+            set_param(&mut probe.query_params, "limit", "1".into());
+            set_param(&mut probe.query_params, "iterator", "true".into());
+            let probe_response = rpc_with_retry!(self, query, probe)?;
+            status_to_result(&probe_response.status)?;
+            let ts = iterator_session_timestamp(probe_response.session_ts);
+            raw.guarantee_timestamp = ts;
+            ts
+        };
 
         let mut iterator = QueryIterator {
             client: self.clone(),
             request: raw,
             batch_size,
             remaining,
+            session_ts,
             original_filter,
+            is_element_filter,
             primary_field_name: primary_field.name.clone(),
             primary_field_type,
-            cursor: None,
+            cursor,
             cache: None,
             finished: false,
             closed: None,
         };
-        iterator.seek_to_offset(offset).await?;
+        // A request offset is consumed by the initial seek; resuming from a captured cursor must
+        // not re-apply it (the cursor already positions past the previously consumed rows),
+        // mirroring pymilvus's `__seek_to_offset` early return when a cursor is present.
+        if iterator.cursor.is_none() {
+            iterator.seek_to_offset(offset).await?;
+        }
         Ok(iterator)
     }
 
@@ -1241,6 +1339,39 @@ fn set_param(params: &mut Vec<common::KeyValuePair>, key: &str, value: String) {
     }
 }
 
+fn remove_param(params: &mut Vec<common::KeyValuePair>, key: &str) {
+    params.retain(|param| param.key != key);
+}
+
+/// Adds or removes the server-side `query_iter_last_pk`/`query_iter_last_element_offset` resume
+/// parameters on the supplied params based on whether the given cursor carries an element
+/// position, mirroring pymilvus's `_has_element_cursor`/`__setup_query_params`.
+fn apply_element_cursor_params(
+    cursor: Option<&QueryCursor>,
+    is_element_filter: bool,
+    params: &mut Vec<common::KeyValuePair>,
+) {
+    if !(is_element_filter && cursor.is_some_and(|cursor| cursor.last_element_offset.is_some())) {
+        remove_param(params, "query_iter_last_pk");
+        remove_param(params, "query_iter_last_element_offset");
+        return;
+    }
+    let cursor = cursor.expect("checked element cursor");
+    let pk = match &cursor.pk {
+        QueryCursorPk::Int64(value) => value.to_string(),
+        QueryCursorPk::VarChar(value) => value.clone(),
+    };
+    set_param(params, "query_iter_last_pk", pk);
+    set_param(
+        params,
+        "query_iter_last_element_offset",
+        cursor
+            .last_element_offset
+            .expect("checked element cursor")
+            .to_string(),
+    );
+}
+
 fn set_search_extra_param(params: &mut Vec<common::KeyValuePair>, key: &str, value: &str) {
     set_param(params, key, value.to_owned());
     let mut nested = params
@@ -1281,14 +1412,64 @@ fn query_row_count(response: &milvus::QueryResults) -> usize {
         .unwrap_or(0)
 }
 
+/// Returns the number of matching elements in a raw query-iterator response, used to judge
+/// exhaustion for `element_filter` iterators whose pages the server caps by element count.
+///
+/// Falls back to the entity row count when the response carries no element indices.
+fn query_proto_element_count(response: &milvus::QueryResults) -> usize {
+    if response.element_indices.is_empty() {
+        query_row_count(response)
+    } else {
+        response
+            .element_indices
+            .iter()
+            .filter_map(|indices| indices.indices.as_ref())
+            .map(|indices| indices.data.len())
+            .sum()
+    }
+}
+
 fn query_response_row_count(response: &response::dql::QueryResponse) -> usize {
     usize::try_from(response.results().get_row_count()).unwrap_or(usize::MAX)
+}
+
+/// Returns the number of matching elements in a query-iterator response, used to judge exhaustion
+/// for `element_filter` iterators whose pages the server caps by element count.
+///
+/// Falls back to the entity row count when the response carries no element indices.
+fn query_response_element_count(response: &response::dql::QueryResponse) -> usize {
+    let indices = response.results().get_element_indices();
+    if indices.is_empty() {
+        query_response_row_count(response)
+    } else {
+        indices.iter().map(Vec::len).sum()
+    }
+}
+
+fn is_element_filter_expr(expr: &str) -> bool {
+    // Milvus's parser skips whitespace between tokens (Plan.g4 `Whitespace: [ \t]+ -> skip`), so
+    // both `element_filter(...)` and `element_filter (...)` are valid calls. Match the function
+    // token loosely (optional whitespace before `(`) while still rejecting a bare substring in a
+    // string literal or a longer identifier such as `element_filtered_value`.
+    let lower = expr.to_ascii_lowercase();
+    let needle = "element_filter";
+    let mut search_from = 0;
+    while let Some(found) = lower[search_from..].find(needle) {
+        let after = search_from + found + needle.len();
+        if lower[after..].trim_start().starts_with('(') {
+            return true;
+        }
+        search_from = after;
+    }
+    false
 }
 
 fn query_response_cursor(
     response: &response::dql::QueryResponse,
     primary_field_name: &str,
     data_type: DataType,
+    session_ts: u64,
+    element_filter: bool,
 ) -> Result<QueryCursor> {
     let field = response
         .results()
@@ -1298,35 +1479,50 @@ fn query_response_cursor(
                 "primary-key field {primary_field_name:?} is missing from query iterator response"
             ))
         })?;
-    match (data_type, field.inner()) {
+    let mut cursor = match (data_type, field.inner()) {
         (DataType::Int64, crate::v2::FieldData::Int64 { values, .. }) => values
             .last()
             .copied()
-            .map(QueryCursor::Int64)
+            .map(|pk| QueryCursor::int64(session_ts, pk))
             .ok_or_else(|| {
                 Error::MalformedResponse(format!(
                     "primary-key field {primary_field_name:?} has no values"
                 ))
-            }),
+            })?,
         (DataType::VarChar, crate::v2::FieldData::VarChar { values, .. }) => values
             .last()
             .cloned()
-            .map(QueryCursor::VarChar)
+            .map(|pk| QueryCursor::varchar(session_ts, pk))
             .ok_or_else(|| {
                 Error::MalformedResponse(format!(
                     "primary-key field {primary_field_name:?} has no values"
                 ))
-            }),
-        _ => Err(Error::MalformedResponse(format!(
-            "primary-key field {primary_field_name:?} does not match its collection schema"
-        ))),
+            })?,
+        _ => {
+            return Err(Error::MalformedResponse(format!(
+                "primary-key field {primary_field_name:?} does not match its collection schema"
+            )))
+        }
+    };
+    if element_filter {
+        if let Some(offset) = response
+            .results()
+            .get_element_indices()
+            .last()
+            .and_then(|indices| indices.last())
+        {
+            cursor = cursor.last_element_offset(*offset);
+        }
     }
+    Ok(cursor)
 }
 
 fn query_proto_cursor(
     response: &milvus::QueryResults,
     primary_field_name: &str,
     data_type: DataType,
+    session_ts: u64,
+    element_filter: bool,
 ) -> Result<QueryCursor> {
     let field = response
         .fields_data
@@ -1337,10 +1533,25 @@ fn query_proto_cursor(
                 "primary-key field {primary_field_name:?} is missing from query iterator response"
             ))
         })?;
-    query_proto_field_cursor(field, data_type)
+    let mut cursor = query_proto_field_cursor(field, data_type, session_ts)?;
+    if element_filter {
+        if let Some(offset) = response
+            .element_indices
+            .last()
+            .and_then(|indices| indices.indices.as_ref())
+            .and_then(|indices| indices.data.last())
+        {
+            cursor = cursor.last_element_offset(*offset);
+        }
+    }
+    Ok(cursor)
 }
 
-fn query_proto_field_cursor(field: &schema::FieldData, data_type: DataType) -> Result<QueryCursor> {
+fn query_proto_field_cursor(
+    field: &schema::FieldData,
+    data_type: DataType,
+    session_ts: u64,
+) -> Result<QueryCursor> {
     use schema::{field_data, scalar_field};
 
     let scalar = match field.field.as_ref() {
@@ -1357,7 +1568,7 @@ fn query_proto_field_cursor(field: &schema::FieldData, data_type: DataType) -> R
             .data
             .last()
             .copied()
-            .map(QueryCursor::Int64)
+            .map(|pk| QueryCursor::int64(session_ts, pk))
             .ok_or_else(|| {
                 Error::MalformedResponse(format!(
                     "primary-key field {:?} has no values",
@@ -1368,7 +1579,7 @@ fn query_proto_field_cursor(field: &schema::FieldData, data_type: DataType) -> R
             .data
             .last()
             .cloned()
-            .map(QueryCursor::VarChar)
+            .map(|pk| QueryCursor::varchar(session_ts, pk))
             .ok_or_else(|| {
                 Error::MalformedResponse(format!(
                     "primary-key field {:?} has no values",
@@ -1441,14 +1652,34 @@ fn field_row_count(field: &schema::FieldData) -> usize {
 #[cfg(test)]
 mod search_iterator_v2_tests {
     use super::{
-        format_iterator_bound, hybrid_timestamp_from_millis, search_iterator_result_count,
-        search_iterator_v2_metadata, set_search_extra_param, set_search_numeric_param,
-        validate_search_iterator_input, validate_search_iterator_range, LegacyFilteredIds,
+        format_iterator_bound, hybrid_timestamp_from_millis, is_element_filter_expr,
+        search_iterator_result_count, search_iterator_v2_metadata, set_search_extra_param,
+        set_search_numeric_param, validate_search_iterator_input, validate_search_iterator_range,
+        LegacyFilteredIds,
     };
     use crate::proto::{common, milvus, schema};
     use crate::v2::request::dql::{SearchRequest, SearchVectors};
     use crate::v2::types::FunctionChain;
     use crate::v2::MetricType;
+
+    #[test]
+    fn is_element_filter_expr_requires_the_function_call() {
+        assert!(is_element_filter_expr("element_filter(tags, tag == \"x\")"));
+        assert!(is_element_filter_expr("Element_Filter( a, b )"));
+        // Milvus's parser skips whitespace between tokens, so whitespace before `(` is valid too.
+        assert!(is_element_filter_expr(
+            "element_filter (tags, tag == \"x\")"
+        ));
+        assert!(is_element_filter_expr(
+            "element_filter\t(tags, tag == \"x\")"
+        ));
+
+        // A plain filter that merely contains the text must not be misclassified.
+        assert!(!is_element_filter_expr("name == \"element_filter\""));
+        assert!(!is_element_filter_expr("tags[\"element_filter\"] == 1"));
+        assert!(!is_element_filter_expr("element_filtered_value > 0"));
+        assert!(!is_element_filter_expr(""));
+    }
 
     #[test]
     fn last_bound_uses_double_precision_wire_text() {

@@ -1634,18 +1634,181 @@ impl MilvusService for MockMilvus {
             } else if request.expr.contains("element_filter_query_iterator") {
                 let start = request
                     .expr
-                    .split_once("id > ")
+                    .split_once("id >=")
                     .and_then(|(_, value)| value.split_whitespace().next())
                     .and_then(|value| value.parse::<i64>().ok())
+                    .or_else(|| {
+                        request
+                            .expr
+                            .split_once("id > ")
+                            .and_then(|(_, value)| value.split_whitespace().next())
+                            .and_then(|value| value.parse::<i64>().ok())
+                    })
                     .map_or(0, |value| value + 1);
-                let end = (start + 1).min(3);
+                let limit = request
+                    .query_params
+                    .iter()
+                    .find(|param| param.key == "limit")
+                    .and_then(|param| param.value.parse::<i64>().ok())
+                    .unwrap_or(1)
+                    .max(1);
+                let end = (start + limit).min(17_000);
+                let ids: Vec<i64> = (start..end).collect();
+                let count = ids.len();
                 pb::QueryResults {
                     status: Some(success_status()),
-                    fields_data: vec![int64_field("id", (start..end).collect())],
+                    fields_data: vec![int64_field("id", ids)],
                     collection_name: "books".into(),
                     output_fields: vec!["id".into()],
                     session_ts: 300,
                     primary_field_name: "id".into(),
+                    element_indices: (0..count)
+                        .map(|i| pb::ElementIndices {
+                            indices: Some(schema::LongArray {
+                                data: vec![start as i64 + i as i64],
+                                ..Default::default()
+                            }),
+                        })
+                        .collect(),
+                    ..Default::default()
+                }
+            } else if request.expr.contains("varchar_element_query_iterator") {
+                let start = request
+                    .expr
+                    .split_once("title >=")
+                    .and_then(|(_, value)| value.trim_start().strip_prefix('"'))
+                    .and_then(|value| value.split_once('"').map(|(value, _)| value.to_owned()))
+                    .or_else(|| {
+                        request
+                            .expr
+                            .split_once("title > ")
+                            .and_then(|(_, value)| value.trim_start().strip_prefix('"'))
+                            .and_then(|value| {
+                                value.split_once('"').map(|(value, _)| value.to_owned())
+                            })
+                    });
+                let (pk, element_offset) = match start.as_deref() {
+                    Some("row-0") => ("row-1", 1_i64),
+                    _ => ("row-0", 0_i64),
+                };
+                pb::QueryResults {
+                    status: Some(success_status()),
+                    fields_data: vec![string_field("title", vec![pk])],
+                    collection_name: "novels".into(),
+                    output_fields: vec!["title".into()],
+                    session_ts: 300,
+                    primary_field_name: "title".into(),
+                    element_indices: vec![pb::ElementIndices {
+                        indices: Some(schema::LongArray {
+                            data: vec![element_offset],
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                }
+            } else if request.expr.contains("plain_varchar_query_iterator") {
+                let start = request
+                    .expr
+                    .split_once("title > ")
+                    .and_then(|(_, value)| value.trim_start().strip_prefix('"'))
+                    .and_then(|value| value.split_once('"').map(|(value, _)| value.to_owned()));
+                let pk = match start.as_deref() {
+                    Some("row-0") => "row-1",
+                    _ => "row-0",
+                };
+                pb::QueryResults {
+                    status: Some(success_status()),
+                    fields_data: vec![string_field("title", vec![pk])],
+                    collection_name: "novels".into(),
+                    output_fields: vec!["title".into()],
+                    session_ts: 300,
+                    primary_field_name: "title".into(),
+                    ..Default::default()
+                }
+            } else if request.expr.contains("multi_element_query_iterator") {
+                // Each entity matches two elements, so the server caps a page at `limit` elements
+                // and returns at most `limit / 2` entities (mimicking `elementLimit` when
+                // `reduce_stop_for_best=false`).
+                let start = request
+                    .expr
+                    .split_once("id >=")
+                    .and_then(|(_, value)| value.split_whitespace().next())
+                    .and_then(|value| value.parse::<i64>().ok())
+                    .or_else(|| {
+                        request
+                            .expr
+                            .split_once("id > ")
+                            .and_then(|(_, value)| value.split_whitespace().next())
+                            .and_then(|value| value.parse::<i64>().ok())
+                    })
+                    .map_or(0, |value| value + 1);
+                let limit = request
+                    .query_params
+                    .iter()
+                    .find(|param| param.key == "limit")
+                    .and_then(|param| param.value.parse::<i64>().ok())
+                    .unwrap_or(1)
+                    .max(1);
+                let end = (start + (limit + 1) / 2).min(4);
+                let ids: Vec<i64> = (start..end).collect();
+                pb::QueryResults {
+                    status: Some(success_status()),
+                    fields_data: vec![int64_field("id", ids.clone())],
+                    collection_name: "books".into(),
+                    output_fields: vec!["id".into()],
+                    session_ts: 300,
+                    primary_field_name: "id".into(),
+                    element_indices: ids
+                        .iter()
+                        .map(|id| pb::ElementIndices {
+                            indices: Some(schema::LongArray {
+                                data: vec![id * 2, id * 2 + 1],
+                                ..Default::default()
+                            }),
+                        })
+                        .collect(),
+                    ..Default::default()
+                }
+            } else if request
+                .expr
+                .contains("int64_reenter_element_query_iterator")
+            {
+                // A fresh request starts at primary key 0 with elements [0, 1]; a resume
+                // (`id >= X` + `query_iter_last_element_offset=K`) re-enters primary key X with
+                // its remaining elements after K, pinning the response-side element resume.
+                let start = request
+                    .expr
+                    .split_once("id >=")
+                    .and_then(|(_, value)| value.split_whitespace().next())
+                    .and_then(|value| value.parse::<i64>().ok())
+                    .or_else(|| {
+                        request
+                            .expr
+                            .split_once("id > ")
+                            .and_then(|(_, value)| value.split_whitespace().next())
+                            .and_then(|value| value.parse::<i64>().ok())
+                    })
+                    .unwrap_or(0);
+                let offset = request
+                    .query_params
+                    .iter()
+                    .find(|param| param.key == "query_iter_last_element_offset")
+                    .and_then(|param| param.value.parse::<i64>().ok());
+                let start_offset = offset.map(|offset| offset + 1).unwrap_or(0);
+                pb::QueryResults {
+                    status: Some(success_status()),
+                    fields_data: vec![int64_field("id", vec![start])],
+                    collection_name: "books".into(),
+                    output_fields: vec!["id".into()],
+                    session_ts: 300,
+                    primary_field_name: "id".into(),
+                    element_indices: vec![pb::ElementIndices {
+                        indices: Some(schema::LongArray {
+                            data: vec![start_offset, start_offset + 1],
+                            ..Default::default()
+                        }),
+                    }],
                     ..Default::default()
                 }
             } else if request.expr.contains("decode_failure_query_iterator")

@@ -16,7 +16,7 @@
 
 use milvus::client::*;
 
-const URL: &str = "http://localhost:19530";
+const URL: &str = "http://localhost:29830";
 
 #[tokio::test]
 async fn test_client_keepalive() {

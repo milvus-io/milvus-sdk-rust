@@ -1214,6 +1214,7 @@ impl SemanticHighlighter {
 pub struct QueryResults {
     pub(crate) output_fields: Vec<FieldData>,
     pub(crate) output_field_names: Vec<String>,
+    pub(crate) element_indices: Vec<Vec<i64>>,
 }
 
 impl QueryResults {
@@ -1222,6 +1223,7 @@ impl QueryResults {
         Self {
             output_fields: Vec::new(),
             output_field_names: Vec::new(),
+            element_indices: Vec::new(),
         }
     }
 
@@ -1294,6 +1296,32 @@ impl QueryResults {
     /// Adds one add output field name to the existing values.
     pub fn add_output_field_name(mut self, value: impl Into<String>) -> Self {
         self.output_field_names.push(value.into());
+        self
+    }
+
+    /// Sets the per-row element indices and returns the updated value.
+    ///
+    /// Each inner list holds the element offsets within an entity when an `element_filter`
+    /// iterator is used; ordinary queries leave this empty.
+    pub fn element_indices(mut self, value: Vec<Vec<i64>>) -> Self {
+        self.element_indices = value;
+        self
+    }
+
+    /// Sets the per-row element indices and returns this value for further mutation.
+    pub fn set_element_indices(&mut self, value: Vec<Vec<i64>>) -> &mut Self {
+        self.element_indices = value;
+        self
+    }
+
+    /// Returns the per-row element indices, one list per entity.
+    pub fn get_element_indices(&self) -> &[Vec<i64>] {
+        &self.element_indices
+    }
+
+    /// Appends one entity's element indices and returns the updated value.
+    pub fn add_element_indices(mut self, value: Vec<i64>) -> Self {
+        self.element_indices.push(value);
         self
     }
 
@@ -2975,6 +3003,151 @@ pub(crate) fn group_aggregation_buckets(
         )));
     }
     Ok(groups)
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// QueryCursor
+///////////////////////////////////////////////////////////////////////////////
+/// Resumable cursor for a query iterator, mirroring the Java/Python SDKs' `QueryIteratorCursor`.
+///
+/// A cursor bundles the MVCC snapshot timestamp (`session_ts`) from the original iterator with
+/// the primary-key position after the last page read. Restoring both on resume pins the new
+/// iterator to the same data view as the original, so concurrent inserts/deletes between capture
+/// and resume cannot cause missed or duplicated rows. For `element_filter` iterators the cursor
+/// additionally carries `last_element_offset`, the element position within the last primary key
+/// from which the server resumes, matching pymilvus.
+///
+/// Capture a cursor from [`QueryIterator::cursor`](crate::v2::QueryIterator::cursor) after
+/// reading a few pages, then pass it to
+/// [`QueryIteratorRequestBuilder::cursor`](crate::v2::request::dql::QueryIteratorRequestBuilder::cursor)
+/// to resume pagination in a brand-new iterator.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct QueryCursor {
+    pub(crate) session_ts: u64,
+    pub(crate) pk: QueryCursorPk,
+    pub(crate) last_element_offset: Option<i64>,
+}
+
+/// Primary-key position of a [`QueryCursor`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum QueryCursorPk {
+    /// Int64 primary-key position.
+    Int64(i64),
+    /// VarChar primary-key position.
+    VarChar(String),
+}
+
+impl QueryCursor {
+    /// Creates a value initialized with its SDK defaults.
+    ///
+    /// The default cursor carries an `Int64` primary-key position of `0` and no element offset.
+    /// Use [`Self::int64`]/[`Self::varchar`] for the primary construction path, or configure this
+    /// default with the fluent and in-place setters.
+    ///
+    /// # Warning
+    ///
+    /// The default cursor is **not a valid resume point**: passing it to
+    /// [`QueryIteratorRequestBuilder::cursor`](crate::v2::request::dql::QueryIteratorRequestBuilder::cursor)
+    /// resumes from strictly after primary key `0`, silently skipping any rows with `pk <= 0`.
+    /// Resume only with a cursor captured from
+    /// [`QueryIterator::cursor`](crate::v2::QueryIterator::cursor) or constructed with an explicit
+    /// primary-key position via [`Self::int64`]/[`Self::varchar`].
+    pub fn new() -> Self {
+        Self {
+            session_ts: 0,
+            pk: QueryCursorPk::Int64(0),
+            last_element_offset: None,
+        }
+    }
+
+    /// Creates a cursor with an Int64 primary-key position.
+    ///
+    /// `session_ts` pins the MVCC snapshot the resumed iterator reads from. Pass `0` when building
+    /// a cursor from scratch: the SDK then runs the server-side timestamp probe and derives the
+    /// guarantee timestamp, exactly as a fresh iterator does. Pass the timestamp captured from
+    /// [`QueryIterator::cursor`](crate::v2::QueryIterator::cursor) (see [`QueryCursor::get_session_ts`])
+    /// to pin the resumed iterator to the original data view and skip the probe.
+    pub fn int64(session_ts: u64, pk: i64) -> Self {
+        Self {
+            session_ts,
+            pk: QueryCursorPk::Int64(pk),
+            last_element_offset: None,
+        }
+    }
+
+    /// Creates a cursor with a VarChar primary-key position.
+    ///
+    /// `session_ts` pins the MVCC snapshot the resumed iterator reads from. Pass `0` when building
+    /// a cursor from scratch: the SDK then runs the server-side timestamp probe and derives the
+    /// guarantee timestamp, exactly as a fresh iterator does. Pass the timestamp captured from
+    /// [`QueryIterator::cursor`](crate::v2::QueryIterator::cursor) (see [`QueryCursor::get_session_ts`])
+    /// to pin the resumed iterator to the original data view and skip the probe.
+    pub fn varchar(session_ts: u64, pk: impl Into<String>) -> Self {
+        Self {
+            session_ts,
+            pk: QueryCursorPk::VarChar(pk.into()),
+            last_element_offset: None,
+        }
+    }
+
+    /// Sets the MVCC snapshot timestamp and returns the updated value.
+    pub fn session_ts(mut self, value: u64) -> Self {
+        self.session_ts = value;
+        self
+    }
+
+    /// Sets the MVCC snapshot timestamp and returns this value for further mutation.
+    pub fn set_session_ts(&mut self, value: u64) -> &mut Self {
+        self.session_ts = value;
+        self
+    }
+
+    /// Returns the MVCC snapshot timestamp pinned from the original iterator session.
+    pub fn get_session_ts(&self) -> u64 {
+        self.session_ts
+    }
+
+    /// Sets the primary-key position and returns the updated value.
+    pub fn pk(mut self, value: QueryCursorPk) -> Self {
+        self.pk = value;
+        self
+    }
+
+    /// Sets the primary-key position and returns this value for further mutation.
+    pub fn set_pk(&mut self, value: QueryCursorPk) -> &mut Self {
+        self.pk = value;
+        self
+    }
+
+    /// Returns the primary-key position after the last page read.
+    pub fn get_pk(&self) -> &QueryCursorPk {
+        &self.pk
+    }
+
+    /// Sets the element position within the last primary key and returns the updated value.
+    ///
+    /// Only meaningful for `element_filter` iterators; ordinary iterators leave it `None`.
+    pub fn last_element_offset(mut self, value: i64) -> Self {
+        self.last_element_offset = Some(value);
+        self
+    }
+
+    /// Sets the element position within the last primary key and returns this value for further
+    /// mutation.
+    ///
+    /// Only meaningful for `element_filter` iterators; ordinary iterators leave it `None`.
+    pub fn set_last_element_offset(&mut self, value: i64) -> &mut Self {
+        self.last_element_offset = Some(value);
+        self
+    }
+
+    /// Returns the element position within the last primary key, if this is an `element_filter`
+    /// cursor.
+    pub fn get_last_element_offset(&self) -> Option<i64> {
+        self.last_element_offset
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
