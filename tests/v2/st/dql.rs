@@ -1362,6 +1362,197 @@ async fn insert_query_and_search_struct_vector_subfield() {
     );
 }
 
+#[tokio::test]
+async fn query_decodes_nullable_struct_rows() {
+    const STRUCT_FIELD: &str = "events";
+    const LABEL_FIELD: &str = "label";
+    const SCORE_FIELD: &str = "score";
+
+    let client = common::client().await;
+    let collection_name = common::unique_collection_name("nullable_struct");
+    let _cleanup = common::CollectionCleanup::new([&collection_name]);
+    let schema = CollectionSchema::new()
+        .enable_dynamic_field(false)
+        .add_field(
+            FieldSchema::new()
+                .name("id")
+                .data_type(DataType::Int64)
+                .primary_key(true),
+        )
+        .add_field(
+            FieldSchema::new()
+                .name("vector")
+                .data_type(DataType::FloatVector)
+                .dimension(4),
+        )
+        .add_struct_field(
+            StructFieldSchema::new()
+                .name(STRUCT_FIELD)
+                .max_capacity(4)
+                .nullable(true)
+                .add_field(
+                    FieldSchema::new()
+                        .name(LABEL_FIELD)
+                        .data_type(DataType::VarChar)
+                        .max_length(64),
+                )
+                .add_field(
+                    FieldSchema::new()
+                        .name(SCORE_FIELD)
+                        .data_type(DataType::Int32),
+                ),
+        );
+    client
+        .create_collection(
+            CreateCollectionRequest::builder()
+                .collection_name(&collection_name)
+                .schema(schema)
+                .consistency_level(ConsistencyLevel::Strong)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("create nullable-struct collection");
+
+    client
+        .insert(
+            InsertRequest::builder()
+                .collection_name(&collection_name)
+                .rows(vec![
+                    json!({
+                        "id": 1,
+                        "vector": [0.1, 0.2, 0.3, 0.4],
+                        (STRUCT_FIELD): [
+                            { (LABEL_FIELD): "first", (SCORE_FIELD): 10 },
+                            { (LABEL_FIELD): "second", (SCORE_FIELD): 20 }
+                        ]
+                    })
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+                    json!({
+                        "id": 2,
+                        "vector": [0.5, 0.6, 0.7, 0.8],
+                        (STRUCT_FIELD): serde_json::Value::Null
+                    })
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+                    json!({
+                        "id": 3,
+                        "vector": [0.9, 1.0, 1.1, 1.2],
+                        (STRUCT_FIELD): [{ (LABEL_FIELD): "third", (SCORE_FIELD): 30 }]
+                    })
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+                ])
+                .build()
+                .expect("build nullable-struct insert"),
+        )
+        .await
+        .expect("insert nullable struct rows");
+    client
+        .flush(
+            FlushRequest::builder()
+                .collection_names([&collection_name])
+                .wait_flushed_ms(60_000)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("flush nullable struct rows");
+    client
+        .create_index(
+            CreateIndexRequest::builder()
+                .collection_name(&collection_name)
+                .index_param(
+                    IndexParam::new()
+                        .field_name("vector")
+                        .index_type(IndexType::AutoIndex)
+                        .metric_type(MetricType::L2),
+                )
+                .sync(true)
+                .timeout_ms(60_000)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("create vector index");
+    client
+        .load_collection(
+            LoadCollectionRequest::builder()
+                .collection_name(&collection_name)
+                .sync(true)
+                .timeout_ms(60_000)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("load nullable-struct collection");
+
+    // The nullable struct's nullable is propagated to every sub-field on the wire.
+    let description = client
+        .describe_collection(
+            DescribeCollectionRequest::builder()
+                .collection_name(&collection_name)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("describe nullable-struct collection");
+    let described = description
+        .description()
+        .get_schema()
+        .get_struct_fields()
+        .iter()
+        .find(|field| field.get_name() == STRUCT_FIELD)
+        .expect("described struct field");
+    assert!(described.is_nullable());
+    for sub_field in described.get_fields() {
+        assert!(
+            sub_field.is_nullable(),
+            "struct sub-field must inherit nullable"
+        );
+    }
+
+    let response = client
+        .query(
+            QueryRequest::builder()
+                .collection_name(&collection_name)
+                .filter("id in [1, 2, 3]")
+                .output_fields(["id", STRUCT_FIELD])
+                .limit(3)
+                .consistency_level(ConsistencyLevel::Strong)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("query nullable struct rows");
+    common::drop_collection(&client, &collection_name)
+        .await
+        .expect("drop nullable-struct collection");
+
+    let rows = response
+        .results()
+        .get_output_rows()
+        .expect("materialize nullable-struct query rows");
+    let rows = rows_by_id(&rows);
+    assert_eq!(rows.len(), 3);
+    assert_eq!(
+        rows.get(&1).unwrap().get(STRUCT_FIELD).unwrap(),
+        &json!([
+            { (LABEL_FIELD): "first", (SCORE_FIELD): 10 },
+            { (LABEL_FIELD): "second", (SCORE_FIELD): 20 }
+        ])
+    );
+    assert!(rows.get(&2).unwrap().get(STRUCT_FIELD).unwrap().is_null());
+    assert_eq!(
+        rows.get(&3).unwrap().get(STRUCT_FIELD).unwrap(),
+        &json!([{ (LABEL_FIELD): "third", (SCORE_FIELD): 30 }])
+    );
+}
+
 fn assert_struct_output_rows(
     rows: &[EntityRow],
     expected_struct_rows: &HashMap<i64, Value>,

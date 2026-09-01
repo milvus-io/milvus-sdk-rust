@@ -947,10 +947,10 @@ impl StructFieldSchema {
                     "struct sub-fields cannot be clustering keys".into(),
                 ));
             }
-            if !self.nullable && field.nullable {
+            if field.nullable && !self.nullable {
                 return Err(Error::validation(
                     field.name.clone(),
-                    "sub-fields of a non-nullable struct cannot be nullable".into(),
+                    "struct sub-fields cannot be nullable individually, set nullable on the struct instead".into(),
                 ));
             }
             if field.default_value.is_some() {
@@ -966,6 +966,7 @@ impl StructFieldSchema {
 
     pub(crate) fn into_proto(self) -> schema::StructArrayFieldSchema {
         let max_capacity = self.max_capacity.to_string();
+        let nullable = self.nullable;
         schema::StructArrayFieldSchema {
             field_id: 0,
             name: self.name,
@@ -982,6 +983,9 @@ impl StructFieldSchema {
                         schema::DataType::Array
                     } as i32;
                     value.element_type = data_type.into_proto() as i32;
+                    // A struct is nullable as a whole: the struct's nullable is applied to
+                    // every sub-field on the wire (aligned with pymilvus and the Java SDK).
+                    value.nullable = nullable;
                     value.type_params.retain(|pair| pair.key != "max_capacity");
                     value.type_params.push(common::KeyValuePair {
                         key: "max_capacity".into(),
@@ -991,7 +995,7 @@ impl StructFieldSchema {
                 })
                 .collect(),
             type_params: Vec::new(),
-            nullable: self.nullable,
+            nullable,
             ..Default::default()
         }
     }
@@ -1040,7 +1044,11 @@ impl StructFieldSchema {
                     field.data_type = field.element_type;
                     field.element_type = schema::DataType::None as i32;
                     field.type_params.retain(|pair| pair.key != "max_capacity");
-                    FieldSchema::from_proto(field)
+                    let mut field = FieldSchema::from_proto(field)?;
+                    // A struct's nullable is applied to every sub-field on the wire, so the
+                    // decoded sub-fields inherit the struct's nullable.
+                    field.nullable = value.nullable;
+                    Ok(field)
                 })
                 .collect::<Result<Vec<_>>>()?,
         };
@@ -2331,6 +2339,56 @@ mod collection_schema_tests {
     }
 
     #[test]
+    fn struct_field_schema_propagates_nullable_to_subfields_on_the_wire() {
+        // A struct is nullable as a whole: the struct's nullable is applied to every
+        // sub-field on the wire (aligned with pymilvus and the Java SDK). Sub-fields
+        // cannot be nullable individually.
+        let nullable_struct = StructFieldSchema::new()
+            .name("items")
+            .max_capacity(8)
+            .nullable(true)
+            .add_field(
+                FieldSchema::new()
+                    .name("score")
+                    .data_type(DataType::Float)
+                    .nullable(false),
+            );
+        let proto = nullable_struct.clone().into_proto();
+        assert!(proto.nullable);
+        assert_eq!(proto.fields.len(), 1);
+        assert!(
+            proto.fields[0].nullable,
+            "nullable struct must propagate to sub-fields"
+        );
+
+        let non_nullable_struct = StructFieldSchema::new()
+            .name("items")
+            .max_capacity(8)
+            .nullable(false)
+            .add_field(
+                FieldSchema::new()
+                    .name("score")
+                    .data_type(DataType::Float)
+                    .nullable(false),
+            );
+        let proto = non_nullable_struct.clone().into_proto();
+        assert!(!proto.nullable);
+        assert!(
+            !proto.fields[0].nullable,
+            "non-nullable struct sub-fields stay non-nullable"
+        );
+
+        // Round-trip: a nullable struct decodes back with nullable sub-fields, and the
+        // decoded schema must pass validate() so describe -> recreate keeps working.
+        let decoded = StructFieldSchema::from_proto(nullable_struct.into_proto()).unwrap();
+        assert!(decoded.is_nullable());
+        assert!(decoded.get_fields()[0].is_nullable());
+        decoded
+            .validate()
+            .expect("decoded nullable struct must re-validate for describe -> recreate");
+    }
+
+    #[test]
     fn array_element_type_converts_to_proto_and_round_trips() {
         let sdk = CollectionSchema::new().add_field(
             FieldSchema::new()
@@ -3089,14 +3147,33 @@ mod constructor_value_tests {
         assert_eq!(value.get_max_capacity().to_owned(), 16);
         assert!(value.is_nullable());
         assert_eq!(value.get_fields().to_owned(), [field]);
+        let round_tripped = StructFieldSchema::from_proto(value.clone().into_proto()).unwrap();
+        assert!(round_tripped.is_nullable());
+        // The struct's nullable is applied to every sub-field on the wire, so the
+        // round-tripped sub-field inherits nullable=true.
+        assert!(round_tripped.get_fields()[0].is_nullable());
         assert_eq!(
-            StructFieldSchema::from_proto(value.clone().into_proto()).unwrap(),
-            value
+            StructFieldSchema::new()
+                .name("items")
+                .description("description")
+                .max_capacity(16)
+                .nullable(true)
+                .add_field(
+                    FieldSchema::new()
+                        .name("text")
+                        .data_type(DataType::VarChar)
+                        .max_length(128)
+                        .nullable(true)
+                ),
+            round_tripped
         );
     }
 
     #[test]
-    fn struct_field_schema_nullable_parent_allows_nullable_subfields() {
+    fn struct_field_schema_allows_nullable_subfields_under_nullable_struct() {
+        // A nullable struct's sub-fields inherit nullable=true on the wire and on
+        // decode, so re-validating a described schema (describe -> recreate) must
+        // succeed. A sub-field may be nullable only when the struct is nullable.
         let nullable_parent = StructFieldSchema::new()
             .name("items")
             .max_capacity(8)
@@ -3108,7 +3185,9 @@ mod constructor_value_tests {
                     .max_length(64)
                     .nullable(true),
             );
-        assert!(nullable_parent.validate().is_ok());
+        nullable_parent
+            .validate()
+            .expect("nullable sub-fields under a nullable struct must validate");
 
         let non_nullable_parent = StructFieldSchema::new()
             .name("items")
@@ -3121,7 +3200,7 @@ mod constructor_value_tests {
                     .nullable(true),
             );
         let error = non_nullable_parent.validate().unwrap_err();
-        assert!(error.to_string().contains("non-nullable struct"));
+        assert!(error.to_string().contains("nullable individually"));
     }
 
     #[test]

@@ -446,39 +446,60 @@ fn rows_to_columns(
         if partial_update && present == 0 {
             continue;
         }
-        if present != rows.len() {
+        if partial_update && present != rows.len() {
             return Err(Error::validation(
                 field_name,
-                "struct field must be present in every row".into(),
+                "a partial-update struct field must be present in every row or omitted from every row"
+                    .into(),
             ));
         }
-        let values = rows
-            .iter()
-            .map(|row| {
-                row.get(&field_name)
-                    .and_then(Value::as_array)
-                    .ok_or_else(|| {
-                        Error::validation(
-                            field_name.clone(),
-                            "struct field value must be an array of objects".into(),
-                        )
-                    })?
-                    .iter()
-                    .map(|value| {
-                        value.as_object().cloned().ok_or_else(|| {
+        let mut values = Vec::with_capacity(rows.len());
+        let mut valid_data = Vec::with_capacity(rows.len());
+        for row in rows {
+            match row.get(&field_name).filter(|value| !value.is_null()) {
+                Some(value) => {
+                    let parsed = value
+                        .as_array()
+                        .ok_or_else(|| {
                             Error::validation(
                                 field_name.clone(),
-                                "every struct element must be an object".into(),
+                                "struct field value must be an array of objects".into(),
                             )
+                        })?
+                        .iter()
+                        .map(|value| {
+                            value.as_object().cloned().ok_or_else(|| {
+                                Error::validation(
+                                    field_name.clone(),
+                                    "every struct element must be an object".into(),
+                                )
+                            })
                         })
-                    })
-                    .collect::<Result<Vec<_>>>()
-            })
-            .collect::<Result<Vec<_>>>()?;
-        columns.push(FieldData::Struct {
+                        .collect::<Result<Vec<_>>>()?;
+                    valid_data.push(true);
+                    values.push(parsed);
+                }
+                None => {
+                    if field.nullable {
+                        valid_data.push(false);
+                    } else {
+                        return Err(Error::validation(
+                            field_name.clone(),
+                            "struct field is missing or null but the struct is not nullable".into(),
+                        ));
+                    }
+                }
+            }
+        }
+        let data = FieldData::Struct {
             name: field_name,
             values,
-        });
+        };
+        if valid_data.iter().all(|valid| *valid) {
+            columns.push(data);
+        } else {
+            columns.push(FieldData::nullable(data, valid_data)?);
+        }
     }
 
     let known_fields = collection
@@ -547,17 +568,27 @@ fn validate_columns_against_schema(
             ));
         }
         if struct_fields.contains_key(column.name()) {
+            let struct_field = struct_fields[column.name()];
             if !matches!(column.inner(), FieldData::Struct { .. }) {
                 return Err(Error::validation(
                     column.name().to_owned(),
                     "field data type does not match struct schema".into(),
                 ));
             }
-            if column.valid_data().is_some() {
-                return Err(Error::validation(
-                    column.name().to_owned(),
-                    "struct array fields cannot be nullable".into(),
-                ));
+            if let Some(valid_data) = column.valid_data() {
+                if !struct_field.nullable {
+                    return Err(Error::validation(
+                        column.name().to_owned(),
+                        "null struct rows require a nullable struct field".into(),
+                    ));
+                }
+                let valid_count = valid_data.iter().filter(|valid| **valid).count();
+                if column.inner().len() != valid_count {
+                    return Err(Error::validation(
+                        column.name().to_owned(),
+                        "struct rows and validity bitmap have inconsistent lengths".into(),
+                    ));
+                }
             }
             continue;
         }
@@ -821,12 +852,39 @@ fn struct_column_to_proto(
 ) -> Result<schema::FieldData> {
     use schema::{field_data, vector_field};
 
-    let FieldData::Struct { name, values } = column else {
-        return Err(Error::validation(
-            struct_schema.name.clone(),
-            "field data type does not match struct schema".into(),
-        ));
+    // A nullable struct column arrives as FieldData::Nullable wrapping the Struct
+    // rows; the validity bitmap marks which rows are null structs. Non-nullable
+    // structs arrive as a plain Struct column.
+    let (name, values, valid_data) = match column {
+        FieldData::Struct { name, values } => (name.clone(), values.as_slice(), None),
+        FieldData::Nullable { data, valid_data } => match data.as_ref() {
+            FieldData::Struct { name, values } => {
+                (name.clone(), values.as_slice(), Some(valid_data.as_slice()))
+            }
+            _ => {
+                return Err(Error::validation(
+                    struct_schema.name.clone(),
+                    "field data type does not match struct schema".into(),
+                ))
+            }
+        },
+        _ => {
+            return Err(Error::validation(
+                struct_schema.name.clone(),
+                "field data type does not match struct schema".into(),
+            ))
+        }
     };
+    let struct_row_count = valid_data.map_or(values.len(), |data| data.len());
+    if let Some(data) = valid_data {
+        let valid_count = data.iter().filter(|valid| **valid).count();
+        if values.len() != valid_count {
+            return Err(Error::validation(
+                name.clone(),
+                "struct rows and validity bitmap have inconsistent lengths".into(),
+            ));
+        }
+    }
     let max_capacity = struct_schema
         .type_params
         .iter()
@@ -883,10 +941,18 @@ fn struct_column_to_proto(
         } else {
             None
         };
-        let mut valid_data = Vec::new();
+        let mut sub_valid_data = Vec::new();
         let default = field_default_json(&element_schema)?;
 
-        for row in values {
+        let mut value_index = 0;
+        for row_index in 0..struct_row_count {
+            let row_valid = valid_data.map_or(true, |data| data[row_index]);
+            if !row_valid {
+                sub_valid_data.push(false);
+                continue;
+            }
+            let row = &values[value_index];
+            value_index += 1;
             let mut nested_values = Vec::with_capacity(row.len());
             let mut row_valid_data = Vec::with_capacity(row.len());
             for value in row {
@@ -930,7 +996,7 @@ fn struct_column_to_proto(
             }
             nested.validate_value_constraints(&element_schema)?;
             let nested = nested.into_proto_with_schema(&element_schema)?;
-            valid_data.extend(row_valid_data);
+            sub_valid_data.push(true);
             match nested.field {
                 Some(field_data::Field::Scalars(scalars)) => scalar_rows.push(scalars),
                 Some(field_data::Field::Vectors(vectors)) => vector_rows.push(vectors),
@@ -974,10 +1040,10 @@ fn struct_column_to_proto(
             field_name: sub_schema.name.clone(),
             field_id: sub_schema.field_id,
             is_dynamic: false,
-            valid_data: if valid_data.iter().all(|valid| *valid) {
+            valid_data: if sub_valid_data.iter().all(|valid| *valid) {
                 Vec::new()
             } else {
-                valid_data
+                sub_valid_data
             },
             field: Some(field),
             ..Default::default()
@@ -1901,15 +1967,15 @@ mod tests {
     }
 
     #[test]
-    fn struct_subfields_apply_nullable_and_default_values() {
+    fn struct_subfields_apply_default_values() {
         let mut schema = extended_collection_schema();
         let struct_schema = &mut schema.struct_array_fields[0];
         struct_schema.fields[0].default_value = Some(schema::ValueField {
             data: Some(schema::value_field::Data::StringData("default".into())),
             ..Default::default()
         });
-        struct_schema.fields[1].nullable = true;
         let values = vec![vec![[
+            ("location".into(), json!("POINT (3 4)")),
             ("observed_at".into(), json!("2026-07-15T12:31:00+08:00")),
             ("embedding".into(), json!([0.1, 0.2])),
         ]
@@ -1941,7 +2007,7 @@ mod tests {
             panic!("expected struct array data");
         };
         assert!(structs.fields[0].valid_data.is_empty());
-        assert_eq!(structs.fields[1].valid_data, vec![false]);
+        assert!(structs.fields[1].valid_data.is_empty());
         let Some(schema::field_data::Field::Scalars(label)) = &structs.fields[0].field else {
             panic!("expected scalar struct subfield");
         };
@@ -1952,6 +2018,98 @@ mod tests {
             panic!("expected string struct subfield");
         };
         assert_eq!(labels.data, vec!["default"]);
+    }
+
+    #[test]
+    fn nullable_struct_row_encodes_valid_data_and_compacts_payload() {
+        let mut schema = extended_collection_schema();
+        schema.struct_array_fields[0].nullable = true;
+        let rows = vec![
+            json!({
+                "id": 1,
+                "location": "POINT (1 1)",
+                "observed_at": "2026-07-15T12:30:00+08:00",
+                "events": [{
+                    "label": "start",
+                    "location": "POINT (3 4)",
+                    "observed_at": "2026-07-15T12:31:00+08:00",
+                    "embedding": [0.1, 0.2]
+                }]
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+            json!({
+                "id": 2,
+                "location": "POINT (1 1)",
+                "observed_at": "2026-07-15T12:30:00+08:00",
+                "events": null
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+            json!({
+                "id": 3,
+                "location": "POINT (1 1)",
+                "observed_at": "2026-07-15T12:30:00+08:00",
+                "events": [{
+                    "label": "stop",
+                    "location": "POINT (5 6)",
+                    "observed_at": "2026-07-15T12:32:00+08:00",
+                    "embedding": [0.3, 0.4]
+                }]
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        ];
+        let columns = rows_to_columns(&rows, &schema, false, false).unwrap();
+        assert!(matches!(
+            columns[3],
+            FieldData::Nullable {
+                ref data,
+                ..
+            } if matches!(data.as_ref(), FieldData::Struct { .. })
+        ));
+        let proto = columns_to_proto(columns, &schema).unwrap();
+        let Some(schema::field_data::Field::StructArrays(structs)) = &proto[3].field else {
+            panic!("expected struct array data");
+        };
+        // The null middle row is marked invalid on every sub-field with a shared mask,
+        // and only the present rows contribute payload data (compacted).
+        for sub_field in &structs.fields {
+            assert_eq!(sub_field.valid_data, vec![true, false, true]);
+        }
+        let Some(schema::field_data::Field::Scalars(label)) = &structs.fields[0].field else {
+            panic!("expected scalar struct subfield");
+        };
+        let Some(schema::scalar_field::Data::ArrayData(labels)) = &label.data else {
+            panic!("expected array data for struct subfield");
+        };
+        assert_eq!(labels.data.len(), 2);
+        let Some(schema::field_data::Field::Vectors(embedding)) = &structs.fields[3].field else {
+            panic!("expected vector struct subfield");
+        };
+        let Some(schema::vector_field::Data::VectorArray(embedding)) = &embedding.data else {
+            panic!("expected vector array data");
+        };
+        assert_eq!(embedding.data.len(), 2);
+    }
+
+    #[test]
+    fn non_nullable_struct_rejects_null_rows() {
+        let schema = extended_collection_schema();
+        let rows = vec![json!({
+            "id": 1,
+            "location": "POINT (1 1)",
+            "observed_at": "2026-07-15T12:30:00+08:00",
+            "events": null
+        })
+        .as_object()
+        .unwrap()
+        .clone()];
+        let error = rows_to_columns(&rows, &schema, false, false).unwrap_err();
+        assert!(error.to_string().contains("not nullable"));
     }
 
     #[test]
