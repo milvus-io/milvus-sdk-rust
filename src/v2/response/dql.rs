@@ -573,59 +573,49 @@ fn struct_field_data(name: String, value: schema::StructArrayField) -> Option<Fi
                 let scalar_field::Data::ArrayData(array) = scalars.data? else {
                     return None;
                 };
-                if let Some(valid_data) = &parent_valid_data {
-                    if array.data.len() != valid_data.len() {
-                        return None;
-                    }
-                }
-                array
-                    .data
-                    .into_iter()
-                    .enumerate()
-                    .map(|(index, scalars)| {
-                        if parent_valid_at(index) == Some(false) {
-                            return Some(Vec::new());
-                        }
+                let field_name = field_name.clone();
+                let element_type = array.element_type;
+                let field_id = field.field_id;
+                decode_struct_subfield_rows(
+                    array.data,
+                    parent_valid_data.as_deref(),
+                    &parent_valid_at,
+                    move |scalars| {
                         field_data_to_json_values(decode_field_data(schema::FieldData {
-                            r#type: array.element_type,
+                            r#type: element_type,
                             field_name: field_name.clone(),
-                            field_id: field.field_id,
+                            field_id,
                             is_dynamic: false,
                             valid_data: Vec::new(),
                             field: Some(proto_field_data::Field::Scalars(scalars)),
                             ..Default::default()
                         })?)
-                    })
-                    .collect::<Option<Vec<_>>>()?
+                    },
+                )?
             }
             proto_field_data::Field::Vectors(vectors) => {
                 let vector_field::Data::VectorArray(array) = vectors.data? else {
                     return None;
                 };
-                if let Some(valid_data) = &parent_valid_data {
-                    if array.data.len() != valid_data.len() {
-                        return None;
-                    }
-                }
-                array
-                    .data
-                    .into_iter()
-                    .enumerate()
-                    .map(|(index, vectors)| {
-                        if parent_valid_at(index) == Some(false) {
-                            return Some(Vec::new());
-                        }
+                let field_name = field_name.clone();
+                let element_type = array.element_type;
+                let field_id = field.field_id;
+                decode_struct_subfield_rows(
+                    array.data,
+                    parent_valid_data.as_deref(),
+                    &parent_valid_at,
+                    move |vectors| {
                         field_data_to_json_values(decode_field_data(schema::FieldData {
-                            r#type: array.element_type,
+                            r#type: element_type,
                             field_name: field_name.clone(),
-                            field_id: field.field_id,
+                            field_id,
                             is_dynamic: false,
                             valid_data: Vec::new(),
                             field: Some(proto_field_data::Field::Vectors(vectors)),
                             ..Default::default()
                         })?)
-                    })
-                    .collect::<Option<Vec<_>>>()?
+                    },
+                )?
             }
             proto_field_data::Field::StructArrays(_) => return None,
         };
@@ -664,6 +654,70 @@ fn struct_field_data(name: String, value: schema::StructArrayField) -> Option<Fi
         .collect();
     let data = FieldData::Struct { name, values };
     FieldData::nullable(data, valid_data).ok()
+}
+
+/// Aligns a decoded struct sub-field column to the logical struct rows.
+///
+/// Servers can return a sub-field either with a full-length payload (one entry
+/// per logical row, null rows carrying an empty placeholder) or a compacted
+/// payload (only the non-null rows). When a validity mask is present the
+/// compacted payload is re-expanded so every logical row maps back to its
+/// original position, mirroring the Java SDK's `alignColumnData`.
+fn align_struct_subfield(
+    grouped: Vec<Vec<serde_json::Value>>,
+    valid_data: Option<&[bool]>,
+) -> Option<Vec<Vec<serde_json::Value>>> {
+    let Some(valid_data) = valid_data else {
+        return Some(grouped);
+    };
+    if grouped.len() == valid_data.len() {
+        // Full-length payload: null rows are empty placeholders already.
+        return Some(grouped);
+    }
+    let valid_count = valid_data.iter().filter(|valid| **valid).count();
+    if grouped.len() != valid_count {
+        return None;
+    }
+    // Compacted payload: re-expand to the full logical row count.
+    let mut aligned = Vec::with_capacity(valid_data.len());
+    let mut grouped = grouped.into_iter();
+    for valid in valid_data {
+        if *valid {
+            aligned.push(grouped.next()?);
+        } else {
+            aligned.push(Vec::new());
+        }
+    }
+    Some(aligned)
+}
+
+/// Decodes one struct sub-field's payload rows and aligns them back to the
+/// logical struct rows. Scalar (`ArrayData`) and vector (`VectorArray`)
+/// sub-fields share the same full-length vs compacted handling; only the
+/// per-row decoding differs, which is supplied through `decode_row`.
+fn decode_struct_subfield_rows<T>(
+    rows: Vec<T>,
+    valid_data: Option<&[bool]>,
+    parent_valid_at: &dyn Fn(usize) -> Option<bool>,
+    decode_row: impl Fn(T) -> Option<Vec<serde_json::Value>>,
+) -> Option<Vec<Vec<serde_json::Value>>> {
+    let full_length = valid_data.is_none_or(|valid_data| rows.len() == valid_data.len());
+    let grouped = if full_length {
+        rows.into_iter()
+            .enumerate()
+            .map(|(index, row)| {
+                if parent_valid_at(index) == Some(false) {
+                    return Some(Vec::new());
+                }
+                decode_row(row)
+            })
+            .collect::<Option<Vec<_>>>()?
+    } else {
+        rows.into_iter()
+            .map(decode_row)
+            .collect::<Option<Vec<_>>>()?
+    };
+    align_struct_subfield(grouped, valid_data)
 }
 
 fn field_data_to_json_values(value: FieldData) -> Option<Vec<serde_json::Value>> {
@@ -2554,6 +2608,185 @@ mod tests {
             assert_eq!(values[1].get("rating"), Some(&serde_json::json!(4)));
             assert_eq!(values[1].get("tag"), Some(&serde_json::json!("classic")));
         }
+    }
+
+    #[test]
+    fn query_decodes_compacted_nullable_struct_payload() {
+        // A nullable struct row can arrive with a compacted payload where only the
+        // non-null rows carry data and a shared valid_data mask marks the null rows.
+        // The decoder must re-expand the compacted sub-field columns so the null
+        // struct rows map back to their original positions (Java SDK alignColumnData).
+        use schema::{field_data, scalar_field};
+        let rating = schema::FieldData {
+            r#type: schema::DataType::Array as i32,
+            field_name: "rating".into(),
+            valid_data: vec![false, true, false],
+            field: Some(field_data::Field::Scalars(schema::ScalarField {
+                valid_data: vec![false, true, false],
+                data: Some(scalar_field::Data::ArrayData(schema::ArrayArray {
+                    element_type: schema::DataType::Int32 as i32,
+                    data: vec![schema::ScalarField {
+                        data: Some(scalar_field::Data::IntData(schema::IntArray {
+                            data: vec![5, 4],
+                        })),
+                        ..Default::default()
+                    }],
+                })),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let tag = schema::FieldData {
+            r#type: schema::DataType::Array as i32,
+            field_name: "tag".into(),
+            valid_data: vec![false, true, false],
+            field: Some(field_data::Field::Scalars(schema::ScalarField {
+                valid_data: vec![false, true, false],
+                data: Some(scalar_field::Data::ArrayData(schema::ArrayArray {
+                    element_type: schema::DataType::VarChar as i32,
+                    data: vec![schema::ScalarField {
+                        data: Some(scalar_field::Data::StringData(schema::StringArray {
+                            data: vec!["favorite".into(), "classic".into()],
+                        })),
+                        ..Default::default()
+                    }],
+                })),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let metadata = schema::FieldData {
+            r#type: schema::DataType::ArrayOfStruct as i32,
+            field_name: "metadata".into(),
+            field: Some(field_data::Field::StructArrays(schema::StructArrayField {
+                fields: vec![rating, tag],
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let query = QueryResponse::from_proto(milvus::QueryResults {
+            collection_name: "ignored_collection".into(),
+            fields_data: vec![
+                schema::FieldData {
+                    r#type: schema::DataType::Int64 as i32,
+                    field_name: "id".into(),
+                    field: Some(field_data::Field::Scalars(schema::ScalarField {
+                        data: Some(scalar_field::Data::LongData(schema::LongArray {
+                            data: vec![1, 2, 3],
+                        })),
+                        ..Default::default()
+                    })),
+                    ..Default::default()
+                },
+                metadata,
+            ],
+            output_fields: vec!["id".into(), "metadata".into()],
+            primary_field_name: "id".into(),
+            ..Default::default()
+        })
+        .unwrap();
+
+        let rows: Vec<_> = query.results().rows().unwrap().collect();
+        assert_eq!(rows.len(), 3);
+        assert!(matches!(
+            rows[0].get("metadata").unwrap(),
+            crate::v2::types::ResultValue::Null
+        ));
+        let crate::v2::types::ResultValue::Struct(values) = rows[1].get("metadata").unwrap() else {
+            panic!("expected non-null struct values");
+        };
+        assert_eq!(values.len(), 2);
+        assert_eq!(values[0].get("rating"), Some(&serde_json::json!(5)));
+        assert_eq!(values[0].get("tag"), Some(&serde_json::json!("favorite")));
+        assert_eq!(values[1].get("rating"), Some(&serde_json::json!(4)));
+        assert_eq!(values[1].get("tag"), Some(&serde_json::json!("classic")));
+        assert!(matches!(
+            rows[2].get("metadata").unwrap(),
+            crate::v2::types::ResultValue::Null
+        ));
+    }
+
+    #[test]
+    fn query_decodes_compacted_nullable_struct_vector_subfield() {
+        // align_struct_subfield is shared by the scalar (ArrayData) and vector
+        // (VectorArray) sub-field decode paths; verify the compacted re-expansion
+        // also works when the struct carries a vector sub-field.
+        use schema::{field_data, vector_field};
+        let embedding = schema::FieldData {
+            r#type: schema::DataType::ArrayOfVector as i32,
+            field_name: "embedding".into(),
+            valid_data: vec![false, true, false],
+            field: Some(field_data::Field::Vectors(schema::VectorField {
+                valid_data: vec![false, true, false],
+                dim: 2,
+                data: Some(vector_field::Data::VectorArray(schema::VectorArray {
+                    dim: 2,
+                    element_type: schema::DataType::FloatVector as i32,
+                    data: vec![schema::VectorField {
+                        valid_data: Vec::new(),
+                        dim: 2,
+                        data: Some(vector_field::Data::FloatVector(schema::FloatArray {
+                            data: vec![1.0, 2.0, 3.0, 4.0],
+                        })),
+                    }],
+                })),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let metadata = schema::FieldData {
+            r#type: schema::DataType::ArrayOfStruct as i32,
+            field_name: "metadata".into(),
+            field: Some(field_data::Field::StructArrays(schema::StructArrayField {
+                fields: vec![embedding],
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let query = QueryResponse::from_proto(milvus::QueryResults {
+            collection_name: "ignored_collection".into(),
+            fields_data: vec![
+                schema::FieldData {
+                    r#type: schema::DataType::Int64 as i32,
+                    field_name: "id".into(),
+                    field: Some(field_data::Field::Scalars(schema::ScalarField {
+                        data: Some(schema::scalar_field::Data::LongData(schema::LongArray {
+                            data: vec![1, 2, 3],
+                        })),
+                        ..Default::default()
+                    })),
+                    ..Default::default()
+                },
+                metadata,
+            ],
+            output_fields: vec!["id".into(), "metadata".into()],
+            primary_field_name: "id".into(),
+            ..Default::default()
+        })
+        .unwrap();
+
+        let rows: Vec<_> = query.results().rows().unwrap().collect();
+        assert_eq!(rows.len(), 3);
+        assert!(matches!(
+            rows[0].get("metadata").unwrap(),
+            crate::v2::types::ResultValue::Null
+        ));
+        let crate::v2::types::ResultValue::Struct(values) = rows[1].get("metadata").unwrap() else {
+            panic!("expected non-null struct values");
+        };
+        assert_eq!(values.len(), 2);
+        assert_eq!(
+            values[0].get("embedding"),
+            Some(&serde_json::json!([1.0, 2.0]))
+        );
+        assert_eq!(
+            values[1].get("embedding"),
+            Some(&serde_json::json!([3.0, 4.0]))
+        );
+        assert!(matches!(
+            rows[2].get("metadata").unwrap(),
+            crate::v2::types::ResultValue::Null
+        ));
     }
 
     #[test]
