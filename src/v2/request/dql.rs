@@ -1663,10 +1663,10 @@ impl HybridSearchRequestBuilder {
         non_negative_i64("offset", self.value.offset)?;
         positive_i64("group_size", self.value.group_size)?;
         validate_search_extra_params(&self.value.extra_params)?;
-        if self.value.round_decimal < -1 {
+        if !(-1..=6).contains(&self.value.round_decimal) {
             return Err(Error::validation(
                 "round_decimal".into(),
-                "must be -1 or greater".into(),
+                "must be within -1..=6".into(),
             ));
         }
         Ok(self.value)
@@ -1933,10 +1933,10 @@ fn validate_search_request(value: &SearchRequest) -> Result<()> {
     positive_i64("limit", value.limit)?;
     non_negative_i64("offset", value.offset)?;
     positive_i64("group_size", value.group_size)?;
-    if value.round_decimal < -1 {
+    if !(-1..=6).contains(&value.round_decimal) {
         return Err(Error::validation(
             "round_decimal".into(),
-            "must be -1 or greater".into(),
+            "must be within -1..=6".into(),
         ));
     }
     validate_search_extra_params(&value.extra_params)?;
@@ -2006,7 +2006,13 @@ fn validate_sub_search_request(value: &SubSearchRequest) -> Result<()> {
 }
 
 fn validate_search_extra_params(extra_params: &HashMap<String, String>) -> Result<()> {
-    const RESERVED: [&str; 4] = ["params", "topk", "anns_field", "metric_type"];
+    const RESERVED: [&str; 5] = [
+        "params",
+        "topk",
+        "anns_field",
+        "metric_type",
+        "round_decimal",
+    ];
     if let Some(key) = RESERVED
         .into_iter()
         .find(|key| extra_params.contains_key(*key))
@@ -2353,6 +2359,68 @@ mod search_request_tests {
     }
 
     #[test]
+    fn search_rejects_out_of_range_round_decimal() {
+        // PyMilvus accepts round_decimal in -2 < rd < 7 (i.e. -1..=6); reject both
+        // bounds client-side instead of waiting for the server.
+        for round_decimal in [-2, 7, 100] {
+            let result = SearchRequest::builder()
+                .collection_name("books")
+                .vector_field("embedding")
+                .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+                .round_decimal(round_decimal)
+                .build();
+            assert!(
+                matches!(
+                    result,
+                    Err(crate::v2::error::Error::Validation(error))
+                        if error.parameter() == "round_decimal"
+                ),
+                "round_decimal {round_decimal} must be rejected"
+            );
+        }
+        for round_decimal in [-1, 0, 6] {
+            SearchRequest::builder()
+                .collection_name("books")
+                .vector_field("embedding")
+                .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+                .round_decimal(round_decimal)
+                .build()
+                .unwrap_or_else(|error| {
+                    panic!("round_decimal {round_decimal} must be accepted: {error}")
+                });
+        }
+    }
+
+    #[test]
+    fn hybrid_search_rejects_out_of_range_round_decimal() {
+        for round_decimal in [-2, 7, 100] {
+            let result = HybridSearchRequest::builder()
+                .collection_name("books")
+                .sub_requests(vec![SubSearchRequest::empty()])
+                .round_decimal(round_decimal)
+                .build();
+            assert!(
+                matches!(
+                    result,
+                    Err(crate::v2::error::Error::Validation(error))
+                        if error.parameter() == "round_decimal"
+                ),
+                "round_decimal {round_decimal} must be rejected"
+            );
+        }
+        for round_decimal in [-1, 0, 6] {
+            HybridSearchRequest::builder()
+                .collection_name("books")
+                .sub_requests(vec![SubSearchRequest::empty()])
+                .round_decimal(round_decimal)
+                .build()
+                .unwrap_or_else(|error| {
+                    panic!("round_decimal {round_decimal} must be accepted: {error}")
+                });
+        }
+    }
+
+    #[test]
     fn search_rejects_function_chains_combined_with_rerank() {
         let chain = FunctionChain::new()
             .stage(FunctionChainStage::L2Rerank)
@@ -2640,7 +2708,13 @@ mod search_request_tests {
 
     #[test]
     fn search_builders_reject_reserved_extra_params() {
-        for key in ["params", "topk", "anns_field", "metric_type"] {
+        for key in [
+            "params",
+            "topk",
+            "anns_field",
+            "metric_type",
+            "round_decimal",
+        ] {
             let extra_params = HashMap::from([(key.to_owned(), "value".to_owned())]);
             assert!(SearchRequest::builder()
                 .collection_name("books")
@@ -3146,7 +3220,7 @@ mod builder_value_tests {
         let output_fields = vec!["output_fields-value".to_owned()];
         let limit = 7;
         let offset = 7;
-        let round_decimal = 7;
+        let round_decimal = 6;
         let ignore_growing = true;
         let group_by_field = "group_by_field-value".to_owned();
         let group_size = 7;
@@ -3344,7 +3418,7 @@ mod builder_value_tests {
             .function_type(crate::v2::FunctionType::Bm25);
         let limit = 7;
         let offset = 7;
-        let round_decimal = 7;
+        let round_decimal = 6;
         let ignore_growing = true;
         let extra_params = HashMap::from([("key-value".to_owned(), "value-value".to_owned())]);
         let group_by_field = "group_by_field-value".to_owned();
@@ -3502,5 +3576,38 @@ mod builder_value_tests {
             .search(search)
             .build()
             .is_err());
+    }
+
+    #[test]
+    fn search_iterator_request_applies_search_round_decimal_bound() {
+        // The iterator delegates to validate_search_request for the wrapped search,
+        // so only a search whose round_decimal is within -1..=6 can be wrapped.
+        for round_decimal in [-2, 7, 100] {
+            let search = SearchRequest::builder()
+                .collection_name("books")
+                .vectors(SearchVectors::Float(vec![vec![0.0]]))
+                .round_decimal(round_decimal)
+                .build();
+            assert!(
+                search.is_err(),
+                "round_decimal {round_decimal} must be rejected at the search level"
+            );
+        }
+        for round_decimal in [-1, 0, 6] {
+            let search = SearchRequest::builder()
+                .collection_name("books")
+                .vectors(SearchVectors::Float(vec![vec![0.0]]))
+                .round_decimal(round_decimal)
+                .build()
+                .unwrap_or_else(|error| {
+                    panic!("round_decimal {round_decimal} must be accepted: {error}")
+                });
+            SearchIteratorRequest::builder()
+                .search(search)
+                .build()
+                .unwrap_or_else(|error| {
+                    panic!("round_decimal {round_decimal} must be accepted: {error}")
+                });
+        }
     }
 }
