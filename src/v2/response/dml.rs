@@ -38,12 +38,9 @@ pub struct DmlResponse {
 }
 
 impl DmlResponse {
-    ///////////////////////////////////////////////////////////////////////////////
-    // Test Cases
-    ///////////////////////////////////////////////////////////////////////////////
-
-    #[cfg(test)]
-    fn empty() -> Self {
+    /// Creates an empty response used when the client short-circuits an empty
+    /// mutation before issuing the RPC (matching pymilvus's empty-input behavior).
+    pub(crate) fn empty() -> Self {
         Self {
             ids: Ids::default(),
             succeeded_indices: Vec::new(),

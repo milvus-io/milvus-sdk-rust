@@ -81,6 +81,9 @@ impl ClientV2 {
         request: request::dql::GetRequest,
         cluster_id: &str,
     ) -> Result<response::dql::GetResponse> {
+        if request.ids.is_empty() {
+            return Ok(response::dql::QueryResponse::empty());
+        }
         let collection = request.collection_name.clone();
         let telemetry = self.telemetry.begin_operation("Query", &collection);
         let result = async {

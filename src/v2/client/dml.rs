@@ -33,6 +33,9 @@ impl ClientV2 {
         &self,
         request: request::dml::InsertRequest,
     ) -> Result<response::dml::InsertResponse> {
+        if request.columns.is_empty() && request.rows.is_empty() {
+            return Ok(response::dml::DmlResponse::empty());
+        }
         let collection_name = request.collection_name.clone();
         let telemetry = self.telemetry.begin_operation("Insert", &collection_name);
         let result = async {
@@ -99,6 +102,9 @@ impl ClientV2 {
         &self,
         request: request::dml::UpsertRequest,
     ) -> Result<response::dml::UpsertResponse> {
+        if request.insert.columns.is_empty() && request.insert.rows.is_empty() {
+            return Ok(response::dml::DmlResponse::empty());
+        }
         let collection_name = request.insert.collection_name.clone();
         let telemetry = self.telemetry.begin_operation("Upsert", &collection_name);
         let result = async {

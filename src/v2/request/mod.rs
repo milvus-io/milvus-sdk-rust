@@ -111,11 +111,11 @@ mod validation_tests {
     }
 
     #[test]
-    fn builders_reject_incomplete_dml_and_cdc_requests() {
+    fn dml_builders_require_collection_but_allow_empty_data() {
         assert!(InsertRequest::builder()
             .collection_name("books")
             .build()
-            .is_err());
+            .is_ok());
         assert!(UpsertRequest::builder().build().is_err());
         assert!(DumpMessagesRequest::builder()
             .physical_channel("channel")

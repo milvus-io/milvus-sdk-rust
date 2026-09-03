@@ -470,15 +470,12 @@ impl GetRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// Empty ids are allowed: the client short-circuits a get with no ids into an
+    /// empty result without issuing the RPC, matching pymilvus.
     pub fn build(self) -> Result<GetRequest> {
         required("collection_name", &self.value.collection_name)?;
         non_empty_strings("partition_names", &self.value.partition_names)?;
-        if self.value.ids.is_empty() {
-            return Err(Error::validation(
-                "ids".into(),
-                "must contain at least one primary key".into(),
-            ));
-        }
         Ok(self.value)
     }
 }

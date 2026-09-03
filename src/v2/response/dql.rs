@@ -808,12 +808,10 @@ pub struct QueryResponse {
 }
 
 impl QueryResponse {
-    ///////////////////////////////////////////////////////////////////////////////
-    // Test Cases
-    ///////////////////////////////////////////////////////////////////////////////
-
-    #[cfg(test)]
-    fn empty() -> Self {
+    /// Creates an empty response used when the client short-circuits a request
+    /// with no ids before issuing the RPC (matching pymilvus's empty-input
+    /// behavior).
+    pub(crate) fn empty() -> Self {
         Self {
             results: QueryResults::new(),
             session_timestamp: 0,

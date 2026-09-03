@@ -401,3 +401,50 @@ async fn field_operation_is_encoded_and_implicitly_enables_partial_update() {
     );
     server.shutdown().await;
 }
+
+#[tokio::test]
+async fn empty_insert_short_circuits_without_rpc() {
+    let server = MockServer::start().await;
+    let client = &server.client;
+
+    let response = client
+        .insert(
+            InsertRequest::builder()
+                .collection_name("books")
+                .build()
+                .expect("empty data builds"),
+        )
+        .await
+        .expect("empty insert returns an empty result");
+
+    assert_eq!(response.insert_count(), 0);
+    assert!(response.ids().is_empty());
+    assert_eq!(server.service.call_count("insert"), 0);
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn empty_upsert_short_circuits_without_rpc() {
+    let server = MockServer::start().await;
+    let client = &server.client;
+
+    let response = client
+        .upsert(
+            UpsertRequest::builder()
+                .insert(
+                    InsertRequest::builder()
+                        .collection_name("books")
+                        .build()
+                        .expect("empty data builds"),
+                )
+                .build()
+                .expect("empty upsert builds"),
+        )
+        .await
+        .expect("empty upsert returns an empty result");
+
+    assert_eq!(response.upsert_count(), 0);
+    assert!(response.ids().is_empty());
+    assert_eq!(server.service.call_count("upsert"), 0);
+    server.shutdown().await;
+}

@@ -371,6 +371,7 @@ impl ClientV2 {
                 .list_indexes(request::index::ListIndexesRequest {
                     database_name: Some(database.clone()),
                     collection_name: collection.clone(),
+                    field_name: String::new(),
                     index_name: String::new(),
                     timestamp: 0,
                 })

@@ -306,6 +306,7 @@ impl DescribeIndexRequestBuilder {
 pub struct ListIndexesRequest {
     pub(crate) database_name: Option<String>,
     pub(crate) collection_name: String,
+    pub(crate) field_name: String,
     pub(crate) index_name: String,
     pub(crate) timestamp: u64,
 }
@@ -315,6 +316,7 @@ impl ListIndexesRequest {
         Self {
             database_name: Default::default(),
             collection_name: Default::default(),
+            field_name: Default::default(),
             index_name: Default::default(),
             timestamp: Default::default(),
         }
@@ -340,6 +342,13 @@ impl ListIndexesRequest {
     /// Returns the collection name.
     pub fn collection_name(&self) -> &str {
         &self.collection_name
+    }
+
+    /// Returns the field name filter.
+    ///
+    /// When non-empty, only indexes built on this field are returned.
+    pub fn field_name(&self) -> &str {
+        &self.field_name
     }
 
     /// Returns the index name.
@@ -383,6 +392,14 @@ impl ListIndexesRequestBuilder {
     /// Sets the collection name and returns the updated value.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
+        self
+    }
+
+    /// Sets the field name filter and returns the updated value.
+    ///
+    /// When non-empty, only indexes built on this field are returned.
+    pub fn field_name(mut self, value: impl Into<String>) -> Self {
+        self.value.field_name = value.into();
         self
     }
 
@@ -953,11 +970,13 @@ mod builder_value_tests {
         let value = ListIndexesRequest::empty();
         let expected_database_name: Option<String> = None;
         let expected_collection_name: String = String::new();
+        let expected_field_name: String = String::new();
         let expected_index_name: String = String::new();
         let expected_timestamp: u64 = 0;
 
         assert_eq!(value.database_name().to_owned(), expected_database_name);
         assert_eq!(value.collection_name().to_owned(), expected_collection_name);
+        assert_eq!(value.field_name().to_owned(), expected_field_name);
         assert_eq!(value.index_name().to_owned(), expected_index_name);
         assert_eq!(value.timestamp().to_owned(), expected_timestamp);
     }
@@ -966,11 +985,13 @@ mod builder_value_tests {
     fn list_indexes_request_populated_values() {
         let database_name = "database_name-value".to_owned();
         let collection_name = "collection_name-value".to_owned();
+        let field_name = "field_name-value".to_owned();
         let index_name = "index_name-value".to_owned();
         let timestamp = 7;
         let value = ListIndexesRequest::builder()
             .database_name(database_name.clone())
             .collection_name(collection_name.clone())
+            .field_name(field_name.clone())
             .index_name(index_name.clone())
             .timestamp(timestamp.clone())
             .build()
@@ -978,6 +999,7 @@ mod builder_value_tests {
 
         assert_eq!(value.database_name().to_owned(), Some(database_name));
         assert_eq!(value.collection_name().to_owned(), collection_name);
+        assert_eq!(value.field_name().to_owned(), field_name);
         assert_eq!(value.index_name().to_owned(), index_name);
         assert_eq!(value.timestamp().to_owned(), timestamp);
     }

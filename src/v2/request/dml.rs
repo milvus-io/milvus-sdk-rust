@@ -169,37 +169,34 @@ impl InsertRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// Empty data is allowed: the client short-circuits an empty insert into an
+    /// empty result without issuing the RPC, matching pymilvus.
     pub fn build(self) -> Result<InsertRequest> {
         required("collection_name", &self.value.collection_name)?;
-        match (self.value.columns.is_empty(), self.rows.is_empty()) {
-            (false, false) => Err(Error::validation(
+        if !self.value.columns.is_empty() && !self.rows.is_empty() {
+            return Err(Error::validation(
                 "data".into(),
                 "columns and rows cannot both be provided".into(),
-            )),
-            (true, true) => Err(Error::validation(
-                "data".into(),
-                "either non-empty columns or rows must be provided".into(),
-            )),
-            _ => {
-                let rows = self
-                    .rows
-                    .into_iter()
-                    .enumerate()
-                    .map(|(index, value)| {
-                        let Value::Object(row) = value else {
-                            return Err(Error::validation(
-                                format!("rows[{index}]"),
-                                "must be a JSON object".into(),
-                            ));
-                        };
-                        Ok(row)
-                    })
-                    .collect::<Result<_>>()?;
-                let mut value = self.value;
-                value.rows = rows;
-                Ok(value)
-            }
+            ));
         }
+        let rows = self
+            .rows
+            .into_iter()
+            .enumerate()
+            .map(|(index, value)| {
+                let Value::Object(row) = value else {
+                    return Err(Error::validation(
+                        format!("rows[{index}]"),
+                        "must be a JSON object".into(),
+                    ));
+                };
+                Ok(row)
+            })
+            .collect::<Result<_>>()?;
+        let mut value = self.value;
+        value.rows = rows;
+        Ok(value)
     }
 }
 
@@ -291,25 +288,21 @@ impl UpsertRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// Empty data is allowed: the client short-circuits an empty upsert into an
+    /// empty result without issuing the RPC, matching pymilvus.
     pub fn build(self) -> Result<UpsertRequest> {
         required("collection_name", &self.value.insert.collection_name)?;
         for operation in &self.value.field_ops {
             required("field_ops.field_name", operation.get_field_name())?;
         }
-        match (
-            self.value.insert.columns.is_empty(),
-            self.value.insert.rows.is_empty(),
-        ) {
-            (false, false) => Err(Error::validation(
+        if !self.value.insert.columns.is_empty() && !self.value.insert.rows.is_empty() {
+            return Err(Error::validation(
                 "data".into(),
                 "columns and rows cannot both be provided".into(),
-            )),
-            (true, true) => Err(Error::validation(
-                "data".into(),
-                "either non-empty columns or rows must be provided".into(),
-            )),
-            _ => Ok(self.value),
+            ));
         }
+        Ok(self.value)
     }
 }
 
@@ -700,21 +693,21 @@ mod insert_request_tests {
     }
 
     #[test]
-    fn build_rejects_missing_or_empty_input() {
+    fn build_accepts_missing_or_empty_input() {
         assert!(InsertRequest::builder()
             .collection_name("books")
             .build()
-            .is_err());
+            .is_ok());
         assert!(InsertRequest::builder()
             .collection_name("books")
             .columns(Vec::new())
             .build()
-            .is_err());
+            .is_ok());
         assert!(InsertRequest::builder()
             .collection_name("books")
             .rows(Vec::<EntityRow>::new())
             .build()
-            .is_err());
+            .is_ok());
     }
 
     #[test]

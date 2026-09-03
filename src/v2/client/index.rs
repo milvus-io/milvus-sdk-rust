@@ -70,14 +70,23 @@ impl ClientV2 {
     }
 
     /// Lists index names and metadata associated with a collection.
+    ///
+    /// When the request carries a non-empty
+    /// [`request::index::ListIndexesRequest::field_name`], only indexes built on
+    /// that field are returned. The filter is applied locally after the
+    /// `get_index_statistics` RPC: every index description of the collection is
+    /// still transferred, and non-matching entries are dropped before the
+    /// response is decoded, because the wire request has no `field_name` member
+    /// to narrow the query server-side.
     pub async fn list_indexes(
         &self,
         request: request::index::ListIndexesRequest,
     ) -> Result<response::index::ListIndexesResponse> {
+        let field_name = request.field_name().to_owned();
         let database = self.current_database();
         let response = rpc_with_retry!(self, get_index_statistics, request.into_proto(&database))?;
         status_to_result(&response.status)?;
-        response::index::ListIndexesResponse::from_proto(response)
+        response::index::ListIndexesResponse::from_proto(response, &field_name)
     }
 
     /// Updates mutable properties of an existing index.
