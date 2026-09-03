@@ -617,3 +617,23 @@ async fn missing_primary_field_name_does_not_load_the_schema_cache() {
     assert_eq!(server.service.call_count("describe_collection"), 0);
     server.shutdown().await;
 }
+
+#[tokio::test]
+async fn get_with_empty_ids_short_circuits_without_rpc() {
+    let server = MockServer::start().await;
+    let client = &server.client;
+
+    let response = client
+        .get(
+            GetRequest::builder()
+                .collection_name("books")
+                .build()
+                .expect("empty ids build"),
+        )
+        .await
+        .expect("get with empty ids returns an empty result");
+
+    assert_eq!(response.results().get_row_count(), 0);
+    assert_eq!(server.service.call_count("query"), 0);
+    server.shutdown().await;
+}

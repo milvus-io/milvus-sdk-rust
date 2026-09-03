@@ -145,10 +145,14 @@ impl ListIndexesResponse {
         &self.indexes
     }
 
-    pub(crate) fn from_proto(v: milvus::GetIndexStatisticsResponse) -> Result<Self> {
+    pub(crate) fn from_proto(
+        v: milvus::GetIndexStatisticsResponse,
+        field_name: &str,
+    ) -> Result<Self> {
         let indexes: Vec<IndexDesc> = v
             .index_descriptions
             .into_iter()
+            .filter(|description| field_name.is_empty() || description.field_name == field_name)
             .map(IndexDesc::from_proto)
             .collect::<Result<_>>()?;
         let index_names = indexes.iter().map(|v| v.index_name.clone()).collect();
@@ -271,13 +275,39 @@ mod index_desc_tests {
 
     #[test]
     fn list_indexes_rejects_malformed_params_json() {
-        assert!(
-            super::ListIndexesResponse::from_proto(milvus::GetIndexStatisticsResponse {
+        assert!(super::ListIndexesResponse::from_proto(
+            milvus::GetIndexStatisticsResponse {
                 index_descriptions: vec![malformed_index_description()],
                 ..Default::default()
-            })
-            .is_err()
-        );
+            },
+            ""
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn list_indexes_field_scoped_decode_ignores_unrelated_malformed_params() {
+        let mut unrelated = malformed_index_description();
+        unrelated.field_name = "title".into();
+        unrelated.index_name = "title_idx".into();
+        let related = milvus::IndexDescription {
+            field_name: "embedding".into(),
+            index_name: "embedding_idx".into(),
+            params: vec![common::KeyValuePair {
+                key: "params".into(),
+                value: r#"{"M":16}"#.into(),
+            }],
+            ..Default::default()
+        };
+        let response = super::ListIndexesResponse::from_proto(
+            milvus::GetIndexStatisticsResponse {
+                index_descriptions: vec![unrelated, related],
+                ..Default::default()
+            },
+            "embedding",
+        )
+        .expect("field-scoped listing must not inherit unrelated decode failures");
+        assert_eq!(response.index_names().to_owned(), ["embedding_idx"]);
     }
 }
 

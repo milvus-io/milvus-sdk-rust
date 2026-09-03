@@ -214,3 +214,183 @@ async fn index_wait_timeout_bounds_sleep_and_stalled_poll() {
     assert_eq!(stalled_server.service.call_count("describe_index"), 1);
     stalled_server.shutdown().await;
 }
+
+#[tokio::test]
+async fn list_indexes_filters_by_field_name() {
+    let server = MockServer::start().await;
+    let client = &server.client;
+
+    client
+        .create_index(
+            CreateIndexRequest::builder()
+                .collection_name("books")
+                .index_param(
+                    IndexParam::new()
+                        .field_name("vector")
+                        .index_type(IndexType::Hnsw)
+                        .metric_type(MetricType::Cosine)
+                        .index_name("vector_idx"),
+                )
+                .index_param(
+                    IndexParam::new()
+                        .field_name("title")
+                        .index_type(IndexType::Inverted)
+                        .metric_type(MetricType::Default)
+                        .index_name("title_idx"),
+                )
+                .sync(false)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .unwrap();
+
+    let all = client
+        .list_indexes(
+            ListIndexesRequest::builder()
+                .collection_name("books")
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .unwrap();
+    let mut all_names = all.index_names().to_vec();
+    all_names.sort();
+    assert_eq!(all_names, ["title_idx", "vector_idx"]);
+
+    let vector_only = client
+        .list_indexes(
+            ListIndexesRequest::builder()
+                .collection_name("books")
+                .field_name("vector")
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .unwrap();
+    assert_eq!(vector_only.index_names().to_owned(), ["vector_idx"]);
+    assert_eq!(vector_only.indexes().len().to_owned(), 1);
+    assert_eq!(
+        vector_only.indexes()[0].get_field_name().to_owned(),
+        "vector"
+    );
+
+    let title_only = client
+        .list_indexes(
+            ListIndexesRequest::builder()
+                .collection_name("books")
+                .field_name("title")
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .unwrap();
+    assert_eq!(title_only.index_names().to_owned(), ["title_idx"]);
+
+    let none = client
+        .list_indexes(
+            ListIndexesRequest::builder()
+                .collection_name("books")
+                .field_name("missing")
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .unwrap();
+    assert!(none.index_names().is_empty());
+    assert!(none.indexes().is_empty());
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn list_indexes_combines_index_and_field_filters_and_keeps_names_in_sync() {
+    let server = MockServer::start().await;
+    let client = &server.client;
+
+    client
+        .create_index(
+            CreateIndexRequest::builder()
+                .collection_name("combined_indexes")
+                .index_param(
+                    IndexParam::new()
+                        .field_name("vector")
+                        .index_type(IndexType::Hnsw)
+                        .metric_type(MetricType::Cosine)
+                        .index_name("vector_idx_a"),
+                )
+                .index_param(
+                    IndexParam::new()
+                        .field_name("vector")
+                        .index_type(IndexType::IvfFlat)
+                        .metric_type(MetricType::Cosine)
+                        .index_name("vector_idx_b"),
+                )
+                .index_param(
+                    IndexParam::new()
+                        .field_name("title")
+                        .index_type(IndexType::Inverted)
+                        .metric_type(MetricType::Default)
+                        .index_name("title_idx"),
+                )
+                .sync(false)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .unwrap();
+
+    let by_field = client
+        .list_indexes(
+            ListIndexesRequest::builder()
+                .collection_name("combined_indexes")
+                .field_name("vector")
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .unwrap();
+    let mut by_field_names = by_field.index_names().to_vec();
+    by_field_names.sort();
+    assert_eq!(by_field_names, ["vector_idx_a", "vector_idx_b"]);
+    assert_eq!(by_field.indexes().len().to_owned(), 2);
+    let desc_names: Vec<String> = by_field
+        .indexes()
+        .iter()
+        .map(|index| index.get_index_name().to_owned())
+        .collect();
+    let mut desc_names = desc_names;
+    desc_names.sort();
+    assert_eq!(desc_names, by_field_names);
+
+    let combined = client
+        .list_indexes(
+            ListIndexesRequest::builder()
+                .collection_name("combined_indexes")
+                .field_name("vector")
+                .index_name("vector_idx_a")
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .unwrap();
+    assert_eq!(combined.index_names().to_owned(), ["vector_idx_a"]);
+    assert_eq!(combined.indexes().len().to_owned(), 1);
+    assert_eq!(combined.indexes()[0].get_field_name().to_owned(), "vector");
+
+    let field_mismatch = client
+        .list_indexes(
+            ListIndexesRequest::builder()
+                .collection_name("combined_indexes")
+                .field_name("title")
+                .index_name("vector_idx_a")
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .unwrap();
+    assert!(field_mismatch.index_names().is_empty());
+    assert!(field_mismatch.indexes().is_empty());
+
+    server.shutdown().await;
+}
