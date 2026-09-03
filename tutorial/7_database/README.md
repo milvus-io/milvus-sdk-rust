@@ -1,6 +1,6 @@
 # Tutorial 7: Manage databases (advanced)
 
-This tutorial is a separate Cargo project that downloads `milvus-sdk-rust` version `2.6.0`
+This tutorial is a separate Cargo project that downloads `milvus-sdk-rust` version `2.6.1`
 from crates.io. It demonstrates how to:
 
 1. Connect with `ClientV2`.
@@ -14,7 +14,7 @@ from crates.io. It demonstrates how to:
 
 - Rust and Cargo are installed.
 - Milvus is running and accessible.
-- `milvus-sdk-rust` version `2.6.0` has been published to crates.io.
+- `milvus-sdk-rust` version `2.6.1` has been published to crates.io.
 
 The tutorial uses these environment variables:
 

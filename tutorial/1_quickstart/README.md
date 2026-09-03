@@ -8,7 +8,7 @@ collection before exiting.
 
 - Rust and Cargo are installed.
 - Milvus 2.6 or later is running and accessible.
-- `milvus-sdk-rust` version `2.6.0` has been published to crates.io.
+- `milvus-sdk-rust` version `2.6.1` has been published to crates.io.
 
 Connection settings use `MILVUS_URI` and `MILVUS_TOKEN`, defaulting to
 `http://localhost:19530` and `root:Milvus`.
