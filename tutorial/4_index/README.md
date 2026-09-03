@@ -1,6 +1,6 @@
 # Tutorial 4: Create and manage indexes
 
-This standalone Cargo project uses `milvus-sdk-rust` version `2.6.0` to demonstrate indexes for
+This standalone Cargo project uses `milvus-sdk-rust` version `3.0.0` to demonstrate indexes for
 both vector and scalar fields.
 
 The tutorial:

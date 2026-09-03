@@ -1,5 +1,50 @@
 # Changelog
 
+## milvus-sdk-rust 3.0.0 (2026-09-03)
+
+### Feature
+
+- Introduce a session client (`ClientV2::session`) that routes DQL operations (query, search,
+  hybrid search, get, and iterators) to a target global-cluster member, and recognize
+  `*-global-cluster-*` endpoints with topology discovery, primary selection, background refresh,
+  and proactive/reactive failover across generations
+- Add default-on client telemetry to `ClientV2`, shared by clones and cluster-scoped sessions,
+  reporting the seven Go SDK operation families, with heartbeats and the five server commands
+  (`push_config`, `collection_metrics`, `show_errors`, `show_latency_history`, `get_config`)
+- Support snapshots: create/drop/list/describe, restore with state and job listing, and pin/unpin
+  snapshot data
+- Support external collections: refresh, progress, and job listing for file-resource-backed
+  external tables
+- Support struct-field and function-field schema evolution: `add_collection_struct_field`,
+  `add_function_field`, `drop_function_field`, and `drop_collection_field`
+- Support search-time function chains (rerank/refine) and hierarchical bucket search aggregation
+  with typed `FunctionChain`, `SearchAggregation`, `MetricSpec`, `SortSpec`, `TopHitsSpec`, and
+  nested sub-aggregations
+- Support resumable query iterator cursors, so a query can continue from a previously captured
+  cursor after a disconnect or process restart
+- Support nullable struct sub-fields with wire-level `nullable` propagation on insert and query
+- `list_indexes`: add a `field_name` filter; returned indexes are filtered by field name when set
+- `compact`: add `l0_compaction` and `target_size_unit` (`TargetSizeUnit`: B/KB/MB/GB/TB/PB),
+  normalized at `build()` time so `into_builder().build()` round-trips idempotently
+- `grant_privilege` / `revoke_privilege`: add the V1 object-scoped form via `object_type` and
+  `object_name`, routed to the legacy `OperatePrivilege` RPC when set
+
+### Improvement
+
+- Align validation with pymilvus: enforce `round_decimal` in `-1..=6` on `search`,
+  `hybrid_search`, and `search_iterator`, reject `compact.target_size <= 0`, and treat empty
+  insert/upsert data and empty get ids as short-circuited empty results instead of build errors
+- Keep the deprecated V1 surface compiling through the Milvus 3.x proto upgrade
+
+### Breaking change
+
+- This is the first major release targeting Milvus `3.x`; the `2.6.x` line remains supported for
+  existing deployments
+- `compact`: a `target_size` of `0` is now rejected; callers that passed `0` to mean "server
+  default" must omit the field so the server picks its default target size
+- `insert`/`upsert`/`get`: empty input now builds and returns an empty result without issuing an
+  RPC instead of failing at request construction
+
 ## milvus-sdk-rust 2.6.0 (2026-08-14)
 
 ### Feature
