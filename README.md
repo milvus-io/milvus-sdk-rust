@@ -4,7 +4,7 @@ The official Rust SDK for [Milvus](https://milvus.io/).
 
 ## Compatibility
 
-The current `2.6.x` SDK release line targets Milvus `2.6.x`. See [CHANGELOG.md](CHANGELOG.md) for
+The current `3.x` SDK release line targets Milvus `3.x`. See [CHANGELOG.md](CHANGELOG.md) for
 release-specific features, fixes, and compatibility notes.
 
 The minimum supported Rust version (MSRV) is Rust `1.86`.
@@ -125,7 +125,7 @@ Enable the SDK's `tracing` feature and add a subscriber to your application:
 
 ```toml
 [dependencies]
-milvus-sdk-rust = { version = "2.6", features = ["tracing"] }
+milvus-sdk-rust = { version = "3", features = ["tracing"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 ```
 
