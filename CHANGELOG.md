@@ -1,5 +1,30 @@
 # Changelog
 
+## milvus-sdk-rust 2.6.1 (2026-09-03)
+
+### Feature
+
+- `compact`: add `l0_compaction` mapped to `ManualCompactionRequest.l0_compaction`
+- `compact`: add `target_size_unit` (`TargetSizeUnit`: B/KB/MB/GB/TB/PB) used to convert
+  `target_size` to megabytes before it is sent on the wire; `target_size` and
+  `target_size_unit` are normalized at `build()` time, so `into_builder().build()`
+  round-trips idempotently
+- `list_indexes`: add a `field_name` filter; returned indexes are filtered by field name
+  when set (empty means all fields)
+- `grant_privilege` / `revoke_privilege`: add the V1 object-scoped form via `object_type`
+  and `object_name`, routed to the legacy `OperatePrivilege` RPC when set
+
+### Improvement
+
+- Align `compact`, `list_indexes`, and `round_decimal` validation with pymilvus:
+  reject `compact.target_size <= 0`, filter `list_indexes` by field name, and enforce
+  `round_decimal` in `-1..=6` on `search`, `hybrid_search`, and `search_iterator`
+
+### Breaking change
+
+- `compact`: a `target_size` of `0` is now rejected; callers that passed `0` to mean
+  "server default" must omit the field so the server picks its default target size
+
 ## milvus-sdk-rust 2.6.0 (2026-08-14)
 
 ### Feature

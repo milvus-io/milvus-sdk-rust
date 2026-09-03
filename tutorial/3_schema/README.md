@@ -1,7 +1,7 @@
 # Tutorial 3: Define collection schemas
 
 A schema defines the fields that each entity in a collection can contain. This standalone Cargo
-project downloads `milvus-sdk-rust` version `2.6.0` from crates.io and demonstrates every usable
+project downloads `milvus-sdk-rust` version `2.6.1` from crates.io and demonstrates every usable
 V2 `DataType`.
 
 The program creates three collections so the examples remain within common Milvus vector-field
@@ -55,7 +55,7 @@ a top-level `FieldSchema` with `DataType::Struct` directly.
 
 - Rust and Cargo are installed.
 - Milvus 2.6 or later is running and accessible.
-- `milvus-sdk-rust` version `2.6.0` has been published to crates.io.
+- `milvus-sdk-rust` version `2.6.1` has been published to crates.io.
 
 The tutorial uses these environment variables:
 
