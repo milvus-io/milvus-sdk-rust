@@ -1048,6 +1048,14 @@ impl DescribeUserRequestBuilder {
 // GrantPrivilegeRequest
 ///////////////////////////////////////////////////////////////////////////////
 /// Parameters for the ClientV2 grant_privilege operation.
+///
+/// Grants a privilege to a role. Two forms are supported:
+///
+/// - The default V2 form targets a collection: set `collection_name`.
+/// - The V1 object-scoped form targets an arbitrary object identified by
+///   `object_type` (e.g. `Global`, `Database`, `Collection`, `User`) and
+///   `object_name`. When `object_type` is set, the V1 `OperatePrivilege` RPC is
+///   used and `collection_name` is ignored.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct GrantPrivilegeRequest {
@@ -1055,6 +1063,8 @@ pub struct GrantPrivilegeRequest {
     pub(crate) database_name: String,
     pub(crate) collection_name: String,
     pub(crate) privilege: String,
+    pub(crate) object_type: Option<String>,
+    pub(crate) object_name: Option<String>,
 }
 
 impl GrantPrivilegeRequest {
@@ -1064,6 +1074,8 @@ impl GrantPrivilegeRequest {
             database_name: Default::default(),
             collection_name: Default::default(),
             privilege: Default::default(),
+            object_type: Default::default(),
+            object_name: Default::default(),
         }
     }
 
@@ -1099,7 +1111,47 @@ impl GrantPrivilegeRequest {
         &self.privilege
     }
 
-    pub(crate) fn into_proto(self) -> milvus::OperatePrivilegeV2Request {
+    /// Returns the V1 object type, e.g. `Global`, `Database`, `Collection`, `User`.
+    pub fn object_type(&self) -> Option<&str> {
+        self.object_type.as_deref()
+    }
+
+    /// Returns the V1 object name.
+    pub fn object_name(&self) -> Option<&str> {
+        self.object_name.as_deref()
+    }
+
+    /// Returns whether this request uses the V1 object-scoped privilege form.
+    pub(crate) fn is_v1(&self) -> bool {
+        self.object_type.is_some()
+    }
+
+    pub(crate) fn into_proto_v1(self) -> milvus::OperatePrivilegeRequest {
+        milvus::OperatePrivilegeRequest {
+            base: None,
+            entity: Some(milvus::GrantEntity {
+                role: Some(milvus::RoleEntity {
+                    name: self.role_name,
+                    description: String::new(),
+                }),
+                object: Some(milvus::ObjectEntity {
+                    name: self.object_type.unwrap_or_default(),
+                }),
+                object_name: self.object_name.unwrap_or_default(),
+                grantor: Some(milvus::GrantorEntity {
+                    user: None,
+                    privilege: Some(milvus::PrivilegeEntity {
+                        name: self.privilege,
+                    }),
+                }),
+                db_name: self.database_name,
+            }),
+            r#type: milvus::OperatePrivilegeType::Grant as i32,
+            version: String::new(),
+        }
+    }
+
+    pub(crate) fn into_proto_v2(self) -> milvus::OperatePrivilegeV2Request {
         milvus::OperatePrivilegeV2Request {
             base: None,
             role: Some(milvus::RoleEntity {
@@ -1153,14 +1205,40 @@ impl GrantPrivilegeRequestBuilder {
         self
     }
 
+    /// Sets the V1 object type (e.g. `Global`, `Database`, `Collection`, `User`)
+    /// and returns the updated value.
+    pub fn object_type(mut self, value: impl Into<String>) -> Self {
+        self.value.object_type = Some(value.into());
+        self
+    }
+
+    /// Sets the V1 object name and returns the updated value.
+    pub fn object_name(mut self, value: impl Into<String>) -> Self {
+        self.value.object_name = Some(value.into());
+        self
+    }
+
     /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<GrantPrivilegeRequest> {
-        validate_privilege(
-            &self.value.role_name,
-            &self.value.database_name,
-            &self.value.collection_name,
-            &self.value.privilege,
-        )?;
+        if self.value.object_type.is_some() || self.value.object_name.is_some() {
+            required("role_name", &self.value.role_name)?;
+            required(
+                "object_type",
+                self.value.object_type.as_deref().unwrap_or_default(),
+            )?;
+            required(
+                "object_name",
+                self.value.object_name.as_deref().unwrap_or_default(),
+            )?;
+            required("privilege", &self.value.privilege)?;
+        } else {
+            validate_privilege(
+                &self.value.role_name,
+                &self.value.database_name,
+                &self.value.collection_name,
+                &self.value.privilege,
+            )?;
+        }
         Ok(self.value)
     }
 }
@@ -1169,6 +1247,14 @@ impl GrantPrivilegeRequestBuilder {
 // RevokePrivilegeRequest
 ///////////////////////////////////////////////////////////////////////////////
 /// Parameters for the ClientV2 revoke_privilege operation.
+///
+/// Revokes a privilege from a role. Two forms are supported:
+///
+/// - The default V2 form targets a collection: set `collection_name`.
+/// - The V1 object-scoped form targets an arbitrary object identified by
+///   `object_type` (e.g. `Global`, `Database`, `Collection`, `User`) and
+///   `object_name`. When `object_type` is set, the V1 `OperatePrivilege` RPC is
+///   used and `collection_name` is ignored.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct RevokePrivilegeRequest {
@@ -1176,6 +1262,8 @@ pub struct RevokePrivilegeRequest {
     pub(crate) database_name: String,
     pub(crate) collection_name: String,
     pub(crate) privilege: String,
+    pub(crate) object_type: Option<String>,
+    pub(crate) object_name: Option<String>,
 }
 
 impl RevokePrivilegeRequest {
@@ -1185,6 +1273,8 @@ impl RevokePrivilegeRequest {
             database_name: Default::default(),
             collection_name: Default::default(),
             privilege: Default::default(),
+            object_type: Default::default(),
+            object_name: Default::default(),
         }
     }
 
@@ -1220,7 +1310,47 @@ impl RevokePrivilegeRequest {
         &self.privilege
     }
 
-    pub(crate) fn into_proto(self) -> milvus::OperatePrivilegeV2Request {
+    /// Returns the V1 object type, e.g. `Global`, `Database`, `Collection`, `User`.
+    pub fn object_type(&self) -> Option<&str> {
+        self.object_type.as_deref()
+    }
+
+    /// Returns the V1 object name.
+    pub fn object_name(&self) -> Option<&str> {
+        self.object_name.as_deref()
+    }
+
+    /// Returns whether this request uses the V1 object-scoped privilege form.
+    pub(crate) fn is_v1(&self) -> bool {
+        self.object_type.is_some()
+    }
+
+    pub(crate) fn into_proto_v1(self) -> milvus::OperatePrivilegeRequest {
+        milvus::OperatePrivilegeRequest {
+            base: None,
+            entity: Some(milvus::GrantEntity {
+                role: Some(milvus::RoleEntity {
+                    name: self.role_name,
+                    description: String::new(),
+                }),
+                object: Some(milvus::ObjectEntity {
+                    name: self.object_type.unwrap_or_default(),
+                }),
+                object_name: self.object_name.unwrap_or_default(),
+                grantor: Some(milvus::GrantorEntity {
+                    user: None,
+                    privilege: Some(milvus::PrivilegeEntity {
+                        name: self.privilege,
+                    }),
+                }),
+                db_name: self.database_name,
+            }),
+            r#type: milvus::OperatePrivilegeType::Revoke as i32,
+            version: String::new(),
+        }
+    }
+
+    pub(crate) fn into_proto_v2(self) -> milvus::OperatePrivilegeV2Request {
         milvus::OperatePrivilegeV2Request {
             base: None,
             role: Some(milvus::RoleEntity {
@@ -1274,14 +1404,40 @@ impl RevokePrivilegeRequestBuilder {
         self
     }
 
+    /// Sets the V1 object type (e.g. `Global`, `Database`, `Collection`, `User`)
+    /// and returns the updated value.
+    pub fn object_type(mut self, value: impl Into<String>) -> Self {
+        self.value.object_type = Some(value.into());
+        self
+    }
+
+    /// Sets the V1 object name and returns the updated value.
+    pub fn object_name(mut self, value: impl Into<String>) -> Self {
+        self.value.object_name = Some(value.into());
+        self
+    }
+
     /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<RevokePrivilegeRequest> {
-        validate_privilege(
-            &self.value.role_name,
-            &self.value.database_name,
-            &self.value.collection_name,
-            &self.value.privilege,
-        )?;
+        if self.value.object_type.is_some() || self.value.object_name.is_some() {
+            required("role_name", &self.value.role_name)?;
+            required(
+                "object_type",
+                self.value.object_type.as_deref().unwrap_or_default(),
+            )?;
+            required(
+                "object_name",
+                self.value.object_name.as_deref().unwrap_or_default(),
+            )?;
+            required("privilege", &self.value.privilege)?;
+        } else {
+            validate_privilege(
+                &self.value.role_name,
+                &self.value.database_name,
+                &self.value.collection_name,
+                &self.value.privilege,
+            )?;
+        }
         Ok(self.value)
     }
 }
@@ -1830,7 +1986,7 @@ mod dedicated_operation_tests {
             .privilege("Search")
             .build()
             .expect("valid request")
-            .into_proto();
+            .into_proto_v2();
         assert_eq!(grant.r#type, milvus::OperatePrivilegeType::Grant as i32);
         assert_eq!(grant.db_name, "catalog");
         assert_eq!(grant.collection_name, "books");
@@ -1842,8 +1998,63 @@ mod dedicated_operation_tests {
             .privilege("Search")
             .build()
             .expect("valid request")
-            .into_proto();
+            .into_proto_v2();
         assert_eq!(revoke.r#type, milvus::OperatePrivilegeType::Revoke as i32);
+    }
+
+    #[test]
+    fn privilege_requests_encode_v1_object_scoped_surface() {
+        let grant = GrantPrivilegeRequest::builder()
+            .role_name("analyst")
+            .database_name("catalog")
+            .object_type("Global")
+            .object_name("*")
+            .privilege("Search")
+            .build()
+            .expect("valid request");
+        assert!(grant.is_v1());
+        assert_eq!(grant.object_type(), Some("Global"));
+        assert_eq!(grant.object_name(), Some("*"));
+        let grant_proto = grant.into_proto_v1();
+        assert_eq!(
+            grant_proto.r#type,
+            milvus::OperatePrivilegeType::Grant as i32
+        );
+        let entity = grant_proto.entity.expect("v1 entity present");
+        assert_eq!(entity.object.map(|o| o.name), Some("Global".into()));
+        assert_eq!(entity.object_name, "*");
+        assert_eq!(entity.db_name, "catalog");
+
+        let revoke = RevokePrivilegeRequest::builder()
+            .role_name("analyst")
+            .database_name("catalog")
+            .object_type("Collection")
+            .object_name("books")
+            .privilege("Search")
+            .build()
+            .expect("valid request");
+        assert!(revoke.is_v1());
+        let revoke_proto = revoke.into_proto_v1();
+        assert_eq!(
+            revoke_proto.r#type,
+            milvus::OperatePrivilegeType::Revoke as i32
+        );
+    }
+
+    #[test]
+    fn privilege_requests_reject_incomplete_v1_object_scoped_surface() {
+        assert!(GrantPrivilegeRequest::builder()
+            .role_name("analyst")
+            .object_type("Global")
+            .privilege("Search")
+            .build()
+            .is_err());
+        assert!(RevokePrivilegeRequest::builder()
+            .role_name("analyst")
+            .object_name("books")
+            .privilege("Search")
+            .build()
+            .is_err());
     }
 
     #[test]

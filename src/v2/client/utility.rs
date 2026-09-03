@@ -373,6 +373,7 @@ impl ClientV2 {
                     collection_name: collection.clone(),
                     index_name: String::new(),
                     timestamp: 0,
+                    field_name: String::new(),
                 })
                 .await?;
             response

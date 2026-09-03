@@ -1597,10 +1597,10 @@ impl HybridSearchRequestBuilder {
         non_negative_i64("offset", self.value.offset)?;
         positive_i64("group_size", self.value.group_size)?;
         validate_search_extra_params(&self.value.extra_params)?;
-        if self.value.round_decimal < -1 {
+        if !(-1..=6).contains(&self.value.round_decimal) {
             return Err(Error::validation(
                 "round_decimal".into(),
-                "must be -1 or greater".into(),
+                "must be in -1..=6".into(),
             ));
         }
         Ok(self.value)
@@ -1843,10 +1843,10 @@ fn validate_search_request(value: &SearchRequest) -> Result<()> {
     positive_i64("limit", value.limit)?;
     non_negative_i64("offset", value.offset)?;
     positive_i64("group_size", value.group_size)?;
-    if value.round_decimal < -1 {
+    if !(-1..=6).contains(&value.round_decimal) {
         return Err(Error::validation(
             "round_decimal".into(),
-            "must be -1 or greater".into(),
+            "must be in -1..=6".into(),
         ));
     }
     validate_search_extra_params(&value.extra_params)?;
@@ -2228,6 +2228,34 @@ mod search_request_tests {
             result,
             Err(crate::v2::error::Error::Validation(error)) if error.parameter() == "ids"
         ));
+    }
+
+    #[test]
+    fn search_rejects_round_decimal_outside_of_legal_range() {
+        let search = || {
+            SearchRequest::builder()
+                .collection_name("books")
+                .vector_field("vector")
+                .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+                .limit(3)
+        };
+        let hybrid = || {
+            let sub_request = SubSearchRequest::builder()
+                .vector_field("vector")
+                .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+                .limit(3)
+                .build()
+                .expect("valid sub search request");
+            HybridSearchRequest::builder()
+                .collection_name("books")
+                .sub_requests(vec![sub_request])
+        };
+
+        assert!(search().round_decimal(7).build().is_err());
+        assert!(search().round_decimal(-2).build().is_err());
+        assert!(search().round_decimal(6).build().is_ok());
+        assert!(hybrid().round_decimal(7).build().is_err());
+        assert!(hybrid().round_decimal(6).build().is_ok());
     }
 
     #[test]
@@ -2851,7 +2879,7 @@ mod builder_value_tests {
         let output_fields = vec!["output_fields-value".to_owned()];
         let limit = 7;
         let offset = 7;
-        let round_decimal = 7;
+        let round_decimal = 6;
         let ignore_growing = true;
         let group_by_field = "group_by_field-value".to_owned();
         let group_size = 7;
@@ -3049,7 +3077,7 @@ mod builder_value_tests {
             .function_type(crate::v2::FunctionType::Bm25);
         let limit = 7;
         let offset = 7;
-        let round_decimal = 7;
+        let round_decimal = 6;
         let ignore_growing = true;
         let extra_params = HashMap::from([("key-value".to_owned(), "value-value".to_owned())]);
         let group_by_field = "group_by_field-value".to_owned();

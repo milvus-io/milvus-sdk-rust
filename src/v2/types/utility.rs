@@ -115,6 +115,42 @@ impl CompactionStateCode {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// TargetSizeUnit
+///////////////////////////////////////////////////////////////////////////////
+/// Unit used to interpret a compaction target segment size.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum TargetSizeUnit {
+    /// Represents the Byte case.
+    Bytes,
+    /// Represents the Kilobyte case.
+    KB,
+    #[default]
+    /// Represents the Megabyte case.
+    MB,
+    /// Represents the Gigabyte case.
+    GB,
+    /// Represents the Terabyte case.
+    TB,
+    /// Represents the Petabyte case.
+    PB,
+}
+
+impl TargetSizeUnit {
+    /// Returns the number of bytes that make up one unit.
+    pub(crate) fn bytes(self) -> i64 {
+        match self {
+            Self::Bytes => 1,
+            Self::KB => 1024,
+            Self::MB => 1024 * 1024,
+            Self::GB => 1024 * 1024 * 1024,
+            Self::TB => 1024_i64.pow(4),
+            Self::PB => 1024_i64.pow(5),
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // PersistentSegmentInfo
 ///////////////////////////////////////////////////////////////////////////////
 /// Metadata for a persisted data segment.
