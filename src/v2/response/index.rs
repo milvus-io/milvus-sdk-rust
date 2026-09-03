@@ -145,10 +145,14 @@ impl ListIndexesResponse {
         &self.indexes
     }
 
-    pub(crate) fn from_proto(v: milvus::GetIndexStatisticsResponse) -> Result<Self> {
+    pub(crate) fn from_proto(
+        v: milvus::GetIndexStatisticsResponse,
+        field_name: &str,
+    ) -> Result<Self> {
         let indexes: Vec<IndexDesc> = v
             .index_descriptions
             .into_iter()
+            .filter(|index| field_name.is_empty() || index.field_name == field_name)
             .map(IndexDesc::from_proto)
             .collect::<Result<_>>()?;
         let index_names = indexes.iter().map(|v| v.index_name.clone()).collect();
@@ -268,13 +272,50 @@ mod index_desc_tests {
 
     #[test]
     fn list_indexes_rejects_malformed_params_json() {
-        assert!(
-            super::ListIndexesResponse::from_proto(milvus::GetIndexStatisticsResponse {
+        assert!(super::ListIndexesResponse::from_proto(
+            milvus::GetIndexStatisticsResponse {
                 index_descriptions: vec![malformed_index_description()],
                 ..Default::default()
-            })
-            .is_err()
-        );
+            },
+            "",
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn list_indexes_filters_indexes_by_field_name() {
+        let descriptions = vec![
+            milvus::IndexDescription {
+                field_name: "embedding".into(),
+                index_name: "embedding_idx".into(),
+                ..Default::default()
+            },
+            milvus::IndexDescription {
+                field_name: "title".into(),
+                index_name: "title_idx".into(),
+                ..Default::default()
+            },
+        ];
+        let all = super::ListIndexesResponse::from_proto(
+            milvus::GetIndexStatisticsResponse {
+                index_descriptions: descriptions.clone(),
+                ..Default::default()
+            },
+            "",
+        )
+        .expect("valid response");
+        assert_eq!(all.index_names().to_owned(), ["embedding_idx", "title_idx"]);
+
+        let filtered = super::ListIndexesResponse::from_proto(
+            milvus::GetIndexStatisticsResponse {
+                index_descriptions: descriptions,
+                ..Default::default()
+            },
+            "title",
+        )
+        .expect("valid response");
+        assert_eq!(filtered.index_names().to_owned(), ["title_idx"]);
+        assert_eq!(filtered.indexes().len(), 1);
     }
 }
 

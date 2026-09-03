@@ -845,6 +845,20 @@ impl MilvusService for MockMilvus {
         }
     );
     status_method_with!(
+        operate_privilege,
+        pb::OperatePrivilegeRequest,
+        |service, request| {
+            let entity = request.entity.unwrap_or_default();
+            let mut state = service.state.lock().unwrap();
+            if request.r#type == pb::OperatePrivilegeType::Grant as i32 {
+                state.grants.push(entity);
+            } else {
+                state.grants.retain(|grant| grant != &entity);
+            }
+            success_status()
+        }
+    );
+    status_method_with!(
         create_privilege_group,
         pb::CreatePrivilegeGroupRequest,
         |service, request| {

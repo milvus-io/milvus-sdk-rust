@@ -138,12 +138,21 @@ impl ClientV2 {
         &self,
         request: request::rbac::GrantPrivilegeRequest,
     ) -> Result<()> {
-        let status = status_rpc_with_retry!(
-            NonIdempotent,
-            self,
-            operate_privilege_v2,
-            request.into_proto()
-        )?;
+        let status = if request.is_v1() {
+            status_rpc_with_retry!(
+                NonIdempotent,
+                self,
+                operate_privilege,
+                request.into_proto_v1()
+            )?
+        } else {
+            status_rpc_with_retry!(
+                NonIdempotent,
+                self,
+                operate_privilege_v2,
+                request.into_proto_v2()
+            )?
+        };
         self.status(status)
     }
 
@@ -152,12 +161,21 @@ impl ClientV2 {
         &self,
         request: request::rbac::RevokePrivilegeRequest,
     ) -> Result<()> {
-        let status = status_rpc_with_retry!(
-            NonIdempotent,
-            self,
-            operate_privilege_v2,
-            request.into_proto()
-        )?;
+        let status = if request.is_v1() {
+            status_rpc_with_retry!(
+                NonIdempotent,
+                self,
+                operate_privilege,
+                request.into_proto_v1()
+            )?
+        } else {
+            status_rpc_with_retry!(
+                NonIdempotent,
+                self,
+                operate_privilege_v2,
+                request.into_proto_v2()
+            )?
+        };
         self.status(status)
     }
 

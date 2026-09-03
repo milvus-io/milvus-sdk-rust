@@ -303,6 +303,7 @@ pub struct ListIndexesRequest {
     pub(crate) collection_name: String,
     pub(crate) index_name: String,
     pub(crate) timestamp: u64,
+    pub(crate) field_name: String,
 }
 
 impl ListIndexesRequest {
@@ -312,6 +313,7 @@ impl ListIndexesRequest {
             collection_name: Default::default(),
             index_name: Default::default(),
             timestamp: Default::default(),
+            field_name: Default::default(),
         }
     }
 
@@ -345,6 +347,11 @@ impl ListIndexesRequest {
     /// Returns the timestamp.
     pub fn timestamp(&self) -> u64 {
         self.timestamp
+    }
+
+    /// Returns the field name filter.
+    pub fn field_name(&self) -> &str {
+        &self.field_name
     }
 
     pub(crate) fn into_proto(self, db: &str) -> milvus::GetIndexStatisticsRequest {
@@ -389,6 +396,12 @@ impl ListIndexesRequestBuilder {
     /// Sets the timestamp and returns the updated value.
     pub fn timestamp(mut self, value: u64) -> Self {
         self.value.timestamp = value;
+        self
+    }
+
+    /// Sets the field name filter and returns the updated value.
+    pub fn field_name(mut self, value: impl Into<String>) -> Self {
+        self.value.field_name = value.into();
         self
     }
 
@@ -946,11 +959,13 @@ mod builder_value_tests {
         let expected_collection_name: String = String::new();
         let expected_index_name: String = String::new();
         let expected_timestamp: u64 = 0;
+        let expected_field_name: String = String::new();
 
         assert_eq!(value.database_name().to_owned(), expected_database_name);
         assert_eq!(value.collection_name().to_owned(), expected_collection_name);
         assert_eq!(value.index_name().to_owned(), expected_index_name);
         assert_eq!(value.timestamp().to_owned(), expected_timestamp);
+        assert_eq!(value.field_name().to_owned(), expected_field_name);
     }
 
     #[test]
@@ -959,11 +974,13 @@ mod builder_value_tests {
         let collection_name = "collection_name-value".to_owned();
         let index_name = "index_name-value".to_owned();
         let timestamp = 7;
+        let field_name = "field_name-value".to_owned();
         let value = ListIndexesRequest::builder()
             .database_name(database_name.clone())
             .collection_name(collection_name.clone())
             .index_name(index_name.clone())
             .timestamp(timestamp.clone())
+            .field_name(field_name.clone())
             .build()
             .expect("valid request");
 
@@ -971,6 +988,7 @@ mod builder_value_tests {
         assert_eq!(value.collection_name().to_owned(), collection_name);
         assert_eq!(value.index_name().to_owned(), index_name);
         assert_eq!(value.timestamp().to_owned(), timestamp);
+        assert_eq!(value.field_name().to_owned(), field_name);
     }
 
     #[test]

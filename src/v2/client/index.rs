@@ -75,9 +75,10 @@ impl ClientV2 {
         request: request::index::ListIndexesRequest,
     ) -> Result<response::index::ListIndexesResponse> {
         let database = self.current_database();
+        let field_name = request.field_name.clone();
         let response = rpc_with_retry!(self, get_index_statistics, request.into_proto(&database))?;
         status_to_result(&response.status)?;
-        response::index::ListIndexesResponse::from_proto(response)
+        response::index::ListIndexesResponse::from_proto(response, &field_name)
     }
 
     /// Updates mutable properties of an existing index.

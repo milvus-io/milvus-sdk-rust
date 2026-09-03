@@ -368,3 +368,71 @@ async fn rbac_interfaces_reach_rpc_server() {
     }
     server.shutdown().await;
 }
+
+#[tokio::test]
+async fn rbac_v1_privileges_route_to_operate_privilege() {
+    let server = MockServer::start().await;
+    let client = &server.client;
+
+    client
+        .create_role(
+            CreateRoleRequest::builder()
+                .role_name("reader")
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .unwrap();
+
+    client
+        .grant_privilege(
+            GrantPrivilegeRequest::builder()
+                .role_name("reader")
+                .database_name("default")
+                .object_type("Global")
+                .object_name("*")
+                .privilege("CreateCollection")
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .unwrap();
+    server.assert_called("operate_privilege");
+    server.assert_request_contains(
+        "operate_privilege",
+        &[
+            "name: \"reader\"",
+            "name: \"Global\"",
+            "object_name: \"*\"",
+            "name: \"CreateCollection\"",
+        ],
+    );
+    assert_eq!(server.service.call_count("operate_privilege_v2"), 0);
+
+    client
+        .revoke_privilege(
+            RevokePrivilegeRequest::builder()
+                .role_name("reader")
+                .database_name("default")
+                .object_type("Global")
+                .object_name("*")
+                .privilege("CreateCollection")
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .unwrap();
+    server.assert_called("operate_privilege");
+
+    client
+        .drop_role(
+            DropRoleRequest::builder()
+                .role_name("reader")
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .unwrap();
+
+    server.shutdown().await;
+}
