@@ -150,6 +150,7 @@ impl DefaultValue {
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub struct FieldSchema {
+    pub(crate) field_id: i64,
     pub(crate) name: String,
     pub(crate) description: String,
     pub(crate) data_type: DataType,
@@ -159,6 +160,8 @@ pub struct FieldSchema {
     pub(crate) is_partition_key: bool,
     pub(crate) is_clustering_key: bool,
     pub(crate) nullable: bool,
+    pub(crate) is_dynamic: bool,
+    pub(crate) is_function_output: bool,
     pub(crate) default_value: Option<DefaultValue>,
     pub(crate) type_params: HashMap<String, String>,
     pub(crate) index_params: HashMap<String, String>,
@@ -169,6 +172,7 @@ impl FieldSchema {
     /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
+            field_id: 0,
             name: String::new(),
             description: String::new(),
             data_type: DataType::Unknown,
@@ -178,6 +182,8 @@ impl FieldSchema {
             is_partition_key: false,
             is_clustering_key: false,
             nullable: false,
+            is_dynamic: false,
+            is_function_output: false,
             default_value: None,
             type_params: HashMap::new(),
             index_params: HashMap::new(),
@@ -410,6 +416,31 @@ impl FieldSchema {
         &self.external_field
     }
 
+    /// Returns the field id assigned by the server.
+    ///
+    /// This is populated when decoding a `describe_collection` response and
+    /// has no effect when building a create-collection request; the server
+    /// assigns field ids at collection creation.
+    pub fn get_field_id(&self) -> i64 {
+        self.field_id
+    }
+
+    /// Returns whether this field is the dynamic field.
+    ///
+    /// This is populated when decoding a `describe_collection` response and
+    /// cannot be set when building a create-collection request.
+    pub fn is_dynamic(&self) -> bool {
+        self.is_dynamic
+    }
+
+    /// Returns whether this field is produced by a function.
+    ///
+    /// This is populated when decoding a `describe_collection` response and
+    /// cannot be set when building a create-collection request.
+    pub fn is_function_output(&self) -> bool {
+        self.is_function_output
+    }
+
     /// Sets the dimension and returns the updated value.
     pub fn dimension(mut self, dimension: u32) -> Self {
         if dimension > 0 {
@@ -578,6 +609,7 @@ impl FieldSchema {
 
     pub(crate) fn into_proto(self) -> schema::FieldSchema {
         schema::FieldSchema {
+            field_id: self.field_id,
             name: self.name,
             description: self.description,
             data_type: self.data_type.into_proto() as i32,
@@ -590,6 +622,8 @@ impl FieldSchema {
             is_partition_key: self.is_partition_key,
             is_clustering_key: self.is_clustering_key,
             nullable: self.nullable,
+            is_dynamic: self.is_dynamic,
+            is_function_output: self.is_function_output,
             default_value: self.default_value.map(DefaultValue::into_proto),
             type_params: pairs(self.type_params),
             index_params: pairs(self.index_params),
@@ -711,6 +745,7 @@ impl FieldSchema {
             .map(DefaultValue::from_proto)
             .transpose()?;
         let field = Self {
+            field_id: value.field_id,
             name: value.name,
             description: value.description,
             data_type,
@@ -720,6 +755,8 @@ impl FieldSchema {
             is_partition_key: value.is_partition_key,
             is_clustering_key: value.is_clustering_key,
             nullable: value.nullable,
+            is_dynamic: value.is_dynamic,
+            is_function_output: value.is_function_output,
             default_value,
             type_params: value
                 .type_params
@@ -1096,6 +1133,7 @@ impl StructFieldSchema {
 pub struct CollectionSchema {
     pub(crate) description: String,
     pub(crate) enable_dynamic_field: bool,
+    pub(crate) schema_version: i32,
     pub(crate) fields: Vec<FieldSchema>,
     pub(crate) struct_fields: Vec<StructFieldSchema>,
     pub(crate) functions: Vec<Function>,
@@ -1110,6 +1148,7 @@ impl CollectionSchema {
         Self {
             description: String::new(),
             enable_dynamic_field: true,
+            schema_version: 0,
             fields: Vec::new(),
             struct_fields: Vec::new(),
             functions: Vec::new(),
@@ -1151,6 +1190,11 @@ impl CollectionSchema {
     /// Returns whether dynamic field enabled.
     pub fn is_dynamic_field_enabled(&self) -> bool {
         self.enable_dynamic_field
+    }
+
+    /// Returns the schema version.
+    pub fn get_schema_version(&self) -> i32 {
+        self.schema_version
     }
 
     /// Sets the fields and returns the updated value.
@@ -1295,6 +1339,7 @@ impl CollectionSchema {
                 .map(StructFieldSchema::into_proto)
                 .collect(),
             enable_dynamic_field: self.enable_dynamic_field,
+            version: self.schema_version,
             properties: pairs(self.properties.clone()),
             functions: self
                 .functions
@@ -1346,6 +1391,7 @@ impl CollectionSchema {
         Ok(Self {
             description: value.description,
             enable_dynamic_field: value.enable_dynamic_field,
+            schema_version: value.version,
             fields: value
                 .fields
                 .into_iter()
@@ -1723,6 +1769,17 @@ impl CollectionDesc {
     /// Returns the configured consistency level.
     pub fn get_consistency_level(&self) -> ConsistencyLevel {
         self.consistency_level
+    }
+
+    /// Returns the consistency level name, e.g. `"Strong"`, `"Bounded"`.
+    pub fn consistency_level_name(&self) -> &'static str {
+        match self.consistency_level {
+            ConsistencyLevel::Strong => "Strong",
+            ConsistencyLevel::Session => "Session",
+            ConsistencyLevel::Bounded => "Bounded",
+            ConsistencyLevel::Eventually => "Eventually",
+            ConsistencyLevel::Customized => "Customized",
+        }
     }
 
     /// Sets the properties and returns the updated value.

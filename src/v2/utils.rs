@@ -156,3 +156,22 @@ mod tests {
         assert_eq!(array_bf16_to_f32(&bf16), values);
     }
 }
+
+/// Parses an optional extra-info string into `T`, falling back to `default`.
+///
+/// Shared by the response decoders that read server extra-info values such as
+/// `report_value`, `scanned_remote_bytes`, `scanned_total_bytes`, and
+/// `cache_hit_ratio`.
+pub(crate) fn parse_extra<T>(
+    values: &std::collections::HashMap<String, String>,
+    key: &str,
+    default: T,
+) -> T
+where
+    T: std::str::FromStr,
+{
+    values
+        .get(key)
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(default)
+}

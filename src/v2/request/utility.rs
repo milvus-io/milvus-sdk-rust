@@ -1004,10 +1004,10 @@ impl GetCompactionPlansRequestBuilder {
 // RunAnalyzerRequest
 ///////////////////////////////////////////////////////////////////////////////
 /// Parameters for the ClientV2 run_analyzer operation.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub struct RunAnalyzerRequest {
-    pub(crate) analyzer_params: String,
+    pub(crate) analyzer_params: Option<serde_json::Value>,
     pub(crate) texts: Vec<String>,
     pub(crate) with_detail: bool,
     pub(crate) with_hash: bool,
@@ -1020,7 +1020,7 @@ pub struct RunAnalyzerRequest {
 impl RunAnalyzerRequest {
     fn empty() -> Self {
         Self {
-            analyzer_params: Default::default(),
+            analyzer_params: None,
             texts: Default::default(),
             with_detail: Default::default(),
             with_hash: Default::default(),
@@ -1044,8 +1044,8 @@ impl RunAnalyzerRequest {
     }
 
     /// Returns the analyzer params.
-    pub fn analyzer_params(&self) -> &str {
-        &self.analyzer_params
+    pub fn analyzer_params(&self) -> Option<&serde_json::Value> {
+        self.analyzer_params.as_ref()
     }
 
     /// Returns the texts.
@@ -1086,7 +1086,11 @@ impl RunAnalyzerRequest {
     pub(crate) fn into_proto(self, default_db: &str) -> milvus::RunAnalyzerRequest {
         milvus::RunAnalyzerRequest {
             base: None,
-            analyzer_params: self.analyzer_params,
+            analyzer_params: self
+                .analyzer_params
+                .as_ref()
+                .map(serde_json::Value::to_string)
+                .unwrap_or_default(),
             placeholder: self.texts.into_iter().map(String::into_bytes).collect(),
             with_detail: self.with_detail,
             with_hash: self.with_hash,
@@ -1110,8 +1114,8 @@ pub struct RunAnalyzerRequestBuilder {
 
 impl RunAnalyzerRequestBuilder {
     /// Sets the analyzer params and returns the updated value.
-    pub fn analyzer_params(mut self, value: impl Into<String>) -> Self {
-        self.value.analyzer_params = value.into();
+    pub fn analyzer_params(mut self, value: serde_json::Value) -> Self {
+        self.value.analyzer_params = Some(value);
         self
     }
 
@@ -1160,7 +1164,14 @@ impl RunAnalyzerRequestBuilder {
     /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<RunAnalyzerRequest> {
         required_slice("texts", &self.value.texts)?;
-        if self.value.analyzer_params.trim().is_empty() {
+        if let Some(params) = &self.value.analyzer_params {
+            if !params.is_object() {
+                return Err(Error::validation(
+                    "analyzer_params".into(),
+                    "must be a JSON object".into(),
+                ));
+            }
+        } else {
             required("collection_name", &self.value.collection_name)?;
             required("field_name", &self.value.field_name)?;
         }
@@ -2023,7 +2034,7 @@ mod builder_value_tests {
     #[test]
     fn run_analyzer_request_default_values() {
         let value = RunAnalyzerRequest::empty();
-        let expected_analyzer_params: String = String::new();
+        let expected_analyzer_params: Option<serde_json::Value> = None;
         let expected_texts: Vec<String> = Default::default();
         let expected_with_detail: bool = false;
         let expected_with_hash: bool = false;
@@ -2032,7 +2043,7 @@ mod builder_value_tests {
         let expected_field_name: String = String::new();
         let expected_analyzer_names: Vec<String> = Default::default();
 
-        assert_eq!(value.analyzer_params().to_owned(), expected_analyzer_params);
+        assert_eq!(value.analyzer_params().cloned(), expected_analyzer_params);
         assert_eq!(value.texts().to_owned(), expected_texts);
         assert_eq!(
             value.should_include_detail().to_owned(),
@@ -2047,7 +2058,7 @@ mod builder_value_tests {
 
     #[test]
     fn run_analyzer_request_populated_values() {
-        let analyzer_params = "analyzer_params-value".to_owned();
+        let analyzer_params = serde_json::json!({"tokenizer": "standard"});
         let texts = vec!["texts-value".to_owned()];
         let with_detail = true;
         let with_hash = true;
@@ -2067,7 +2078,7 @@ mod builder_value_tests {
             .build()
             .expect("valid request");
 
-        assert_eq!(value.analyzer_params().to_owned(), analyzer_params);
+        assert_eq!(value.analyzer_params().cloned(), Some(analyzer_params));
         assert_eq!(value.texts().to_owned(), texts);
         assert_eq!(value.should_include_detail().to_owned(), with_detail);
         assert_eq!(value.should_include_hash().to_owned(), with_hash);
@@ -2075,6 +2086,23 @@ mod builder_value_tests {
         assert_eq!(value.collection_name().to_owned(), collection_name);
         assert_eq!(value.field_name().to_owned(), field_name);
         assert_eq!(value.analyzer_names().to_owned(), analyzer_names);
+    }
+
+    #[test]
+    fn run_analyzer_request_rejects_non_object_analyzer_params() {
+        let error = RunAnalyzerRequest::builder()
+            .analyzer_params(serde_json::json!("standard"))
+            .texts(["hello"])
+            .build()
+            .expect_err("analyzer_params must be a JSON object");
+        assert!(error.to_string().contains("analyzer_params"));
+
+        let error = RunAnalyzerRequest::builder()
+            .analyzer_params(serde_json::json!(42))
+            .texts(["hello"])
+            .build()
+            .expect_err("analyzer_params must be a JSON object");
+        assert!(error.to_string().contains("analyzer_params"));
     }
 }
 

@@ -27,7 +27,7 @@ async fn run_analyzer(client: &ClientV2, params: Value, text: &str) -> Result<()
     let response = client
         .run_analyzer(
             RunAnalyzerRequest::builder()
-                .analyzer_params(params.to_string())
+                .analyzer_params(params)
                 .texts([text])
                 .with_detail(true)
                 .with_hash(true)

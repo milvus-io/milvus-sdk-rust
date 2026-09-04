@@ -25,6 +25,7 @@ use crate::v2::error::{Error, Result};
 use crate::v2::types::Ids;
 use crate::v2::types::{group_aggregation_buckets, DataType, FieldData, SparseVector};
 pub use crate::v2::types::{HighlightResult, QueryResults, SearchResults, SingleResult};
+use crate::v2::utils::parse_extra;
 use std::collections::{HashMap, HashSet};
 
 fn field_data(value: schema::FieldData) -> Result<FieldData> {
@@ -1720,16 +1721,6 @@ fn split_field_data(data: FieldData, sizes: &[usize]) -> Option<Vec<FieldData>> 
                 .collect()
         }
     }
-}
-
-fn parse_extra<T>(values: &HashMap<String, String>, key: &str, default: T) -> T
-where
-    T: std::str::FromStr,
-{
-    values
-        .get(key)
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(default)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
