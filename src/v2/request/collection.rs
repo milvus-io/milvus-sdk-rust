@@ -162,16 +162,16 @@ impl From<CreateSimpleCollectionRequest> for CreateCollectionRequest {
         CreateCollectionRequest {
             database_name: value.database_name,
             collection_name: value.collection_name,
-            description: None,
+            description: value.description,
             schema: Some(schema),
-            num_partitions: 0,
-            num_shards: 1,
+            num_partitions: value.num_partitions,
+            num_shards: value.num_shards,
             consistency_level: value.consistency_level,
             index_params: vec![IndexParam::new()
                 .field_name(value.vector_field)
                 .index_type(IndexType::AutoIndex)
                 .metric_type(value.metric_type)],
-            properties: HashMap::new(),
+            properties: value.properties,
         }
     }
 }
@@ -314,12 +314,17 @@ pub struct CreateSimpleCollectionRequest {
     pub(crate) dimension: u32,
     pub(crate) primary_field: String,
     pub(crate) primary_field_type: DataType,
+    pub(crate) id_type_alias: Option<String>,
     pub(crate) max_length: u32,
     pub(crate) vector_field: String,
     pub(crate) auto_id: bool,
     pub(crate) enable_dynamic_field: bool,
     pub(crate) consistency_level: ConsistencyLevel,
     pub(crate) metric_type: MetricType,
+    pub(crate) num_shards: i32,
+    pub(crate) num_partitions: i64,
+    pub(crate) properties: HashMap<String, String>,
+    pub(crate) description: Option<String>,
 }
 
 impl CreateSimpleCollectionRequest {
@@ -360,6 +365,11 @@ impl CreateSimpleCollectionRequest {
         self.primary_field_type
     }
 
+    /// Returns the raw `id_type` string alias, if one was set.
+    pub fn id_type_alias(&self) -> Option<&str> {
+        self.id_type_alias.as_deref()
+    }
+
     /// Returns the max length.
     pub fn max_length(&self) -> u32 {
         self.max_length
@@ -389,6 +399,26 @@ impl CreateSimpleCollectionRequest {
     pub fn metric_type(&self) -> MetricType {
         self.metric_type
     }
+
+    /// Returns the number of shards.
+    pub fn num_shards(&self) -> i32 {
+        self.num_shards
+    }
+
+    /// Returns the number of partitions.
+    pub fn num_partitions(&self) -> i64 {
+        self.num_partitions
+    }
+
+    /// Returns the collection properties.
+    pub fn properties(&self) -> &HashMap<String, String> {
+        &self.properties
+    }
+
+    /// Returns the collection description.
+    pub fn description(&self) -> Option<&str> {
+        self.description.as_deref()
+    }
 }
 
 impl CreateSimpleCollectionRequest {
@@ -399,12 +429,17 @@ impl CreateSimpleCollectionRequest {
             dimension: 0,
             primary_field: "id".into(),
             primary_field_type: DataType::Int64,
+            id_type_alias: None,
             max_length: 65_535,
             vector_field: "vector".into(),
             auto_id: false,
             enable_dynamic_field: true,
             consistency_level: ConsistencyLevel::Bounded,
             metric_type: MetricType::Cosine,
+            num_shards: 1,
+            num_partitions: 0,
+            properties: HashMap::new(),
+            description: None,
         }
     }
 }
@@ -485,19 +520,67 @@ impl CreateSimpleCollectionRequestBuilder {
         self
     }
 
+    /// Sets the primary id type and returns the updated value.
+    ///
+    /// Accepts `"int"` (maps to [`DataType::Int64`]) and `"string"`/`"str"`
+    /// (maps to [`DataType::VarChar`]), matching pymilvus `create_collection`.
+    /// The alias is resolved during [`CreateSimpleCollectionRequestBuilder::build`].
+    pub fn id_type(mut self, value: impl Into<String>) -> Self {
+        self.value.id_type_alias = Some(value.into());
+        self
+    }
+
+    /// Sets the number of shards and returns the updated value.
+    pub fn num_shards(mut self, value: i32) -> Self {
+        self.value.num_shards = value;
+        self
+    }
+
+    /// Sets the number of partitions and returns the updated value.
+    pub fn num_partitions(mut self, value: i64) -> Self {
+        self.value.num_partitions = value;
+        self
+    }
+
+    /// Sets the collection properties and returns the updated value.
+    pub fn properties(mut self, value: HashMap<String, String>) -> Self {
+        self.value.properties = value;
+        self
+    }
+
+    /// Sets the collection description and returns the updated value.
+    pub fn description(mut self, value: impl Into<String>) -> Self {
+        self.value.description = Some(value.into());
+        self
+    }
+
     /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<CreateSimpleCollectionRequest> {
-        required("collection_name", &self.value.collection_name)?;
-        if self.value.dimension == 0 {
+        let mut value = self.value;
+        if let Some(alias) = value.id_type_alias.take() {
+            let data_type = match alias.as_str() {
+                "int" => DataType::Int64,
+                "string" | "str" => DataType::VarChar,
+                other => {
+                    return Err(Error::validation(
+                        "id_type".into(),
+                        format!("must be \"int\" or \"string\", got {other:?}"),
+                    ))
+                }
+            };
+            value.primary_field_type = data_type;
+        }
+        required("collection_name", &value.collection_name)?;
+        if value.dimension == 0 {
             return Err(Error::validation(
                 "dimension".into(),
                 "must be greater than zero".into(),
             ));
         }
-        required("primary_field", &self.value.primary_field)?;
-        required("vector_field", &self.value.vector_field)?;
+        required("primary_field", &value.primary_field)?;
+        required("vector_field", &value.vector_field)?;
         if !matches!(
-            self.value.primary_field_type,
+            value.primary_field_type,
             DataType::Int64 | DataType::VarChar
         ) {
             return Err(Error::validation(
@@ -505,13 +588,25 @@ impl CreateSimpleCollectionRequestBuilder {
                 "must be Int64 or VarChar".into(),
             ));
         }
-        if self.value.primary_field_type == DataType::VarChar && self.value.max_length == 0 {
+        if value.primary_field_type == DataType::VarChar && value.max_length == 0 {
             return Err(Error::validation(
                 "max_length".into(),
                 "must be greater than zero for a VarChar primary field".into(),
             ));
         }
-        Ok(self.value)
+        if value.num_shards <= 0 {
+            return Err(Error::validation(
+                "num_shards".into(),
+                "must be greater than zero".into(),
+            ));
+        }
+        if value.num_partitions < 0 {
+            return Err(Error::validation(
+                "num_partitions".into(),
+                "must not be negative".into(),
+            ));
+        }
+        Ok(value)
     }
 }
 
@@ -857,6 +952,8 @@ pub struct LoadCollectionRequest {
     pub(crate) load_fields: Vec<String>,
     pub(crate) skip_load_dynamic_field: bool,
     pub(crate) resource_groups: Vec<String>,
+    /// Load priority (e.g. `"low"`); forwarded as the `load_priority` load param.
+    pub(crate) load_priority: Option<String>,
 }
 
 impl LoadCollectionRequest {
@@ -917,6 +1014,11 @@ impl LoadCollectionRequest {
         &self.resource_groups
     }
 
+    /// Returns the load priority.
+    pub fn load_priority(&self) -> Option<&str> {
+        self.load_priority.as_deref()
+    }
+
     pub(crate) fn into_proto(self, default_db: &str) -> milvus::LoadCollectionRequest {
         let mut value = milvus::LoadCollectionRequest::default();
         value.db_name = self.database_name.unwrap_or_else(|| default_db.to_owned());
@@ -926,6 +1028,9 @@ impl LoadCollectionRequest {
         value.load_fields = self.load_fields;
         value.skip_load_dynamic_field = self.skip_load_dynamic_field;
         value.resource_groups = self.resource_groups;
+        if let Some(priority) = self.load_priority {
+            value.load_params.insert("load_priority".into(), priority);
+        }
         value
     }
 }
@@ -942,6 +1047,7 @@ impl LoadCollectionRequest {
             load_fields: Vec::new(),
             skip_load_dynamic_field: false,
             resource_groups: Vec::new(),
+            load_priority: None,
         }
     }
 }
@@ -1007,6 +1113,15 @@ impl LoadCollectionRequestBuilder {
     /// Sets the resource groups and returns the updated value.
     pub fn resource_groups(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.resource_groups = values.into_iter().map(Into::into).collect();
+        self
+    }
+
+    /// Sets the load priority and returns the updated value.
+    ///
+    /// Forwarded as the `load_priority` load param; pass values such as
+    /// `"low"` to use a lower priority than the default.
+    pub fn load_priority(mut self, value: impl Into<String>) -> Self {
+        self.value.load_priority = Some(value.into());
         self
     }
 

@@ -285,11 +285,14 @@ pub enum FunctionType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Function {
+    pub(crate) id: i64,
     pub(crate) name: String,
     pub(crate) description: String,
     pub(crate) function_type: FunctionType,
     pub(crate) input_fields: Vec<String>,
     pub(crate) output_fields: Vec<String>,
+    pub(crate) input_field_ids: Vec<i64>,
+    pub(crate) output_field_ids: Vec<i64>,
     pub(crate) params: HashMap<String, String>,
 }
 
@@ -297,11 +300,14 @@ impl Function {
     /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
+            id: 0,
             name: String::new(),
             description: String::new(),
             function_type: FunctionType::Unknown,
             input_fields: Vec::new(),
             output_fields: Vec::new(),
+            input_field_ids: Vec::new(),
+            output_field_ids: Vec::new(),
             params: HashMap::new(),
         }
     }
@@ -397,6 +403,21 @@ impl Function {
         &self.output_fields
     }
 
+    /// Returns the input field ids assigned by the server.
+    pub fn get_input_field_ids(&self) -> &[i64] {
+        &self.input_field_ids
+    }
+
+    /// Returns the output field ids assigned by the server.
+    pub fn get_output_field_ids(&self) -> &[i64] {
+        &self.output_field_ids
+    }
+
+    /// Returns the function id assigned by the server.
+    pub fn get_id(&self) -> i64 {
+        self.id
+    }
+
     /// Sets the params and returns the updated value.
     pub fn params(mut self, value: HashMap<String, String>) -> Self {
         self.params = value;
@@ -435,7 +456,7 @@ impl Function {
     pub(crate) fn into_proto(self) -> schema::FunctionSchema {
         schema::FunctionSchema {
             name: self.name,
-            id: 0,
+            id: self.id,
             description: self.description,
             r#type: match self.function_type {
                 FunctionType::Unknown => schema::FunctionType::Unknown,
@@ -445,9 +466,9 @@ impl Function {
                 FunctionType::MinHash => schema::FunctionType::MinHash,
             } as i32,
             input_field_names: self.input_fields,
-            input_field_ids: Vec::new(),
+            input_field_ids: self.input_field_ids,
             output_field_names: self.output_fields,
-            output_field_ids: Vec::new(),
+            output_field_ids: self.output_field_ids,
             params: pairs(self.params),
             ..Default::default()
         }
@@ -455,6 +476,7 @@ impl Function {
 
     pub(crate) fn from_proto(value: schema::FunctionSchema) -> Self {
         Self {
+            id: value.id,
             name: value.name,
             description: value.description,
             function_type: match schema::FunctionType::try_from(value.r#type)
@@ -468,6 +490,8 @@ impl Function {
             },
             input_fields: value.input_field_names,
             output_fields: value.output_field_names,
+            input_field_ids: value.input_field_ids,
+            output_field_ids: value.output_field_ids,
             params: value.params.into_iter().map(|v| (v.key, v.value)).collect(),
         }
     }
