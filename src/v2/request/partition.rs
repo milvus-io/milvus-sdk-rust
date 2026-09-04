@@ -512,6 +512,8 @@ pub struct LoadPartitionsRequest {
     pub(crate) load_fields: Vec<String>,
     pub(crate) skip_load_dynamic_field: bool,
     pub(crate) resource_groups: Vec<String>,
+    /// Load priority (e.g. `"low"`); forwarded as the `load_priority` load param.
+    pub(crate) load_priority: Option<String>,
 }
 
 impl LoadPartitionsRequest {
@@ -577,6 +579,11 @@ impl LoadPartitionsRequest {
         &self.resource_groups
     }
 
+    /// Returns the load priority.
+    pub fn load_priority(&self) -> Option<&str> {
+        self.load_priority.as_deref()
+    }
+
     pub(crate) fn into_proto(self, default_db: &str) -> milvus::LoadPartitionsRequest {
         let mut value = milvus::LoadPartitionsRequest::default();
         value.db_name = self.database_name.unwrap_or_else(|| default_db.to_owned());
@@ -587,6 +594,9 @@ impl LoadPartitionsRequest {
         value.resource_groups = self.resource_groups;
         value.load_fields = self.load_fields;
         value.skip_load_dynamic_field = self.skip_load_dynamic_field;
+        if let Some(priority) = self.load_priority {
+            value.load_params.insert("load_priority".into(), priority);
+        }
         value
     }
 }
@@ -604,6 +614,7 @@ impl LoadPartitionsRequest {
             load_fields: Vec::new(),
             skip_load_dynamic_field: false,
             resource_groups: Vec::new(),
+            load_priority: None,
         }
     }
 }
@@ -717,6 +728,15 @@ impl LoadPartitionsRequestBuilder {
         if !self.value.resource_groups.contains(&value) {
             self.value.resource_groups.push(value);
         }
+        self
+    }
+
+    /// Sets the load priority and returns the updated value.
+    ///
+    /// Forwarded as the `load_priority` load param; pass values such as
+    /// `"low"` to use a lower priority than the default.
+    pub fn load_priority(mut self, value: impl Into<String>) -> Self {
+        self.value.load_priority = Some(value.into());
         self
     }
 

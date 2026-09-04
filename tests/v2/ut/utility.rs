@@ -500,7 +500,7 @@ async fn utility_interfaces_reach_rpc_server() {
     let analyzer = client
         .run_analyzer(
             RunAnalyzerRequest::builder()
-                .analyzer_params("{}")
+                .analyzer_params(serde_json::json!({}))
                 .texts(["hello"])
                 .build()
                 .expect("valid request"),

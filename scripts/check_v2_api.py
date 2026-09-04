@@ -39,6 +39,7 @@ ACCESSOR_ALIASES = {
 }
 SETTER_ALIASES = {
     "rows": ("row",),
+    "id_type_alias": ("id_type",),
 }
 
 
