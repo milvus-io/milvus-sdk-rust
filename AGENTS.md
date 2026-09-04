@@ -7,7 +7,9 @@ reviewing code.
 ## Repository orientation
 
 - The **V2 API** (`src/v2`, surfaced as `milvus::v2`) is the active SDK surface. Put all new
-  feature work here.
+  feature work here. Active feature areas include collection, alias, partition, index, DML, DQL,
+  iterators, database, RBAC, resource group, snapshot, CDC, bulk import, session, telemetry,
+  and global-cluster routing.
 - The **V1 API** (crate-root `milvus::client`, `schema`, `query`, `mutate`, `index`) is deprecated
   compatibility. Limit V1 edits to compatibility preservation, build fixes, security fixes, and
   critical correctness fixes.
@@ -35,7 +37,8 @@ reviewing code.
 ## Value types (`src/v2/types`)
 
 - **Every public struct uses a zero-argument `new()`** that establishes SDK defaults; configure
-  required values with fluent methods.
+  required values with fluent methods. Types produced only by decoding (e.g. response-like value
+  types constructed via `from_proto`) may omit `new()`.
 - **Do not add `Default` to structs** merely as an alias for `new()` (keep it only where an
   enum/sentinel genuinely needs it).
 - **For each member, keep the method family adjacent and ordered**:
