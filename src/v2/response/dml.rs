@@ -19,6 +19,7 @@
 use crate::proto::milvus;
 use crate::v2::error::Result;
 pub use crate::v2::types::Ids;
+use crate::v2::utils::parse_extra;
 
 ///////////////////////////////////////////////////////////////////////////////
 // DmlResponse
@@ -35,6 +36,7 @@ pub struct DmlResponse {
     pub(crate) delete_count: i64,
     pub(crate) upsert_count: i64,
     pub(crate) timestamp: u64,
+    pub(crate) cost: i64,
 }
 
 impl DmlResponse {
@@ -50,6 +52,7 @@ impl DmlResponse {
             delete_count: 0,
             upsert_count: 0,
             timestamp: 0,
+            cost: 0,
         }
     }
 
@@ -105,6 +108,12 @@ impl DmlResponse {
     }
 
     pub(crate) fn from_proto(value: milvus::MutationResult) -> Result<Self> {
+        let extra_info = value
+            .status
+            .as_ref()
+            .map(|status| &status.extra_info)
+            .cloned()
+            .unwrap_or_default();
         Ok(Self {
             ids: Ids::from_proto(value.i_ds)?,
             succeeded_indices: value.succ_index,
@@ -114,7 +123,14 @@ impl DmlResponse {
             delete_count: value.delete_cnt,
             upsert_count: value.upsert_cnt,
             timestamp: value.timestamp,
+            cost: parse_extra(&extra_info, "report_value", -1_i64),
         })
+    }
+
+    /// Returns the cost reported by the server, or `-1` when the server did
+    /// not report one.
+    pub fn cost(&self) -> i64 {
+        self.cost
     }
 }
 
@@ -185,6 +201,12 @@ impl DmlResponseBuilder {
         self
     }
 
+    /// Sets the cost and returns the updated value.
+    pub fn cost(mut self, value: i64) -> Self {
+        self.value.cost = value;
+        self
+    }
+
     /// Validates the configured values and builds the request.
     pub fn build(self) -> DmlResponse {
         self.value
@@ -242,6 +264,7 @@ mod builder_value_tests {
         let expected_delete_count: i64 = 0;
         let expected_upsert_count: i64 = 0;
         let expected_timestamp: u64 = 0;
+        let expected_cost: i64 = 0;
 
         assert_eq!(value.ids().to_owned(), expected_ids);
         assert_eq!(
@@ -254,6 +277,7 @@ mod builder_value_tests {
         assert_eq!(value.delete_count().to_owned(), expected_delete_count);
         assert_eq!(value.upsert_count().to_owned(), expected_upsert_count);
         assert_eq!(value.timestamp().to_owned(), expected_timestamp);
+        assert_eq!(value.cost().to_owned(), expected_cost);
     }
 
     #[test]
@@ -266,6 +290,7 @@ mod builder_value_tests {
         let delete_count = 7;
         let upsert_count = 7;
         let timestamp = 7;
+        let cost = 7;
         let value = DmlResponse::builder()
             .ids(ids.clone())
             .succeeded_indices(succeeded_indices.clone())
@@ -275,6 +300,7 @@ mod builder_value_tests {
             .delete_count(delete_count.clone())
             .upsert_count(upsert_count.clone())
             .timestamp(timestamp.clone())
+            .cost(cost.clone())
             .build();
 
         assert_eq!(value.ids().to_owned(), ids);
@@ -285,5 +311,41 @@ mod builder_value_tests {
         assert_eq!(value.delete_count().to_owned(), delete_count);
         assert_eq!(value.upsert_count().to_owned(), upsert_count);
         assert_eq!(value.timestamp().to_owned(), timestamp);
+        assert_eq!(value.cost().to_owned(), cost);
+    }
+
+    #[test]
+    fn dml_response_decodes_cost_from_server_extra_info() {
+        use crate::proto::common;
+        use crate::proto::schema;
+
+        let value = DmlResponse::from_proto(milvus::MutationResult {
+            status: Some(common::Status {
+                extra_info: [("report_value".into(), "42".into())].into_iter().collect(),
+                ..Default::default()
+            }),
+            insert_cnt: 2,
+            i_ds: Some(schema::IDs {
+                id_field: Some(schema::i_ds::IdField::IntId(schema::LongArray {
+                    data: vec![1, 2],
+                })),
+            }),
+            ..Default::default()
+        })
+        .expect("valid mutation result");
+
+        assert_eq!(value.insert_count(), 2);
+        assert_eq!(value.cost(), 42);
+        assert_eq!(value.ids(), &Ids::Int64(vec![1, 2]));
+    }
+
+    #[test]
+    fn dml_response_defaults_cost_when_server_reports_none() {
+        let value = DmlResponse::from_proto(milvus::MutationResult {
+            ..Default::default()
+        })
+        .expect("valid empty mutation result");
+
+        assert_eq!(value.cost(), -1);
     }
 }

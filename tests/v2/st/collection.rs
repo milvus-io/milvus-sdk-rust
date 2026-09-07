@@ -177,13 +177,65 @@ async fn describe_collection() {
         }
     }
     assert_eq!(
-        returned_schema.get_struct_fields(),
-        schema.get_struct_fields()
+        returned_schema.get_struct_fields().len(),
+        schema.get_struct_fields().len()
     );
+    for expected in schema.get_struct_fields() {
+        let actual = returned_schema
+            .get_struct_fields()
+            .iter()
+            .find(|field| field.get_name() == expected.get_name())
+            .expect("described struct field");
+        assert_eq!(actual.get_description(), expected.get_description());
+        assert_eq!(actual.get_max_capacity(), expected.get_max_capacity());
+        assert_eq!(actual.is_nullable(), expected.is_nullable());
+        assert_eq!(actual.get_fields().len(), expected.get_fields().len());
+        for (actual_sub, expected_sub) in actual.get_fields().iter().zip(expected.get_fields()) {
+            assert_eq!(actual_sub.get_name(), expected_sub.get_name());
+            assert_eq!(actual_sub.get_description(), expected_sub.get_description());
+            assert_eq!(actual_sub.get_data_type(), expected_sub.get_data_type());
+            assert_eq!(
+                actual_sub.get_element_type(),
+                expected_sub.get_element_type()
+            );
+            assert_eq!(actual_sub.is_primary_key(), expected_sub.is_primary_key());
+            assert_eq!(actual_sub.is_auto_id(), expected_sub.is_auto_id());
+            assert_eq!(
+                actual_sub.is_partition_key(),
+                expected_sub.is_partition_key()
+            );
+            assert_eq!(
+                actual_sub.is_clustering_key(),
+                expected_sub.is_clustering_key()
+            );
+            assert_eq!(actual_sub.is_nullable(), expected_sub.is_nullable());
+            assert_eq!(actual_sub.get_type_params(), expected_sub.get_type_params());
+            assert_eq!(
+                actual_sub.get_index_params(),
+                expected_sub.get_index_params()
+            );
+            assert_eq!(
+                actual_sub.get_default_value(),
+                expected_sub.get_default_value()
+            );
+        }
+    }
     assert_eq!(
-        returned_schema.get_functions().to_owned(),
-        schema.get_functions()
+        returned_schema.get_functions().len(),
+        schema.get_functions().len()
     );
+    for expected in schema.get_functions() {
+        let actual = returned_schema
+            .get_functions()
+            .iter()
+            .find(|function| function.get_name() == expected.get_name())
+            .expect("described function");
+        assert_eq!(actual.get_description(), expected.get_description());
+        assert_eq!(actual.get_function_type(), expected.get_function_type());
+        assert_eq!(actual.get_input_fields(), expected.get_input_fields());
+        assert_eq!(actual.get_output_fields(), expected.get_output_fields());
+        assert_eq!(actual.get_params(), expected.get_params());
+    }
     for (key, value) in &properties {
         assert_eq!(
             returned_schema.get_properties().get(key).to_owned(),

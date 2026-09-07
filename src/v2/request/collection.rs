@@ -162,16 +162,16 @@ impl From<CreateSimpleCollectionRequest> for CreateCollectionRequest {
         CreateCollectionRequest {
             database_name: value.database_name,
             collection_name: value.collection_name,
-            description: None,
+            description: value.description,
             schema: Some(schema),
-            num_partitions: 0,
-            num_shards: 1,
+            num_partitions: value.num_partitions,
+            num_shards: value.num_shards,
             consistency_level: value.consistency_level,
             index_params: vec![IndexParam::new()
                 .field_name(value.vector_field)
                 .index_type(IndexType::AutoIndex)
                 .metric_type(value.metric_type)],
-            properties: HashMap::new(),
+            properties: value.properties,
         }
     }
 }
@@ -314,12 +314,17 @@ pub struct CreateSimpleCollectionRequest {
     pub(crate) dimension: u32,
     pub(crate) primary_field: String,
     pub(crate) primary_field_type: DataType,
+    pub(crate) id_type: Option<String>,
     pub(crate) max_length: u32,
     pub(crate) vector_field: String,
     pub(crate) auto_id: bool,
     pub(crate) enable_dynamic_field: bool,
     pub(crate) consistency_level: ConsistencyLevel,
     pub(crate) metric_type: MetricType,
+    pub(crate) num_shards: i32,
+    pub(crate) num_partitions: i64,
+    pub(crate) properties: HashMap<String, String>,
+    pub(crate) description: Option<String>,
 }
 
 impl CreateSimpleCollectionRequest {
@@ -360,6 +365,11 @@ impl CreateSimpleCollectionRequest {
         self.primary_field_type
     }
 
+    /// Returns the raw `id_type` string alias, if one was set.
+    pub fn id_type(&self) -> Option<&str> {
+        self.id_type.as_deref()
+    }
+
     /// Returns the max length.
     pub fn max_length(&self) -> u32 {
         self.max_length
@@ -389,6 +399,26 @@ impl CreateSimpleCollectionRequest {
     pub fn metric_type(&self) -> MetricType {
         self.metric_type
     }
+
+    /// Returns the number of shards.
+    pub fn num_shards(&self) -> i32 {
+        self.num_shards
+    }
+
+    /// Returns the number of partitions.
+    pub fn num_partitions(&self) -> i64 {
+        self.num_partitions
+    }
+
+    /// Returns the collection properties.
+    pub fn properties(&self) -> &HashMap<String, String> {
+        &self.properties
+    }
+
+    /// Returns the collection description.
+    pub fn description(&self) -> Option<&str> {
+        self.description.as_deref()
+    }
 }
 
 impl CreateSimpleCollectionRequest {
@@ -399,12 +429,17 @@ impl CreateSimpleCollectionRequest {
             dimension: 0,
             primary_field: "id".into(),
             primary_field_type: DataType::Int64,
+            id_type: None,
             max_length: 65_535,
             vector_field: "vector".into(),
             auto_id: false,
             enable_dynamic_field: true,
             consistency_level: ConsistencyLevel::Bounded,
             metric_type: MetricType::Cosine,
+            num_shards: 1,
+            num_partitions: 0,
+            properties: HashMap::new(),
+            description: None,
         }
     }
 }
@@ -485,19 +520,67 @@ impl CreateSimpleCollectionRequestBuilder {
         self
     }
 
+    /// Sets the primary id type and returns the updated value.
+    ///
+    /// Accepts `"int"` (maps to [`DataType::Int64`]) and `"string"`/`"str"`
+    /// (maps to [`DataType::VarChar`]), matching pymilvus `create_collection`.
+    /// The alias is resolved during [`CreateSimpleCollectionRequestBuilder::build`].
+    pub fn id_type(mut self, value: impl Into<String>) -> Self {
+        self.value.id_type = Some(value.into());
+        self
+    }
+
+    /// Sets the number of shards and returns the updated value.
+    pub fn num_shards(mut self, value: i32) -> Self {
+        self.value.num_shards = value;
+        self
+    }
+
+    /// Sets the number of partitions and returns the updated value.
+    pub fn num_partitions(mut self, value: i64) -> Self {
+        self.value.num_partitions = value;
+        self
+    }
+
+    /// Sets the collection properties and returns the updated value.
+    pub fn properties(mut self, value: HashMap<String, String>) -> Self {
+        self.value.properties = value;
+        self
+    }
+
+    /// Sets the collection description and returns the updated value.
+    pub fn description(mut self, value: impl Into<String>) -> Self {
+        self.value.description = Some(value.into());
+        self
+    }
+
     /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<CreateSimpleCollectionRequest> {
-        required("collection_name", &self.value.collection_name)?;
-        if self.value.dimension == 0 {
+        let mut value = self.value;
+        if let Some(alias) = value.id_type.take() {
+            let data_type = match alias.as_str() {
+                "int" => DataType::Int64,
+                "string" | "str" => DataType::VarChar,
+                other => {
+                    return Err(Error::validation(
+                        "id_type".into(),
+                        format!("must be \"int\" or \"string\", got {other:?}"),
+                    ))
+                }
+            };
+            value.primary_field_type = data_type;
+        }
+        required("collection_name", &value.collection_name)?;
+        if value.dimension == 0 {
             return Err(Error::validation(
                 "dimension".into(),
                 "must be greater than zero".into(),
             ));
         }
-        required("primary_field", &self.value.primary_field)?;
-        required("vector_field", &self.value.vector_field)?;
+        required("primary_field", &value.primary_field)?;
+        required("vector_field", &value.vector_field)?;
         if !matches!(
-            self.value.primary_field_type,
+            value.primary_field_type,
             DataType::Int64 | DataType::VarChar
         ) {
             return Err(Error::validation(
@@ -505,13 +588,25 @@ impl CreateSimpleCollectionRequestBuilder {
                 "must be Int64 or VarChar".into(),
             ));
         }
-        if self.value.primary_field_type == DataType::VarChar && self.value.max_length == 0 {
+        if value.primary_field_type == DataType::VarChar && value.max_length == 0 {
             return Err(Error::validation(
                 "max_length".into(),
                 "must be greater than zero for a VarChar primary field".into(),
             ));
         }
-        Ok(self.value)
+        if value.num_shards <= 0 {
+            return Err(Error::validation(
+                "num_shards".into(),
+                "must be greater than zero".into(),
+            ));
+        }
+        if value.num_partitions < 0 {
+            return Err(Error::validation(
+                "num_partitions".into(),
+                "must not be negative".into(),
+            ));
+        }
+        Ok(value)
     }
 }
 
@@ -857,6 +952,8 @@ pub struct LoadCollectionRequest {
     pub(crate) load_fields: Vec<String>,
     pub(crate) skip_load_dynamic_field: bool,
     pub(crate) resource_groups: Vec<String>,
+    /// Load priority (e.g. `"low"`); forwarded as the `load_priority` load param.
+    pub(crate) load_priority: Option<String>,
 }
 
 impl LoadCollectionRequest {
@@ -917,6 +1014,11 @@ impl LoadCollectionRequest {
         &self.resource_groups
     }
 
+    /// Returns the load priority.
+    pub fn load_priority(&self) -> Option<&str> {
+        self.load_priority.as_deref()
+    }
+
     pub(crate) fn into_proto(self, default_db: &str) -> milvus::LoadCollectionRequest {
         let mut value = milvus::LoadCollectionRequest::default();
         value.db_name = self.database_name.unwrap_or_else(|| default_db.to_owned());
@@ -926,6 +1028,9 @@ impl LoadCollectionRequest {
         value.load_fields = self.load_fields;
         value.skip_load_dynamic_field = self.skip_load_dynamic_field;
         value.resource_groups = self.resource_groups;
+        if let Some(priority) = self.load_priority {
+            value.load_params.insert("load_priority".into(), priority);
+        }
         value
     }
 }
@@ -942,6 +1047,7 @@ impl LoadCollectionRequest {
             load_fields: Vec::new(),
             skip_load_dynamic_field: false,
             resource_groups: Vec::new(),
+            load_priority: None,
         }
     }
 }
@@ -1007,6 +1113,15 @@ impl LoadCollectionRequestBuilder {
     /// Sets the resource groups and returns the updated value.
     pub fn resource_groups(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.value.resource_groups = values.into_iter().map(Into::into).collect();
+        self
+    }
+
+    /// Sets the load priority and returns the updated value.
+    ///
+    /// Forwarded as the `load_priority` load param; pass values such as
+    /// `"low"` to use a lower priority than the default.
+    pub fn load_priority(mut self, value: impl Into<String>) -> Self {
+        self.value.load_priority = Some(value.into());
         self
     }
 
@@ -3911,12 +4026,17 @@ mod builder_value_tests {
         let expected_dimension: u32 = 0;
         let expected_primary_field: String = "id".to_owned();
         let expected_primary_field_type: DataType = DataType::Int64;
+        let expected_id_type: Option<String> = None;
         let expected_max_length: u32 = 65_535;
         let expected_vector_field: String = "vector".to_owned();
         let expected_auto_id: bool = false;
         let expected_enable_dynamic_field: bool = true;
         let expected_consistency_level: ConsistencyLevel = ConsistencyLevel::Bounded;
         let expected_metric_type: MetricType = MetricType::Cosine;
+        let expected_num_shards: i32 = 1;
+        let expected_num_partitions: i64 = 0;
+        let expected_properties: HashMap<String, String> = HashMap::new();
+        let expected_description: Option<String> = None;
 
         assert_eq!(value.database_name().to_owned(), expected_database_name);
         assert_eq!(value.collection_name().to_owned(), expected_collection_name);
@@ -3926,6 +4046,7 @@ mod builder_value_tests {
             value.primary_field_type().to_owned(),
             expected_primary_field_type
         );
+        assert_eq!(value.id_type(), expected_id_type.as_deref());
         assert_eq!(value.max_length().to_owned(), expected_max_length);
         assert_eq!(value.vector_field().to_owned(), expected_vector_field);
         assert_eq!(value.is_auto_id().to_owned(), expected_auto_id);
@@ -3938,6 +4059,10 @@ mod builder_value_tests {
             expected_consistency_level
         );
         assert_eq!(value.metric_type().to_owned(), expected_metric_type);
+        assert_eq!(value.num_shards().to_owned(), expected_num_shards);
+        assert_eq!(value.num_partitions().to_owned(), expected_num_partitions);
+        assert_eq!(value.properties().to_owned(), expected_properties);
+        assert_eq!(value.description(), expected_description.as_deref());
     }
 
     #[test]
@@ -3953,6 +4078,10 @@ mod builder_value_tests {
         let enable_dynamic_field = true;
         let consistency_level = ConsistencyLevel::Strong;
         let metric_type = MetricType::Cosine;
+        let num_shards = 4;
+        let num_partitions = 8;
+        let properties = HashMap::from([("key".to_owned(), "value".to_owned())]);
+        let description = "description-value".to_owned();
         let value = CreateSimpleCollectionRequest::builder()
             .database_name(database_name.clone())
             .collection_name(collection_name.clone())
@@ -3965,6 +4094,10 @@ mod builder_value_tests {
             .enable_dynamic_field(enable_dynamic_field.clone())
             .consistency_level(consistency_level.clone())
             .metric_type(metric_type.clone())
+            .num_shards(num_shards.clone())
+            .num_partitions(num_partitions.clone())
+            .properties(properties.clone())
+            .description(description.clone())
             .build()
             .expect("valid request");
 
@@ -3982,6 +4115,87 @@ mod builder_value_tests {
         );
         assert_eq!(value.consistency_level().to_owned(), consistency_level);
         assert_eq!(value.metric_type().to_owned(), metric_type);
+        assert_eq!(value.num_shards().to_owned(), num_shards);
+        assert_eq!(value.num_partitions().to_owned(), num_partitions);
+        assert_eq!(value.properties().to_owned(), properties);
+        assert_eq!(value.description(), Some(description.as_str()));
+    }
+
+    #[test]
+    fn create_simple_collection_request_id_type_resolves() {
+        let int_value = CreateSimpleCollectionRequest::builder()
+            .collection_name("books")
+            .dimension(8)
+            .id_type("int")
+            .build()
+            .expect("valid int id type");
+        assert_eq!(int_value.primary_field_type(), DataType::Int64);
+
+        let string_value = CreateSimpleCollectionRequest::builder()
+            .collection_name("books")
+            .dimension(8)
+            .id_type("string")
+            .build()
+            .expect("valid string id type");
+        assert_eq!(string_value.primary_field_type(), DataType::VarChar);
+
+        let str_value = CreateSimpleCollectionRequest::builder()
+            .collection_name("books")
+            .dimension(8)
+            .id_type("str")
+            .build()
+            .expect("valid str id type");
+        assert_eq!(str_value.primary_field_type(), DataType::VarChar);
+
+        let error = CreateSimpleCollectionRequest::builder()
+            .collection_name("books")
+            .dimension(8)
+            .id_type("uuid")
+            .build()
+            .expect_err("invalid id type");
+        assert!(error.to_string().contains("id_type"));
+    }
+
+    #[test]
+    fn create_simple_collection_request_rejects_invalid_shards_and_partitions() {
+        let error = CreateSimpleCollectionRequest::builder()
+            .collection_name("books")
+            .dimension(8)
+            .num_shards(0)
+            .build()
+            .expect_err("num_shards must be positive");
+        assert!(error.to_string().contains("num_shards"));
+
+        let error = CreateSimpleCollectionRequest::builder()
+            .collection_name("books")
+            .dimension(8)
+            .num_partitions(-1)
+            .build()
+            .expect_err("num_partitions must not be negative");
+        assert!(error.to_string().contains("num_partitions"));
+    }
+
+    #[test]
+    fn create_simple_collection_request_forwards_fields_to_full_request() {
+        let simple = CreateSimpleCollectionRequest::builder()
+            .collection_name("books")
+            .dimension(8)
+            .num_shards(4)
+            .num_partitions(8)
+            .description("a book collection")
+            .properties(HashMap::from([("ttl".to_owned(), "120".to_owned())]))
+            .build()
+            .expect("valid request");
+        let full = CreateCollectionRequest::from(simple);
+
+        assert_eq!(full.collection_name(), "books");
+        assert_eq!(full.num_shards(), 4);
+        assert_eq!(full.num_partitions(), 8);
+        assert_eq!(full.description().as_deref(), Some("a book collection"));
+        assert_eq!(
+            full.properties().get("ttl").map(String::as_str),
+            Some("120")
+        );
     }
 
     #[test]
@@ -4138,6 +4352,29 @@ mod builder_value_tests {
             skip_load_dynamic_field
         );
         assert_eq!(value.resource_groups().to_owned(), resource_groups);
+    }
+
+    #[test]
+    fn load_collection_request_forwards_load_priority() {
+        let value = LoadCollectionRequest::builder()
+            .collection_name("books")
+            .load_priority("low")
+            .build()
+            .expect("valid request");
+        assert_eq!(value.load_priority(), Some("low"));
+
+        let proto = value.into_proto("default");
+        assert_eq!(
+            proto.load_params.get("load_priority").map(String::as_str),
+            Some("low")
+        );
+
+        let no_priority = LoadCollectionRequest::builder()
+            .collection_name("books")
+            .build()
+            .expect("valid request");
+        assert_eq!(no_priority.load_priority(), None);
+        assert!(no_priority.into_proto("default").load_params.is_empty());
     }
 
     #[test]
