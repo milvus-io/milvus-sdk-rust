@@ -15,6 +15,7 @@
 // limitations under the License.
 
 use super::common::MockServer;
+use milvus::proto::common;
 use milvus::v2::error::Error;
 use milvus::v2::request::collection::*;
 use milvus::v2::request::dml::InsertRequest;
@@ -695,7 +696,10 @@ async fn collection_interfaces_reach_rpc_server() {
         "rename_collection",
         &["old_name: \"books\"", "new_name: \"renamed_books\""],
     );
-    server.assert_request_contains("add_collection_field", &["schema:"]);
+    server.assert_request_contains(
+        "alter_collection_schema",
+        &["collection_name: \"books\"", "AddRequest("],
+    );
     server.assert_request_contains("add_collection_function", &["name: \"bm25\""]);
     server.assert_request_contains("alter_collection_function", &["function_name: \"bm25\""]);
     server.assert_request_contains("drop_collection_function", &["function_name: \"bm25\""]);
@@ -734,7 +738,7 @@ async fn collection_interfaces_reach_rpc_server() {
         "rename_collection",
         "alter_collection",
         "alter_collection_field",
-        "add_collection_field",
+        "alter_collection_schema",
         "add_collection_function",
         "alter_collection_function",
         "drop_collection_function",
@@ -742,6 +746,109 @@ async fn collection_interfaces_reach_rpc_server() {
     ] {
         server.assert_called(rpc);
     }
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn add_collection_field_falls_back_to_legacy_rpc_when_schema_alter_unsupported() {
+    let server = MockServer::start().await;
+    server
+        .service
+        .set_alter_collection_schema_unimplemented(true);
+
+    server
+        .client
+        .add_collection_field(
+            AddCollectionFieldRequest::builder()
+                .collection_name("books")
+                .field(
+                    FieldSchema::new()
+                        .name("extra")
+                        .data_type(DataType::Int64)
+                        .nullable(true),
+                )
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("add collection field via legacy fallback");
+    server.assert_called("alter_collection_schema");
+    server.assert_request_contains("add_collection_field", &["schema:"]);
+    server.shutdown().await;
+}
+
+#[tokio::test]
+#[allow(deprecated)]
+async fn add_collection_field_falls_back_to_legacy_rpc_for_external_collection() {
+    let server = MockServer::start().await;
+    server
+        .service
+        .set_alter_collection_schema_status(common::Status {
+            code: 1100,
+            error_code: common::ErrorCode::UnexpectedError as i32,
+            reason:
+                "alter collection schema operation is not supported for external collection books"
+                    .into(),
+            ..Default::default()
+        });
+
+    server
+        .client
+        .add_collection_field(
+            AddCollectionFieldRequest::builder()
+                .collection_name("books")
+                .field(
+                    FieldSchema::new()
+                        .name("extra")
+                        .data_type(DataType::Int64)
+                        .nullable(true),
+                )
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("add collection field via external-collection fallback");
+    server.assert_called("alter_collection_schema");
+    server.assert_request_contains("add_collection_field", &["schema:"]);
+    server.shutdown().await;
+}
+
+#[tokio::test]
+#[allow(deprecated)]
+async fn add_collection_field_propagates_unrelated_schema_alter_errors() {
+    let server = MockServer::start().await;
+    server
+        .service
+        .set_alter_collection_schema_status(common::Status {
+            code: 1002,
+            error_code: common::ErrorCode::UnexpectedError as i32,
+            reason: "unrelated alter failure".into(),
+            ..Default::default()
+        });
+
+    let error = server
+        .client
+        .add_collection_field(
+            AddCollectionFieldRequest::builder()
+                .collection_name("books")
+                .field(
+                    FieldSchema::new()
+                        .name("extra")
+                        .data_type(DataType::Int64)
+                        .nullable(true),
+                )
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect_err("unrelated alter failure must propagate");
+    assert!(matches!(error, milvus::v2::error::Error::Server(_)));
+    server.assert_called("alter_collection_schema");
+    assert_eq!(
+        server.service.call_count("add_collection_field"),
+        0,
+        "legacy add_collection_field must not be invoked for unrelated errors"
+    );
     server.shutdown().await;
 }
 

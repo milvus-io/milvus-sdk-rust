@@ -327,7 +327,17 @@ async fn iterators_treat_empty_database_name_as_the_selected_database() {
     let client = &server.client;
     let collection = "selected_database_iterator_books";
     client
+        .create_database(
+            CreateDatabaseRequest::builder()
+                .database_name("tenant")
+                .build()
+                .expect("valid database request"),
+        )
+        .await
+        .expect("create tenant database");
+    client
         .use_database("tenant")
+        .await
         .expect("select tenant database");
     client
         .create_collection(

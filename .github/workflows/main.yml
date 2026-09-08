@@ -1,4 +1,4 @@
-name: Unittest
+name: Build and Test
 
 on:
   push:
@@ -38,7 +38,7 @@ concurrency:
 
 jobs:
   ut-linux:
-    name: UT on Ubuntu-${{ matrix.ubuntu }}
+    name: Build and test on Ubuntu-${{ matrix.ubuntu }}
     # The type of runner that the job will run on
     runs-on: ubuntu-${{ matrix.ubuntu }}
     timeout-minutes: 60
@@ -93,7 +93,7 @@ jobs:
           flags: ubuntu-${{ matrix.ubuntu }}-unittests
 
   ut-macos:
-    name: UT on MacOS 15
+    name: Build and test on MacOS 15
     if: github.event_name == 'pull_request'
     runs-on: macos-15
     timeout-minutes: 45
@@ -118,7 +118,7 @@ jobs:
         run: ./scripts/run_tests.sh --no-server
 
   ut-windows:
-    name: UT on Windows
+    name: Build and test on Windows
     runs-on: windows-latest
     timeout-minutes: 45
     env:

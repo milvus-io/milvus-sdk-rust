@@ -81,15 +81,73 @@ reviewing code.
   non-idempotent mutations (insert/upsert/delete/truncate/credential/resource-transfer/snapshot
   mutations) after ambiguous transport failures.
 
-## Build, format, lint, test
+## Build, format, lint
 
-- `cargo test --lib`, `cargo test --test v2_ut` (unit; no server), `cargo test --doc`.
 - `cargo check --all-targets` (also compiles examples and server-backed system tests).
 - `cargo fmt --all -- --check` and `git diff --check` before handoff.
-- Server-backed system tests are under `tests/v2/st`; ask before starting Docker or running
-  destructive tests.
-- V2 examples live under `examples/v2` (V1 under `examples/v1`) and import
-  `milvus::v2::prelude::*`; use uppercase collection names `RUST_V2_<EXAMPLE_NAME>`.
+- Use Clippy when requested or proportionate to the change.
+
+## Examples
+
+- V2 examples live under `examples/v2` (V1 under `examples/v1`).
+- V2 examples import `milvus::v2::prelude::*` and use the V2 request/type APIs.
+- Use uppercase collection names `RUST_V2_<EXAMPLE_NAME>`.
+- Compile without running them when no live Milvus mutation is requested:
+  `cargo build --examples`.
+- Examples connect to Milvus and may create, modify, or delete resources; review connection
+  settings before running and clean up resources they create.
+
+## Tutorials
+
+- Standalone application crates under `tutorial/` (`1_quickstart` through `8_rbac`), one per
+  path in `tutorial/README.md`. Each pins the published `milvus-sdk-rust` version in its
+  `Cargo.toml`; keep tutorial code and the pinned version mutually compatible in the same commit.
+- Tutorial code changes (including README output and version references) land in lockstep with a
+  release-prep PR that bumps the pin, as done for previous releases; do not update tutorial code
+  to an unpublished API surface without also bumping its pinned dependency.
+- Keep tutorial READMEs beginner-oriented: first-run command, default endpoint/credential
+  assumptions, representative output, and concise troubleshooting.
+- `scripts/run_tests.sh` compile-checks tutorials against the current checkout with a temporary
+  Cargo patch; `scripts/run_tutorials.sh` runs them against one standalone Milvus container using
+  the pinned crates.io version.
+
+## Tests
+
+The test suite has three tiers. Run the tier that matches the change; the fast tiers require no
+Milvus server.
+
+### Unit tests (`cargo test --lib`)
+
+- In-crate `#[cfg(test)]` modules co-located with the code (e.g. `src/v2/request/*.rs`,
+  `src/v2/client/*.rs`, `src/v2/types/*.rs`). No server, no network.
+- Cover builder validation, protobuf encoding/decoding, value-type invariants, cache/retry logic,
+  and internal helpers.
+- Run with `cargo test --lib`. Prefer this tier for request/response/type logic that needs no RPC.
+
+### Integration tests (`cargo test --test v2_ut`)
+
+- `tests/v2/ut/` targets the `v2_ut` test binary. It exercises `ClientV2` methods against the
+  local in-process `MockServer` (`tests/v2/ut/common.rs`), which records RPCs, stores server-side
+  state, and can inject transport failures (`fail_next_transport`) or per-RPC error responses.
+- No Milvus server or Docker required. Run with `cargo test --test v2_ut`.
+- Add a mock handler in `tests/v2/ut/common.rs` when a feature dispatches a new RPC, and assert
+  wire behavior (which RPC fired, request contents, fallback paths, retry/no-retry) here rather
+  than in system tests.
+
+### System tests (`cargo test --test v2_st` / `--test v1_st`)
+
+- `tests/v2/st/` (target `v2_st`) and `tests/v1/` (target `v1_st`) run against a real Milvus
+  server. They validate end-to-end behavior the mock cannot: real schema evolution, RBAC
+  enforcement, server-side validation, and cross-component DML/DQL flows.
+- They require Milvus at `http://localhost:19530` (override with `MILVUS_URI`) and may create,
+  modify, and delete resources. Ask before starting Docker or running destructive tests.
+- On Linux, `./scripts/run_tests.sh` starts a managed standalone Milvus container, runs the
+  non-server checks and `v1_st`/`v2_st`, then removes the container.
+- Server-backed tests must clean up resources they create; prefer unique names in concurrent tests.
+
+### Doctests (`cargo test --doc`)
+
+- `cargo test --doc` compiles and runs `///` examples. Keep them current with API changes.
 
 ## Commits and PRs
 

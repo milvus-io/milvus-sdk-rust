@@ -71,7 +71,7 @@ async fn main() -> Result<()> {
             .get("database.replica.number")
             .map_or("", String::as_str)
     );
-    client.use_database(DATABASE)?;
+    client.use_database(DATABASE).await?;
     println!("Current in-used database: {}", client.current_database());
 
     drop_collection(&client, COLLECTION).await;
@@ -189,7 +189,7 @@ async fn main() -> Result<()> {
         .await?;
     println!("partition count(*) = {}", query_count(count.results())?);
 
-    client.use_database("default")?;
+    client.use_database("default").await?;
     println!("Current in-used database: {}", client.current_database());
     let query = client
         .query(
@@ -227,7 +227,7 @@ async fn main() -> Result<()> {
         .await?;
     print_search_results(search.results())?;
 
-    client.use_database(DATABASE)?;
+    client.use_database(DATABASE).await?;
     println!("Current in-used database: {}", client.current_database());
     client
         .release_collection(
@@ -268,7 +268,7 @@ async fn main() -> Result<()> {
             .map_or("0", String::as_str)
     );
     drop_collection(&client, COLLECTION).await;
-    client.use_database("")?;
+    client.use_database("").await?;
     println!("Current in-used database: {}", client.current_database());
     client
         .drop_database(

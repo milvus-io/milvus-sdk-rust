@@ -230,7 +230,7 @@ async fn main() -> Result<()> {
         "\nPartitions of {COLLECTION}: {:?}",
         partitions.partition_names()
     );
-    client.use_database(DATABASE)?;
+    client.use_database(DATABASE).await?;
 
     let mut rng = rand::thread_rng();
     let ids = (0..2000).collect::<Vec<i64>>();
@@ -408,7 +408,7 @@ async fn main() -> Result<()> {
             .map_or("0", String::as_str)
     );
     drop_collection(&client, COLLECTION).await;
-    client.use_database("default")?;
+    client.use_database("default").await?;
     if created_database {
         client
             .drop_database(

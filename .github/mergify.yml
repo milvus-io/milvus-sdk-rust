@@ -26,9 +26,9 @@ pull_request_rules:
   - name: Add ci-passed when eligible
     conditions:
       - 'base~=^(main|[0-9]+[.][0-9]+)$'
-      - "check-success=UT on Ubuntu-22.04"
-      - "check-success=UT on MacOS 15"
-      - "check-success=UT on Windows"
+      - "check-success=Build and test on Ubuntu-22.04"
+      - "check-success=Build and test on MacOS 15"
+      - "check-success=Build and test on Windows"
     actions:
       label:
         add:
@@ -39,9 +39,9 @@ pull_request_rules:
       - 'base~=^(main|[0-9]+[.][0-9]+)$'
       - label=ci-passed
       - or:
-        - "-check-success=UT on Ubuntu-22.04"
-        - "-check-success=UT on MacOS 15"
-        - "-check-success=UT on Windows"
+        - "-check-success=Build and test on Ubuntu-22.04"
+        - "-check-success=Build and test on MacOS 15"
+        - "-check-success=Build and test on Windows"
       - files~=^(?!\.github\/mergify\.yml).*$
       - files~=\.(?!md|png)
     actions:

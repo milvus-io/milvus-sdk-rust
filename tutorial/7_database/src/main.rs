@@ -52,7 +52,7 @@ async fn main() -> Result<()> {
         // use_database changes the database selected by this client. Returning to `default` ensures
         // the database being deleted is not still selected.
         println!("Calling use_database: select default");
-        client.use_database("default")?;
+        client.use_database("default").await?;
         println!("use_database completed");
         println!("\nDropping tutorial database {database:?}");
         // drop_database permanently removes the named database; it must contain no collections.
@@ -159,7 +159,7 @@ async fn demonstrate_database_interfaces(client: &ClientV2, database: &str) -> R
 
     // use_database selects this database for requests that omit an explicit database name.
     println!("Calling use_database: select {database:?}");
-    client.use_database(database)?;
+    client.use_database(database).await?;
     println!("use_database completed");
     println!("\nSelected database: {}", client.current_database());
     println!("Subsequent requests with no database_name will use this selected database.");

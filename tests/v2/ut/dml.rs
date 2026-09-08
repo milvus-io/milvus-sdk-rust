@@ -214,12 +214,19 @@ async fn local_validation_errors_force_refresh_the_shared_schema() {
 #[tokio::test]
 async fn stale_schema_is_force_refreshed_after_local_validation_mismatch() {
     let server = MockServer::start().await;
+    let describe_before = server.service.call_count("describe_collection");
     server
         .client
         .insert(insert_request())
         .await
         .expect("prime the schema cache");
-    assert_eq!(server.service.call_count("describe_collection"), 1);
+    // The process-wide schema cache may already hold this collection from a concurrent test,
+    // so the first insert issues either zero (cache hit) or one (cache miss) describe.
+    let describe_after_prime = server.service.call_count("describe_collection");
+    assert!(
+        describe_after_prime - describe_before <= 1,
+        "priming the schema cache issues at most one describe_collection"
+    );
 
     server
         .service
@@ -249,7 +256,11 @@ async fn stale_schema_is_force_refreshed_after_local_validation_mismatch() {
         .await
         .expect("insert succeeds after forced schema refresh");
 
-    assert_eq!(server.service.call_count("describe_collection"), 2);
+    assert_eq!(
+        server.service.call_count("describe_collection"),
+        describe_after_prime + 1,
+        "the local validation mismatch must force exactly one schema refresh"
+    );
     assert_eq!(server.service.call_count("insert"), 2);
     server.shutdown().await;
 }
