@@ -91,6 +91,8 @@ async fn partition_interfaces_reach_rpc_server() {
         )
         .await
         .unwrap();
+    assert_eq!(statistics.name(), "p1");
+    assert_eq!(statistics.row_count(), Some(1));
     assert_eq!(
         statistics.statistics().get("row_count").unwrap().to_owned(),
         "1"

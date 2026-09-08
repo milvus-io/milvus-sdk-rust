@@ -39,9 +39,12 @@ pull_request_rules:
       - 'base~=^(main|[0-9]+[.][0-9]+)$'
       - label=ci-passed
       - or:
-        - "-check-success=Build and test on Ubuntu-22.04"
-        - "-check-success=Build and test on MacOS 15"
-        - "-check-success=Build and test on Windows"
+          - "check-pending=Build and test on Ubuntu-22.04"
+          - "check-pending=Build and test on MacOS 15"
+          - "check-pending=Build and test on Windows"
+          - "check-failure=Build and test on Ubuntu-22.04"
+          - "check-failure=Build and test on MacOS 15"
+          - "check-failure=Build and test on Windows"
       - files~=^(?!\.github\/mergify\.yml).*$
       - files~=\.(?!md|png)
     actions:

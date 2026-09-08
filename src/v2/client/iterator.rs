@@ -1153,6 +1153,12 @@ fn validate_search_iterator_input(
             "search iterator does not support search aggregation".into(),
         ));
     }
+    if !search.order_by_fields.is_empty() {
+        return Err(Error::validation(
+            "order_by_fields".into(),
+            "search iterator does not support ORDER BY".into(),
+        ));
+    }
     Ok(())
 }
 

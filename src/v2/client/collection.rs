@@ -302,13 +302,14 @@ impl ClientV2 {
         request: request::collection::GetCollectionStatsRequest,
     ) -> Result<response::collection::GetCollectionStatsResponse> {
         let database = self.current_database();
+        let collection_name = request.collection_name.clone();
         let response = rpc_with_retry!(
             self,
             get_collection_statistics,
             request.into_proto(&database)
         )?;
         status_to_result(&response.status)?;
-        Ok(response::collection::GetCollectionStatsResponse::from_proto(response))
+        Ok(response::collection::GetCollectionStatsResponse::from_proto(response, collection_name))
     }
 
     /// Retrieves descriptions for multiple collections in one request.

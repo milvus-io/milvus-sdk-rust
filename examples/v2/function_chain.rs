@@ -118,12 +118,12 @@ async fn search_with_aggregation(client: &sdk::ClientV2) -> Result<()> {
         .add_order(
             OrderSpec::new()
                 .key("avg_year")
-                .direction(SortDirection::Desc),
+                .direction(AggDirection::Desc),
         )
         .top_hits(
             TopHitsSpec::new().size(3).sort([SortSpec::new()
                 .field_name(YEAR)
-                .direction(SortDirection::Desc)]),
+                .direction(AggDirection::Desc)]),
         );
     let request = SearchRequest::builder()
         .collection_name(COLLECTION)

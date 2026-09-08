@@ -485,6 +485,8 @@ async fn collection_interfaces_reach_rpc_server() {
         )
         .await
         .unwrap();
+    assert_eq!(statistics.name(), "books");
+    assert_eq!(statistics.row_count(), Some(1));
     assert_eq!(
         statistics.statistics().get("row_count").unwrap().to_owned(),
         "1"

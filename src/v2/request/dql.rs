@@ -30,7 +30,7 @@ use crate::v2::request::validation::{
 pub use crate::v2::types::Ids;
 use crate::v2::types::{
     encode_sparse_vector, validate_sparse_vector, ConsistencyLevel, Function, FunctionChain,
-    FunctionScore, MetricType, QueryCursor, SearchAggregation,
+    FunctionScore, MetricType, OrderByField, QueryCursor, SearchAggregation,
 };
 pub use crate::v2::types::{
     EmbeddingList, HighlightQuery, HighlightType, Highlighter, LexicalHighlighter, SearchVectors,
@@ -59,6 +59,7 @@ pub struct QueryRequest {
     pub(crate) ignore_growing: bool,
     pub(crate) timezone: String,
     pub(crate) consistency_level: Option<ConsistencyLevel>,
+    pub(crate) order_by_fields: Vec<OrderByField>,
     pub(crate) extra_params: HashMap<String, String>,
 }
 
@@ -77,6 +78,7 @@ impl QueryRequest {
             ignore_growing: Default::default(),
             timezone: Default::default(),
             consistency_level: Default::default(),
+            order_by_fields: Default::default(),
             extra_params: Default::default(),
         }
     }
@@ -153,6 +155,11 @@ impl QueryRequest {
         self.consistency_level
     }
 
+    /// Returns the fields used to order query results.
+    pub fn order_by_fields(&self) -> &[OrderByField] {
+        &self.order_by_fields
+    }
+
     /// Returns the extra params.
     pub fn extra_params(&self) -> &HashMap<String, String> {
         &self.extra_params
@@ -176,6 +183,12 @@ impl QueryRequest {
         }
         if !self.timezone.is_empty() {
             params.insert("timezone".into(), self.timezone);
+        }
+        if !self.order_by_fields.is_empty() {
+            params.insert(
+                "order_by_fields".into(),
+                format_order_by_fields(&self.order_by_fields),
+            );
         }
         let (filter, filter_templates) = if self.ids.is_empty() {
             (self.filter, self.filter_templates)
@@ -304,6 +317,12 @@ impl QueryRequestBuilder {
     /// Sets the consistency level and returns the updated value.
     pub fn consistency_level(mut self, value: ConsistencyLevel) -> Self {
         self.value.consistency_level = Some(value);
+        self
+    }
+
+    /// Sets the fields used to order query results and returns the updated value.
+    pub fn order_by_fields(mut self, values: impl IntoIterator<Item = OrderByField>) -> Self {
+        self.value.order_by_fields = values.into_iter().collect();
         self
     }
 
@@ -506,6 +525,7 @@ pub struct SearchRequest {
     pub(crate) radius: Option<f64>,
     pub(crate) range_filter: Option<f64>,
     pub(crate) metric_type: Option<MetricType>,
+    pub(crate) order_by_fields: Vec<OrderByField>,
     pub(crate) extra_params: HashMap<String, String>,
     pub(crate) rerank: Option<FunctionScore>,
     pub(crate) timezone: String,
@@ -621,6 +641,11 @@ impl SearchRequest {
     /// Returns the metric type.
     pub fn metric_type(&self) -> Option<MetricType> {
         self.metric_type
+    }
+
+    /// Returns the fields used to order search results.
+    pub fn order_by_fields(&self) -> &[OrderByField] {
+        &self.order_by_fields
     }
 
     /// Returns the extra params.
@@ -871,6 +896,13 @@ impl SearchRequest {
                 set_search_param(&mut search_params, "metric_type", metric.as_str());
             }
         }
+        if !self.order_by_fields.is_empty() {
+            set_search_param(
+                &mut search_params,
+                "order_by_fields",
+                format_order_by_fields(&self.order_by_fields),
+            );
+        }
         set_search_param(
             &mut search_params,
             "params",
@@ -941,6 +973,7 @@ impl SearchRequest {
             radius: None,
             range_filter: None,
             metric_type: None,
+            order_by_fields: Vec::new(),
             extra_params: HashMap::new(),
             rerank: None,
             timezone: String::new(),
@@ -1075,6 +1108,12 @@ impl SearchRequestBuilder {
     /// Sets the metric type and returns the updated value.
     pub fn metric_type(mut self, value: MetricType) -> Self {
         self.value.metric_type = Some(value);
+        self
+    }
+
+    /// Sets the fields used to order search results and returns the updated value.
+    pub fn order_by_fields(mut self, values: impl IntoIterator<Item = OrderByField>) -> Self {
+        self.value.order_by_fields = values.into_iter().collect();
         self
     }
 
@@ -1880,6 +1919,12 @@ impl SearchIteratorRequestBuilder {
                 "search iterator does not support IDs as search targets".into(),
             ));
         }
+        if !self.value.search.order_by_fields.is_empty() {
+            return Err(Error::validation(
+                "order_by_fields".into(),
+                "search iterator does not support ORDER BY".into(),
+            ));
+        }
         positive_usize("batch_size", self.value.batch_size)?;
         Ok(self.value)
     }
@@ -1896,12 +1941,19 @@ fn validate_query_iterator_query(value: &QueryRequest) -> Result<()> {
             "query iterator does not support IDs".into(),
         ));
     }
+    if !value.order_by_fields.is_empty() {
+        return Err(Error::validation(
+            "order_by_fields".into(),
+            "query iterator does not support ORDER BY".into(),
+        ));
+    }
     validate_query_request_limit(value, true)
 }
 
 fn validate_query_request_limit(value: &QueryRequest, allow_zero_limit: bool) -> Result<()> {
     required("collection_name", &value.collection_name)?;
     non_empty_strings("partition_names", &value.partition_names)?;
+    validate_order_by_fields(&value.order_by_fields)?;
     if !value.ids.is_empty() && !value.filter.is_empty() {
         return Err(Error::validation(
             "ids".into(),
@@ -1936,6 +1988,7 @@ fn validate_search_request(value: &SearchRequest) -> Result<()> {
             "must be within -1..=6".into(),
         ));
     }
+    validate_order_by_fields(&value.order_by_fields)?;
     validate_search_extra_params(&value.extra_params)?;
     validate_finite_range_parameter("radius", value.radius)?;
     validate_finite_range_parameter("range_filter", value.range_filter)?;
@@ -2003,12 +2056,13 @@ fn validate_sub_search_request(value: &SubSearchRequest) -> Result<()> {
 }
 
 fn validate_search_extra_params(extra_params: &HashMap<String, String>) -> Result<()> {
-    const RESERVED: [&str; 5] = [
+    const RESERVED: [&str; 6] = [
         "params",
         "topk",
         "anns_field",
         "metric_type",
         "round_decimal",
+        "order_by_fields",
     ];
     if let Some(key) = RESERVED
         .into_iter()
@@ -2110,6 +2164,32 @@ fn set_search_param(params: &mut Vec<common::KeyValuePair>, key: &str, value: im
     }
 }
 
+fn validate_order_by_fields(order_by_fields: &[OrderByField]) -> Result<()> {
+    for field in order_by_fields {
+        if field.get_field_name().is_empty() {
+            return Err(Error::validation(
+                "order_by_fields".into(),
+                "field name cannot be empty".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn format_order_by_fields(order_by_fields: &[OrderByField]) -> String {
+    order_by_fields
+        .iter()
+        .map(|field| {
+            format!(
+                "{}:{}",
+                field.get_field_name(),
+                field.get_direction().as_str()
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // Test Cases
 ///////////////////////////////////////////////////////////////////////////////
@@ -2118,13 +2198,13 @@ fn set_search_param(params: &mut Vec<common::KeyValuePair>, key: &str, value: im
 mod search_request_tests {
     use super::{
         EmbeddingList, HighlightQuery, Highlighter, HybridSearchRequest, LexicalHighlighter,
-        SearchRequest, SearchVectors, SubSearchRequest,
+        OrderByField, SearchRequest, SearchVectors, SubSearchRequest,
     };
     use crate::proto::{common, milvus};
     use crate::v2::types::{
-        col, fn_, BoostRerank, DecayRerank, FunctionChain, FunctionChainStage, FunctionScore,
-        HighlightType, Ids, MetricOp, MetricSpec, MetricType, ModelRerank, OrderSpec,
-        SearchAggregation, SortDirection, SparseVector, WeightedRerank,
+        col, fn_, AggDirection, BoostRerank, DecayRerank, FunctionChain, FunctionChainStage,
+        FunctionScore, HighlightType, Ids, MetricOp, MetricSpec, MetricType, ModelRerank,
+        OrderSpec, SearchAggregation, SparseVector, WeightedRerank,
     };
     use prost::Message;
     use serde_json::json;
@@ -2270,6 +2350,46 @@ mod search_request_tests {
             .search_params
             .iter()
             .all(|param| param.key != "metric_type"));
+    }
+
+    #[test]
+    fn search_encodes_order_by_fields() {
+        let request = SearchRequest::builder()
+            .collection_name("books")
+            .vector_field("embedding")
+            .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+            .limit(3)
+            .order_by_fields([
+                OrderByField::new()
+                    .field_name("word_count")
+                    .direction(AggDirection::Desc),
+                OrderByField::new().field_name("title"),
+            ])
+            .build()
+            .expect("valid request");
+        assert_eq!(request.order_by_fields().len(), 2);
+
+        let request = request.into_proto("default", 0).expect("convert");
+        let order_by = request
+            .search_params
+            .iter()
+            .find(|param| param.key == "order_by_fields")
+            .map(|param| param.value.as_str())
+            .expect("order_by_fields param encoded");
+        assert_eq!(order_by, "word_count:desc,title:asc");
+    }
+
+    #[test]
+    fn search_rejects_empty_order_by_field_name() {
+        let error = SearchRequest::builder()
+            .collection_name("books")
+            .vector_field("embedding")
+            .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+            .limit(3)
+            .order_by_fields([OrderByField::new().direction(AggDirection::Desc)])
+            .build()
+            .expect_err("empty order-by field name must be rejected");
+        assert!(error.to_string().contains("order_by_fields"));
     }
 
     #[test]
@@ -2449,11 +2569,7 @@ mod search_request_tests {
                 "total",
                 MetricSpec::new().op(MetricOp::Sum).field_name("price"),
             )
-            .add_order(
-                OrderSpec::new()
-                    .key("_count")
-                    .direction(SortDirection::Desc),
-            );
+            .add_order(OrderSpec::new().key("_count").direction(AggDirection::Desc));
         let result = SearchRequest::builder()
             .collection_name("books")
             .vector_field("embedding")
@@ -2478,11 +2594,7 @@ mod search_request_tests {
                 "total",
                 MetricSpec::new().op(MetricOp::Sum).field_name("price"),
             )
-            .add_order(
-                OrderSpec::new()
-                    .key("_count")
-                    .direction(SortDirection::Desc),
-            );
+            .add_order(OrderSpec::new().key("_count").direction(AggDirection::Desc));
         let result = SearchRequest::builder()
             .collection_name("books")
             .vector_field("embedding")
@@ -2507,11 +2619,7 @@ mod search_request_tests {
                 "total",
                 MetricSpec::new().op(MetricOp::Sum).field_name("price"),
             )
-            .add_order(
-                OrderSpec::new()
-                    .key("_count")
-                    .direction(SortDirection::Desc),
-            );
+            .add_order(OrderSpec::new().key("_count").direction(AggDirection::Desc));
         let result = SearchRequest::builder()
             .collection_name("books")
             .vector_field("embedding")
@@ -2540,11 +2648,7 @@ mod search_request_tests {
                 "total",
                 MetricSpec::new().op(MetricOp::Sum).field_name("price"),
             )
-            .add_order(
-                OrderSpec::new()
-                    .key("_count")
-                    .direction(SortDirection::Desc),
-            );
+            .add_order(OrderSpec::new().key("_count").direction(AggDirection::Desc));
         let request = SearchRequest::builder()
             .collection_name("books")
             .vector_field("embedding")
@@ -2711,6 +2815,7 @@ mod search_request_tests {
             "anns_field",
             "metric_type",
             "round_decimal",
+            "order_by_fields",
         ] {
             let extra_params = HashMap::from([(key.to_owned(), "value".to_owned())]);
             assert!(SearchRequest::builder()
@@ -2788,10 +2893,11 @@ mod search_request_tests {
 #[cfg(test)]
 mod query_request_tests {
     use super::{
-        GetRequest, HybridSearchRequest, Ids, QueryCursor, QueryIteratorRequest, QueryRequest,
-        SearchRequest, SearchVectors, SubSearchRequest,
+        GetRequest, HybridSearchRequest, Ids, OrderByField, QueryCursor, QueryIteratorRequest,
+        QueryRequest, SearchRequest, SearchVectors, SubSearchRequest,
     };
     use crate::proto::schema::{template_array_value, template_value};
+    use crate::v2::types::AggDirection;
     use std::collections::HashMap;
 
     #[test]
@@ -2820,6 +2926,56 @@ mod query_request_tests {
         assert_eq!(value("ignore_growing"), Some("true"));
         assert_eq!(value("timezone"), Some("Asia/Shanghai"));
         assert_eq!(request.guarantee_timestamp, 42);
+    }
+
+    #[test]
+    fn query_encodes_order_by_fields() {
+        let request = QueryRequest::builder()
+            .collection_name("books")
+            .limit(10)
+            .order_by_fields([
+                OrderByField::new()
+                    .field_name("word_count")
+                    .direction(AggDirection::Desc),
+                OrderByField::new().field_name("title"),
+            ])
+            .build()
+            .expect("valid request");
+        assert_eq!(request.order_by_fields().len(), 2);
+
+        let request = request.into_proto("default", None, 42).unwrap();
+        let value = |key: &str| {
+            request
+                .query_params
+                .iter()
+                .find(|param| param.key == key)
+                .map(|param| param.value.as_str())
+        };
+        assert_eq!(value("order_by_fields"), Some("word_count:desc,title:asc"));
+    }
+
+    #[test]
+    fn query_rejects_empty_order_by_field_name() {
+        let error = QueryRequest::builder()
+            .collection_name("books")
+            .order_by_fields([OrderByField::new()])
+            .build()
+            .expect_err("empty order-by field name must be rejected");
+        assert!(error.to_string().contains("order_by_fields"));
+    }
+
+    #[test]
+    fn query_iterator_rejects_order_by_fields() {
+        let query = QueryRequest::builder()
+            .collection_name("books")
+            .order_by_fields([OrderByField::new().field_name("price")])
+            .build()
+            .expect("valid request");
+        let error = QueryIteratorRequest::builder()
+            .query(query)
+            .build()
+            .expect_err("query iterator must reject ORDER BY");
+        assert!(error.to_string().contains("ORDER BY"));
     }
 
     #[test]
@@ -2985,6 +3141,7 @@ mod query_request_tests {
 #[cfg(test)]
 mod builder_value_tests {
     use super::*;
+    use crate::v2::types::AggDirection;
 
     #[test]
     fn query_request_default_values() {
@@ -3001,6 +3158,7 @@ mod builder_value_tests {
         let expected_ignore_growing: bool = false;
         let expected_timezone: String = String::new();
         let expected_consistency_level: Option<ConsistencyLevel> = None;
+        let expected_order_by_fields: Vec<OrderByField> = Default::default();
         let expected_extra_params: HashMap<String, String> = Default::default();
 
         assert_eq!(value.database_name().to_owned(), expected_database_name);
@@ -3024,6 +3182,7 @@ mod builder_value_tests {
             value.consistency_level().to_owned(),
             expected_consistency_level
         );
+        assert_eq!(value.order_by_fields().to_owned(), expected_order_by_fields);
         assert_eq!(value.extra_params().to_owned(), expected_extra_params);
     }
 
@@ -3041,6 +3200,9 @@ mod builder_value_tests {
         let ignore_growing = true;
         let timezone = "timezone-value".to_owned();
         let consistency_level = ConsistencyLevel::Strong;
+        let order_by_fields = vec![OrderByField::new()
+            .field_name("price")
+            .direction(AggDirection::Desc)];
         let extra_params = HashMap::from([("key-value".to_owned(), "value-value".to_owned())]);
         let value = QueryRequest::builder()
             .database_name(database_name.clone())
@@ -3054,6 +3216,7 @@ mod builder_value_tests {
             .ignore_growing(ignore_growing.clone())
             .timezone(timezone.clone())
             .consistency_level(consistency_level.clone())
+            .order_by_fields(order_by_fields.clone())
             .extra_params(extra_params.clone())
             .build()
             .expect("valid request");
@@ -3072,6 +3235,7 @@ mod builder_value_tests {
             value.consistency_level().to_owned(),
             Some(consistency_level)
         );
+        assert_eq!(value.order_by_fields().to_owned(), order_by_fields);
         assert_eq!(value.extra_params().to_owned(), extra_params);
     }
 
@@ -3159,6 +3323,7 @@ mod builder_value_tests {
         let expected_radius: Option<f64> = None;
         let expected_range_filter: Option<f64> = None;
         let expected_metric_type: Option<MetricType> = None;
+        let expected_order_by_fields: Vec<OrderByField> = Default::default();
         let expected_extra_params: HashMap<String, String> = Default::default();
         let expected_rerank: Option<FunctionScore> = None;
         let expected_timezone: String = String::new();
@@ -3193,6 +3358,7 @@ mod builder_value_tests {
         assert_eq!(value.radius().to_owned(), expected_radius);
         assert_eq!(value.range_filter().to_owned(), expected_range_filter);
         assert_eq!(value.metric_type().to_owned(), expected_metric_type);
+        assert_eq!(value.order_by_fields().to_owned(), expected_order_by_fields);
         assert_eq!(value.extra_params().to_owned(), expected_extra_params);
         assert_eq!(value.rerank().to_owned(), expected_rerank);
         assert_eq!(value.timezone().to_owned(), expected_timezone);
@@ -3225,6 +3391,9 @@ mod builder_value_tests {
         let radius = 1.5;
         let range_filter = 1.5;
         let metric_type = MetricType::Cosine;
+        let order_by_fields = vec![OrderByField::new()
+            .field_name("price")
+            .direction(AggDirection::Asc)];
         let extra_params = HashMap::from([("key-value".to_owned(), "value-value".to_owned())]);
         let rerank = FunctionScore::new().add_function(
             Function::new()
@@ -3254,6 +3423,7 @@ mod builder_value_tests {
             .radius(radius.clone())
             .range_filter(range_filter.clone())
             .metric_type(metric_type.clone())
+            .order_by_fields(order_by_fields.clone())
             .extra_params(extra_params.clone())
             .rerank(rerank.clone())
             .timezone(timezone.clone())
@@ -3281,6 +3451,7 @@ mod builder_value_tests {
         assert_eq!(value.radius().to_owned(), Some(radius));
         assert_eq!(value.range_filter().to_owned(), Some(range_filter));
         assert_eq!(value.metric_type().to_owned(), Some(metric_type));
+        assert_eq!(value.order_by_fields().to_owned(), order_by_fields);
         assert_eq!(value.extra_params().to_owned(), extra_params);
         assert_eq!(value.rerank().to_owned(), Some(rerank));
         assert_eq!(value.timezone().to_owned(), timezone);
@@ -3573,6 +3744,22 @@ mod builder_value_tests {
             .search(search)
             .build()
             .is_err());
+    }
+
+    #[test]
+    fn search_iterator_request_rejects_order_by_fields() {
+        let search = SearchRequest::builder()
+            .collection_name("books")
+            .vectors(SearchVectors::Float(vec![vec![0.0]]))
+            .order_by_fields([OrderByField::new().field_name("price")])
+            .build()
+            .expect("valid search request");
+
+        let error = SearchIteratorRequest::builder()
+            .search(search)
+            .build()
+            .expect_err("search iterator must reject ORDER BY");
+        assert!(error.to_string().contains("ORDER BY"));
     }
 
     #[test]

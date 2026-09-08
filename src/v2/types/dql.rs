@@ -16,6 +16,7 @@
 
 //! Query, search, reranking, highlighting, and result types.
 
+use super::aggregation::AggDirection;
 use super::common::{EntityRow, FieldData, Function, FunctionType, Ids, SparseVector, StructValue};
 use crate::proto::{common, schema};
 use crate::v2::error::{Error, Result};
@@ -3316,6 +3317,87 @@ fn row_index_error(index: usize, row_count: usize) -> Error {
         "index".into(),
         format!("row index {index} is out of bounds for {row_count} rows"),
     )
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// OrderByField
+///////////////////////////////////////////////////////////////////////////////
+/// Scalar field and direction used to order query or search results.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct OrderByField {
+    pub(crate) field_name: String,
+    pub(crate) direction: AggDirection,
+}
+
+impl OrderByField {
+    /// Creates a value initialized with its SDK defaults.
+    pub fn new() -> Self {
+        Self {
+            field_name: String::new(),
+            direction: AggDirection::Asc,
+        }
+    }
+
+    /// Sets the field name and returns the updated value.
+    pub fn field_name(mut self, value: impl Into<String>) -> Self {
+        self.field_name = value.into();
+        self
+    }
+
+    /// Sets the field name and returns this value for further mutation.
+    pub fn set_field_name(&mut self, value: impl Into<String>) -> &mut Self {
+        self.field_name = value.into();
+        self
+    }
+
+    /// Sets the direction and returns the updated value.
+    pub fn direction(mut self, value: AggDirection) -> Self {
+        self.direction = value;
+        self
+    }
+
+    /// Sets the direction and returns this value for further mutation.
+    pub fn set_direction(&mut self, value: AggDirection) -> &mut Self {
+        self.direction = value;
+        self
+    }
+
+    /// Returns the field name.
+    pub fn get_field_name(&self) -> &str {
+        &self.field_name
+    }
+
+    /// Returns the direction.
+    pub fn get_direction(&self) -> AggDirection {
+        self.direction
+    }
+}
+
+#[cfg(test)]
+mod order_by_field_tests {
+    use super::*;
+
+    #[test]
+    fn order_by_field_defaults_to_ascending() {
+        let value = OrderByField::new().field_name("price");
+        assert_eq!(value.get_field_name(), "price");
+        assert_eq!(value.get_direction(), AggDirection::Asc);
+    }
+
+    #[test]
+    fn order_by_field_supports_descending_direction() {
+        let mut value = OrderByField::new().field_name("price");
+        value.set_direction(AggDirection::Desc);
+        assert_eq!(value.get_direction(), AggDirection::Desc);
+        assert_eq!(
+            OrderByField::new()
+                .field_name("word_count")
+                .direction(AggDirection::Desc)
+                .get_direction(),
+            AggDirection::Desc
+        );
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////

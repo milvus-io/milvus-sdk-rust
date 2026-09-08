@@ -110,6 +110,19 @@ impl OptimizeTask {
     pub fn progress_history(&self) -> Vec<String> {
         self.state.progress.read().clone()
     }
+
+    /// Returns the final task status, or success while the task is still running. A cancellation
+    /// that has been requested but not yet completed reports the cancellation error.
+    pub fn task_status(&self) -> Result<()> {
+        match self.state.result.read().as_ref() {
+            Some(Ok(_)) => Ok(()),
+            Some(Err(error)) => Err(error.clone()),
+            None if self.state.cancelled.load(Ordering::SeqCst) => {
+                Err(Error::Cancelled("optimization task".into()))
+            }
+            None => Ok(()),
+        }
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -961,6 +974,38 @@ mod tests {
 
         assert!(matches!(
             task.get_result(100).await,
+            Err(Error::Timeout(message)) if message == "optimizing collection"
+        ));
+    }
+
+    #[test]
+    fn optimize_task_status_reports_final_outcome() {
+        let running = OptimizeTask::new();
+        assert!(running.task_status().is_ok());
+
+        let cancelled = OptimizeTask::new();
+        cancelled.cancel();
+        assert!(matches!(
+            cancelled.task_status(),
+            Err(Error::Cancelled(message)) if message == "optimization task"
+        ));
+
+        let ok_task = OptimizeTask::new();
+        ok_task.state.complete(&Ok(OptimizeResponse {
+            status_text: "success".into(),
+            collection_name: "books".into(),
+            compaction_id: 7,
+            target_size: "512MB".into(),
+            progress_history: Vec::new(),
+        }));
+        assert!(ok_task.task_status().is_ok());
+
+        let failed_task = OptimizeTask::new();
+        failed_task
+            .state
+            .complete(&Err(Error::Timeout("optimizing collection".into())));
+        assert!(matches!(
+            failed_task.task_status(),
             Err(Error::Timeout(message)) if message == "optimizing collection"
         ));
     }

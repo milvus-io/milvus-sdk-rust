@@ -29,6 +29,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct GetPartitionStatsResponse {
+    pub(crate) name: String,
     pub(crate) statistics: HashMap<String, String>,
 }
 
@@ -40,6 +41,7 @@ impl GetPartitionStatsResponse {
     #[cfg(test)]
     fn empty() -> Self {
         Self {
+            name: String::new(),
             statistics: HashMap::new(),
         }
     }
@@ -55,13 +57,33 @@ impl GetPartitionStatsResponse {
         }
     }
 
+    /// Returns the name of the partition the statistics describe.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns the server-reported row count, when present.
+    ///
+    /// The stat is parsed leniently: both a missing `row_count` key and a non-numeric value are
+    /// reported as `None` rather than surfacing a malformed-response error. The raw value remains
+    /// available through [`Self::statistics`].
+    pub fn row_count(&self) -> Option<i64> {
+        self.statistics
+            .get("row_count")
+            .and_then(|value| value.parse::<i64>().ok())
+    }
+
     /// Returns the statistics.
     pub fn statistics(&self) -> &HashMap<String, String> {
         &self.statistics
     }
 
-    pub(crate) fn from_proto(value: milvus::GetPartitionStatisticsResponse) -> Self {
+    pub(crate) fn from_proto(
+        value: milvus::GetPartitionStatisticsResponse,
+        name: impl Into<String>,
+    ) -> Self {
         Self {
+            name: name.into(),
             statistics: value.stats.into_iter().map(|v| (v.key, v.value)).collect(),
         }
     }
@@ -86,6 +108,12 @@ pub(crate) struct GetPartitionStatsResponseBuilder {
 
 #[cfg(test)]
 impl GetPartitionStatsResponseBuilder {
+    /// Sets the name and returns the updated value.
+    pub fn name(mut self, value: impl Into<String>) -> Self {
+        self.value.name = value.into();
+        self
+    }
+
     /// Sets the statistics and returns the updated value.
     pub fn statistics(mut self, value: HashMap<String, String>) -> Self {
         self.value.statistics = value;
@@ -300,16 +328,24 @@ mod tests {
     #[test]
     fn partition_response_methods_and_conversions() {
         let stats = GetPartitionStatsResponse::builder()
+            .name("p1")
             .statistics(HashMap::from([("row_count".into(), "12".into())]))
             .build();
+        assert_eq!(stats.name(), "p1");
+        assert_eq!(stats.row_count(), Some(12));
         assert_eq!(stats.statistics()["row_count"], "12");
-        let stats = GetPartitionStatsResponse::from_proto(milvus::GetPartitionStatisticsResponse {
-            stats: vec![KeyValuePair {
-                key: "row_count".into(),
-                value: "13".into(),
-            }],
-            ..Default::default()
-        });
+        let stats = GetPartitionStatsResponse::from_proto(
+            milvus::GetPartitionStatisticsResponse {
+                stats: vec![KeyValuePair {
+                    key: "row_count".into(),
+                    value: "13".into(),
+                }],
+                ..Default::default()
+            },
+            "p1",
+        );
+        assert_eq!(stats.name(), "p1");
+        assert_eq!(stats.row_count(), Some(13));
         assert_eq!(stats.statistics()["row_count"], "13");
 
         let info = PartitionInfo::new().name("p1").id(10);
