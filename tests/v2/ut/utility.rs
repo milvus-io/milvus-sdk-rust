@@ -19,6 +19,7 @@ use milvus::v2::error::Error;
 use milvus::v2::request::collection::{
     CreateSimpleCollectionRequest, LoadCollectionRequest, RefreshLoadRequest,
 };
+use milvus::v2::request::database::CreateDatabaseRequest;
 use milvus::v2::request::dml::InsertRequest;
 use milvus::v2::request::partition::LoadPartitionsRequest;
 use milvus::v2::request::utility::*;
@@ -88,7 +89,19 @@ async fn compact_and_optimize_direct_describe_bypass_the_schema_cache() {
 async fn empty_database_name_uses_selected_database_for_workflow_rpcs() {
     let server = MockServer::start().await;
     let client = &server.client;
-    client.use_database("tenant").expect("select database");
+    client
+        .create_database(
+            CreateDatabaseRequest::builder()
+                .database_name("tenant")
+                .build()
+                .expect("valid database request"),
+        )
+        .await
+        .expect("create tenant database");
+    client
+        .use_database("tenant")
+        .await
+        .expect("select database");
 
     client
         .create_collection(

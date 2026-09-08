@@ -22,8 +22,6 @@ async fn database_interfaces_reach_rpc_server() {
     let server = MockServer::start().await;
     let client = &server.client;
 
-    client.use_database("tenant").unwrap();
-    assert_eq!(client.current_database(), "tenant");
     client
         .create_database(
             CreateDatabaseRequest::builder()
@@ -37,6 +35,8 @@ async fn database_interfaces_reach_rpc_server() {
         )
         .await
         .unwrap();
+    client.use_database("tenant").await.unwrap();
+    assert_eq!(client.current_database(), "tenant");
     let databases = client
         .list_databases(
             ListDatabasesRequest::builder()
@@ -144,6 +144,57 @@ async fn database_interfaces_reach_rpc_server() {
         "drop_database",
     ] {
         server.assert_called(rpc);
+    }
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn use_database_rejects_missing_database_without_switching() {
+    let server = MockServer::start().await;
+    let client = &server.client;
+
+    let error = client
+        .use_database("missing")
+        .await
+        .expect_err("selecting a missing database must fail");
+    assert!(matches!(error, milvus::v2::error::Error::Server(_)));
+    assert_eq!(client.current_database(), "default");
+    server.assert_called("describe_database");
+
+    client
+        .create_database(
+            CreateDatabaseRequest::builder()
+                .database_name("tenant")
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .unwrap();
+    client
+        .use_database("tenant")
+        .await
+        .expect("select existing database");
+    assert_eq!(client.current_database(), "tenant");
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn use_database_reset_to_default_does_not_issue_describe_database() {
+    let server = MockServer::start().await;
+    let client = &server.client;
+
+    client
+        .use_database("")
+        .await
+        .expect("reset to default without an RPC");
+    assert_eq!(client.current_database(), "default");
+
+    for rpc in ["describe_database", "list_databases"] {
+        assert_eq!(
+            server.service.call_count(rpc),
+            0,
+            "reset to default must not issue {rpc}"
+        );
     }
     server.shutdown().await;
 }

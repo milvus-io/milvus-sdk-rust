@@ -281,10 +281,12 @@ impl Interceptor for V2Interceptor {
 /// - DDL operations that change a database, collection identity, schema, or alias should be
 ///   serialized with DML and DQL calls targeting the affected objects. Results are not guaranteed
 ///   when those operations overlap.
-/// - [`ClientV2::use_database`], [`ClientV2::set_rpc_deadline`], [`ClientV2::set_retry_param`],
-///   and `update_password` with `reset_connection` (which re-establishes the shared channel and
-///   credentials) are internally synchronized but update state shared by every clone. Serialize
-///   configuration changes with RPC creation when deterministic request settings are required.
+/// - [`ClientV2::use_database`] verifies the target database exists (a `describe_database` RPC)
+///   before switching, then updates state shared by every clone; [`ClientV2::set_rpc_deadline`],
+///   [`ClientV2::set_retry_param`], and `update_password` with `reset_connection` (which
+///   re-establishes the shared channel and credentials) are internally synchronized but update
+///   state shared by every clone. Serialize configuration changes with RPC creation when
+///   deterministic request settings are required.
 #[derive(Clone)]
 pub struct ClientV2 {
     service: SharedServices,

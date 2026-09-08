@@ -2170,6 +2170,35 @@ impl AddCollectionFieldRequest {
             ..Default::default()
         })
     }
+
+    /// Encodes the request as an `AlterCollectionSchemaRequest` add-field action, the modern
+    /// RPC that pymilvus/java/cpp use for `add_collection_field` (falling back to
+    /// `AddCollectionField` only when the server reports UNIMPLEMENTED).
+    pub(crate) fn into_alter_schema_proto(self) -> Result<milvus::AlterCollectionSchemaRequest> {
+        use crate::proto::milvus::alter_collection_schema_request::{self as req};
+
+        let field = self
+            .field
+            .ok_or_else(|| Error::validation("field".into(), "must be specified".into()))?;
+        let add_request = req::AddRequest {
+            field_infos: vec![req::FieldInfo {
+                field_schema: Some(field.into_proto()),
+                index_name: String::new(),
+                extra_params: Vec::new(),
+            }],
+            func_schema: Vec::new(),
+            do_physical_backfill: false,
+        };
+        Ok(milvus::AlterCollectionSchemaRequest {
+            base: None,
+            db_name: self.database_name.unwrap_or_default(),
+            collection_name: self.collection_name,
+            collection_id: 0,
+            action: Some(req::Action {
+                op: Some(req::action::Op::AddRequest(add_request)),
+            }),
+        })
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -2216,6 +2245,12 @@ impl AddCollectionFieldRequestBuilder {
             return Err(Error::validation(
                 "field.data_type".into(),
                 "must be specified".into(),
+            ));
+        }
+        if field.get_data_type().is_vector() && !field.is_nullable() {
+            return Err(Error::validation(
+                "field.nullable".into(),
+                "adding a vector field to an existing collection requires nullable = true".into(),
             ));
         }
         field.validate()?;
@@ -4668,6 +4703,84 @@ mod builder_value_tests {
         assert_eq!(value.database_name().to_owned(), Some(database_name));
         assert_eq!(value.collection_name().to_owned(), collection_name);
         assert_eq!(value.field(), Some(&field));
+    }
+
+    #[test]
+    fn add_collection_field_encodes_alter_schema_add_request() {
+        let field = FieldSchema::new()
+            .name("embedding")
+            .data_type(DataType::FloatVector)
+            .dimension(4)
+            .nullable(true);
+        let proto = AddCollectionFieldRequest::builder()
+            .database_name("catalog")
+            .collection_name("books")
+            .field(field)
+            .build()
+            .expect("valid request")
+            .into_alter_schema_proto()
+            .expect("valid proto");
+        assert_eq!(proto.db_name, "catalog");
+        assert_eq!(proto.collection_name, "books");
+        let add = match proto.action.and_then(|action| action.op) {
+            Some(milvus::alter_collection_schema_request::action::Op::AddRequest(add)) => add,
+            _ => panic!("expected AddRequest action"),
+        };
+        assert_eq!(add.field_infos.len(), 1);
+        let info = &add.field_infos[0];
+        let schema = info.field_schema.as_ref().expect("field schema present");
+        assert_eq!(schema.name, "embedding");
+        assert!(schema.nullable);
+    }
+
+    #[test]
+    fn add_collection_field_rejects_non_nullable_vector_field() {
+        let error = AddCollectionFieldRequest::builder()
+            .collection_name("books")
+            .field(
+                FieldSchema::new()
+                    .name("embedding")
+                    .data_type(DataType::FloatVector)
+                    .dimension(4),
+            )
+            .build()
+            .expect_err("non-nullable vector field must be rejected");
+        assert!(matches!(error, Error::Validation(_)));
+    }
+
+    #[test]
+    fn add_collection_field_accepts_nullable_vector_field() {
+        let value = AddCollectionFieldRequest::builder()
+            .collection_name("books")
+            .field(
+                FieldSchema::new()
+                    .name("embedding")
+                    .data_type(DataType::FloatVector)
+                    .dimension(4)
+                    .nullable(true),
+            )
+            .build()
+            .expect("nullable vector field is accepted");
+        let field = value.field().expect("field is present");
+        assert_eq!(field.get_name(), "embedding");
+        assert!(field.is_nullable());
+    }
+
+    #[test]
+    fn add_collection_field_accepts_non_nullable_scalar_field() {
+        let value = AddCollectionFieldRequest::builder()
+            .collection_name("books")
+            .field(
+                FieldSchema::new()
+                    .name("note")
+                    .data_type(DataType::VarChar)
+                    .max_length(128),
+            )
+            .build()
+            .expect("non-nullable scalar field is passed through to the server");
+        let field = value.field().expect("field is present");
+        assert_eq!(field.get_name(), "note");
+        assert!(!field.is_nullable());
     }
 
     #[test]

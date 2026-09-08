@@ -108,6 +108,7 @@ async fn database_lifecycle_and_selection() {
 
     client
         .use_database(&database)
+        .await
         .expect("use created database");
     assert_eq!(client.current_database(), database);
     common::create_advanced_collection(&client, &collection).await;
@@ -117,6 +118,7 @@ async fn database_lifecycle_and_selection() {
 
     client
         .use_database("default")
+        .await
         .expect("use default database");
     client
         .drop_database(

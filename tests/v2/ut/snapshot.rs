@@ -16,6 +16,7 @@
 
 use super::common::MockServer;
 use milvus::v2::error::Error;
+use milvus::v2::request::database::CreateDatabaseRequest;
 use milvus::v2::request::snapshot::*;
 use milvus::v2::RestoreSnapshotStateCode;
 use tonic::Code;
@@ -191,7 +192,17 @@ async fn snapshot_interfaces_reach_rpc_server() {
 #[tokio::test]
 async fn snapshot_requests_use_the_selected_database() {
     let server = MockServer::start().await;
-    server.client.use_database("analytics").unwrap();
+    server
+        .client
+        .create_database(
+            CreateDatabaseRequest::builder()
+                .database_name("analytics")
+                .build()
+                .expect("valid database request"),
+        )
+        .await
+        .unwrap();
+    server.client.use_database("analytics").await.unwrap();
 
     server
         .client

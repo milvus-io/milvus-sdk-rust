@@ -46,6 +46,8 @@ struct MockState {
     client_request_ids: HashMap<&'static str, Vec<Option<String>>>,
     authorization_headers: HashMap<&'static str, Vec<Option<String>>>,
     transport_failures: HashMap<&'static str, Vec<tonic::Code>>,
+    alter_collection_schema_unimplemented: bool,
+    alter_collection_schema_status: Option<common::Status>,
     aliases: HashMap<(String, String), String>,
     databases: HashMap<String, HashMap<String, String>>,
     replicate_configuration: Option<common::ReplicateConfiguration>,
@@ -70,6 +72,8 @@ impl Default for MockState {
             client_request_ids: HashMap::new(),
             authorization_headers: HashMap::new(),
             transport_failures: HashMap::new(),
+            alter_collection_schema_unimplemented: false,
+            alter_collection_schema_status: None,
             aliases: HashMap::new(),
             databases: HashMap::new(),
             replicate_configuration: None,
@@ -201,6 +205,17 @@ impl MockMilvus {
             .entry(method)
             .or_default()
             .push(code);
+    }
+
+    pub fn set_alter_collection_schema_unimplemented(&self, value: bool) {
+        self.state
+            .lock()
+            .unwrap()
+            .alter_collection_schema_unimplemented = value;
+    }
+
+    pub fn set_alter_collection_schema_status(&self, status: common::Status) {
+        self.state.lock().unwrap().alter_collection_schema_status = Some(status);
     }
 
     fn take_transport_failure(&self, method: &'static str) -> Option<Status> {
@@ -686,6 +701,30 @@ impl MilvusService for MockMilvus {
     );
     status_method!(alter_collection_field, pb::AlterCollectionFieldRequest);
     status_method!(add_collection_field, pb::AddCollectionFieldRequest);
+    response_method_with!(
+        alter_collection_schema,
+        pb::AlterCollectionSchemaRequest,
+        pb::AlterCollectionSchemaResponse,
+        |service, request| {
+            let mut state = service.state.lock().unwrap();
+            if state.alter_collection_schema_unimplemented {
+                // Simulate an older server that does not support schema alteration so the
+                // client falls back to the legacy AddCollectionField RPC.
+                return Err(tonic::Status::unimplemented(
+                    "schema alteration unsupported",
+                ));
+            }
+            pb::AlterCollectionSchemaResponse {
+                alter_status: Some(
+                    state
+                        .alter_collection_schema_status
+                        .take()
+                        .unwrap_or_else(success_status),
+                ),
+                ..Default::default()
+            }
+        }
+    );
     status_method!(add_collection_function, pb::AddCollectionFunctionRequest);
     status_method!(
         alter_collection_function,
@@ -2421,27 +2460,39 @@ impl MilvusService for MockMilvus {
         pb::DescribeDatabaseRequest,
         pb::DescribeDatabaseResponse,
         |service, request| {
-            let properties = service
-                .state
-                .lock()
-                .unwrap()
-                .databases
-                .get(&request.db_name)
-                .cloned()
-                .unwrap_or_default();
-            pb::DescribeDatabaseResponse {
-                status: Some(success_status()),
-                db_name: request.db_name,
-                db_id: 20,
-                created_timestamp: 200,
-                properties: properties
-                    .into_iter()
-                    .map(|(key, value)| common::KeyValuePair {
-                        key,
-                        value,
+            let state = service.state.lock().unwrap();
+            let known =
+                request.db_name == "default" || state.databases.contains_key(&request.db_name);
+            if !known {
+                pb::DescribeDatabaseResponse {
+                    status: Some(common::Status {
+                        code: 800,
+                        error_code: common::ErrorCode::UnexpectedError as i32,
+                        reason: format!("database {} not found", request.db_name),
                         ..Default::default()
-                    })
-                    .collect(),
+                    }),
+                    ..Default::default()
+                }
+            } else {
+                let properties = state
+                    .databases
+                    .get(&request.db_name)
+                    .cloned()
+                    .unwrap_or_default();
+                pb::DescribeDatabaseResponse {
+                    status: Some(success_status()),
+                    db_name: request.db_name,
+                    db_id: 20,
+                    created_timestamp: 200,
+                    properties: properties
+                        .into_iter()
+                        .map(|(key, value)| common::KeyValuePair {
+                            key,
+                            value,
+                            ..Default::default()
+                        })
+                        .collect(),
+                }
             }
         }
     );

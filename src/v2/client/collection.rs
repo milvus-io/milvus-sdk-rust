@@ -487,21 +487,51 @@ impl ClientV2 {
     }
 
     /// Add a field to an existing collection.
+    ///
+    /// The field is added through the modern `AlterCollectionSchema` RPC (as in pymilvus/java/cpp),
+    /// falling back to the legacy `AddCollectionField` RPC when the server does not support schema
+    /// alteration (gRPC `UNIMPLEMENTED` or an external-collection alter rejection).
     pub async fn add_collection_field(
         &self,
         request: request::collection::AddCollectionFieldRequest,
     ) -> Result<()> {
         let database = self.effective_database(request.database_name.as_deref());
         let collection = request.collection_name.clone();
+        let alter = request.clone().into_alter_schema_proto()?;
+        let response = self
+            .retry_rpc(
+                || Ok(alter.clone()),
+                super::RetrySemantics::Idempotent,
+                |mut service, request| async move { service.alter_collection_schema(request).await },
+                |response| response.alter_status.clone(),
+            )
+            .await;
+        match response {
+            Ok(_) => {}
+            Err(Error::Grpc(status)) if status.code() == tonic::Code::Unimplemented => {
+                self.add_collection_field_legacy(request).await?;
+            }
+            Err(Error::Server(error)) if external_collection_alter_unsupported(&error) => {
+                self.add_collection_field_legacy(request).await?;
+            }
+            Err(error) => return Err(error),
+        }
+        self.remove_collection_description(&database, &collection);
+        Ok(())
+    }
+
+    /// Adds a field through the legacy `AddCollectionField` RPC.
+    async fn add_collection_field_legacy(
+        &self,
+        request: request::collection::AddCollectionFieldRequest,
+    ) -> Result<()> {
         let status = status_rpc_with_retry!(
             Idempotent,
             self,
             add_collection_field,
             request.into_proto()?
         )?;
-        self.status(status)?;
-        self.remove_collection_description(&database, &collection);
-        Ok(())
+        self.status(status)
     }
 
     /// Add a function to an existing collection.
@@ -649,4 +679,15 @@ impl ClientV2 {
         self.remove_collection_description(&database, &collection);
         Ok(())
     }
+}
+
+/// Whether an `AlterCollectionSchema` rejection signals that schema alteration is unsupported for
+/// an external collection, in which case the legacy `AddCollectionField` RPC should be used
+/// (mirroring pymilvus's `is_external_collection_schema_alter_unsupported`).
+fn external_collection_alter_unsupported(error: &crate::v2::error::ServerError) -> bool {
+    let invalid_parameter = error.code() == 1100 || error.legacy_code() == 5;
+    invalid_parameter
+        && error
+            .reason()
+            .contains("alter collection schema operation is not supported for external collection")
 }

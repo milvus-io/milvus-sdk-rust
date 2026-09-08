@@ -24,28 +24,42 @@ use crate::v2::{request, response};
 impl ClientV2 {
     /// Selects the database used by subsequent operations on this client and its clones.
     ///
-    /// This changes client-side routing metadata; it does not create the database or verify that
-    /// it exists. Use [`ClientV2::describe_database`] or a database operation to validate it.
-    pub fn use_database(&self, database: impl Into<String>) -> Result<()> {
+    /// When switching to an explicitly named database, the target is first verified to exist via
+    /// [`ClientV2::describe_database`] (matching pymilvus) and the switch fails with the server
+    /// error when it does not. Passing an empty name resets the selection to the always-present
+    /// `default` database without an extra RPC.
+    pub async fn use_database(&self, database: impl Into<String>) -> Result<()> {
         let database = database.into();
         let explicit = !database.is_empty();
         let database = normalize_database(database)?;
 
         if explicit {
-            // Publish the selected name before declaring it explicit. A concurrent
-            // reader can therefore observe only the old selection or the new one.
+            let request = request::database::DescribeDatabaseRequest::builder()
+                .database_name(database.clone())
+                .build()?;
+            self.describe_database(request).await?;
+        }
+
+        self.select_database(database, explicit);
+        Ok(())
+    }
+
+    /// Publishes the database selection to the shared routing state.
+    ///
+    /// For an explicit selection the name is published before the explicitness flag so a
+    /// concurrent reader observes either the old selection or the new one. For a reset the
+    /// explicitness flag is cleared before the normalized default is published so a concurrent
+    /// reader never observes an omitted database reported as an explicit `default`.
+    fn select_database(&self, database: String, explicit: bool) {
+        if explicit {
             *self.database.write() = database;
             self.database_explicit
                 .store(true, std::sync::atomic::Ordering::Release);
         } else {
-            // Clear explicitness before publishing the normalized default. Reversing
-            // this order could transiently report an omitted database as explicit
-            // `default` while switching from a previously explicit selection.
             self.database_explicit
                 .store(false, std::sync::atomic::Ordering::Release);
             *self.database.write() = database;
         }
-        Ok(())
     }
 
     /// Returns the database currently selected by this client.
@@ -183,7 +197,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn use_database_updates_shared_selection_without_clearing_global_schema_cache() {
+    async fn select_database_updates_shared_selection_without_clearing_global_schema_cache() {
         let client = client();
         let clone = client.clone();
         SCHEMA_CACHE.set(
@@ -193,7 +207,7 @@ mod tests {
             milvus::DescribeCollectionResponse::default(),
         );
 
-        client.use_database("catalog").expect("switch database");
+        client.select_database("catalog".to_owned(), true);
 
         assert_eq!(client.current_database(), "catalog");
         assert_eq!(clone.current_database(), "catalog");
@@ -204,38 +218,40 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn use_database_normalizes_default_and_rejects_invalid_metadata() {
+    async fn use_database_rejects_invalid_metadata_before_switching() {
         let client = client();
-
-        *client.database.write() = String::new();
-        assert_eq!(client.current_database(), "default");
-
-        client
-            .use_database("default")
-            .expect("select explicit default database");
-        assert!(client
-            .database_explicit
-            .load(std::sync::atomic::Ordering::Acquire));
-
-        client.use_database("").expect("select default database");
-        assert_eq!(client.current_database(), "default");
-        assert!(!client
-            .database_explicit
-            .load(std::sync::atomic::Ordering::Acquire));
 
         let error = client
             .use_database("invalid\nname")
+            .await
             .expect_err("reject invalid database metadata");
         assert!(matches!(error, Error::Validation(_)));
         assert_eq!(client.current_database(), "default");
     }
 
     #[tokio::test]
-    async fn use_database_reset_clears_explicitness_before_publishing_default() {
+    async fn select_database_normalizes_default_explicitness() {
         let client = client();
-        client
-            .use_database("catalog")
-            .expect("select explicit database");
+
+        *client.database.write() = String::new();
+        assert_eq!(client.current_database(), "default");
+
+        client.select_database("default".to_owned(), true);
+        assert!(client
+            .database_explicit
+            .load(std::sync::atomic::Ordering::Acquire));
+
+        client.select_database("default".to_owned(), false);
+        assert_eq!(client.current_database(), "default");
+        assert!(!client
+            .database_explicit
+            .load(std::sync::atomic::Ordering::Acquire));
+    }
+
+    #[tokio::test]
+    async fn select_database_reset_clears_explicitness_before_publishing_default() {
+        let client = client();
+        client.select_database("catalog".to_owned(), true);
 
         // Hold a reader so the reset thread blocks immediately before publishing
         // the normalized default. It must still be able to clear explicitness first.
@@ -244,7 +260,7 @@ mod tests {
         let (started_tx, started_rx) = std::sync::mpsc::channel();
         let reset = std::thread::spawn(move || {
             started_tx.send(()).expect("signal reset start");
-            reset_client.use_database("").expect("reset database");
+            reset_client.select_database("default".to_owned(), false);
         });
         started_rx.recv().expect("reset thread started");
 

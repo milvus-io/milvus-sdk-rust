@@ -517,7 +517,17 @@ async fn empty_database_name_uses_selected_database_for_dml_and_session_reads() 
     let client = &server.client;
     let collection = "selected_database_session_books";
     client
+        .create_database(
+            CreateDatabaseRequest::builder()
+                .database_name("tenant")
+                .build()
+                .expect("valid database request"),
+        )
+        .await
+        .expect("create tenant database");
+    client
         .use_database("tenant")
+        .await
         .expect("select tenant database");
     client
         .create_collection(
