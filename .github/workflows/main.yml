@@ -38,6 +38,8 @@ concurrency:
 
 jobs:
   ut-linux:
+    # This job name is referenced by the release validation in publish-release.yml
+    # (env.UT_CHECK_UBUNTU); keep both in sync when renaming this job.
     name: Build and test on Ubuntu-${{ matrix.ubuntu }}
     # The type of runner that the job will run on
     runs-on: ubuntu-${{ matrix.ubuntu }}
@@ -118,6 +120,8 @@ jobs:
         run: ./scripts/run_tests.sh --no-server
 
   ut-windows:
+    # This job name is referenced by the release validation in publish-release.yml
+    # (env.UT_CHECK_WINDOWS); keep both in sync when renaming this job.
     name: Build and test on Windows
     runs-on: windows-latest
     timeout-minutes: 45
