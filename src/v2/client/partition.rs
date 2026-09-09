@@ -133,6 +133,7 @@ impl ClientV2 {
         request: request::partition::GetPartitionStatsRequest,
     ) -> Result<response::partition::GetPartitionStatsResponse> {
         let database = self.current_database();
+        let partition_name = request.partition_name.clone();
         let response = rpc_with_retry!(
             self,
             get_partition_statistics,
@@ -141,6 +142,7 @@ impl ClientV2 {
         status_to_result(&response.status)?;
         Ok(response::partition::GetPartitionStatsResponse::from_proto(
             response,
+            partition_name,
         ))
     }
 }

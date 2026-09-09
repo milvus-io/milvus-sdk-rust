@@ -296,6 +296,7 @@ impl DescribeReplicasResponseBuilder {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct GetCollectionStatsResponse {
+    pub(crate) name: String,
     pub(crate) statistics: HashMap<String, String>,
 }
 
@@ -307,6 +308,7 @@ impl GetCollectionStatsResponse {
     #[cfg(test)]
     fn empty() -> Self {
         Self {
+            name: String::new(),
             statistics: HashMap::new(),
         }
     }
@@ -322,13 +324,33 @@ impl GetCollectionStatsResponse {
         }
     }
 
+    /// Returns the name of the collection the statistics describe.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Returns the server-reported row count, when present.
+    ///
+    /// The stat is parsed leniently: both a missing `row_count` key and a non-numeric value are
+    /// reported as `None` rather than surfacing a malformed-response error. The raw value remains
+    /// available through [`Self::statistics`].
+    pub fn row_count(&self) -> Option<i64> {
+        self.statistics
+            .get("row_count")
+            .and_then(|value| value.parse::<i64>().ok())
+    }
+
     /// Returns the statistics.
     pub fn statistics(&self) -> &HashMap<String, String> {
         &self.statistics
     }
 
-    pub(crate) fn from_proto(value: milvus::GetCollectionStatisticsResponse) -> Self {
+    pub(crate) fn from_proto(
+        value: milvus::GetCollectionStatisticsResponse,
+        name: impl Into<String>,
+    ) -> Self {
         Self {
+            name: name.into(),
             statistics: value.stats.into_iter().map(|v| (v.key, v.value)).collect(),
         }
     }
@@ -353,6 +375,12 @@ pub(crate) struct GetCollectionStatsResponseBuilder {
 
 #[cfg(test)]
 impl GetCollectionStatsResponseBuilder {
+    /// Sets the name and returns the updated value.
+    pub fn name(mut self, value: impl Into<String>) -> Self {
+        self.value.name = value.into();
+        self
+    }
+
     /// Sets the statistics and returns the updated value.
     pub fn statistics(mut self, value: HashMap<String, String>) -> Self {
         self.value.statistics = value;
@@ -997,18 +1025,25 @@ mod builder_value_tests {
     #[test]
     fn get_collection_stats_response_default_values() {
         let value = GetCollectionStatsResponse::builder().build();
+        let expected_name: String = String::new();
         let expected_statistics: HashMap<String, String> = Default::default();
 
+        assert_eq!(value.name().to_owned(), expected_name);
+        assert_eq!(value.row_count(), None);
         assert_eq!(value.statistics().to_owned(), expected_statistics);
     }
 
     #[test]
     fn get_collection_stats_response_populated_values() {
-        let statistics = HashMap::from([("key-value".to_owned(), "value-value".to_owned())]);
+        let name = "books".to_owned();
+        let statistics = HashMap::from([("row_count".to_owned(), "42".to_owned())]);
         let value = GetCollectionStatsResponse::builder()
+            .name(name.clone())
             .statistics(statistics.clone())
             .build();
 
+        assert_eq!(value.name().to_owned(), name);
+        assert_eq!(value.row_count(), Some(42));
         assert_eq!(value.statistics().to_owned(), statistics);
     }
 

@@ -1657,3 +1657,158 @@ async fn hybrid_search_combines_sub_searches() {
         .expect("materialize hybrid-search rows");
     assert_advanced_output_rows(&rows, Some(result.get_score_field_name()), true);
 }
+
+#[tokio::test]
+async fn search_and_query_order_by_scalar_field() {
+    const SCORE_FIELD: &str = "score";
+
+    let client = common::client().await;
+    let collection_name = common::unique_collection_name("order_by");
+    let _cleanup = common::CollectionCleanup::new([&collection_name]);
+    let schema = CollectionSchema::new()
+        .enable_dynamic_field(false)
+        .add_field(
+            FieldSchema::new()
+                .name("id")
+                .data_type(DataType::Int64)
+                .primary_key(true),
+        )
+        .add_field(
+            FieldSchema::new()
+                .name(SCORE_FIELD)
+                .data_type(DataType::Int64),
+        )
+        .add_field(
+            FieldSchema::new()
+                .name(common::VECTOR_FIELD)
+                .data_type(DataType::FloatVector)
+                .dimension(4),
+        );
+    client
+        .create_collection(
+            CreateCollectionRequest::builder()
+                .collection_name(&collection_name)
+                .schema(schema)
+                .consistency_level(ConsistencyLevel::Strong)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("create order-by collection");
+
+    client
+        .insert(
+            InsertRequest::builder()
+                .collection_name(&collection_name)
+                .rows(vec![
+                    order_by_row(1, 30, [1.0, 0.0, 0.0, 0.0]),
+                    order_by_row(2, 10, [0.0, 1.0, 0.0, 0.0]),
+                    order_by_row(3, 20, [0.0, 0.0, 1.0, 0.0]),
+                ])
+                .build()
+                .expect("build order-by insert"),
+        )
+        .await
+        .expect("insert order-by rows");
+    client
+        .flush(
+            FlushRequest::builder()
+                .collection_names([&collection_name])
+                .wait_flushed_ms(60_000)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("flush order-by rows");
+    client
+        .create_index(
+            CreateIndexRequest::builder()
+                .collection_name(&collection_name)
+                .index_param(
+                    IndexParam::new()
+                        .field_name(common::VECTOR_FIELD)
+                        .index_type(IndexType::Flat)
+                        .metric_type(MetricType::L2),
+                )
+                .sync(true)
+                .timeout_ms(60_000)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("create order-by index");
+    client
+        .load_collection(
+            LoadCollectionRequest::builder()
+                .collection_name(&collection_name)
+                .load_fields(["id", SCORE_FIELD, common::VECTOR_FIELD])
+                .sync(true)
+                .timeout_ms(60_000)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("load order-by collection");
+
+    let query = client
+        .query(
+            QueryRequest::builder()
+                .collection_name(&collection_name)
+                .filter("id in [1, 2, 3]")
+                .output_fields(["id", SCORE_FIELD])
+                .limit(3)
+                .order_by_fields([OrderByField::new()
+                    .field_name(SCORE_FIELD)
+                    .direction(AggDirection::Desc)])
+                .consistency_level(ConsistencyLevel::Strong)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("query ordered by score descending");
+    let query_ids = query
+        .results()
+        .rows()
+        .expect("iterate ordered query rows")
+        .map(|row| row.get_i64("id").expect("Int64 primary key"))
+        .collect::<Vec<_>>();
+    assert_eq!(query_ids, [1, 3, 2]);
+
+    let search = client
+        .search(
+            SearchRequest::builder()
+                .collection_name(&collection_name)
+                .vector_field(common::VECTOR_FIELD)
+                .vectors(SearchVectors::Float(vec![vec![0.0, 0.0, 1.0, 0.0]]))
+                .output_fields(["id", SCORE_FIELD])
+                .limit(3)
+                .order_by_fields([OrderByField::new().field_name(SCORE_FIELD)])
+                .metric_type(MetricType::L2)
+                .consistency_level(ConsistencyLevel::Strong)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("search ordered by score ascending");
+    let search_ids = search.results().get_results()[0]
+        .rows()
+        .expect("iterate ordered search rows")
+        .map(|row| row.get_i64("id").expect("Int64 primary key"))
+        .collect::<Vec<_>>();
+    assert_eq!(search_ids, [2, 3, 1]);
+
+    common::drop_collection(&client, &collection_name)
+        .await
+        .expect("drop order-by collection");
+}
+
+fn order_by_row(id: i64, score: i64, vector: [f32; 4]) -> EntityRow {
+    json!({
+        "id": id,
+        "score": score,
+        (common::VECTOR_FIELD): vector,
+    })
+    .as_object()
+    .expect("order-by row is a JSON object")
+    .clone()
+}

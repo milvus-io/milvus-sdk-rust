@@ -26,6 +26,9 @@ MILVUS_CONTAINER_ID=""
 RUN_SERVER_TESTS=true
 SYSTEM_TEST_THREADS="${SYSTEM_TEST_THREADS:-2}"
 export RUST_BACKTRACE="${RUST_BACKTRACE:-1}"
+# Exclude generated protobuf bindings and non-library harness code (examples,
+# tutorials, and integration tests) from the coverage report.
+COVERAGE_IGNORE_REGEX='src/proto/.*|examples/.*|tutorial/.*|tests/.*'
 
 if [[ "${1:-}" == "--no-server" ]]; then
   RUN_SERVER_TESTS=false
@@ -138,7 +141,7 @@ run_server_coverage_tests() {
   cd "$ROOT_DIR"
   cargo llvm-cov --workspace --no-report --test v1_st -- --test-threads="$SYSTEM_TEST_THREADS"
   cargo llvm-cov --workspace --no-report --test v2_st -- --test-threads="$SYSTEM_TEST_THREADS"
-  cargo llvm-cov report --lcov --output-path "$LCOV_FILE" --ignore-filename-regex 'src/proto/.*'
+  cargo llvm-cov report --lcov --output-path "$LCOV_FILE" --ignore-filename-regex "$COVERAGE_IGNORE_REGEX"
   genhtml "$LCOV_FILE" --output-directory "$COVERAGE_DIR"
 }
 
@@ -168,7 +171,7 @@ else
   cd "$ROOT_DIR"
   if [[ "$CODE_COV" == "true" ]]; then
     mkdir -p "$COVERAGE_DIR"
-    cargo llvm-cov --workspace --lcov --output-path "$LCOV_FILE" --ignore-filename-regex 'src/proto/.*' "$@" -- --test-threads="$SYSTEM_TEST_THREADS"
+    cargo llvm-cov --workspace --lcov --output-path "$LCOV_FILE" --ignore-filename-regex "$COVERAGE_IGNORE_REGEX" "$@" -- --test-threads="$SYSTEM_TEST_THREADS"
     genhtml "$LCOV_FILE" --output-directory "$COVERAGE_DIR"
   else
     "$@"

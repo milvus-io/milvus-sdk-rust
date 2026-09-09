@@ -61,12 +61,13 @@ impl MetricOp {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// SortDirection
+// AggDirection
 ///////////////////////////////////////////////////////////////////////////////
-/// Sort direction used by aggregation order and top-hits rules.
+/// Sort direction used by aggregation order and top-hits rules and by search/query
+/// `order_by_fields` ordering.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[non_exhaustive]
-pub enum SortDirection {
+pub enum AggDirection {
     /// Represents the Asc case.
     Asc,
     #[default]
@@ -74,7 +75,7 @@ pub enum SortDirection {
     Desc,
 }
 
-impl SortDirection {
+impl AggDirection {
     pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::Asc => "asc",
@@ -82,6 +83,10 @@ impl SortDirection {
         }
     }
 }
+
+/// Deprecated alias for [`AggDirection`], kept for compatibility with SDK 3.0.0.
+#[deprecated(note = "renamed to AggDirection to align with the C++ and Java SDKs")]
+pub type SortDirection = AggDirection;
 
 ///////////////////////////////////////////////////////////////////////////////
 // MetricSpec
@@ -154,7 +159,7 @@ impl MetricSpec {
 #[non_exhaustive]
 pub struct SortSpec {
     pub(crate) field_name: String,
-    pub(crate) direction: SortDirection,
+    pub(crate) direction: AggDirection,
     pub(crate) null_first: bool,
 }
 
@@ -163,7 +168,7 @@ impl SortSpec {
     pub fn new() -> Self {
         Self {
             field_name: String::new(),
-            direction: SortDirection::Desc,
+            direction: AggDirection::Desc,
             null_first: false,
         }
     }
@@ -181,13 +186,13 @@ impl SortSpec {
     }
 
     /// Sets the direction and returns the updated value.
-    pub fn direction(mut self, value: SortDirection) -> Self {
+    pub fn direction(mut self, value: AggDirection) -> Self {
         self.direction = value;
         self
     }
 
     /// Sets the direction and returns this value for further mutation.
-    pub fn set_direction(&mut self, value: SortDirection) -> &mut Self {
+    pub fn set_direction(&mut self, value: AggDirection) -> &mut Self {
         self.direction = value;
         self
     }
@@ -210,7 +215,7 @@ impl SortSpec {
     }
 
     /// Returns the direction.
-    pub fn get_direction(&self) -> SortDirection {
+    pub fn get_direction(&self) -> AggDirection {
         self.direction
     }
 
@@ -239,7 +244,7 @@ impl SortSpec {
 #[non_exhaustive]
 pub struct OrderSpec {
     pub(crate) key: String,
-    pub(crate) direction: SortDirection,
+    pub(crate) direction: AggDirection,
     pub(crate) null_first: bool,
 }
 
@@ -248,7 +253,7 @@ impl OrderSpec {
     pub fn new() -> Self {
         Self {
             key: String::new(),
-            direction: SortDirection::Desc,
+            direction: AggDirection::Desc,
             null_first: false,
         }
     }
@@ -266,13 +271,13 @@ impl OrderSpec {
     }
 
     /// Sets the direction and returns the updated value.
-    pub fn direction(mut self, value: SortDirection) -> Self {
+    pub fn direction(mut self, value: AggDirection) -> Self {
         self.direction = value;
         self
     }
 
     /// Sets the direction and returns this value for further mutation.
-    pub fn set_direction(&mut self, value: SortDirection) -> &mut Self {
+    pub fn set_direction(&mut self, value: AggDirection) -> &mut Self {
         self.direction = value;
         self
     }
@@ -295,7 +300,7 @@ impl OrderSpec {
     }
 
     /// Returns the direction.
-    pub fn get_direction(&self) -> SortDirection {
+    pub fn get_direction(&self) -> AggDirection {
         self.direction
     }
 
@@ -659,11 +664,7 @@ mod tests {
                 "total",
                 MetricSpec::new().op(MetricOp::Sum).field_name("price"),
             )
-            .add_order(
-                OrderSpec::new()
-                    .key("_count")
-                    .direction(SortDirection::Desc),
-            )
+            .add_order(OrderSpec::new().key("_count").direction(AggDirection::Desc))
     }
 
     #[test]
@@ -700,7 +701,7 @@ mod tests {
     #[test]
     fn validate_rejects_unknown_order_key() {
         let error = valid_spec()
-            .add_order(OrderSpec::new().key("bogus").direction(SortDirection::Asc))
+            .add_order(OrderSpec::new().key("bogus").direction(AggDirection::Asc))
             .validate()
             .expect_err("unknown order key must be rejected");
         assert!(error.to_string().contains("order key"));
@@ -739,7 +740,7 @@ mod tests {
             .top_hits(
                 TopHitsSpec::new()
                     .size(3)
-                    .add_sort(SortSpec::new().field_name("").direction(SortDirection::Asc)),
+                    .add_sort(SortSpec::new().field_name("").direction(AggDirection::Asc)),
             )
             .validate()
             .expect_err("empty top-hits sort field must be rejected");
@@ -785,7 +786,7 @@ mod tests {
                 TopHitsSpec::new().size(3).add_sort(
                     SortSpec::new()
                         .field_name("price")
-                        .direction(SortDirection::Asc),
+                        .direction(AggDirection::Asc),
                 ),
             )
             .sub_aggregation(
