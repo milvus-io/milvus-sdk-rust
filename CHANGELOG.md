@@ -1,5 +1,39 @@
 # Changelog
 
+## milvus-sdk-rust 3.0.1 (2026-09-09)
+
+### Feature
+
+- Support ORDER BY on `search` and `query` through the new `OrderByField` value type; scalar
+  fields named in `order_by_fields` order the returned rows
+- Add `OptimizeTask::task_status()`, which reports the final optimize outcome (success, error, or
+  requested cancellation) instead of requiring a separate polling round
+- `CreateSimpleCollectionRequest`: accept `num_shards`, `num_partitions`, `properties`,
+  `description`, and `id_type` string aliases (`"int"`/`"string"`/`"str"`)
+- `LoadCollectionRequest` and `LoadPartitionsRequest`: accept `load_priority`, forwarded as the
+  load-priority load param
+- `DmlResponse`: expose `cost()` parsed from the server status `report_value`
+- `describe_collection`: expose `consistency_level_name`, the schema version, per-field
+  `field_id`/`is_dynamic`/`is_function_output`, and per-function `id`/`input_field_ids`/
+  `output_field_ids`
+
+### Improvement
+
+- `use_database` now verifies that the target database exists (`describe_database`) before
+  switching; an unknown database fails the switch instead of being silently selected, and a
+  failed switch keeps the previous selection
+- `add_collection_field` now routes through the modern `AlterCollectionSchema` RPC (falling back
+  to the legacy `AddCollectionField` RPC when unsupported), letting non-nullable scalar fields
+  with a `default_value` reach the server as pymilvus does
+
+### Breaking change
+
+- `use_database` is now `async`; callers must await the switch and handle a failure when the
+  target database does not exist
+- `add_collection_field`: a vector `FieldSchema` now requires `nullable = true`, matching pymilvus
+- `RunAnalyzerRequest.analyzer_params` changed from a pre-serialized `String` to an optional
+  `serde_json::Value`; pass the analyzer configuration as a JSON object
+
 ## milvus-sdk-rust 3.0.0 (2026-09-03)
 
 ### Feature
@@ -44,6 +78,33 @@
   default" must omit the field so the server picks its default target size
 - `insert`/`upsert`/`get`: empty input now builds and returns an empty result without issuing an
   RPC instead of failing at request construction
+
+
+## milvus-sdk-rust 2.6.1 (2026-09-03)
+
+### Feature
+
+- `compact`: add `l0_compaction` mapped to `ManualCompactionRequest.l0_compaction`
+- `compact`: add `target_size_unit` (`TargetSizeUnit`: B/KB/MB/GB/TB/PB) used to convert
+  `target_size` to megabytes before it is sent on the wire; `target_size` and
+  `target_size_unit` are normalized at `build()` time, so `into_builder().build()`
+  round-trips idempotently
+- `list_indexes`: add a `field_name` filter; returned indexes are filtered by field name
+  when set (empty means all fields)
+- `grant_privilege` / `revoke_privilege`: add the V1 object-scoped form via `object_type`
+  and `object_name`, routed to the legacy `OperatePrivilege` RPC when set
+
+### Improvement
+
+- Align `compact`, `list_indexes`, and `round_decimal` validation with pymilvus:
+  reject `compact.target_size <= 0`, filter `list_indexes` by field name, and enforce
+  `round_decimal` in `-1..=6` on `search`, `hybrid_search`, and `search_iterator`
+
+### Breaking change
+
+- `compact`: a `target_size` of `0` is now rejected; callers that passed `0` to mean
+  "server default" must omit the field so the server picks its default target size
+
 
 ## milvus-sdk-rust 2.6.0 (2026-08-14)
 
