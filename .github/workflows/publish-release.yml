@@ -11,6 +11,14 @@ permissions:
   contents: read
   checks: read
 
+# CI job names the release must have passed on the tagged commit before publishing. Keep these
+# in sync with the `ut-linux` / `ut-windows` job names in main.yml: renaming a CI job there must
+# update the matching name here or every release validation fails with a "No successful ... check
+# was found" error.
+env:
+  UT_CHECK_UBUNTU: 'Build and test on Ubuntu-22.04'
+  UT_CHECK_WINDOWS: 'Build and test on Windows'
+
 # crates.io releases are immutable. Do not publish two release tags at the same time,
 # and do not cancel a workflow after it has started uploading the crate.
 concurrency:
@@ -67,7 +75,7 @@ jobs:
           echo "Release commit is contained in ${approved_branch}."
 
           check_runs="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${TAG_SHA}/check-runs?per_page=100")"
-          for check_name in 'UT on Ubuntu-22.04' 'UT on Windows'; do
+          for check_name in "${{ env.UT_CHECK_UBUNTU }}" "${{ env.UT_CHECK_WINDOWS }}"; do
             if ! jq -e --arg name "${check_name}" --arg sha "${TAG_SHA}" \
               '[.check_runs[] | select(.name == $name and .head_sha == $sha and .conclusion == "success")] | length > 0' <<<"${check_runs}" >/dev/null; then
               echo "No successful ${check_name} check was found for ${TAG_SHA}." >&2
