@@ -109,7 +109,7 @@ async fn main() -> Result<()> {
                 .filter(filter)
                 .filter_templates(HashMap::from([(
                     "my_ids".into(),
-                    json!(ids[500..600].to_vec()),
+                    sdk::FilterTemplateValue::Int64Array(ids[500..600].to_vec()),
                 )]))
                 .output_fields([TEXT])
                 .consistency_level(sdk::ConsistencyLevel::Strong)
@@ -130,7 +130,10 @@ async fn main() -> Result<()> {
                     float_vector(DIMENSION),
                 ]))
                 .filter("text in {my_texts}")
-                .filter_templates(HashMap::from([("my_texts".into(), json!(texts))]))
+                .filter_templates(HashMap::from([(
+                    "my_texts".into(),
+                    sdk::FilterTemplateValue::StringArray(texts),
+                )]))
                 .output_fields([TEXT])
                 .limit(200)
                 .consistency_level(sdk::ConsistencyLevel::Bounded)

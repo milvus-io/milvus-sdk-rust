@@ -23,6 +23,148 @@ use crate::v2::error::{Error, Result};
 use serde_json::Value;
 use std::collections::HashMap;
 
+///////////////////////////////////////////////////////////////////////////////
+// FilterTemplateValue
+///////////////////////////////////////////////////////////////////////////////
+/// A validated filter-template value for `{key}` placeholders in query/search/delete filters.
+///
+/// This mirrors the protobuf `TemplateValue` oneof (bool / int64 / float / string / typed arrays /
+/// raw bytes) as an SDK-owned enum, so every template travels on the wire as the matching protobuf
+/// variant — including client-built membership-filter blobs (`membership_match(field, {blob},
+/// type=bloom|roaring)`), which ship as `TemplateValue.bytes_val` rather than being base64-inflated
+/// through a string field.
+///
+/// ```
+/// use milvus::v2::types::FilterTemplateValue;
+/// use std::collections::HashMap;
+///
+/// let templates: HashMap<String, FilterTemplateValue> = HashMap::from([
+///     ("ids".into(), FilterTemplateValue::Int64Array(vec![1, 2, 3])),
+///     ("tag".into(), FilterTemplateValue::String("active".into())),
+/// ]);
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum FilterTemplateValue {
+    /// A boolean template value.
+    Bool(bool),
+    /// A 64-bit integer template value.
+    Int64(i64),
+    /// A floating-point template value.
+    Float(f64),
+    /// A string template value.
+    String(String),
+    /// A boolean-array template value.
+    BoolArray(Vec<bool>),
+    /// An int64-array template value.
+    Int64Array(Vec<i64>),
+    /// A float-array template value.
+    FloatArray(Vec<f64>),
+    /// A string-array template value.
+    StringArray(Vec<String>),
+    /// A raw bytes template value, used to carry a client-built membership-filter blob (for example
+    /// an [`crate::v2::bloom_filter::BloomFilterBuilder`] or
+    /// [`crate::v2::roaring_bitmap::RoaringBitmapBuilder`] blob).
+    Bytes(Vec<u8>),
+}
+
+impl FilterTemplateValue {
+    pub(crate) fn into_proto(self) -> crate::proto::schema::TemplateValue {
+        use crate::proto::schema::{
+            template_array_value, template_value, BoolArray, DoubleArray, LongArray, StringArray,
+            TemplateArrayValue, TemplateValue,
+        };
+        let val = match self {
+            Self::Bool(value) => template_value::Val::BoolVal(value),
+            Self::Int64(value) => template_value::Val::Int64Val(value),
+            Self::Float(value) => template_value::Val::FloatVal(value),
+            Self::String(value) => template_value::Val::StringVal(value),
+            Self::BoolArray(values) => template_value::Val::ArrayVal(TemplateArrayValue {
+                data: Some(template_array_value::Data::BoolData(BoolArray {
+                    data: values,
+                })),
+            }),
+            Self::Int64Array(values) => template_value::Val::ArrayVal(TemplateArrayValue {
+                data: Some(template_array_value::Data::LongData(LongArray {
+                    data: values,
+                })),
+            }),
+            Self::FloatArray(values) => template_value::Val::ArrayVal(TemplateArrayValue {
+                data: Some(template_array_value::Data::DoubleData(DoubleArray {
+                    data: values,
+                })),
+            }),
+            Self::StringArray(values) => template_value::Val::ArrayVal(TemplateArrayValue {
+                data: Some(template_array_value::Data::StringData(StringArray {
+                    data: values,
+                })),
+            }),
+            Self::Bytes(value) => template_value::Val::BytesVal(value),
+        };
+        TemplateValue { val: Some(val) }
+    }
+}
+
+impl From<bool> for FilterTemplateValue {
+    fn from(value: bool) -> Self {
+        Self::Bool(value)
+    }
+}
+
+impl From<i64> for FilterTemplateValue {
+    fn from(value: i64) -> Self {
+        Self::Int64(value)
+    }
+}
+
+impl From<f64> for FilterTemplateValue {
+    fn from(value: f64) -> Self {
+        Self::Float(value)
+    }
+}
+
+impl From<String> for FilterTemplateValue {
+    fn from(value: String) -> Self {
+        Self::String(value)
+    }
+}
+
+impl From<&str> for FilterTemplateValue {
+    fn from(value: &str) -> Self {
+        Self::String(value.to_owned())
+    }
+}
+
+impl From<Vec<bool>> for FilterTemplateValue {
+    fn from(value: Vec<bool>) -> Self {
+        Self::BoolArray(value)
+    }
+}
+
+impl From<Vec<i64>> for FilterTemplateValue {
+    fn from(value: Vec<i64>) -> Self {
+        Self::Int64Array(value)
+    }
+}
+
+impl From<Vec<f64>> for FilterTemplateValue {
+    fn from(value: Vec<f64>) -> Self {
+        Self::FloatArray(value)
+    }
+}
+
+impl From<Vec<String>> for FilterTemplateValue {
+    fn from(value: Vec<String>) -> Self {
+        Self::StringArray(value)
+    }
+}
+
+impl From<Vec<u8>> for FilterTemplateValue {
+    fn from(value: Vec<u8>) -> Self {
+        Self::Bytes(value)
+    }
+}
+
 fn rerank_function(name: impl Into<String>, reranker: &str) -> Function {
     Function::new()
         .name(name)

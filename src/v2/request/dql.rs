@@ -29,8 +29,8 @@ use crate::v2::request::validation::{
 };
 pub use crate::v2::types::Ids;
 use crate::v2::types::{
-    encode_sparse_vector, validate_sparse_vector, ConsistencyLevel, Function, FunctionChain,
-    FunctionScore, MetricType, OrderByField, QueryCursor, SearchAggregation,
+    encode_sparse_vector, validate_sparse_vector, ConsistencyLevel, FilterTemplateValue, Function,
+    FunctionChain, FunctionScore, MetricType, OrderByField, QueryCursor, SearchAggregation,
 };
 pub use crate::v2::types::{
     EmbeddingList, HighlightQuery, HighlightType, Highlighter, LexicalHighlighter, SearchVectors,
@@ -52,7 +52,7 @@ pub struct QueryRequest {
     pub(crate) partition_names: Vec<String>,
     pub(crate) ids: Ids,
     pub(crate) filter: String,
-    pub(crate) filter_templates: HashMap<String, Value>,
+    pub(crate) filter_templates: HashMap<String, FilterTemplateValue>,
     pub(crate) output_fields: Vec<String>,
     pub(crate) limit: Option<i64>,
     pub(crate) offset: Option<i64>,
@@ -121,7 +121,11 @@ impl QueryRequest {
     }
 
     /// Returns the filter templates.
-    pub fn filter_templates(&self) -> &HashMap<String, Value> {
+    ///
+    /// **Breaking change in 3.0.2:** releases 3.0.0 and 3.0.1 exposed this as
+    /// `HashMap<String, serde_json::Value>`; it now returns `HashMap<String, FilterTemplateValue>` —
+    /// see [`FilterTemplateValue`]. Callers reading `&HashMap<String, serde_json::Value>` must adapt.
+    pub fn filter_templates(&self) -> &HashMap<String, FilterTemplateValue> {
         &self.filter_templates
     }
 
@@ -190,8 +194,14 @@ impl QueryRequest {
                 format_order_by_fields(&self.order_by_fields),
             );
         }
-        let (filter, filter_templates) = if self.ids.is_empty() {
-            (self.filter, self.filter_templates)
+        let (filter, expr_template_values) = if self.ids.is_empty() {
+            (
+                self.filter,
+                self.filter_templates
+                    .into_iter()
+                    .map(|(key, value)| (key, value.into_proto()))
+                    .collect(),
+            )
         } else {
             let primary_field = primary_field.ok_or_else(|| {
                 Error::validation(
@@ -200,9 +210,14 @@ impl QueryRequest {
                 )
             })?;
             let template_name = "__milvus_v2_query_ids";
+            // User templates are dropped when querying by ids: the rewritten expression only
+            // references the pk-in template.
             (
                 format!("{primary_field} in {{{template_name}}}"),
-                HashMap::from([(template_name.to_owned(), self.ids.into_json())]),
+                HashMap::from([(
+                    template_name.to_owned(),
+                    json_template(self.ids.into_json())?,
+                )]),
             )
         };
         Ok(milvus::QueryRequest {
@@ -228,10 +243,7 @@ impl QueryRequest {
                 .map(|level| level.into_proto() as i32)
                 .unwrap_or_default(),
             use_default_consistency: self.consistency_level.is_none(),
-            expr_template_values: filter_templates
-                .into_iter()
-                .map(|(key, value)| Ok((key, json_template(value)?)))
-                .collect::<Result<_>>()?,
+            expr_template_values,
             namespace: None,
             ..Default::default()
         })
@@ -279,8 +291,28 @@ impl QueryRequestBuilder {
     }
 
     /// Sets the filter templates and returns the updated value.
-    pub fn filter_templates(mut self, value: HashMap<String, Value>) -> Self {
+    ///
+    /// **Breaking change in 3.0.2:** releases 3.0.0 and 3.0.1 took
+    /// `HashMap<String, serde_json::Value>`; this now takes `HashMap<String, FilterTemplateValue>` —
+    /// see [`FilterTemplateValue`]. Existing callers that passed JSON values (e.g. `json!([1, 2, 3])`)
+    /// must use the enum variants or the provided `From` conversions
+    /// (e.g. `FilterTemplateValue::Int64Array(vec![1, 2, 3])` or `vec![1i64, 2, 3].into()`).
+    pub fn filter_templates(mut self, value: HashMap<String, FilterTemplateValue>) -> Self {
         self.value.filter_templates = value;
+        self
+    }
+
+    /// Adds a filter template entry — including a `FilterTemplateValue::Bytes` client-built
+    /// membership-filter blob for a `membership_match(field, {blob}, type=bloom)` /
+    /// `membership_match(field, {blob}, type=roaring)` expression — and returns the updated value.
+    /// The blob is sent as native protobuf `TemplateValue.bytes_val`, never base64-inflated through
+    /// a string field.
+    pub fn add_filter_template(
+        mut self,
+        key: impl Into<String>,
+        value: FilterTemplateValue,
+    ) -> Self {
+        self.value.filter_templates.insert(key.into(), value);
         self
     }
 
@@ -513,7 +545,7 @@ pub struct SearchRequest {
     pub(crate) vectors: SearchVectors,
     pub(crate) partition_names: Vec<String>,
     pub(crate) filter: String,
-    pub(crate) filter_templates: HashMap<String, Value>,
+    pub(crate) filter_templates: HashMap<String, FilterTemplateValue>,
     pub(crate) output_fields: Vec<String>,
     pub(crate) limit: i64,
     pub(crate) offset: i64,
@@ -584,7 +616,11 @@ impl SearchRequest {
     }
 
     /// Returns the filter templates.
-    pub fn filter_templates(&self) -> &HashMap<String, Value> {
+    ///
+    /// **Breaking change in 3.0.2:** releases 3.0.0 and 3.0.1 exposed this as
+    /// `HashMap<String, serde_json::Value>`; it now returns `HashMap<String, FilterTemplateValue>` —
+    /// see [`FilterTemplateValue`]. Callers reading `&HashMap<String, serde_json::Value>` must adapt.
+    pub fn filter_templates(&self) -> &HashMap<String, FilterTemplateValue> {
         &self.filter_templates
     }
 
@@ -931,8 +967,8 @@ impl SearchRequest {
             expr_template_values: self
                 .filter_templates
                 .into_iter()
-                .map(|(key, value)| Ok((key, json_template(value)?)))
-                .collect::<Result<_>>()?,
+                .map(|(key, value)| (key, value.into_proto()))
+                .collect(),
             function_score: self.rerank.map(FunctionScore::into_proto),
             namespace: None,
             highlighter: self.highlighter.map(Highlighter::into_proto),
@@ -1040,8 +1076,28 @@ impl SearchRequestBuilder {
     }
 
     /// Sets the filter templates and returns the updated value.
-    pub fn filter_templates(mut self, value: HashMap<String, Value>) -> Self {
+    ///
+    /// **Breaking change in 3.0.2:** releases 3.0.0 and 3.0.1 took
+    /// `HashMap<String, serde_json::Value>`; this now takes `HashMap<String, FilterTemplateValue>` —
+    /// see [`FilterTemplateValue`]. Existing callers that passed JSON values (e.g. `json!([1, 2, 3])`)
+    /// must use the enum variants or the provided `From` conversions
+    /// (e.g. `FilterTemplateValue::Int64Array(vec![1, 2, 3])` or `vec![1i64, 2, 3].into()`).
+    pub fn filter_templates(mut self, value: HashMap<String, FilterTemplateValue>) -> Self {
         self.value.filter_templates = value;
+        self
+    }
+
+    /// Adds a filter template entry — including a `FilterTemplateValue::Bytes` client-built
+    /// membership-filter blob for a `membership_match(field, {blob}, type=bloom)` /
+    /// `membership_match(field, {blob}, type=roaring)` expression — and returns the updated value.
+    /// The blob is sent as native protobuf `TemplateValue.bytes_val`, never base64-inflated through
+    /// a string field.
+    pub fn add_filter_template(
+        mut self,
+        key: impl Into<String>,
+        value: FilterTemplateValue,
+    ) -> Self {
+        self.value.filter_templates.insert(key.into(), value);
         self
     }
 
@@ -1188,7 +1244,7 @@ pub struct SubSearchRequest {
     pub(crate) vector_field: String,
     pub(crate) vectors: SearchVectors,
     pub(crate) filter: String,
-    pub(crate) filter_templates: HashMap<String, Value>,
+    pub(crate) filter_templates: HashMap<String, FilterTemplateValue>,
     pub(crate) limit: i64,
     pub(crate) metric_type: Option<MetricType>,
     pub(crate) extra_params: HashMap<String, String>,
@@ -1226,7 +1282,11 @@ impl SubSearchRequest {
     }
 
     /// Returns the filter templates.
-    pub fn filter_templates(&self) -> &HashMap<String, Value> {
+    ///
+    /// **Breaking change in 3.0.2:** releases 3.0.0 and 3.0.1 exposed this as
+    /// `HashMap<String, serde_json::Value>`; it now returns `HashMap<String, FilterTemplateValue>` —
+    /// see [`FilterTemplateValue`]. Callers reading `&HashMap<String, serde_json::Value>` must adapt.
+    pub fn filter_templates(&self) -> &HashMap<String, FilterTemplateValue> {
         &self.filter_templates
     }
 
@@ -1328,8 +1388,28 @@ impl SubSearchRequestBuilder {
     }
 
     /// Sets the filter templates and returns the updated value.
-    pub fn filter_templates(mut self, value: HashMap<String, Value>) -> Self {
+    ///
+    /// **Breaking change in 3.0.2:** releases 3.0.0 and 3.0.1 took
+    /// `HashMap<String, serde_json::Value>`; this now takes `HashMap<String, FilterTemplateValue>` —
+    /// see [`FilterTemplateValue`]. Existing callers that passed JSON values (e.g. `json!([1, 2, 3])`)
+    /// must use the enum variants or the provided `From` conversions
+    /// (e.g. `FilterTemplateValue::Int64Array(vec![1, 2, 3])` or `vec![1i64, 2, 3].into()`).
+    pub fn filter_templates(mut self, value: HashMap<String, FilterTemplateValue>) -> Self {
         self.value.filter_templates = value;
+        self
+    }
+
+    /// Adds a filter template entry — including a `FilterTemplateValue::Bytes` client-built
+    /// membership-filter blob for a `membership_match(field, {blob}, type=bloom)` /
+    /// `membership_match(field, {blob}, type=roaring)` expression — and returns the updated value.
+    /// The blob is sent as native protobuf `TemplateValue.bytes_val`, never base64-inflated through
+    /// a string field.
+    pub fn add_filter_template(
+        mut self,
+        key: impl Into<String>,
+        value: FilterTemplateValue,
+    ) -> Self {
+        self.value.filter_templates.insert(key.into(), value);
         self
     }
 
@@ -3151,7 +3231,7 @@ mod builder_value_tests {
         let expected_partition_names: Vec<String> = Default::default();
         let expected_ids: Ids = Default::default();
         let expected_filter: String = String::new();
-        let expected_filter_templates: HashMap<String, Value> = Default::default();
+        let expected_filter_templates: HashMap<String, FilterTemplateValue> = Default::default();
         let expected_output_fields: Vec<String> = Default::default();
         let expected_limit: Option<i64> = None;
         let expected_offset: Option<i64> = None;
@@ -3192,8 +3272,10 @@ mod builder_value_tests {
         let collection_name = "collection_name-value".to_owned();
         let partition_names = vec!["partition_names-value".to_owned()];
         let filter = "filter-value".to_owned();
-        let filter_templates =
-            HashMap::from([("key-value".to_owned(), serde_json::json!({"key": "value"}))]);
+        let filter_templates = HashMap::from([(
+            "key-value".to_owned(),
+            FilterTemplateValue::String("value".into()),
+        )]);
         let output_fields = vec!["output_fields-value".to_owned()];
         let limit = 7;
         let offset = 7;
@@ -3311,7 +3393,7 @@ mod builder_value_tests {
         let expected_vectors: SearchVectors = Default::default();
         let expected_partition_names: Vec<String> = Default::default();
         let expected_filter: String = String::new();
-        let expected_filter_templates: HashMap<String, Value> = Default::default();
+        let expected_filter_templates: HashMap<String, FilterTemplateValue> = Default::default();
         let expected_output_fields: Vec<String> = Default::default();
         let expected_limit: i64 = 10;
         let expected_offset: i64 = 0;
@@ -3378,8 +3460,10 @@ mod builder_value_tests {
         let vectors = SearchVectors::Float(vec![vec![1.0, 2.0]]);
         let partition_names = vec!["partition_names-value".to_owned()];
         let filter = "filter-value".to_owned();
-        let filter_templates =
-            HashMap::from([("key-value".to_owned(), serde_json::json!({"key": "value"}))]);
+        let filter_templates = HashMap::from([(
+            "key-value".to_owned(),
+            FilterTemplateValue::String("value".into()),
+        )]);
         let output_fields = vec!["output_fields-value".to_owned()];
         let limit = 7;
         let offset = 7;
@@ -3468,7 +3552,7 @@ mod builder_value_tests {
         let expected_vector_field: String = String::new();
         let expected_vectors: SearchVectors = Default::default();
         let expected_filter: String = String::new();
-        let expected_filter_templates: HashMap<String, Value> = Default::default();
+        let expected_filter_templates: HashMap<String, FilterTemplateValue> = Default::default();
         let expected_limit: i64 = 10;
         let expected_metric_type: Option<MetricType> = None;
         let expected_extra_params: HashMap<String, String> = Default::default();
@@ -3496,8 +3580,10 @@ mod builder_value_tests {
         let vector_field = "vector_field-value".to_owned();
         let vectors = SearchVectors::Float(vec![vec![1.0, 2.0]]);
         let filter = "filter-value".to_owned();
-        let filter_templates =
-            HashMap::from([("key-value".to_owned(), serde_json::json!({"key": "value"}))]);
+        let filter_templates = HashMap::from([(
+            "key-value".to_owned(),
+            FilterTemplateValue::String("value".into()),
+        )]);
         let limit = 7;
         let metric_type = MetricType::Cosine;
         let extra_params = HashMap::from([("key-value".to_owned(), "value-value".to_owned())]);
@@ -3793,5 +3879,79 @@ mod builder_value_tests {
                     panic!("round_decimal {round_decimal} must be accepted: {error}")
                 });
         }
+    }
+}
+
+#[cfg(test)]
+mod bytes_template_tests {
+    use super::*;
+
+    fn assert_bytes_val(template: &crate::proto::schema::TemplateValue, expected: &[u8]) {
+        assert!(matches!(
+            &template.val,
+            Some(crate::proto::schema::template_value::Val::BytesVal(bytes)) if bytes == expected
+        ));
+    }
+
+    #[test]
+    fn query_request_sends_bytes_template_as_bytes_val() {
+        let blob = vec![0x4d, 0x42, 0x46, 0x31, 1, 0];
+        let request = QueryRequest::builder()
+            .collection_name("books")
+            .filter("membership_match(id, {blob}, type=bloom)")
+            .add_filter_template("blob", FilterTemplateValue::Bytes(blob.clone()))
+            .build()
+            .unwrap();
+        let proto = request.into_proto("default", None, 0).unwrap();
+        assert_bytes_val(&proto.expr_template_values["blob"], &blob);
+    }
+
+    #[test]
+    fn query_request_mixes_json_and_bytes_templates() {
+        let blob = vec![0x4d, 0x52, 0x42, 0x31];
+        let request = QueryRequest::builder()
+            .collection_name("books")
+            .filter("id in {ids} and membership_match(field, {blob}, type=roaring)")
+            .filter_templates(HashMap::from([
+                ("ids".into(), FilterTemplateValue::Int64Array(vec![1, 2, 3])),
+                ("blob".into(), FilterTemplateValue::Bytes(blob.clone())),
+            ]))
+            .build()
+            .unwrap();
+        let proto = request.into_proto("default", None, 0).unwrap();
+        assert!(matches!(
+            &proto.expr_template_values["ids"].val,
+            Some(crate::proto::schema::template_value::Val::ArrayVal(_))
+        ));
+        assert_bytes_val(&proto.expr_template_values["blob"], &blob);
+    }
+
+    #[test]
+    fn search_request_sends_bytes_template_as_bytes_val() {
+        let blob = vec![0x4d, 0x42, 0x46, 0x31];
+        let request = SearchRequest::builder()
+            .collection_name("books")
+            .vector_field("embedding")
+            .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+            .filter("membership_match(meta[id], {blob}, type=bloom)")
+            .add_filter_template("blob", FilterTemplateValue::Bytes(blob.clone()))
+            .build()
+            .unwrap();
+        let proto = request.into_proto("default", 0).unwrap();
+        assert_bytes_val(&proto.expr_template_values["blob"], &blob);
+    }
+
+    #[test]
+    fn sub_search_request_sends_bytes_template_as_bytes_val() {
+        let blob = vec![0x4d, 0x52, 0x42, 0x31];
+        let sub = SubSearchRequest::builder()
+            .vector_field("embedding")
+            .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+            .filter("membership_match(id, {blob}, type=roaring)")
+            .add_filter_template("blob", FilterTemplateValue::Bytes(blob.clone()))
+            .build()
+            .unwrap();
+        let proto = sub.into_proto("default", 0).unwrap();
+        assert_bytes_val(&proto.expr_template_values["blob"], &blob);
     }
 }

@@ -37,7 +37,7 @@ REAP_LABEL = "milvus-sdk-rust-test"
 # bloom filter / json_stats meta.json), so the harness runs an object-storage
 # backend. `COMMON_STORAGETYPE=remote` with the default `aws` cloud provider
 # speaks the S3 API to this MinIO sidecar.
-MINIO_IMAGE = "minio/minio:RELEASE.2024-12-18T13-15-44Z"
+MINIO_IMAGE = "quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z"
 MINIO_PORT = 19300
 MINIO_ACCESS_KEY = "minioadmin"
 MINIO_SECRET_KEY = "minioadmin"
