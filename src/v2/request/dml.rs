@@ -318,6 +318,7 @@ pub struct DeleteRequest {
     pub(crate) partition_name: String,
     pub(crate) filter: String,
     pub(crate) filter_templates: HashMap<String, Value>,
+    pub(crate) filter_template_bytes: HashMap<String, Vec<u8>>,
     pub(crate) ids: Ids,
 }
 
@@ -359,6 +360,11 @@ impl DeleteRequest {
         &self.filter_templates
     }
 
+    /// Returns the bytes filter templates (client-built membership-filter blobs).
+    pub fn filter_template_bytes(&self) -> &HashMap<String, Vec<u8>> {
+        &self.filter_template_bytes
+    }
+
     /// Returns the ids.
     pub fn ids(&self) -> &Ids {
         &self.ids
@@ -376,10 +382,7 @@ impl DeleteRequest {
         let (expr, expr_template_values) = if !self.filter.is_empty() {
             (
                 self.filter,
-                self.filter_templates
-                    .into_iter()
-                    .map(|(key, value)| Ok((key, json_template(value)?)))
-                    .collect::<Result<_>>()?,
+                template_values(self.filter_templates, self.filter_template_bytes)?,
             )
         } else {
             let primary_field_name = primary_field_name.ok_or_else(|| {
@@ -414,6 +417,7 @@ impl DeleteRequest {
             partition_name: String::new(),
             filter: String::new(),
             filter_templates: HashMap::new(),
+            filter_template_bytes: HashMap::new(),
             ids: Ids::default(),
         }
     }
@@ -459,6 +463,16 @@ impl DeleteRequestBuilder {
         self
     }
 
+    /// Adds a bytes filter template — a client-built membership-filter blob (e.g. a
+    /// [`crate::v2::bloom_filter::BloomFilterBuilder`] or
+    /// [`crate::v2::roaring_bitmap::RoaringBitmapBuilder`] blob) for a `membership_match` expression
+    /// in a delete filter — and returns the updated value. The blob is sent as native protobuf
+    /// `TemplateValue.bytes_val`, never base64-inflated through a string field.
+    pub fn add_filter_template_bytes(mut self, key: impl Into<String>, blob: Vec<u8>) -> Self {
+        self.value.filter_template_bytes.insert(key.into(), blob);
+        self
+    }
+
     /// Sets the ids and returns the updated value.
     pub fn ids(mut self, value: Ids) -> Self {
         self.value.ids = value;
@@ -468,6 +482,10 @@ impl DeleteRequestBuilder {
     /// Validates the configured values and builds the request.
     pub fn build(self) -> Result<DeleteRequest> {
         required("collection_name", &self.value.collection_name)?;
+        validate_no_overlapping_template_keys(
+            &self.value.filter_templates,
+            &self.value.filter_template_bytes,
+        )?;
         match (self.value.filter.is_empty(), self.value.ids.is_empty()) {
             (true, true) => Err(Error::validation(
                 "condition".into(),
@@ -578,6 +596,50 @@ pub(crate) fn json_template(value: Value) -> Result<crate::proto::schema::Templa
         }
     };
     Ok(TemplateValue { val: Some(value) })
+}
+
+/// Rejects a template key that is set through both the JSON (`filter_templates`) and bytes
+/// (`filter_template_bytes`) maps, since one key must map to exactly one `TemplateValue`.
+pub(crate) fn validate_no_overlapping_template_keys(
+    json_templates: &HashMap<String, Value>,
+    bytes_templates: &HashMap<String, Vec<u8>>,
+) -> Result<()> {
+    if let Some(key) = json_templates
+        .keys()
+        .find(|key| bytes_templates.contains_key(*key))
+    {
+        return Err(Error::validation(
+            "filter_template".into(),
+            format!("template key {key:?} is set through both filter_templates and filter_template_bytes"),
+        ));
+    }
+    Ok(())
+}
+
+/// Merges JSON templates (converted through [`json_template`]) with raw bytes templates into the
+/// wire `expr_template_values` map. Bytes templates carry client-built membership-filter blobs
+/// (for example a [`crate::v2::bloom_filter::BloomFilterBuilder`] or
+/// [`crate::v2::roaring_bitmap::RoaringBitmapBuilder`] blob) as native
+/// `TemplateValue.bytes_val`, never base64-inflated through a string field.
+pub(crate) fn template_values(
+    json_templates: HashMap<String, Value>,
+    bytes_templates: HashMap<String, Vec<u8>>,
+) -> Result<HashMap<String, crate::proto::schema::TemplateValue>> {
+    use crate::proto::schema::{template_value, TemplateValue};
+    validate_no_overlapping_template_keys(&json_templates, &bytes_templates)?;
+    let mut values = json_templates
+        .into_iter()
+        .map(|(key, value)| Ok((key, json_template(value)?)))
+        .collect::<Result<HashMap<String, TemplateValue>>>()?;
+    for (key, blob) in bytes_templates {
+        values.insert(
+            key,
+            TemplateValue {
+                val: Some(template_value::Val::BytesVal(blob)),
+            },
+        );
+    }
+    Ok(values)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1017,5 +1079,49 @@ mod builder_value_tests {
             .add_field_op(FieldPartialUpdateOp::new())
             .build()
             .is_err());
+    }
+}
+
+#[cfg(test)]
+mod delete_bytes_template_tests {
+    use super::*;
+
+    #[test]
+    fn delete_request_sends_bytes_template_as_bytes_val() {
+        let blob = vec![0x4d, 0x52, 0x42, 0x31, 1, 0];
+        let request = DeleteRequest::builder()
+            .collection_name("books")
+            .filter("membership_match(id, {blob}, type=roaring)")
+            .add_filter_template_bytes("blob", blob.clone())
+            .build()
+            .unwrap();
+        let proto = request.into_proto("default", Some("id")).unwrap();
+        let value = proto.expr_template_values.get("blob").unwrap();
+        assert!(matches!(
+            &value.val,
+            Some(crate::proto::schema::template_value::Val::BytesVal(bytes)) if bytes == &blob
+        ));
+    }
+
+    #[test]
+    fn delete_request_rejects_bytes_template_without_filter() {
+        // A delete requires a filter or ids, so a bytes template without a filter is rejected at
+        // build time.
+        let error = DeleteRequest::builder()
+            .collection_name("books")
+            .add_filter_template_bytes("blob", vec![1, 2, 3])
+            .build()
+            .unwrap_err();
+        assert!(matches!(error, Error::Validation(e) if e.parameter() == "condition"));
+    }
+
+    #[test]
+    fn template_values_reject_duplicate_key_across_json_and_bytes() {
+        let error = template_values(
+            HashMap::from([("ids".to_owned(), serde_json::json!([1, 2]))]),
+            HashMap::from([("ids".to_owned(), vec![1u8, 2])]),
+        )
+        .unwrap_err();
+        assert!(matches!(error, Error::Validation(e) if e.parameter() == "filter_template"));
     }
 }

@@ -23,7 +23,9 @@
 
 use crate::proto::{common, milvus, schema};
 use crate::v2::error::{Error, Result};
-use crate::v2::request::dml::json_template;
+use crate::v2::request::dml::{
+    json_template, template_values, validate_no_overlapping_template_keys,
+};
 use crate::v2::request::validation::{
     non_empty_strings, non_negative_i64, positive_i64, positive_usize, required, required_slice,
 };
@@ -53,6 +55,7 @@ pub struct QueryRequest {
     pub(crate) ids: Ids,
     pub(crate) filter: String,
     pub(crate) filter_templates: HashMap<String, Value>,
+    pub(crate) filter_template_bytes: HashMap<String, Vec<u8>>,
     pub(crate) output_fields: Vec<String>,
     pub(crate) limit: Option<i64>,
     pub(crate) offset: Option<i64>,
@@ -72,6 +75,7 @@ impl QueryRequest {
             ids: Default::default(),
             filter: Default::default(),
             filter_templates: Default::default(),
+            filter_template_bytes: Default::default(),
             output_fields: Default::default(),
             limit: Default::default(),
             offset: Default::default(),
@@ -123,6 +127,11 @@ impl QueryRequest {
     /// Returns the filter templates.
     pub fn filter_templates(&self) -> &HashMap<String, Value> {
         &self.filter_templates
+    }
+
+    /// Returns the bytes filter templates (client-built membership-filter blobs).
+    pub fn filter_template_bytes(&self) -> &HashMap<String, Vec<u8>> {
+        &self.filter_template_bytes
     }
 
     /// Returns the output fields.
@@ -190,8 +199,12 @@ impl QueryRequest {
                 format_order_by_fields(&self.order_by_fields),
             );
         }
-        let (filter, filter_templates) = if self.ids.is_empty() {
-            (self.filter, self.filter_templates)
+        let (filter, filter_templates, filter_template_bytes) = if self.ids.is_empty() {
+            (
+                self.filter,
+                self.filter_templates,
+                self.filter_template_bytes,
+            )
         } else {
             let primary_field = primary_field.ok_or_else(|| {
                 Error::validation(
@@ -200,9 +213,12 @@ impl QueryRequest {
                 )
             })?;
             let template_name = "__milvus_v2_query_ids";
+            // JSON and bytes templates are both dropped when querying by ids: the rewritten
+            // expression only references the pk-in template.
             (
                 format!("{primary_field} in {{{template_name}}}"),
                 HashMap::from([(template_name.to_owned(), self.ids.into_json())]),
+                HashMap::new(),
             )
         };
         Ok(milvus::QueryRequest {
@@ -228,10 +244,7 @@ impl QueryRequest {
                 .map(|level| level.into_proto() as i32)
                 .unwrap_or_default(),
             use_default_consistency: self.consistency_level.is_none(),
-            expr_template_values: filter_templates
-                .into_iter()
-                .map(|(key, value)| Ok((key, json_template(value)?)))
-                .collect::<Result<_>>()?,
+            expr_template_values: template_values(filter_templates, filter_template_bytes)?,
             namespace: None,
             ..Default::default()
         })
@@ -281,6 +294,17 @@ impl QueryRequestBuilder {
     /// Sets the filter templates and returns the updated value.
     pub fn filter_templates(mut self, value: HashMap<String, Value>) -> Self {
         self.value.filter_templates = value;
+        self
+    }
+
+    /// Adds a bytes filter template — a client-built membership-filter blob (e.g. a
+    /// [`crate::v2::bloom_filter::BloomFilterBuilder`] or
+    /// [`crate::v2::roaring_bitmap::RoaringBitmapBuilder`] blob) for a `membership_match(field, {blob},
+    /// type=bloom)` / `membership_match(field, {blob}, type=roaring)` expression — and returns the
+    /// updated value. The blob is sent as native
+    /// protobuf `TemplateValue.bytes_val`, never base64-inflated through a string field.
+    pub fn add_filter_template_bytes(mut self, key: impl Into<String>, blob: Vec<u8>) -> Self {
+        self.value.filter_template_bytes.insert(key.into(), blob);
         self
     }
 
@@ -514,6 +538,7 @@ pub struct SearchRequest {
     pub(crate) partition_names: Vec<String>,
     pub(crate) filter: String,
     pub(crate) filter_templates: HashMap<String, Value>,
+    pub(crate) filter_template_bytes: HashMap<String, Vec<u8>>,
     pub(crate) output_fields: Vec<String>,
     pub(crate) limit: i64,
     pub(crate) offset: i64,
@@ -586,6 +611,11 @@ impl SearchRequest {
     /// Returns the filter templates.
     pub fn filter_templates(&self) -> &HashMap<String, Value> {
         &self.filter_templates
+    }
+
+    /// Returns the bytes filter templates (client-built membership-filter blobs).
+    pub fn filter_template_bytes(&self) -> &HashMap<String, Vec<u8>> {
+        &self.filter_template_bytes
     }
 
     /// Returns the output fields.
@@ -928,11 +958,10 @@ impl SearchRequest {
             use_default_consistency: self.consistency_level.is_none(),
             search_by_primary_keys: false,
             sub_reqs: Vec::new(),
-            expr_template_values: self
-                .filter_templates
-                .into_iter()
-                .map(|(key, value)| Ok((key, json_template(value)?)))
-                .collect::<Result<_>>()?,
+            expr_template_values: template_values(
+                self.filter_templates,
+                self.filter_template_bytes,
+            )?,
             function_score: self.rerank.map(FunctionScore::into_proto),
             namespace: None,
             highlighter: self.highlighter.map(Highlighter::into_proto),
@@ -962,6 +991,7 @@ impl SearchRequest {
             partition_names: Vec::new(),
             filter: String::new(),
             filter_templates: HashMap::new(),
+            filter_template_bytes: HashMap::new(),
             output_fields: Vec::new(),
             limit: 10,
             offset: 0,
@@ -1042,6 +1072,17 @@ impl SearchRequestBuilder {
     /// Sets the filter templates and returns the updated value.
     pub fn filter_templates(mut self, value: HashMap<String, Value>) -> Self {
         self.value.filter_templates = value;
+        self
+    }
+
+    /// Adds a bytes filter template — a client-built membership-filter blob (e.g. a
+    /// [`crate::v2::bloom_filter::BloomFilterBuilder`] or
+    /// [`crate::v2::roaring_bitmap::RoaringBitmapBuilder`] blob) for a `membership_match(field, {blob},
+    /// type=bloom)` / `membership_match(field, {blob}, type=roaring)` expression — and returns the
+    /// updated value. The blob is sent as native
+    /// protobuf `TemplateValue.bytes_val`, never base64-inflated through a string field.
+    pub fn add_filter_template_bytes(mut self, key: impl Into<String>, blob: Vec<u8>) -> Self {
+        self.value.filter_template_bytes.insert(key.into(), blob);
         self
     }
 
@@ -1189,6 +1230,7 @@ pub struct SubSearchRequest {
     pub(crate) vectors: SearchVectors,
     pub(crate) filter: String,
     pub(crate) filter_templates: HashMap<String, Value>,
+    pub(crate) filter_template_bytes: HashMap<String, Vec<u8>>,
     pub(crate) limit: i64,
     pub(crate) metric_type: Option<MetricType>,
     pub(crate) extra_params: HashMap<String, String>,
@@ -1228,6 +1270,11 @@ impl SubSearchRequest {
     /// Returns the filter templates.
     pub fn filter_templates(&self) -> &HashMap<String, Value> {
         &self.filter_templates
+    }
+
+    /// Returns the bytes filter templates (client-built membership-filter blobs).
+    pub fn filter_template_bytes(&self) -> &HashMap<String, Vec<u8>> {
+        &self.filter_template_bytes
     }
 
     /// Returns the limit.
@@ -1270,6 +1317,7 @@ impl SubSearchRequest {
             vectors: self.vectors,
             filter: self.filter,
             filter_templates: self.filter_templates,
+            filter_template_bytes: self.filter_template_bytes,
             limit: self.limit,
             metric_type: self.metric_type,
             extra_params: self.extra_params,
@@ -1289,6 +1337,7 @@ impl SubSearchRequest {
             vectors: SearchVectors::default(),
             filter: String::new(),
             filter_templates: HashMap::new(),
+            filter_template_bytes: HashMap::new(),
             limit: 10,
             metric_type: None,
             extra_params: HashMap::new(),
@@ -1330,6 +1379,17 @@ impl SubSearchRequestBuilder {
     /// Sets the filter templates and returns the updated value.
     pub fn filter_templates(mut self, value: HashMap<String, Value>) -> Self {
         self.value.filter_templates = value;
+        self
+    }
+
+    /// Adds a bytes filter template — a client-built membership-filter blob (e.g. a
+    /// [`crate::v2::bloom_filter::BloomFilterBuilder`] or
+    /// [`crate::v2::roaring_bitmap::RoaringBitmapBuilder`] blob) for a `membership_match(field, {blob},
+    /// type=bloom)` / `membership_match(field, {blob}, type=roaring)` expression — and returns the
+    /// updated value. The blob is sent as native
+    /// protobuf `TemplateValue.bytes_val`, never base64-inflated through a string field.
+    pub fn add_filter_template_bytes(mut self, key: impl Into<String>, blob: Vec<u8>) -> Self {
+        self.value.filter_template_bytes.insert(key.into(), blob);
         self
     }
 
@@ -1931,6 +1991,7 @@ impl SearchIteratorRequestBuilder {
 }
 
 fn validate_query_request(value: &QueryRequest) -> Result<()> {
+    validate_no_overlapping_template_keys(&value.filter_templates, &value.filter_template_bytes)?;
     validate_query_request_limit(value, false)
 }
 
@@ -1978,6 +2039,7 @@ fn validate_query_request_limit(value: &QueryRequest, allow_zero_limit: bool) ->
 
 fn validate_search_request(value: &SearchRequest) -> Result<()> {
     required("collection_name", &value.collection_name)?;
+    validate_no_overlapping_template_keys(&value.filter_templates, &value.filter_template_bytes)?;
     non_empty_strings("partition_names", &value.partition_names)?;
     positive_i64("limit", value.limit)?;
     non_negative_i64("offset", value.offset)?;
@@ -2048,6 +2110,7 @@ fn search_vectors_are_empty(vectors: &SearchVectors) -> bool {
 }
 
 fn validate_sub_search_request(value: &SubSearchRequest) -> Result<()> {
+    validate_no_overlapping_template_keys(&value.filter_templates, &value.filter_template_bytes)?;
     positive_i64("limit", value.limit)?;
     validate_search_extra_params(&value.extra_params)?;
     validate_finite_range_parameter("radius", value.radius)?;
@@ -3793,5 +3856,93 @@ mod builder_value_tests {
                     panic!("round_decimal {round_decimal} must be accepted: {error}")
                 });
         }
+    }
+}
+
+#[cfg(test)]
+mod bytes_template_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn assert_bytes_val(template: &crate::proto::schema::TemplateValue, expected: &[u8]) {
+        assert!(matches!(
+            &template.val,
+            Some(crate::proto::schema::template_value::Val::BytesVal(bytes)) if bytes == expected
+        ));
+    }
+
+    #[test]
+    fn query_request_sends_bytes_template_as_bytes_val() {
+        let blob = vec![0x4d, 0x42, 0x46, 0x31, 1, 0];
+        let request = QueryRequest::builder()
+            .collection_name("books")
+            .filter("membership_match(id, {blob}, type=bloom)")
+            .add_filter_template_bytes("blob", blob.clone())
+            .build()
+            .unwrap();
+        let proto = request.into_proto("default", None, 0).unwrap();
+        assert_bytes_val(&proto.expr_template_values["blob"], &blob);
+    }
+
+    #[test]
+    fn query_request_mixes_json_and_bytes_templates() {
+        let blob = vec![0x4d, 0x52, 0x42, 0x31];
+        let request = QueryRequest::builder()
+            .collection_name("books")
+            .filter("id in {ids} and membership_match(field, {blob}, type=roaring)")
+            .filter_templates(HashMap::from([("ids".into(), json!([1, 2, 3]))]))
+            .add_filter_template_bytes("blob", blob.clone())
+            .build()
+            .unwrap();
+        let proto = request.into_proto("default", None, 0).unwrap();
+        assert!(matches!(
+            &proto.expr_template_values["ids"].val,
+            Some(crate::proto::schema::template_value::Val::ArrayVal(_))
+        ));
+        assert_bytes_val(&proto.expr_template_values["blob"], &blob);
+    }
+
+    #[test]
+    fn build_rejects_overlapping_json_and_bytes_template_key() {
+        let error = QueryRequest::builder()
+            .collection_name("books")
+            .filter("id in {ids} and membership_match(id, {blob}, type=bloom)")
+            .filter_templates(HashMap::from([("ids".into(), json!([1, 2]))]))
+            .add_filter_template_bytes("ids", vec![1, 2, 3])
+            .build()
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            Error::Validation(e) if e.parameter() == "filter_template"
+        ));
+    }
+
+    #[test]
+    fn search_request_sends_bytes_template_as_bytes_val() {
+        let blob = vec![0x4d, 0x42, 0x46, 0x31];
+        let request = SearchRequest::builder()
+            .collection_name("books")
+            .vector_field("embedding")
+            .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+            .filter("membership_match(meta[id], {blob}, type=bloom)")
+            .add_filter_template_bytes("blob", blob.clone())
+            .build()
+            .unwrap();
+        let proto = request.into_proto("default", 0).unwrap();
+        assert_bytes_val(&proto.expr_template_values["blob"], &blob);
+    }
+
+    #[test]
+    fn sub_search_request_sends_bytes_template_as_bytes_val() {
+        let blob = vec![0x4d, 0x52, 0x42, 0x31];
+        let sub = SubSearchRequest::builder()
+            .vector_field("embedding")
+            .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+            .filter("membership_match(id, {blob}, type=roaring)")
+            .add_filter_template_bytes("blob", blob.clone())
+            .build()
+            .unwrap();
+        let proto = sub.into_proto("default", 0).unwrap();
+        assert_bytes_val(&proto.expr_template_values["blob"], &blob);
     }
 }
