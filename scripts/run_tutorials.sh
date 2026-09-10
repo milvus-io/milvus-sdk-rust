@@ -39,9 +39,9 @@ cleanup_resources() {
   local status="$1"
   if [[ -n "$MILVUS_CONTAINER_ID" ]]; then
     if [[ "$status" -ne 0 ]]; then
-      python3 "$MILVUS_CONTAINER_SCRIPT" logs "$MILVUS_CONTAINER_ID" || true
+      python3 -B "$MILVUS_CONTAINER_SCRIPT" logs "$MILVUS_CONTAINER_ID" || true
     fi
-    python3 "$MILVUS_CONTAINER_SCRIPT" stop "$MILVUS_CONTAINER_ID" || true
+    python3 -B "$MILVUS_CONTAINER_SCRIPT" stop "$MILVUS_CONTAINER_ID" || true
     MILVUS_CONTAINER_ID=""
   fi
 }
@@ -78,7 +78,7 @@ trap 'handle_signal 143' TERM
 
 echo "==> Starting Milvus for tutorials"
 MILVUS_CONTAINER_ID="$(
-  python3 "$MILVUS_CONTAINER_SCRIPT" start \
+  python3 -B "$MILVUS_CONTAINER_SCRIPT" start \
     --grpc-port "$MILVUS_GRPC_PORT" \
     --health-port "$MILVUS_HEALTH_PORT"
 )"

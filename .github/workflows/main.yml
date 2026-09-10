@@ -83,6 +83,14 @@ jobs:
       - name: Validate crate package
         run: cargo package
 
+      # `cargo package` stages the crate under target/package (including tests/). Swatinem/rust-cache's
+      # post-job save walks target/ recursively and treats any `tests` directory as a trybuild profile,
+      # emitting ENOENT annotations for target/package/*/tests/{target,trybuild} whenever the cache save
+      # runs (cache miss or partial match). Remove the staging dir before the post-job cache save runs.
+      - name: Remove staged package before cache save
+        if: always()
+        run: rm -rf target/package
+
       - name: Run coverage
         run: CODE_COV=true ./scripts/run_tests.sh
 

@@ -21,6 +21,7 @@ include = [
     "/README.md",
     "/CHANGELOG.md",
     "/LICENSE",
+    "!/**/__pycache__/**",
 ]
 
 [package.metadata.docs.rs]
