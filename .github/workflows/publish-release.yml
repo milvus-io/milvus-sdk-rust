@@ -171,6 +171,15 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: cargo publish
 
+      # `cargo publish --dry-run` stages the package under target/package. Swatinem/rust-cache's
+      # post-job save (v2.9.x, after the 2026-08-06 "invert target/profile check" change) walks
+      # target/ recursively and treats any `tests` directory as a trybuild profile, so it tries to
+      # opendir target/package/*/tests/{target,trybuild} and emits ENOENT annotations. Remove the
+      # staging dir before the post-job cache save runs, even when publish itself failed.
+      - name: Remove staged package before cache save
+        if: always()
+        run: rm -rf target/package
+
   release:
     name: Create GitHub release
     needs: run-tutorial

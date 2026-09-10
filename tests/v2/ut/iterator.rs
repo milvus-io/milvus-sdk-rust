@@ -33,7 +33,14 @@ async fn search_iterator_v2_direct_describe_bypasses_the_schema_cache() {
         )
         .await
         .expect("prime schema cache");
-    assert_eq!(server.service.call_count("describe_collection"), 1);
+    // The process-wide schema cache is keyed by endpoint, and MockServer binds an ephemeral port
+    // that the OS may reuse, so an earlier test can already hold the schema for this endpoint. The
+    // get therefore primes the cache only when it is cold: at most one describe_collection.
+    let primed = server.service.call_count("describe_collection");
+    assert!(
+        primed <= 1,
+        "get must not issue more than one describe_collection, got {primed}"
+    );
 
     let iterator = server
         .client
@@ -56,7 +63,9 @@ async fn search_iterator_v2_direct_describe_bypasses_the_schema_cache() {
         .await
         .expect("create search iterator");
     assert!(matches!(iterator, SearchIterator::V2(_)));
-    assert_eq!(server.service.call_count("describe_collection"), 2);
+    // The V2 search iterator always issues exactly one direct describe_collection (uncached),
+    // bypassing the schema cache even when it is already warm.
+    assert_eq!(server.service.call_count("describe_collection"), primed + 1);
 
     server.shutdown().await;
 }

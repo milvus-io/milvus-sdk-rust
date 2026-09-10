@@ -36,6 +36,9 @@
 
 ## milvus-sdk-rust 3.0.0 (2026-09-03)
 
+> **Yanked.** 3.0.0 was yanked from crates.io due to interface design issues fixed in 3.0.1.
+> New dependency resolution selects 3.0.1; existing `Cargo.lock` pins continue to build.
+
 ### Feature
 
 - Introduce a session client (`ClientV2::session`) that routes DQL operations (query, search,
