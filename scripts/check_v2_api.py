@@ -39,6 +39,7 @@ ACCESSOR_ALIASES = {
 }
 SETTER_ALIASES = {
     "rows": ("row",),
+    "filter_template_bytes": ("add_filter_template_bytes",),
 }
 
 
