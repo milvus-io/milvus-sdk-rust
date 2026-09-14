@@ -28,6 +28,7 @@ use reqwest::{Client, StatusCode};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::Notify;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_FETCH_ATTEMPTS: u32 = 3;
@@ -369,6 +370,7 @@ pub(crate) struct GlobalCluster {
     last_unavailable_probe: std::sync::Mutex<Option<std::time::Instant>>,
     probe_in_progress: std::sync::atomic::AtomicBool,
     apply_lock: tokio::sync::Mutex<()>,
+    wake_notify: Arc<Notify>,
     shutdown: tokio_util::sync::CancellationToken,
 }
 
@@ -380,6 +382,7 @@ impl GlobalCluster {
         database_explicit: Arc<AtomicBool>,
         service: SharedServices,
         topology: GlobalTopology,
+        wake_notify: Arc<Notify>,
     ) -> Self {
         Self {
             global_endpoint,
@@ -391,6 +394,7 @@ impl GlobalCluster {
             last_unavailable_probe: std::sync::Mutex::new(None),
             probe_in_progress: std::sync::atomic::AtomicBool::new(false),
             apply_lock: tokio::sync::Mutex::new(()),
+            wake_notify,
             shutdown: tokio_util::sync::CancellationToken::new(),
         }
     }
@@ -654,6 +658,9 @@ impl GlobalCluster {
                     return false;
                 }
                 *self.service.write() = services;
+                // A newly attached transport must be probed immediately. Wake the telemetry
+                // heartbeat so it does not keep sleeping the retired endpoint's backoff.
+                self.wake_notify.notify_one();
                 true
             }
             Err(error) => {
@@ -909,6 +916,7 @@ mod tests {
             database_explicit,
             service,
             topology,
+            StdArc::new(Notify::new()),
         ))
     }
 
@@ -944,6 +952,7 @@ mod tests {
             database_explicit,
             service,
             topology,
+            StdArc::new(Notify::new()),
         ));
 
         let mut fresh = config.read().clone();
@@ -961,6 +970,64 @@ mod tests {
         assert_eq!(
             String::from_utf8(raw).expect("utf-8 token"),
             "alice:new-password"
+        );
+    }
+
+    #[tokio::test]
+    async fn rebuild_to_wakes_the_telemetry_heartbeat() {
+        // The failover path must fire the shared telemetry wake Notify so a running heartbeat
+        // probes the replacement transport immediately instead of keeping the retired endpoint's
+        // UNIMPLEMENTED backoff alive.
+        let endpoint = ReachableEndpoint::start().await;
+        let config = StdArc::new(RwLock::new(
+            super::super::ConnectConfig::new().uri("http://global:19530"),
+        ));
+        let database = Arc::new(RwLock::new("default".to_owned()));
+        let database_explicit = Arc::new(AtomicBool::new(false));
+        let current_config = config.read().clone();
+        let topology = parse_topology_response(&topology_body_with_primary(&endpoint.endpoint, 1))
+            .expect("initial topology");
+        let service = Arc::new(RwLock::new(
+            build_services(
+                &cluster_endpoint_uri(&endpoint.endpoint, &current_config)
+                    .expect("initial primary uri"),
+                &current_config,
+                &database,
+                &database_explicit,
+                0,
+            )
+            .await
+            .expect("build initial service"),
+        ));
+        let rebind = StdArc::new(Notify::new());
+        let cluster = StdArc::new(GlobalCluster::new(
+            "http://global:19530".into(),
+            Arc::clone(&config),
+            database,
+            database_explicit,
+            Arc::clone(&service),
+            topology,
+            StdArc::clone(&rebind),
+        ));
+        let wake = {
+            let rebind = StdArc::clone(&rebind);
+            tokio::spawn(async move {
+                tokio::time::timeout(Duration::from_secs(2), rebind.notified()).await
+            })
+        };
+        assert!(
+            cluster
+                .rebuild_to(&endpoint.endpoint, &current_config)
+                .await,
+            "rebuild to the reachable endpoint must succeed"
+        );
+        let notified = tokio::time::timeout(Duration::from_secs(5), wake)
+            .await
+            .expect("wake-notify waiter task did not finish")
+            .expect("wake-notify waiter task panicked");
+        assert!(
+            notified.is_ok(),
+            "rebuild_to did not fire the telemetry wake notify"
         );
     }
 
@@ -995,6 +1062,7 @@ mod tests {
             database_explicit,
             service,
             topology,
+            StdArc::new(Notify::new()),
         ));
 
         let mut fresh = config.read().clone();
