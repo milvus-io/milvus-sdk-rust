@@ -19,7 +19,7 @@
 use crate::proto::milvus;
 use crate::v2::error::{Error, Result};
 use crate::v2::request::validation::required;
-use crate::v2::types::{FieldData, Ids};
+use crate::v2::types::{FieldData, FilterTemplateValue, Ids};
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -317,7 +317,7 @@ pub struct DeleteRequest {
     pub(crate) collection_name: String,
     pub(crate) partition_name: String,
     pub(crate) filter: String,
-    pub(crate) filter_templates: HashMap<String, Value>,
+    pub(crate) filter_templates: HashMap<String, FilterTemplateValue>,
     pub(crate) ids: Ids,
 }
 
@@ -355,7 +355,11 @@ impl DeleteRequest {
     }
 
     /// Returns the filter templates.
-    pub fn filter_templates(&self) -> &HashMap<String, Value> {
+    ///
+    /// **Breaking change in 3.0.2:** releases 3.0.0 and 3.0.1 exposed this as
+    /// `HashMap<String, serde_json::Value>`; it now returns `HashMap<String, FilterTemplateValue>` —
+    /// see [`FilterTemplateValue`]. Callers reading `&HashMap<String, serde_json::Value>` must adapt.
+    pub fn filter_templates(&self) -> &HashMap<String, FilterTemplateValue> {
         &self.filter_templates
     }
 
@@ -378,8 +382,8 @@ impl DeleteRequest {
                 self.filter,
                 self.filter_templates
                     .into_iter()
-                    .map(|(key, value)| Ok((key, json_template(value)?)))
-                    .collect::<Result<_>>()?,
+                    .map(|(key, value)| (key, value.into_proto()))
+                    .collect(),
             )
         } else {
             let primary_field_name = primary_field_name.ok_or_else(|| {
@@ -454,8 +458,27 @@ impl DeleteRequestBuilder {
     }
 
     /// Sets the filter templates and returns the updated value.
-    pub fn filter_templates(mut self, value: HashMap<String, Value>) -> Self {
+    ///
+    /// **Breaking change in 3.0.2:** releases 3.0.0 and 3.0.1 took
+    /// `HashMap<String, serde_json::Value>`; this now takes `HashMap<String, FilterTemplateValue>` —
+    /// see [`FilterTemplateValue`]. Existing callers that passed JSON values (e.g. `json!([1, 2, 3])`)
+    /// must use the enum variants or the provided `From` conversions
+    /// (e.g. `FilterTemplateValue::Int64Array(vec![1, 2, 3])` or `vec![1i64, 2, 3].into()`).
+    pub fn filter_templates(mut self, value: HashMap<String, FilterTemplateValue>) -> Self {
         self.value.filter_templates = value;
+        self
+    }
+
+    /// Adds a filter template entry — including a `FilterTemplateValue::Bytes` client-built
+    /// membership-filter blob for a `membership_match` expression in a delete filter — and returns
+    /// the updated value. The blob is sent as native protobuf `TemplateValue.bytes_val`, never
+    /// base64-inflated through a string field.
+    pub fn add_filter_template(
+        mut self,
+        key: impl Into<String>,
+        value: FilterTemplateValue,
+    ) -> Self {
+        self.value.filter_templates.insert(key.into(), value);
         self
     }
 
@@ -922,7 +945,8 @@ mod builder_value_tests {
 
     #[test]
     fn delete_request_populated_values() {
-        let filter_templates = HashMap::from([("minimum".to_owned(), serde_json::json!(10))]);
+        let filter_templates =
+            HashMap::from([("minimum".to_owned(), FilterTemplateValue::Int64(10))]);
         let value = DeleteRequest::builder()
             .database_name("database")
             .collection_name("collection")
@@ -1017,5 +1041,64 @@ mod builder_value_tests {
             .add_field_op(FieldPartialUpdateOp::new())
             .build()
             .is_err());
+    }
+}
+
+#[cfg(test)]
+mod delete_bytes_template_tests {
+    use super::*;
+
+    #[test]
+    fn delete_request_sends_bytes_template_as_bytes_val() {
+        let blob = vec![0x4d, 0x52, 0x42, 0x31, 1, 0];
+        let request = DeleteRequest::builder()
+            .collection_name("books")
+            .filter("membership_match(id, {blob}, type=roaring)")
+            .add_filter_template("blob", FilterTemplateValue::Bytes(blob.clone()))
+            .build()
+            .unwrap();
+        let proto = request.into_proto("default", Some("id")).unwrap();
+        let value = proto.expr_template_values.get("blob").unwrap();
+        assert!(matches!(
+            &value.val,
+            Some(crate::proto::schema::template_value::Val::BytesVal(bytes)) if bytes == &blob
+        ));
+    }
+
+    #[test]
+    fn delete_request_rejects_bytes_template_without_filter() {
+        // A delete requires a filter or ids, so a template without a filter is rejected at build
+        // time.
+        let error = DeleteRequest::builder()
+            .collection_name("books")
+            .add_filter_template("blob", FilterTemplateValue::Bytes(vec![1, 2, 3]))
+            .build()
+            .unwrap_err();
+        assert!(matches!(error, Error::Validation(e) if e.parameter() == "condition"));
+    }
+
+    #[test]
+    fn delete_request_encodes_scalar_and_array_templates() {
+        let request = DeleteRequest::builder()
+            .collection_name("books")
+            .filter("id in {ids} and status == {status}")
+            .filter_templates(HashMap::from([
+                ("ids".into(), FilterTemplateValue::Int64Array(vec![1, 2, 3])),
+                (
+                    "status".into(),
+                    FilterTemplateValue::String("active".into()),
+                ),
+            ]))
+            .build()
+            .unwrap();
+        let proto = request.into_proto("default", Some("id")).unwrap();
+        assert!(matches!(
+            &proto.expr_template_values["ids"].val,
+            Some(crate::proto::schema::template_value::Val::ArrayVal(_))
+        ));
+        assert!(matches!(
+            &proto.expr_template_values["status"].val,
+            Some(crate::proto::schema::template_value::Val::StringVal(_))
+        ));
     }
 }

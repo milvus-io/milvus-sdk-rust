@@ -42,15 +42,18 @@
 
 #![warn(missing_docs)]
 
+pub mod bloom_filter;
 pub mod bulk_import;
 pub mod client;
 pub mod error;
 pub mod prelude;
 pub mod request;
 pub mod response;
+pub mod roaring_bitmap;
 pub mod types;
 pub mod utils;
 
+pub use bloom_filter::*;
 pub use bulk_import::*;
 pub use client::{
     new_client_request_id, with_client_request_id, ClientTelemetry, ClientTelemetryCommand,
@@ -58,5 +61,6 @@ pub use client::{
     SearchIterator, SearchIteratorV1, SearchIteratorV2, TelemetryErrorInfo, TelemetryMetrics,
     TelemetryOperationMetrics, TelemetrySnapshot,
 };
+pub use roaring_bitmap::*;
 pub use types::*;
 pub use utils::*;
