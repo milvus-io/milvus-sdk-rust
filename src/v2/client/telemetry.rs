@@ -32,6 +32,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 use tonic::{Code, Request};
 use uuid::Uuid;
@@ -39,6 +40,9 @@ use uuid::Uuid;
 const DEFAULT_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(10);
 const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_UNSUPPORTED_BACKOFF: Duration = Duration::from_secs(30 * 60);
+// The heartbeat interval is user/server-configurable and can exceed what a platform clock can
+// form as an absolute deadline. Wait in bounded chunks so every sleep stays inside the clock.
+const MAX_WAIT_CHUNK: Duration = Duration::from_secs(24 * 60 * 60);
 const LATENCY_SAMPLE_CAPACITY: usize = 1000;
 // Retaining all 1000 live-ring values in every one-second history window would
 // exceed 200 MiB. Preserve 128 sorted, equidistant quantiles including min/max;
@@ -49,6 +53,8 @@ const HISTORY_RETENTION: Duration = Duration::from_secs(60 * 60);
 // A one-second heartbeat produces 3601 boundary-inclusive windows in an hour.
 const MAX_HISTORY_SNAPSHOTS: usize = 4096;
 const SAMPLING_SCALE: u64 = 1_000_000_000;
+const TRUNCATION_SUFFIX: &str = "...(truncated)";
+const TRUNCATABLE_ERROR_FIELDS: [&str; 4] = ["error_msg", "collection", "operation", "request_id"];
 
 tokio::task_local! {
     static CLIENT_REQUEST_ID: String;
@@ -324,6 +330,17 @@ struct StoredSnapshot {
 
 type CommandHandler = dyn Fn(&ClientTelemetryCommand) -> ClientTelemetryCommandReply + Send + Sync;
 
+/// A command already executed in an earlier batch, retaining its compact outcome so a fenced
+/// redelivery replays the reported success/error instead of minting a contradictory success ACK.
+/// The full reply payload lives only in `pending_replies` until delivered, so retained memory
+/// grows with the number of executed commands rather than with reply payload size.
+#[derive(Clone)]
+struct ExecutedCommand {
+    create_time: i64,
+    success: bool,
+    error_message: String,
+}
+
 struct RuntimeState {
     config: TelemetryConfig,
     collectors: BTreeMap<String, OperationCollector>,
@@ -335,7 +352,7 @@ struct RuntimeState {
     pending_replies: VecDeque<common::CommandReply>,
     config_hash: String,
     last_command_timestamp: i64,
-    executed_commands: HashMap<String, i64>,
+    executed_commands: HashMap<String, ExecutedCommand>,
     sampling_accumulator: u64,
 }
 
@@ -406,6 +423,11 @@ struct TelemetryInner {
     client_id: String,
     client_id_stable: bool,
     unsupported_streak: AtomicU64,
+    last_seen_generation: AtomicU64,
+    // Interrupts the heartbeat wait. Wake sources: transport rebinding (channel reset /
+    // global-cluster failover, via on_transport_rebound or note_transport_generation) and a
+    // server-pushed heartbeat-interval decrease in handle_push_config.
+    wake_notify: Arc<Notify>,
     last_heartbeat_error: RwLock<Option<String>>,
     shutdown: CancellationToken,
 }
@@ -428,6 +450,7 @@ impl ClientTelemetry {
         services: SharedServices,
         database: Arc<RwLock<String>>,
         database_explicit: Arc<AtomicBool>,
+        wake_notify: Arc<Notify>,
         connect: &ConnectConfig,
     ) -> Self {
         let client_id_stable = !config.client_id.is_empty();
@@ -459,6 +482,8 @@ impl ClientTelemetry {
             client_id,
             client_id_stable,
             unsupported_streak: AtomicU64::new(0),
+            last_seen_generation: AtomicU64::new(0),
+            wake_notify,
             last_heartbeat_error: RwLock::new(None),
             shutdown: CancellationToken::new(),
         };
@@ -479,6 +504,17 @@ impl ClientTelemetry {
     /// at connection time.
     pub(super) fn update_username(&self, username: String) {
         *self.inner.client_config.username.write() = username;
+    }
+
+    /// Signals that the telemetry transport has been replaced (channel reset or global-cluster
+    /// failover).
+    ///
+    /// A newly attached transport must be probed immediately. Carrying an UNIMPLEMENTED backoff
+    /// from the retired endpoint can otherwise keep a supporting endpoint silent for up to thirty
+    /// minutes.
+    pub(super) fn on_transport_rebound(&self) {
+        self.inner.unsupported_streak.store(0, Ordering::Relaxed);
+        self.inner.wake_notify.notify_one();
     }
 
     /// Returns the current effective telemetry configuration.
@@ -575,6 +611,19 @@ impl TelemetryOperationGuard {
 }
 
 impl TelemetryInner {
+    /// Observes the current transport generation, clearing the UNIMPLEMENTED backoff when a new
+    /// transport has been attached. The generation is bumped by every channel reset and failover.
+    fn note_transport_generation(&self) {
+        let generation = self.services.read().generation;
+        if self
+            .last_seen_generation
+            .swap(generation, Ordering::Relaxed)
+            != generation
+        {
+            self.unsupported_streak.store(0, Ordering::Relaxed);
+        }
+    }
+
     fn record_operation(
         &self,
         operation: &str,
@@ -615,31 +664,43 @@ impl TelemetryInner {
     }
 
     fn create_snapshot(&self) {
-        let mut state = self.state.lock();
-        if !state.config.enabled {
-            return;
-        }
-        let now = now_millis();
-        let interval_ms = state
-            .config
-            .heartbeat_interval
-            .as_millis()
-            .min(i64::MAX as u128) as i64;
-        let start = if state.last_snapshot_end == 0 || state.last_snapshot_end > now {
-            now.saturating_sub(interval_ms)
-        } else {
-            state.last_snapshot_end
+        let (collectors, start, now) = {
+            let mut state = self.state.lock();
+            if !state.config.enabled {
+                return;
+            }
+            let now = now_millis();
+            let interval_ms = state
+                .config
+                .heartbeat_interval
+                .as_millis()
+                .min(i64::MAX as u128) as i64;
+            let start = if state.last_snapshot_end == 0 || state.last_snapshot_end > now {
+                now.saturating_sub(interval_ms)
+            } else {
+                state.last_snapshot_end
+            };
+            // Cap the reported window start at the retained-history range so a long heartbeat
+            // gap or a maximum interval cannot surface an extreme (saturated) timestamp in
+            // latency history.
+            let start = start.max(now.saturating_sub(HISTORY_RETENTION.as_millis() as i64));
+            state.last_snapshot_end = now;
+            // Swap the accumulated collectors out in O(1) so the per-bucket sort and snapshot
+            // building below run without holding the lock. Concurrent record_operation calls
+            // meanwhile start a fresh next-window bucket.
+            (std::mem::take(&mut state.collectors), start, now)
         };
-        state.last_snapshot_end = now;
 
         let mut metrics = Vec::new();
         let mut global_samples = BTreeMap::new();
-        for (operation, collector) in &mut state.collectors {
+        for (operation, mut collector) in collectors {
             if let Some((metric, samples)) = collector.take(operation.clone()) {
                 global_samples.insert(operation.clone(), samples);
                 metrics.push(metric);
             }
         }
+
+        let mut state = self.state.lock();
         state.snapshots.push_back(StoredSnapshot {
             snapshot: TelemetrySnapshot {
                 timestamp: start,
@@ -809,15 +870,21 @@ impl TelemetryInner {
         // the service-generation lock while invoking them: an API retry may need the write
         // side of this same lock to publish a global-cluster failover.
         drop(generation_guard);
-        self.process_commands(commands);
+        // Fence the batch to the generation that validated the response, not a re-read here:
+        // a rebind committed between the guard drop and this call must still retire the batch.
+        self.process_commands(commands, generation);
     }
 
-    fn process_commands(&self, commands: Vec<common::ClientCommand>) {
+    fn process_commands(&self, commands: Vec<common::ClientCommand>, expected_generation: u64) {
         let _command_guard = self.command_lock.lock();
-        self.process_commands_locked(commands);
+        self.process_commands_locked(commands, expected_generation);
     }
 
-    fn process_commands_locked(&self, commands: Vec<common::ClientCommand>) {
+    fn process_commands_locked(
+        &self,
+        commands: Vec<common::ClientCommand>,
+        expected_generation: u64,
+    ) {
         let (last_timestamp, mut max_timestamp) = {
             let state = self.state.lock();
             (state.last_command_timestamp, state.last_command_timestamp)
@@ -825,6 +892,11 @@ impl TelemetryInner {
         let has_persistent = commands.iter().any(|command| command.persistent);
 
         for command in &commands {
+            if self.services.read().generation != expected_generation {
+                // A rebind during the batch retires the remaining commands; the replacement
+                // transport redelivers them instead of running the retired batch here.
+                return;
+            }
             max_timestamp = max_timestamp.max(command.create_time);
             let local = ClientTelemetryCommand {
                 command_id: command.command_id.clone(),
@@ -841,29 +913,67 @@ impl TelemetryInner {
                     || state.executed_commands.contains_key(&command.command_id)
             };
             if already_executed {
-                self.state
-                    .lock()
+                let mut state = self.state.lock();
+                // A reply still awaiting delivery must not be re-queued: the next successful
+                // heartbeat already sends it, so repeated redeliveries before the ACK lands
+                // would otherwise duplicate (and amplify) the reply payload.
+                if state
                     .pending_replies
-                    .push_back(common::CommandReply {
+                    .iter()
+                    .any(|reply| reply.command_id == command.command_id)
+                {
+                    continue;
+                }
+                // Re-queue the command's recorded outcome so a fenced redelivery cannot turn an
+                // already-reported failure into a contradictory success ACK. The compact record
+                // replays a payload-less summary; the full payload was delivered with the first
+                // ACK.
+                let reply = match state.executed_commands.get(&command.command_id) {
+                    Some(executed) => common::CommandReply {
+                        command_id: command.command_id.clone(),
+                        success: executed.success,
+                        error_message: executed.error_message.clone(),
+                        payload: Vec::new(),
+                    },
+                    None => common::CommandReply {
                         command_id: command.command_id.clone(),
                         success: true,
                         error_message: String::new(),
                         payload: Vec::new(),
-                    });
+                    },
+                };
+                state.pending_replies.push_back(reply);
                 continue;
             }
 
-            let reply = self.handle_command(&local);
-            let mut state = self.state.lock();
-            state
-                .executed_commands
-                .insert(command.command_id.clone(), command.create_time);
-            state.pending_replies.push_back(common::CommandReply {
+            let mut reply = self.handle_command(&local);
+            // The incoming command ID is the protocol correlation key. Extension handlers
+            // control the result, but cannot redirect or drop its ACK.
+            reply.command_id = command.command_id.clone();
+            let proto_reply = common::CommandReply {
                 command_id: reply.command_id,
                 success: reply.success,
                 error_message: reply.error_message,
                 payload: reply.payload,
-            });
+            };
+            {
+                let mut state = self.state.lock();
+                state.executed_commands.insert(
+                    command.command_id.clone(),
+                    ExecutedCommand {
+                        create_time: command.create_time,
+                        success: proto_reply.success,
+                        error_message: proto_reply.error_message.clone(),
+                    },
+                );
+                state.pending_replies.push_back(proto_reply);
+            }
+            if self.services.read().generation != expected_generation {
+                // Preserve the completed command's ACK/executed marker so a redelivery cannot
+                // repeat its side effects, but leave the cursor/hash unchanged and do not run
+                // the retired endpoint's remaining commands.
+                return;
+            }
         }
 
         let mut state = self.state.lock();
@@ -871,7 +981,7 @@ impl TelemetryInner {
         // so the same command can be returned repeatedly at the cursor.
         state
             .executed_commands
-            .retain(|_, timestamp| *timestamp >= max_timestamp);
+            .retain(|_, executed| executed.create_time >= max_timestamp);
         if has_persistent {
             state.config_hash = calculate_config_hash(&commands);
         }
@@ -961,8 +1071,14 @@ impl TelemetryInner {
             state.config.enabled = enabled;
             applied.push("enabled");
         }
+        let mut interval_decreased = false;
         if let Some(heartbeat_ms) = heartbeat_ms {
-            state.config.heartbeat_interval = Duration::from_millis(heartbeat_ms as u64);
+            let interval = Duration::from_millis(heartbeat_ms as u64);
+            // A decrease must wake the heartbeat wait so a corrective interval push is applied
+            // immediately instead of after the current delay; an increase takes effect at the
+            // next natural wake anyway.
+            interval_decreased = interval < state.config.heartbeat_interval;
+            state.config.heartbeat_interval = interval;
             applied.push("heartbeat_interval_ms");
         }
         if let Some(sampling_rate) = sampling_rate {
@@ -970,6 +1086,9 @@ impl TelemetryInner {
             applied.push("sampling_rate");
         }
         drop(state);
+        if interval_decreased {
+            self.wake_notify.notify_one();
+        }
 
         let payload = serde_json::to_vec(&json!({
             "applied": applied,
@@ -1076,22 +1195,50 @@ impl TelemetryInner {
             errors.truncate(errors.len() / 2);
             payload = serde_json::to_vec(&errors).unwrap_or_default();
         }
-        while payload.len() > MAX_REPLY_PAYLOAD_SIZE && !errors[0].error_message.is_empty() {
-            // Halve at a UTF-8 boundary and re-encode. Basing the decision on the encoded
-            // JSON size also handles quotes/backslashes, which may expand on serialization.
-            let message = &mut errors[0].error_message;
-            let mut new_len = message.len() / 2;
-            while new_len > 0 && !message.is_char_boundary(new_len) {
-                new_len -= 1;
-            }
-            message.truncate(new_len);
-            if new_len > 0 {
-                message.push_str("...(truncated)");
-            }
-            payload = serde_json::to_vec(&errors).unwrap_or_default();
-        }
         if payload.len() > MAX_REPLY_PAYLOAD_SIZE {
-            return ClientTelemetryCommandReply::failure(&command.command_id, "response too large");
+            // A single oversized error is truncated across its truncatable fields instead of
+            // failing the reply (matching the C++/Java SDKs).
+            let mut single = serde_json::to_value(&errors[..1]).unwrap_or_default();
+            let mut payload = serde_json::to_vec(&single).unwrap_or_default();
+            while payload.len() > MAX_REPLY_PAYLOAD_SIZE {
+                let previous_size = payload.len();
+                {
+                    let array = single.as_array_mut().expect("single error array");
+                    let Some(object) = array[0].as_object_mut() else {
+                        break;
+                    };
+                    if truncate_longest_error_field(object).is_none() {
+                        break;
+                    }
+                }
+                payload = serde_json::to_vec(&single).unwrap_or_default();
+                if payload.len() >= previous_size {
+                    // Guarantee monotonic progress even for strings whose JSON escaping defeats
+                    // the best-effort prefix truncation.
+                    {
+                        let array = single.as_array_mut().expect("single error array");
+                        let Some(object) = array[0].as_object_mut() else {
+                            break;
+                        };
+                        if let Some(field) = longest_error_field(object) {
+                            if let Some(Value::String(value)) = object.get_mut(field) {
+                                value.clear();
+                            }
+                        }
+                    }
+                    payload = serde_json::to_vec(&single).unwrap_or_default();
+                    if payload.len() >= previous_size {
+                        break;
+                    }
+                }
+            }
+            if payload.len() > MAX_REPLY_PAYLOAD_SIZE {
+                return ClientTelemetryCommandReply::failure(
+                    &command.command_id,
+                    "response too large",
+                );
+            }
+            return ClientTelemetryCommandReply::success(&command.command_id, payload);
         }
         ClientTelemetryCommandReply::success(&command.command_id, payload)
     }
@@ -1209,6 +1356,51 @@ fn json_object(payload: &[u8]) -> Result<Map<String, Value>, String> {
         Value::Object(object) => Ok(object),
         _ => Err("command payload must be a JSON object".to_owned()),
     }
+}
+
+/// Returns the longest non-empty truncatable string field of a `show_errors` detail object.
+fn longest_error_field(detail: &Map<String, Value>) -> Option<&'static str> {
+    let (mut longest_field, mut longest_size) = (None, 0usize);
+    for field in TRUNCATABLE_ERROR_FIELDS {
+        if let Some(Value::String(value)) = detail.get(field) {
+            if value.len() > longest_size {
+                longest_field = Some(field);
+                longest_size = value.len();
+            }
+        }
+    }
+    if longest_size == 0 {
+        None
+    } else {
+        longest_field
+    }
+}
+
+/// Truncates the longest truncatable string field of a `show_errors` detail object at a UTF-8
+/// boundary, appending the truncation suffix. Returns `None` when no field can shrink further.
+fn truncate_longest_error_field(detail: &mut Map<String, Value>) -> Option<()> {
+    let field = longest_error_field(detail)?;
+    let value = match detail.get_mut(field) {
+        Some(Value::String(value)) => value,
+        _ => return None,
+    };
+    if value.len() > TRUNCATION_SUFFIX.len() + 1 {
+        let mut keep = value.len() / 2;
+        if keep > TRUNCATION_SUFFIX.len() {
+            keep -= TRUNCATION_SUFFIX.len();
+        } else {
+            keep = 0;
+        }
+        // Never split a multi-byte code point so the encoded payload stays valid UTF-8.
+        while keep > 0 && !value.is_char_boundary(keep) {
+            keep -= 1;
+        }
+        value.truncate(keep);
+        value.push_str(TRUNCATION_SUFFIX);
+    } else {
+        value.clear();
+    }
+    Some(())
 }
 
 fn optional_bool(object: &Map<String, Value>, key: &str) -> Result<Option<bool>, String> {
@@ -1401,14 +1593,25 @@ async fn heartbeat_loop(weak: Weak<TelemetryInner>) {
         let Some(inner) = weak.upgrade() else {
             return;
         };
+        inner.note_transport_generation();
         inner.create_snapshot();
         inner.send_heartbeat().await;
         let delay = inner.next_heartbeat_delay();
         let shutdown = inner.shutdown.clone();
+        let wake = Arc::clone(&inner.wake_notify);
         drop(inner);
-        tokio::select! {
-            _ = shutdown.cancelled() => return,
-            _ = tokio::time::sleep(delay) => {}
+        let mut remaining = delay;
+        loop {
+            let chunk = remaining.min(MAX_WAIT_CHUNK);
+            tokio::select! {
+                _ = shutdown.cancelled() => return,
+                _ = wake.notified() => break,
+                _ = tokio::time::sleep(chunk) => {}
+            }
+            if remaining <= chunk {
+                break;
+            }
+            remaining -= chunk;
         }
     }
 }
@@ -1593,7 +1796,14 @@ mod tests {
             interceptor,
             generation,
         )));
-        ClientTelemetry::new(config, services, database, database_explicit, &connect)
+        ClientTelemetry::new(
+            config,
+            services,
+            database,
+            database_explicit,
+            Arc::new(Notify::new()),
+            &connect,
+        )
     }
 
     fn manager(config: TelemetryConfig) -> ClientTelemetry {
@@ -1607,7 +1817,14 @@ mod tests {
         };
         let services = Arc::new(RwLock::new(service_bundle(channel, interceptor, 7)));
         let connect = ConnectConfig::new().telemetry(config.clone());
-        ClientTelemetry::new(config, services, database, database_explicit, &connect)
+        ClientTelemetry::new(
+            config,
+            services,
+            database,
+            database_explicit,
+            Arc::new(Notify::new()),
+            &connect,
+        )
     }
 
     fn command(command_id: &str, command_type: &str, payload: &[u8]) -> ClientTelemetryCommand {
@@ -1909,6 +2126,40 @@ mod tests {
             .ends_with("...(truncated)"));
     }
 
+    #[tokio::test]
+    async fn show_errors_truncates_oversized_auxiliary_fields_utf8_safely() {
+        let telemetry = manager(TelemetryConfig::new().error_max_count(1));
+        telemetry
+            .inner
+            .state
+            .lock()
+            .errors
+            .push_back(TelemetryErrorInfo {
+                timestamp: 1,
+                operation: "Search".to_owned(),
+                error_message: "boom".to_owned(),
+                collection: "€".repeat(400_000),
+                request_id: String::new(),
+            });
+
+        let reply = telemetry
+            .inner
+            .handle_command(&command("errors", "show_errors", &[]));
+        assert!(reply.success, "{}", reply.error_message);
+        assert!(reply.payload.len() <= MAX_REPLY_PAYLOAD_SIZE);
+        let decoded: Value = serde_json::from_slice(&reply.payload).expect("valid error JSON");
+        let errors = decoded.as_array().expect("error array");
+        assert_eq!(errors.len(), 1);
+        let collection = errors[0]["collection"]
+            .as_str()
+            .expect("collection truncated")
+            .to_owned();
+        assert!(collection.ends_with("...(truncated)"));
+        assert!(collection.is_char_boundary(collection.len()));
+        // The oversized auxiliary field is truncated; the error message is left intact.
+        assert_eq!(errors[0]["error_msg"].as_str(), Some("boom"));
+    }
+
     #[test]
     fn config_hash_is_order_independent_and_payload_sensitive() {
         let first = common::ClientCommand {
@@ -1955,14 +2206,27 @@ mod tests {
             persistent: false,
             target_scope: "global".to_owned(),
         };
-        telemetry.inner.process_commands(vec![command.clone()]);
-        telemetry.inner.process_commands(vec![command.clone()]);
-        telemetry.inner.process_commands(vec![command]);
+        let generation = telemetry.inner.services.read().generation;
+        telemetry
+            .inner
+            .process_commands(vec![command.clone()], generation);
+        telemetry
+            .inner
+            .process_commands(vec![command.clone()], generation);
+        telemetry.inner.process_commands(vec![command], generation);
         let state = telemetry.inner.state.lock();
         assert_eq!(executions.load(Ordering::SeqCst), 1);
-        assert_eq!(state.pending_replies.len(), 3);
+        // A reply still awaiting delivery is not re-queued on redelivery: the first ACK already
+        // carries it, so the pending queue holds exactly one entry until it is delivered.
+        assert_eq!(state.pending_replies.len(), 1);
         assert_eq!(state.last_command_timestamp, 42);
-        assert_eq!(state.executed_commands.get("same-ms"), Some(&42));
+        assert_eq!(
+            state
+                .executed_commands
+                .get("same-ms")
+                .map(|executed| executed.create_time),
+            Some(42)
+        );
     }
 
     #[tokio::test]
@@ -2292,7 +2556,12 @@ mod tests {
         telemetry.inner.send_heartbeat().await;
 
         assert_eq!(telemetry.inner.services.read().generation, 8);
-        assert_eq!(telemetry.inner.state.lock().last_command_timestamp, 1);
+        let state = telemetry.inner.state.lock();
+        // The handler's generation bump fences the rest of the batch: the completed command
+        // keeps its executed marker and queued reply, but the cursor does not advance.
+        assert_eq!(state.last_command_timestamp, 0);
+        assert!(state.executed_commands.contains_key("custom-command"));
+        assert_eq!(state.pending_replies.len(), 1);
     }
 
     #[tokio::test]
@@ -2329,5 +2598,343 @@ mod tests {
             telemetry.inner.next_heartbeat_delay(),
             Duration::from_millis(5)
         );
+    }
+
+    #[tokio::test]
+    async fn transport_rebound_wakes_heartbeat_and_resets_unsupported_backoff() {
+        let mut server = MockTelemetryServer::start(vec![
+            HeartbeatAction::Fail(Code::Unimplemented, "retired endpoint"),
+            HeartbeatAction::Respond(success_response(Vec::new())),
+        ])
+        .await;
+        // A long interval makes the UNIMPLEMENTED backoff far exceed the capture timeout,
+        // so only the rebind wake can produce the second probe in time.
+        let telemetry = transport_manager(
+            TelemetryConfig::new().heartbeat_interval(Duration::from_secs(60)),
+            &server.uri,
+            "analytics",
+            "root:Milvus",
+            7,
+        );
+        telemetry.start();
+        let first = server.next_capture().await;
+        assert!(first.request.client_info.is_some());
+        for _ in 0..100 {
+            if !telemetry.is_supported() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+        assert!(!telemetry.is_supported());
+
+        telemetry.inner.services.write().generation = 8;
+        telemetry.on_transport_rebound();
+        let second = server.next_capture().await;
+        assert!(second.request.client_info.is_some());
+        for _ in 0..100 {
+            if telemetry.is_supported() && telemetry.last_heartbeat_error().is_none() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+        assert!(telemetry.is_supported());
+        assert_eq!(telemetry.last_heartbeat_error(), None);
+        assert_eq!(
+            telemetry.inner.next_heartbeat_delay(),
+            Duration::from_secs(60)
+        );
+        telemetry.inner.shutdown.cancel();
+    }
+
+    #[tokio::test]
+    async fn generation_bump_alone_clears_the_unsupported_backoff() {
+        let telemetry = manager(TelemetryConfig::new().heartbeat_interval(Duration::from_secs(60)));
+        telemetry
+            .inner
+            .unsupported_streak
+            .store(1, Ordering::Relaxed);
+        assert_eq!(
+            telemetry.inner.next_heartbeat_delay(),
+            Duration::from_secs(120)
+        );
+        // A failover bumps the shared generation without calling on_transport_rebound directly
+        // (rebuild_to only fires the wake Notify); note_transport_generation is what actually
+        // clears the retired endpoint's UNIMPLEMENTED backoff.
+        telemetry.inner.services.write().generation += 1;
+        telemetry.inner.note_transport_generation();
+        assert!(telemetry.is_supported());
+        assert_eq!(
+            telemetry.inner.next_heartbeat_delay(),
+            Duration::from_secs(60)
+        );
+    }
+
+    #[tokio::test]
+    async fn interval_decrease_wakes_the_waiting_heartbeat() {
+        let mut server = MockTelemetryServer::start(vec![
+            HeartbeatAction::Respond(success_response(Vec::new())),
+            HeartbeatAction::Respond(success_response(Vec::new())),
+        ])
+        .await;
+        // A long interval makes the natural next probe far exceed the capture timeout, so only
+        // the interval-decrease wake can produce the second probe in time.
+        let telemetry = transport_manager(
+            TelemetryConfig::new().heartbeat_interval(Duration::from_secs(60)),
+            &server.uri,
+            "analytics",
+            "root:Milvus",
+            7,
+        );
+        telemetry.start();
+        let first = server.next_capture().await;
+        assert!(first.request.client_info.is_some());
+
+        // A server push_config decreasing the interval must wake the heartbeat wait so the
+        // corrective cadence is applied immediately rather than after the old delay.
+        let generation = telemetry.inner.services.read().generation;
+        telemetry.inner.process_commands(
+            vec![common::ClientCommand {
+                command_id: "speed-up".to_owned(),
+                command_type: "push_config".to_owned(),
+                payload: br#"{"heartbeat_interval_ms":100}"#.to_vec(),
+                create_time: 2,
+                persistent: true,
+                target_scope: "global".to_owned(),
+            }],
+            generation,
+        );
+        assert_eq!(
+            telemetry.config().heartbeat_interval,
+            Duration::from_millis(100)
+        );
+        let second = server.next_capture().await;
+        assert!(second.request.client_info.is_some());
+        telemetry.inner.shutdown.cancel();
+    }
+
+    #[tokio::test]
+    async fn redelivered_command_replays_original_reply() {
+        let telemetry = manager(TelemetryConfig::new());
+        telemetry.register_command_handler("flaky", |command| {
+            ClientTelemetryCommandReply::failure(&command.command_id, "boom")
+        });
+        let command = common::ClientCommand {
+            command_id: "flaky-1".to_owned(),
+            command_type: "flaky".to_owned(),
+            create_time: 5,
+            ..Default::default()
+        };
+        let generation = telemetry.inner.services.read().generation;
+        telemetry
+            .inner
+            .process_commands(vec![command.clone()], generation);
+        // Simulate the first ACK being delivered by a successful heartbeat before the server
+        // redelivers the command; the replay must preserve the failure outcome.
+        telemetry.inner.state.lock().pending_replies.clear();
+        telemetry.inner.process_commands(vec![command], generation);
+        let state = telemetry.inner.state.lock();
+        assert_eq!(state.pending_replies.len(), 1);
+        assert!(!state.pending_replies[0].success);
+        assert_eq!(state.pending_replies[0].error_message, "boom");
+    }
+
+    #[tokio::test]
+    async fn custom_handler_ack_is_canonicalized_to_the_incoming_command() {
+        let telemetry = manager(TelemetryConfig::new());
+        telemetry.register_command_handler("misdirected", |_| {
+            ClientTelemetryCommandReply::success("wrong-id", Vec::new())
+        });
+        let command = common::ClientCommand {
+            command_id: "correct-id".to_owned(),
+            command_type: "misdirected".to_owned(),
+            create_time: 3,
+            ..Default::default()
+        };
+        let generation = telemetry.inner.services.read().generation;
+        telemetry
+            .inner
+            .process_commands(vec![command.clone()], generation);
+        telemetry.inner.state.lock().pending_replies.clear();
+        telemetry.inner.process_commands(vec![command], generation);
+        let state = telemetry.inner.state.lock();
+        assert_eq!(state.pending_replies.len(), 1);
+        assert_eq!(state.pending_replies[0].command_id, "correct-id");
+    }
+
+    #[tokio::test]
+    async fn redelivery_before_ack_does_not_duplicate_the_pending_reply() {
+        let telemetry = manager(TelemetryConfig::new());
+        let executions = Arc::new(AtomicUsize::new(0));
+        let captured = Arc::clone(&executions);
+        telemetry.register_command_handler("custom", move |command| {
+            captured.fetch_add(1, Ordering::SeqCst);
+            ClientTelemetryCommandReply::success(&command.command_id, Vec::new())
+        });
+        let command = common::ClientCommand {
+            command_id: "dedup".to_owned(),
+            command_type: "custom".to_owned(),
+            create_time: 5,
+            ..Default::default()
+        };
+        let generation = telemetry.inner.services.read().generation;
+        telemetry
+            .inner
+            .process_commands(vec![command.clone()], generation);
+        telemetry
+            .inner
+            .process_commands(vec![command.clone()], generation);
+        telemetry.inner.process_commands(vec![command], generation);
+        let state = telemetry.inner.state.lock();
+        assert_eq!(executions.load(Ordering::SeqCst), 1);
+        assert_eq!(state.pending_replies.len(), 1);
+        assert_eq!(state.pending_replies[0].command_id, "dedup");
+    }
+
+    #[tokio::test]
+    async fn batch_is_fenced_when_generation_changes_mid_batch() {
+        let telemetry = manager(TelemetryConfig::new());
+        let executions = Arc::new(AtomicUsize::new(0));
+        let captured = Arc::clone(&executions);
+        let services = Arc::clone(&telemetry.inner.services);
+        telemetry.register_command_handler("rebinding", move |command| {
+            captured.fetch_add(1, Ordering::SeqCst);
+            services.write().generation += 1;
+            ClientTelemetryCommandReply::success(&command.command_id, Vec::new())
+        });
+        let later_executions = Arc::new(AtomicUsize::new(0));
+        let captured_later = Arc::clone(&later_executions);
+        telemetry.register_command_handler("later", move |command| {
+            captured_later.fetch_add(1, Ordering::SeqCst);
+            ClientTelemetryCommandReply::success(&command.command_id, Vec::new())
+        });
+        let first = common::ClientCommand {
+            command_id: "a".to_owned(),
+            command_type: "rebinding".to_owned(),
+            create_time: 1,
+            ..Default::default()
+        };
+        let second = common::ClientCommand {
+            command_id: "b".to_owned(),
+            command_type: "later".to_owned(),
+            create_time: 2,
+            ..Default::default()
+        };
+        let generation = telemetry.inner.services.read().generation;
+        telemetry
+            .inner
+            .process_commands(vec![first, second], generation);
+        let state = telemetry.inner.state.lock();
+        assert_eq!(executions.load(Ordering::SeqCst), 1);
+        assert_eq!(later_executions.load(Ordering::SeqCst), 0);
+        assert_eq!(state.pending_replies.len(), 1);
+        assert_eq!(state.last_command_timestamp, 0);
+        assert!(!state.executed_commands.contains_key("b"));
+    }
+
+    #[tokio::test]
+    async fn batch_uses_the_validated_generation_not_a_re_read() {
+        // The fence anchors to the generation the response was validated against, not a fresh
+        // read at processing time: a rebind committed before processing must still retire the
+        // batch.
+        let telemetry = manager(TelemetryConfig::new());
+        let executions = Arc::new(AtomicUsize::new(0));
+        let captured = Arc::clone(&executions);
+        telemetry.register_command_handler("custom", move |command| {
+            captured.fetch_add(1, Ordering::SeqCst);
+            ClientTelemetryCommandReply::success(&command.command_id, Vec::new())
+        });
+        // A rebind committed after the response was validated: current generation is 8 while the
+        // validated generation was 7.
+        telemetry.inner.services.write().generation = 8;
+        let command = common::ClientCommand {
+            command_id: "stale-batch".to_owned(),
+            command_type: "custom".to_owned(),
+            create_time: 9,
+            ..Default::default()
+        };
+        telemetry.inner.process_commands(vec![command], 7);
+        let state = telemetry.inner.state.lock();
+        assert_eq!(executions.load(Ordering::SeqCst), 0);
+        assert_eq!(state.pending_replies.len(), 0);
+        assert_eq!(state.last_command_timestamp, 0);
+    }
+
+    #[tokio::test]
+    async fn batch_fence_applies_at_generation_zero() {
+        // Generation 0 is a legitimate initial generation; the fence must not be gated on it.
+        let telemetry = manager(TelemetryConfig::new());
+        telemetry.inner.services.write().generation = 0;
+        let executions = Arc::new(AtomicUsize::new(0));
+        let captured = Arc::clone(&executions);
+        let services = Arc::clone(&telemetry.inner.services);
+        telemetry.register_command_handler("rebinding", move |command| {
+            captured.fetch_add(1, Ordering::SeqCst);
+            services.write().generation = 1;
+            ClientTelemetryCommandReply::success(&command.command_id, Vec::new())
+        });
+        let later_executions = Arc::new(AtomicUsize::new(0));
+        let captured_later = Arc::clone(&later_executions);
+        telemetry.register_command_handler("later", move |command| {
+            captured_later.fetch_add(1, Ordering::SeqCst);
+            ClientTelemetryCommandReply::success(&command.command_id, Vec::new())
+        });
+        let first = common::ClientCommand {
+            command_id: "a".to_owned(),
+            command_type: "rebinding".to_owned(),
+            create_time: 1,
+            ..Default::default()
+        };
+        let second = common::ClientCommand {
+            command_id: "b".to_owned(),
+            command_type: "later".to_owned(),
+            create_time: 2,
+            ..Default::default()
+        };
+        telemetry.inner.process_commands(vec![first, second], 0);
+        let state = telemetry.inner.state.lock();
+        assert_eq!(executions.load(Ordering::SeqCst), 1);
+        assert_eq!(later_executions.load(Ordering::SeqCst), 0);
+        assert_eq!(state.pending_replies.len(), 1);
+        assert_eq!(state.last_command_timestamp, 0);
+    }
+
+    #[tokio::test]
+    async fn snapshot_window_start_is_capped_after_a_long_gap() {
+        let telemetry = manager(TelemetryConfig::new().enabled(true));
+        let now = now_millis();
+        {
+            let mut state = telemetry.inner.state.lock();
+            state.last_snapshot_end = now - (HISTORY_RETENTION.as_millis() as i64) * 2;
+        }
+        telemetry.inner.create_snapshot();
+        let state = telemetry.inner.state.lock();
+        let snapshot = state.snapshots.back().expect("snapshot").snapshot.clone();
+        assert!(snapshot.timestamp >= snapshot.end_time - HISTORY_RETENTION.as_millis() as i64);
+    }
+
+    #[tokio::test]
+    async fn huge_heartbeat_interval_survives_wait_and_responds_to_rebind() {
+        let mut server = MockTelemetryServer::start(vec![
+            HeartbeatAction::Respond(success_response(Vec::new())),
+            HeartbeatAction::Respond(success_response(Vec::new())),
+        ])
+        .await;
+        // A far-beyond-clock interval must be waited in bounded chunks rather than overflowing
+        // the sleep deadline and terminating the heartbeat task.
+        let telemetry = transport_manager(
+            TelemetryConfig::new().heartbeat_interval(Duration::from_secs(u64::MAX / 2)),
+            &server.uri,
+            "analytics",
+            "root:Milvus",
+            7,
+        );
+        telemetry.start();
+        let first = server.next_capture().await;
+        assert!(first.request.client_info.is_some());
+        telemetry.inner.services.write().generation = 8;
+        telemetry.on_transport_rebound();
+        let second = server.next_capture().await;
+        assert!(second.request.client_info.is_some());
+        telemetry.inner.shutdown.cancel();
     }
 }

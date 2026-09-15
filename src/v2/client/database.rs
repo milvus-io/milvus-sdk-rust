@@ -155,6 +155,7 @@ mod tests {
     use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
     use std::time::Duration;
+    use tokio::sync::Notify;
     use tonic::transport::Endpoint;
 
     fn client() -> ClientV2 {
@@ -178,6 +179,7 @@ mod tests {
             Arc::clone(&service),
             Arc::clone(&database),
             Arc::clone(&database_explicit),
+            Arc::new(Notify::new()),
             &config,
         );
         ClientV2 {

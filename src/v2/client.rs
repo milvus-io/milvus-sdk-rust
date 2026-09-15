@@ -52,6 +52,7 @@ use std::future::Future;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
+use tokio::sync::Notify;
 use tonic::codegen::InterceptedService;
 use tonic::metadata::MetadataValue;
 use tonic::service::Interceptor;
@@ -322,6 +323,11 @@ impl ClientV2 {
         validate_client_identity(&param)?;
 
         let shared_config = Arc::new(RwLock::new(param.clone()));
+        // Shared with the telemetry heartbeat loop. Any wake source - a channel reset or
+        // global-cluster failover, or a server-pushed heartbeat-interval decrease - interrupts
+        // the heartbeat wait so the replacement transport or corrective cadence takes effect
+        // immediately.
+        let wake_notify = Arc::new(Notify::new());
         let (service, database, cache_endpoint, global_cluster) = if is_global_endpoint(&param.uri)
         {
             let topology = global_cluster::fetch_topology(&param.uri, &param).await?;
@@ -349,6 +355,7 @@ impl ClientV2 {
                 Arc::clone(&database_explicit),
                 Arc::clone(&service),
                 topology,
+                Arc::clone(&wake_notify),
             ));
             global.start_refresh();
             (service, database, cache_endpoint, Some(global))
@@ -375,6 +382,7 @@ impl ClientV2 {
             Arc::clone(&service),
             Arc::clone(&database),
             Arc::clone(&database_explicit),
+            wake_notify,
             &param,
         );
         telemetry.start();
@@ -447,6 +455,7 @@ impl ClientV2 {
         *self.connect_config.write() = config;
         *self.service.write() = services;
         self.telemetry.update_username(username);
+        self.telemetry.on_transport_rebound();
         Ok(())
     }
 
@@ -917,6 +926,7 @@ mod retry_tests {
             Arc::clone(&service),
             Arc::clone(&database),
             Arc::clone(&database_explicit),
+            Arc::new(Notify::new()),
             &config,
         );
         ClientV2 {
