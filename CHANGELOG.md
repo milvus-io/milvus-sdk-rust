@@ -1,5 +1,28 @@
 # Changelog
 
+## milvus-sdk-rust 3.0.2 (2026-09-16)
+
+### Feature
+
+- Support `bloom_match` and `roaring_match` membership-filter blobs: new
+  `milvus::v2::bloom_filter` (MBF1 split-block Bloom filter) and
+  `milvus::v2::roaring_bitmap` (portable Roaring64) builders, wired into V2
+  query, search, hybrid-search, and delete requests as byte-valued filter
+  template parameters
+- Add `doc/guide/v2/` quick-start and concepts guides, exposed through the
+  crate-level rustdoc
+
+### Improvement
+
+- Harden client telemetry performance and control flow: snapshot creation now
+  swaps collectors and sorts metric buckets outside the heartbeat lock, keeping
+  `record_operation` off the DML/DQL critical path
+
+### Bug
+
+- Preserve binary16 subnormals and signed zero during f32-to-f16 conversion, so
+  Float16/bf16 vectors round-trip without lossy collapse of small magnitudes
+
 ## milvus-sdk-rust 3.0.1 (2026-09-09)
 
 ### Feature
