@@ -652,7 +652,7 @@ impl HasCollectionResponse {
         }
     }
 
-    /// Returns the exists.
+    /// Returns whether the collection exists.
     pub fn exists(&self) -> bool {
         self.0
     }

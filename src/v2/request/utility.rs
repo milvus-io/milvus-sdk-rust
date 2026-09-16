@@ -214,6 +214,13 @@ impl FlushRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `collection_names` must contain at least one value
+    /// - `collection_names` must not contain empty values
+    /// - `wait_flushed_ms`: must not be negative
     pub fn build(self) -> Result<FlushRequest> {
         required_slice("collection_names", &self.value.collection_names)?;
         non_empty_strings("collection_names", &self.value.collection_names)?;
@@ -304,6 +311,11 @@ impl FlushAllRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `wait_flushed_ms`: must not be negative
     pub fn build(self) -> Result<FlushAllRequest> {
         if self.value.wait_flushed_ms < 0 {
             return Err(Error::validation(
@@ -481,6 +493,11 @@ impl ListPersistentSegmentsRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - the configured values fail `validate_collection_target` validation
     pub fn build(self) -> Result<ListPersistentSegmentsRequest> {
         validate_collection_target(
             self.value.database_name.as_deref(),
@@ -562,6 +579,11 @@ impl ListQuerySegmentsRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - the configured values fail `validate_collection_target` validation
     pub fn build(self) -> Result<ListQuerySegmentsRequest> {
         validate_collection_target(
             self.value.database_name.as_deref(),
@@ -721,6 +743,12 @@ impl CompactRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `target_size`: must not be negative
+    /// - the configured values fail `validate_collection_target` validation
     pub fn build(self) -> Result<CompactRequest> {
         validate_collection_target(
             self.value.database_name.as_deref(),
@@ -861,6 +889,11 @@ impl OptimizeRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - the configured values fail `validate_collection_target` validation
     pub fn build(self) -> Result<OptimizeRequest> {
         validate_collection_target(
             self.value.database_name.as_deref(),
@@ -929,6 +962,11 @@ impl GetCompactionStateRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `compaction_id` must be greater than zero
     pub fn build(self) -> Result<GetCompactionStateRequest> {
         positive_i64("compaction_id", self.value.compaction_id)?;
         Ok(self.value)
@@ -994,6 +1032,11 @@ impl GetCompactionPlansRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `compaction_id` must be greater than zero
     pub fn build(self) -> Result<GetCompactionPlansRequest> {
         positive_i64("compaction_id", self.value.compaction_id)?;
         Ok(self.value)
@@ -1162,6 +1205,15 @@ impl RunAnalyzerRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - when `analyzer_params` is not provided, `collection_name` must not be empty
+    /// - when `analyzer_params` is not provided, `field_name` must not be empty
+    /// - `texts` must contain at least one value
+    /// - `analyzer_names` must not contain empty values
+    /// - `analyzer_params`: must be a JSON object
     pub fn build(self) -> Result<RunAnalyzerRequest> {
         required_slice("texts", &self.value.texts)?;
         if let Some(params) = &self.value.analyzer_params {
@@ -1290,6 +1342,11 @@ impl RefreshExternalCollectionRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `collection_name` must not be empty
     pub fn build(self) -> Result<RefreshExternalCollectionRequest> {
         required("collection_name", &self.value.collection_name)?;
         Ok(self.value)
@@ -1354,6 +1411,11 @@ impl GetRefreshExternalCollectionProgressRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `job_id` must be greater than zero
     pub fn build(self) -> Result<GetRefreshExternalCollectionProgressRequest> {
         positive_i64("job_id", self.value.job_id)?;
         Ok(self.value)
@@ -1516,6 +1578,12 @@ impl AddFileResourceRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `name` must not be empty
+    /// - `path` must not be empty
     pub fn build(self) -> Result<AddFileResourceRequest> {
         required("name", &self.value.name)?;
         required("path", &self.value.path)?;
@@ -1583,6 +1651,11 @@ impl RemoveFileResourceRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `name` must not be empty
     pub fn build(self) -> Result<RemoveFileResourceRequest> {
         required("name", &self.value.name)?;
         Ok(self.value)
@@ -1717,14 +1790,6 @@ mod builder_value_tests {
                 .into_proto(),
             milvus::CheckHealthRequest::default()
         );
-    }
-
-    #[test]
-    fn check_health_request_populated_values() {
-        let value = CheckHealthRequest::builder()
-            .build()
-            .expect("valid request");
-        assert_eq!(value.into_proto(), milvus::CheckHealthRequest::default());
     }
 
     #[test]

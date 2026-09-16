@@ -34,6 +34,23 @@ impl ClientV2 {
     /// creates those indexes, and starts loading the collection as asynchronous follow-up
     /// operations. The call therefore does not wait for index-building or loading completion. A
     /// successful lifecycle change invalidates the client's cached collection description.
+    ///
+    /// ```
+    /// # use milvus::v2::prelude::*;
+    /// # use milvus::v2::error::Result;
+    /// # async fn example(client: &ClientV2) -> Result<()> {
+    /// let request = CreateCollectionRequest::builder()
+    ///     .collection_name("books")
+    ///     .schema(
+    ///         CollectionSchema::new()
+    ///             .add_field(FieldSchema::new().name("id").data_type(DataType::Int64).primary_key(true))
+    ///             .add_field(FieldSchema::new().name("embedding").data_type(DataType::FloatVector).dimension(4)),
+    ///     )
+    ///     .build()?;
+    /// client.create_collection(request).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn create_collection(
         &self,
         request: impl Into<request::collection::CreateCollectionRequest>,
@@ -76,6 +93,18 @@ impl ClientV2 {
     }
 
     /// Checks whether a collection exists in the request's database.
+    ///
+    /// ```
+    /// # use milvus::v2::prelude::*;
+    /// # use milvus::v2::error::Result;
+    /// # async fn example(client: &ClientV2) -> Result<()> {
+    /// let response = client
+    ///     .has_collection(HasCollectionRequest::builder().collection_name("books").build()?)
+    ///     .await?;
+    /// println!("exists: {}", response.exists());
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn has_collection(
         &self,
         request: request::collection::HasCollectionRequest,
@@ -90,6 +119,17 @@ impl ClientV2 {
     ///
     /// This is destructive and cannot be undone. The collection's schema and DML timestamp cache
     /// entries are removed after the server confirms success.
+    ///
+    /// ```
+    /// # use milvus::v2::prelude::*;
+    /// # use milvus::v2::error::Result;
+    /// # async fn example(client: &ClientV2) -> Result<()> {
+    /// client
+    ///     .drop_collection(DropCollectionRequest::builder().collection_name("books").build()?)
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn drop_collection(
         &self,
         request: request::collection::DropCollectionRequest,
@@ -113,6 +153,17 @@ impl ClientV2 {
     /// With `sync = false`, the method returns after the load request is accepted. With `sync =
     /// true`, it polls load state until success or the request's operation timeout expires; that
     /// timeout covers the polling workflow, not only one RPC attempt.
+    ///
+    /// ```
+    /// # use milvus::v2::prelude::*;
+    /// # use milvus::v2::error::Result;
+    /// # async fn example(client: &ClientV2) -> Result<()> {
+    /// client
+    ///     .load_collection(LoadCollectionRequest::builder().collection_name("books").build()?)
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn load_collection(
         &self,
         mut request: request::collection::LoadCollectionRequest,
@@ -258,6 +309,17 @@ impl ClientV2 {
     }
 
     /// Releases a collection's loaded data from query nodes while retaining its definition.
+    ///
+    /// ```
+    /// # use milvus::v2::prelude::*;
+    /// # use milvus::v2::error::Result;
+    /// # async fn example(client: &ClientV2) -> Result<()> {
+    /// client
+    ///     .release_collection(ReleaseCollectionRequest::builder().collection_name("books").build()?)
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn release_collection(
         &self,
         request: request::collection::ReleaseCollectionRequest,
@@ -276,6 +338,22 @@ impl ClientV2 {
     ///
     /// This is a direct metadata read; schema-aware DML operations maintain their own shared cache
     /// and should not be assumed to populate it from this call.
+    ///
+    /// ```
+    /// # use milvus::v2::prelude::*;
+    /// # use milvus::v2::error::Result;
+    /// # async fn example(client: &ClientV2) -> Result<()> {
+    /// let response = client
+    ///     .describe_collection(DescribeCollectionRequest::builder().collection_name("books").build()?)
+    ///     .await?;
+    /// let description = response.description();
+    /// println!("collection {}", description.get_collection_name());
+    /// for field in description.get_field_names() {
+    ///     println!("  field {field}");
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn describe_collection(
         &self,
         request: request::collection::DescribeCollectionRequest,
@@ -287,6 +365,20 @@ impl ClientV2 {
     }
 
     /// Lists collections visible in the selected database.
+    ///
+    /// ```
+    /// # use milvus::v2::prelude::*;
+    /// # use milvus::v2::error::Result;
+    /// # async fn example(client: &ClientV2) -> Result<()> {
+    /// let response = client
+    ///     .list_collections(ListCollectionsRequest::builder().build()?)
+    ///     .await?;
+    /// for name in response.collection_names() {
+    ///     println!("{name}");
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn list_collections(
         &self,
         request: request::collection::ListCollectionsRequest,
@@ -297,6 +389,18 @@ impl ClientV2 {
     }
 
     /// Returns collection statistics, currently including the server-reported row count.
+    ///
+    /// ```
+    /// # use milvus::v2::prelude::*;
+    /// # use milvus::v2::error::Result;
+    /// # async fn example(client: &ClientV2) -> Result<()> {
+    /// let response = client
+    ///     .get_collection_stats(GetCollectionStatsRequest::builder().collection_name("books").build()?)
+    ///     .await?;
+    /// println!("row count: {:?}", response.row_count());
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_collection_stats(
         &self,
         request: request::collection::GetCollectionStatsRequest,

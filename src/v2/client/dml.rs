@@ -29,6 +29,22 @@ impl ClientV2 {
     /// resolves the effective database, fills the schema timestamp, and updates the session
     /// timestamp cache after a successful insert. Because an insert is non-idempotent, ambiguous
     /// transport failures are not replayed automatically.
+    ///
+    /// ```
+    /// # use milvus::v2::prelude::*;
+    /// # use milvus::v2::error::Result;
+    /// # async fn example(client: &ClientV2) -> Result<()> {
+    /// let request = InsertRequest::builder()
+    ///     .collection_name("books")
+    ///     .columns(vec![
+    ///         FieldData::Int64 { name: "id".into(), values: vec![1, 2] },
+    ///         FieldData::FloatVector { name: "vector".into(), values: vec![vec![0.1, 0.2], vec![0.3, 0.4]] },
+    ///     ])
+    ///     .build()?;
+    /// let response = client.insert(request).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn insert(
         &self,
         request: request::dml::InsertRequest,
@@ -187,6 +203,19 @@ impl ClientV2 {
     /// The request must provide exactly one selection form. A successful delete updates the
     /// collection's session timestamp so subsequent Session-consistency reads observe the change.
     /// Delete is non-idempotent; the client does not replay an ambiguous mutation automatically.
+    ///
+    /// ```
+    /// # use milvus::v2::prelude::*;
+    /// # use milvus::v2::error::Result;
+    /// # async fn example(client: &ClientV2) -> Result<()> {
+    /// let request = DeleteRequest::builder()
+    ///     .collection_name("books")
+    ///     .filter("id in [1, 2, 3]")
+    ///     .build()?;
+    /// client.delete(request).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn delete(
         &self,
         request: request::dml::DeleteRequest,

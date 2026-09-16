@@ -646,21 +646,21 @@ impl FunctionScore {
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum SearchVectors {
-    /// Represents the Float case.
+    /// Dense vectors of 32-bit floats, one slice per query.
     Float(Vec<Vec<f32>>),
-    /// Represents the Binary case.
+    /// Binary vectors stored as packed bytes, one slice per query.
     Binary(Vec<Vec<u8>>),
-    /// Represents the Float16 case.
+    /// Half-precision float vectors, one slice per query.
     Float16(Vec<Vec<u16>>),
-    /// Represents the BFloat16 case.
+    /// BFloat16 vectors, one slice per query.
     BFloat16(Vec<Vec<u16>>),
-    /// Represents the SparseFloat case.
+    /// Sparse vectors, one per query.
     SparseFloat(Vec<SparseVector>),
-    /// Represents the Int8 case.
+    /// Int8 vectors, one slice per query.
     Int8(Vec<Vec<i8>>),
-    /// Represents the EmbeddedText case.
+    /// Plain text inputs embedded by the server for search.
     EmbeddedText(Vec<String>),
-    /// Represents the EmbeddingLists case.
+    /// Struct-vector inputs, each carrying its own list of embeddings.
     EmbeddingLists(Vec<EmbeddingList>),
 }
 
@@ -720,9 +720,9 @@ impl EmbeddingList {
 #[non_exhaustive]
 pub enum HighlightType {
     #[default]
-    /// Represents the Lexical case.
+    /// Lexical (BM25) highlighting based on term matching.
     Lexical,
-    /// Represents the Semantic case.
+    /// Semantic highlighting based on embedding similarity.
     Semantic,
 }
 
@@ -1477,6 +1477,21 @@ impl QueryResults {
     ///
     /// The iterator reads values directly from the column-oriented result data
     /// without materializing JSON maps for every row.
+    ///
+    /// ```
+    /// # use milvus::v2::prelude::*;
+    /// # use milvus::v2::error::Result;
+    /// # fn example() -> Result<()> {
+    /// let results = QueryResults::new().output_fields(vec![
+    ///     FieldData::Int64 { name: "id".into(), values: vec![1, 2] },
+    ///     FieldData::VarChar { name: "title".into(), values: vec!["a".into(), "b".into()] },
+    /// ]);
+    /// for row in results.rows()? {
+    ///     println!("{} {}", row.get_i64("id")?, row.get_str("title")?);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn rows(&self) -> Result<ResultRowIter<'_>> {
         let row_count = output_row_count(&self.output_fields)?;
         Ok(ResultRowIter {
@@ -1497,6 +1512,15 @@ impl QueryResults {
     /// Use this when rows must be owned, mutated, serialized, or passed to a
     /// JSON-oriented API. Prefer [`Self::rows`] for borrowing typed access
     /// without allocating a map and JSON values for every row.
+    ///
+    /// # Returns
+    ///
+    /// One [`EntityRow`] per result row, in server order.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Validation`] when the output fields have inconsistent
+    /// row counts or a requested output field is missing.
     pub fn get_output_rows(&self) -> Result<Vec<EntityRow>> {
         let row_count = output_row_count(&self.output_fields)?;
         (0..row_count)
@@ -2953,19 +2977,19 @@ impl AggregationBucket {
         self
     }
 
-    /// Sets the number of documents in this bucket and returns the updated value.
+    /// Sets the number of retained ANN candidates in this bucket and returns the updated value.
     pub fn count(mut self, value: i64) -> Self {
         self.count = value;
         self
     }
 
-    /// Sets the number of documents in this bucket and returns this value for further mutation.
+    /// Sets the number of retained ANN candidates in this bucket and returns this value for further mutation.
     pub fn set_count(&mut self, value: i64) -> &mut Self {
         self.count = value;
         self
     }
 
-    /// Returns the number of documents in this bucket.
+    /// Returns the number of retained ANN candidates in this bucket.
     pub fn get_count(&self) -> i64 {
         self.count
     }
@@ -3974,6 +3998,29 @@ mod result_row_tests {
 
         assert!(results.get_output_rows().is_err());
         assert!(results.rows().is_err());
+    }
+
+    #[test]
+    fn json_result_kind_describes_every_json_value_variant() {
+        let values = [
+            serde_json::Value::Null,
+            serde_json::Value::Bool(true),
+            serde_json::Value::Number(serde_json::Number::from(1)),
+            serde_json::Value::String("text".into()),
+            serde_json::Value::Array(vec![serde_json::Value::Null]),
+            serde_json::Value::Object(serde_json::Map::new()),
+        ];
+        let expected = [
+            "null",
+            "boolean",
+            "number",
+            "string",
+            "JSON array",
+            "JSON object",
+        ];
+        for (value, expected) in values.iter().zip(expected.iter()) {
+            assert_eq!(ResultValue::Json(value).kind(), *expected);
+        }
     }
 }
 

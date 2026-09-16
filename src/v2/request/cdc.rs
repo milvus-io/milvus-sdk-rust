@@ -216,6 +216,12 @@ impl GetReplicateInfoRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `source_cluster_id` must not be empty
+    /// - `target_physical_channel` must not be empty
     pub fn build(self) -> Result<GetReplicateInfoRequest> {
         required("source_cluster_id", &self.value.source_cluster_id)?;
         required(
@@ -346,6 +352,14 @@ impl DumpMessagesRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `physical_channel` must not be empty
+    /// - `start_message_id.id` must not be empty
+    /// - `start_message_id.wal_name`: must be specified
+    /// - `end_time_tick`: must be zero or greater than or equal to start_time_tick
     pub fn build(self) -> Result<DumpMessagesRequest> {
         required("physical_channel", &self.value.physical_channel)?;
         required("start_message_id.id", self.value.start_message_id.get_id())?;
@@ -410,17 +424,6 @@ mod builder_value_tests {
                 .build()
                 .expect("valid request")
                 .into_proto(),
-            milvus::GetReplicateConfigurationRequest::default()
-        );
-    }
-
-    #[test]
-    fn get_replicate_configuration_request_populated_values() {
-        let value = GetReplicateConfigurationRequest::builder()
-            .build()
-            .expect("valid request");
-        assert_eq!(
-            value.into_proto(),
             milvus::GetReplicateConfigurationRequest::default()
         );
     }

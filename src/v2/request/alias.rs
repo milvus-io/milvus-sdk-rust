@@ -108,6 +108,12 @@ impl CreateAliasRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `collection_name` must not be empty
+    /// - `alias` must not be empty
     pub fn build(self) -> Result<CreateAliasRequest> {
         required("collection_name", &self.value.collection_name)?;
         required("alias", &self.value.alias)?;
@@ -203,6 +209,12 @@ impl AlterAliasRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `collection_name` must not be empty
+    /// - `alias` must not be empty
     pub fn build(self) -> Result<AlterAliasRequest> {
         required("collection_name", &self.value.collection_name)?;
         required("alias", &self.value.alias)?;
@@ -284,6 +296,11 @@ impl DropAliasRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `alias` must not be empty
     pub fn build(self) -> Result<DropAliasRequest> {
         required("alias", &self.value.alias)?;
         Ok(self.value)
@@ -364,6 +381,11 @@ impl DescribeAliasRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `alias` must not be empty
     pub fn build(self) -> Result<DescribeAliasRequest> {
         required("alias", &self.value.alias)?;
         Ok(self.value)

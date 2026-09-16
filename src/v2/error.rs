@@ -71,19 +71,19 @@ impl ServerError {
 #[non_exhaustive]
 pub enum ConversionError {
     #[error("failed to encode protobuf data: {0}")]
-    /// Represents the ProtobufEncode case.
+    /// Encoding SDK values into protobuf failed.
     ProtobufEncode(#[source] prost::EncodeError),
 
     #[error("failed to decode protobuf data: {0}")]
-    /// Represents the ProtobufDecode case.
+    /// Decoding protobuf data into SDK values failed.
     ProtobufDecode(#[source] prost::DecodeError),
 
     #[error("JSON conversion failed: {0}")]
-    /// Represents the Json case.
+    /// JSON serialization or deserialization failed.
     Json(#[source] Arc<serde_json::Error>),
 
     #[error("{0}")]
-    /// Represents the Value case.
+    /// A generic value conversion failed with the given reason.
     Value(String),
 }
 
@@ -126,39 +126,39 @@ impl ValidationError {
 #[non_exhaustive]
 pub enum Error {
     #[error("gRPC error: {0}")]
-    /// Represents the Grpc case.
+    /// A transport-level gRPC failure occurred.
     Grpc(#[from] GrpcError),
 
     #[error(transparent)]
-    /// Represents the Server case.
+    /// The server rejected the request with an error status.
     Server(#[from] ServerError),
 
     #[error(transparent)]
-    /// Represents the Conversion case.
+    /// Converting SDK, JSON, or protobuf values failed.
     Conversion(#[from] ConversionError),
 
     #[error(transparent)]
-    /// Represents the Validation case.
+    /// A request or SDK value failed local validation.
     Validation(#[from] ValidationError),
 
     #[error(transparent)]
-    /// Represents the BulkImport case.
+    /// The bulk-import REST client failed.
     BulkImport(#[from] BulkImportError),
 
     #[error("operation timed out: {0}")]
-    /// Represents the Timeout case.
+    /// The operation exceeded its configured time limit.
     Timeout(String),
 
     #[error("malformed server response: {0}")]
-    /// Represents the MalformedResponse case.
+    /// The server returned a response that could not be decoded.
     MalformedResponse(String),
 
     #[error("operation cancelled: {0}")]
-    /// Represents the Cancelled case.
+    /// The operation was cancelled before completing.
     Cancelled(String),
 
     #[error("RPC retry exhausted after {attempts} attempts: {source}")]
-    /// Represents the RetryExhausted case.
+    /// All configured retry attempts were exhausted.
     RetryExhausted {
         /// Number of transport or server attempts that were made.
         attempts: u32,
@@ -168,7 +168,7 @@ pub enum Error {
     },
 
     #[error("{0}")]
-    /// Represents the Unexpected case.
+    /// An unexpected internal failure occurred.
     Unexpected(String),
 }
 

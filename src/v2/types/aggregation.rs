@@ -36,15 +36,15 @@ const SPECIAL_ORDER_KEYS: [&str; 2] = ["_count", "_key"];
 #[non_exhaustive]
 pub enum MetricOp {
     #[default]
-    /// Represents the Avg case.
+    /// Average of the grouped values.
     Avg,
-    /// Represents the Sum case.
+    /// Sum of the grouped values.
     Sum,
-    /// Represents the Count case.
+    /// Number of retained candidates in each group (skips `NULL` values when a field is specified).
     Count,
-    /// Represents the Min case.
+    /// Minimum of the grouped values.
     Min,
-    /// Represents the Max case.
+    /// Maximum of the grouped values.
     Max,
 }
 
@@ -68,10 +68,10 @@ impl MetricOp {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum AggDirection {
-    /// Represents the Asc case.
+    /// Sort the aggregation buckets in ascending order.
     Asc,
     #[default]
-    /// Represents the Desc case.
+    /// Sort the aggregation buckets in descending order.
     Desc,
 }
 

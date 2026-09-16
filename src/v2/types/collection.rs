@@ -32,15 +32,15 @@ const MAX_ARRAY_CAPACITY: u32 = 4_096;
 #[non_exhaustive]
 pub enum LoadState {
     #[default]
-    /// Represents the NotExist case.
+    /// The collection does not exist on the server.
     NotExist,
-    /// Represents the NotLoad case.
+    /// The collection exists but its data is not loaded.
     NotLoad,
-    /// Represents the Loading case.
+    /// The collection is currently being loaded.
     Loading,
-    /// Represents the Loaded case.
+    /// The collection is fully loaded and available for queries.
     Loaded,
-    /// Represents the Unknown case.
+    /// The load state could not be determined.
     Unknown,
 }
 
@@ -63,21 +63,21 @@ impl LoadState {
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum DefaultValue {
-    /// Represents the Bool case.
+    /// Boolean default value.
     Bool(bool),
-    /// Represents the Int32 case.
+    /// 32-bit integer default value.
     Int32(i32),
-    /// Represents the Int64 case.
+    /// 64-bit integer default value.
     Int64(i64),
-    /// Represents the Float case.
+    /// 32-bit floating-point default value.
     Float(f32),
-    /// Represents the Double case.
+    /// 64-bit floating-point default value.
     Double(f64),
-    /// Represents the String case.
+    /// UTF-8 string default value.
     String(String),
-    /// Represents the Bytes case.
+    /// Raw byte default value.
     Bytes(Vec<u8>),
-    /// Represents the TimestampTz case.
+    /// Timestamp-with-timezone default value (Unix milliseconds).
     TimestampTz(i64),
 }
 
@@ -147,6 +147,17 @@ impl DefaultValue {
 // FieldSchema
 ///////////////////////////////////////////////////////////////////////////////
 /// Schema definition for a collection field.
+///
+/// ```
+/// use milvus::v2::types::{DataType, FieldSchema};
+///
+/// let field = FieldSchema::new()
+///     .name("embedding")
+///     .data_type(DataType::FloatVector)
+///     .dimension(128);
+/// assert_eq!(field.get_name(), "embedding");
+/// assert_eq!(field.get_dimension(), 128);
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub struct FieldSchema {
@@ -1128,6 +1139,18 @@ impl StructFieldSchema {
 // CollectionSchema
 ///////////////////////////////////////////////////////////////////////////////
 /// Schema definition for a Milvus collection.
+///
+/// ```
+/// use milvus::v2::types::{CollectionSchema, DataType, FieldSchema};
+///
+/// let mut schema = CollectionSchema::new()
+///     .add_field(FieldSchema::new().name("id").data_type(DataType::Int64).primary_key(true))
+///     .add_field(FieldSchema::new().name("embedding").data_type(DataType::FloatVector).dimension(4));
+/// schema.set_enable_dynamic_field(false);
+/// schema.set_description("books");
+/// assert_eq!(schema.get_fields().len(), 2);
+/// assert!(!schema.is_dynamic_field_enabled());
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub struct CollectionSchema {

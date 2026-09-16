@@ -1546,4 +1546,79 @@ mod tests {
         .expect_err("separate client certificate requires its private key");
         assert!(matches!(error, Error::Validation(_)));
     }
+
+    #[test]
+    fn read_certificate_reads_arbitrary_bytes_and_reports_unreadable_paths() {
+        let directory = std::env::temp_dir().join(format!(
+            "milvus-sdk-rust-bulk-import-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&directory).expect("create temp directory");
+        let path = directory.join("cert.pem");
+        std::fs::write(&path, b"not-a-real-certificate").expect("write temp certificate");
+
+        let bytes = read_certificate(&path, "cert").expect("reads existing file");
+        assert_eq!(bytes, b"not-a-real-certificate");
+        assert!(matches!(
+            read_certificate(&directory.join("missing.pem"), "cert"),
+            Err(Error::Validation(error)) if error.parameter() == "cert"
+        ));
+
+        std::fs::remove_dir_all(&directory).ok();
+    }
+
+    #[tokio::test]
+    async fn http_transport_errors_are_typed_as_timeouts_or_transport_failures() {
+        use super::{http_transport_error, truncate_error_body};
+        use tokio::io::AsyncReadExt;
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind silent listener");
+        let address = listener.local_addr().expect("listener address");
+        tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.expect("accept");
+            let mut buffer = [0_u8; 4_096];
+            loop {
+                if stream.read(&mut buffer).await.expect("read") == 0 {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            }
+        });
+
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_millis(200))
+            .build()
+            .expect("build client");
+        let request = client
+            .post(format!("http://{address}/v2/vectordb/jobs/import/create"))
+            .body("{}")
+            .send()
+            .await
+            .expect_err("silent server must time out");
+        assert!(request.is_timeout());
+        assert!(matches!(
+            http_transport_error(request),
+            Error::Timeout(message) if message.contains("bulk-import")
+        ));
+
+        let request = client
+            .post("not-a-valid-url")
+            .body("{}")
+            .send()
+            .await
+            .expect_err("invalid URL must fail before transport");
+        assert!(matches!(
+            http_transport_error(request),
+            Error::BulkImport(BulkImportError::Transport(_))
+        ));
+
+        let long = "x".repeat(2_000);
+        let truncated = truncate_error_body(&long);
+        assert_eq!(truncated.chars().count(), MAX_ERROR_BODY_CHARS + 1);
+        assert!(truncated.ends_with('…'));
+        assert_eq!(truncate_error_body("short"), "short");
+    }
 }

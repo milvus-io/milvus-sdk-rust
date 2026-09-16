@@ -26,19 +26,19 @@ use crate::proto::{common, milvus};
 #[non_exhaustive]
 pub enum SegmentState {
     #[default]
-    /// Represents the Unknown case.
+    /// The segment state is unknown.
     Unknown,
-    /// Represents the NotExist case.
+    /// The segment does not exist.
     NotExist,
-    /// Represents the Growing case.
+    /// The segment is actively accepting new inserts.
     Growing,
-    /// Represents the Sealed case.
+    /// The segment is sealed and no longer accepts inserts.
     Sealed,
-    /// Represents the Flushed case.
+    /// The segment is sealed and has been flushed to storage.
     Flushed,
-    /// Represents the Flushing case.
+    /// The segment is in the process of being flushed.
     Flushing,
-    /// Represents the Dropped case.
+    /// The segment has been dropped.
     Dropped,
 }
 
@@ -64,15 +64,15 @@ impl SegmentState {
 #[non_exhaustive]
 pub enum SegmentLevel {
     #[default]
-    /// Represents the Unknown case.
+    /// The segment level is unknown.
     Unknown,
-    /// Represents the Legacy case.
+    /// A legacy segment written before level-based segmentation.
     Legacy,
-    /// Represents the L0 case.
+    /// Level-0 segment holding uncommitted or delta data.
     L0,
-    /// Represents the L1 case.
+    /// Level-1 segment holding committed data.
     L1,
-    /// Represents the L2 case.
+    /// Level-2 segment holding sealed, queryable data.
     L2,
 }
 
@@ -96,11 +96,11 @@ impl SegmentLevel {
 #[non_exhaustive]
 pub enum CompactionStateCode {
     #[default]
-    /// Represents the Unknown case.
+    /// The compaction state is unknown.
     Unknown,
-    /// Represents the Executing case.
+    /// A compaction task is currently running.
     Executing,
-    /// Represents the Completed case.
+    /// A compaction task has completed.
     Completed,
 }
 
@@ -848,15 +848,15 @@ impl AnalyzerResult {
 #[non_exhaustive]
 pub enum RefreshExternalCollectionStateCode {
     #[default]
-    /// Represents the Unknown case.
+    /// The refresh state is unknown.
     Unknown,
-    /// Represents the Pending case.
+    /// The refresh task has been created but has not started running.
     Pending,
-    /// Represents the InProgress case.
+    /// The refresh task is running.
     InProgress,
-    /// Represents the Completed case.
+    /// The refresh task completed successfully.
     Completed,
-    /// Represents the Failed case.
+    /// The refresh task failed.
     Failed,
 }
 

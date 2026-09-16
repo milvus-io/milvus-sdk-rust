@@ -656,4 +656,15 @@ mod tests {
         assert!(builder.build().is_err());
         assert!(builder.stats().is_err());
     }
+
+    #[test]
+    fn blob_helper_matches_builder_path_and_deduplicates() {
+        let blob = roaring_bitmap_blob(&[1, 2, 2, 3, 3, 3]).unwrap();
+        let mut builder = RoaringBitmapBuilder::new();
+        builder.add_int64s(&[1, 2, 3]);
+        assert_eq!(blob, builder.build().unwrap());
+
+        assert!(roaring_bitmap_blob(&[]).is_ok());
+        assert!(roaring_bitmap_blob(&[i64::MAX, i64::MIN]).is_ok());
+    }
 }

@@ -29,6 +29,24 @@ impl ClientV2 {
     /// endpoint/database/collection timestamp recorded by successful DML; other consistency levels
     /// use the corresponding Milvus guarantee semantics. The response owns decoded rows, while
     /// its row iterator provides a borrowing traversal for allocation-sensitive callers.
+    ///
+    /// ```
+    /// # use milvus::v2::prelude::*;
+    /// # use milvus::v2::error::Result;
+    /// # async fn example(client: &ClientV2) -> Result<()> {
+    /// let request = QueryRequest::builder()
+    ///     .collection_name("books")
+    ///     .filter("id > 0")
+    ///     .output_fields(["id", "title"])
+    ///     .limit(10)
+    ///     .build()?;
+    /// let response = client.query(request).await?;
+    /// for row in response.results().rows()? {
+    ///     println!("id = {}", row.get_i64("id")?);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn query(
         &self,
         request: request::dql::QueryRequest,
@@ -108,6 +126,26 @@ impl ClientV2 {
     /// The collection must have a compatible vector index or be loaded according to the server's
     /// search requirements. Search consistency follows the request and the shared DML timestamp
     /// cache; decoded hits expose IDs, scores, and requested output fields.
+    ///
+    /// ```
+    /// # use milvus::v2::prelude::*;
+    /// # use milvus::v2::error::Result;
+    /// # async fn example(client: &ClientV2) -> Result<()> {
+    /// let request = SearchRequest::builder()
+    ///     .collection_name("books")
+    ///     .vectors(SearchVectors::Float(vec![vec![0.1, 0.2, 0.3, 0.4]]))
+    ///     .output_fields(["id", "title"])
+    ///     .limit(5)
+    ///     .build()?;
+    /// let response = client.search(request).await?;
+    /// for query in response.results().iter() {
+    ///     for (index, row) in query.rows()?.enumerate() {
+    ///         println!("score = {}", query.get_scores()[index]);
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn search(
         &self,
         request: request::dql::SearchRequest,
