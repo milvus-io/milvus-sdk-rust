@@ -86,7 +86,11 @@ check_tutorials() {
     # MSRV 1.86 toolchain cannot build it. Pin the last MSRV-compatible version
     # until upstream fixes the MSRV regression; remove this once a compatible
     # release is published.
-    cargo update --manifest-path "$manifest" -p yoke-derive --precise 0.8.2
+    # Resolve the pinned crate version from the local checkout, not crates.io:
+    # release-prep PRs pin the not-yet-published version, so an unpatched
+    # `cargo update` cannot resolve it. Keep the same patch as `cargo check`.
+    cargo update --manifest-path "$manifest" -p yoke-derive --precise 0.8.2 \
+      --config "patch.crates-io.milvus-sdk-rust.path='$ROOT_DIR'"
     CARGO_TARGET_DIR="$ROOT_DIR/target/tutorials" \
       cargo check --manifest-path "$manifest" --all-targets \
         --config "patch.crates-io.milvus-sdk-rust.path='$ROOT_DIR'"
