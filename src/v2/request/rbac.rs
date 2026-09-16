@@ -123,6 +123,12 @@ impl CreateUserRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `username` must not be empty
+    /// - `password` must not be empty
     pub fn build(self) -> Result<CreateUserRequest> {
         required("username", &self.value.username)?;
         required("password", &self.value.password)?;
@@ -258,6 +264,13 @@ impl UpdatePasswordRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `username` must not be empty
+    /// - `old_password` must not be empty
+    /// - `new_password` must not be empty
     pub fn build(self) -> Result<UpdatePasswordRequest> {
         required("username", &self.value.username)?;
         required("old_password", &self.value.old_password)?;
@@ -340,6 +353,11 @@ impl UpdateUserRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `username` must not be empty
     pub fn build(self) -> Result<UpdateUserRequest> {
         required("username", &self.value.username)?;
         Ok(self.value)
@@ -406,6 +424,11 @@ impl DropUserRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `username` must not be empty
     pub fn build(self) -> Result<DropUserRequest> {
         required("username", &self.value.username)?;
         Ok(self.value)
@@ -569,6 +592,11 @@ impl CreateRoleRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `role_name` must not be empty
     pub fn build(self) -> Result<CreateRoleRequest> {
         required("role_name", &self.value.role_name)?;
         Ok(self.value)
@@ -649,6 +677,11 @@ impl AlterRoleRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `role_name` must not be empty
     pub fn build(self) -> Result<AlterRoleRequest> {
         required("role_name", &self.value.role_name)?;
         Ok(self.value)
@@ -729,6 +762,11 @@ impl DropRoleRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `role_name` must not be empty
     pub fn build(self) -> Result<DropRoleRequest> {
         required("role_name", &self.value.role_name)?;
         Ok(self.value)
@@ -810,6 +848,11 @@ impl GrantRoleRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - the configured values fail `validate_user_role` validation
     pub fn build(self) -> Result<GrantRoleRequest> {
         validate_user_role(&self.value.username, &self.value.role_name)?;
         Ok(self.value)
@@ -891,6 +934,11 @@ impl RevokeRoleRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - the configured values fail `validate_user_role` validation
     pub fn build(self) -> Result<RevokeRoleRequest> {
         validate_user_role(&self.value.username, &self.value.role_name)?;
         Ok(self.value)
@@ -997,6 +1045,11 @@ impl DescribeRoleRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `role_name` must not be empty
     pub fn build(self) -> Result<DescribeRoleRequest> {
         required("role_name", &self.value.role_name)?;
         Ok(self.value)
@@ -1081,6 +1134,11 @@ impl DescribeUserRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `username` must not be empty
     pub fn build(self) -> Result<DescribeUserRequest> {
         required("username", &self.value.username)?;
         Ok(self.value)
@@ -1261,6 +1319,11 @@ impl GrantPrivilegeRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - the configured values fail `validate_privilege_request` validation
     pub fn build(self) -> Result<GrantPrivilegeRequest> {
         validate_privilege_request(
             &self.value.role_name,
@@ -1448,6 +1511,11 @@ impl RevokePrivilegeRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - the configured values fail `validate_privilege_request` validation
     pub fn build(self) -> Result<RevokePrivilegeRequest> {
         validate_privilege_request(
             &self.value.role_name,
@@ -1521,6 +1589,11 @@ impl CreatePrivilegeGroupRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `group_name` must not be empty
     pub fn build(self) -> Result<CreatePrivilegeGroupRequest> {
         required("group_name", &self.value.group_name)?;
         Ok(self.value)
@@ -1587,6 +1660,11 @@ impl DropPrivilegeGroupRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `group_name` must not be empty
     pub fn build(self) -> Result<DropPrivilegeGroupRequest> {
         required("group_name", &self.value.group_name)?;
         Ok(self.value)
@@ -1716,6 +1794,11 @@ impl AddPrivilegesToGroupRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - the configured values fail `validate_privilege_group_members` validation
     pub fn build(self) -> Result<AddPrivilegesToGroupRequest> {
         validate_privilege_group_members(&self.value.group_name, &self.value.privileges)?;
         Ok(self.value)
@@ -1807,6 +1890,11 @@ impl RemovePrivilegesFromGroupRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - the configured values fail `validate_privilege_group_members` validation
     pub fn build(self) -> Result<RemovePrivilegesFromGroupRequest> {
         validate_privilege_group_members(&self.value.group_name, &self.value.privileges)?;
         Ok(self.value)
@@ -1988,7 +2076,7 @@ mod update_user_tests {
 
 #[cfg(test)]
 mod describe_role_tests {
-    use super::{DescribeRoleRequest, ListRolesRequest};
+    use super::DescribeRoleRequest;
 
     #[test]
     fn describe_role_uses_database_scope_and_excludes_user_info() {
@@ -2005,16 +2093,6 @@ mod describe_role_tests {
         assert_eq!(entity.db_name, "catalog");
         assert!(!role.include_user_info);
         assert_eq!(role.role.expect("role selector").name, "analyst");
-    }
-
-    #[test]
-    fn list_roles_has_no_selector_and_excludes_user_info() {
-        let proto = ListRolesRequest::builder()
-            .build()
-            .expect("valid request")
-            .into_proto();
-        assert!(proto.role.is_none());
-        assert!(!proto.include_user_info);
     }
 }
 
@@ -2210,23 +2288,7 @@ mod builder_value_tests {
     }
 
     #[test]
-    fn list_users_request_populated_values() {
-        let value = ListUsersRequest::builder().build().expect("valid request");
-        assert_eq!(value.into_proto(), milvus::ListCredUsersRequest::default());
-    }
-
-    #[test]
     fn list_roles_request_default_values() {
-        let proto = ListRolesRequest::builder()
-            .build()
-            .expect("valid request")
-            .into_proto();
-        assert!(proto.role.is_none());
-        assert!(!proto.include_user_info);
-    }
-
-    #[test]
-    fn list_roles_request_populated_values() {
         let proto = ListRolesRequest::builder()
             .build()
             .expect("valid request")
@@ -2242,17 +2304,6 @@ mod builder_value_tests {
                 .build()
                 .expect("valid request")
                 .into_proto(),
-            milvus::ListPrivilegeGroupsRequest::default()
-        );
-    }
-
-    #[test]
-    fn list_privilege_groups_request_populated_values() {
-        let value = ListPrivilegeGroupsRequest::builder()
-            .build()
-            .expect("valid request");
-        assert_eq!(
-            value.into_proto(),
             milvus::ListPrivilegeGroupsRequest::default()
         );
     }

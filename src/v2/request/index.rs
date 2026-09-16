@@ -153,6 +153,14 @@ impl CreateIndexRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `index_params.field_name` must not be empty
+    /// - `index_params` must contain at least one value
+    /// - `index_params.index_type` must not be [`IndexType::Invalid`]
+    /// - the configured values fail `validate_index_collection` validation
     pub fn build(self) -> Result<CreateIndexRequest> {
         validate_index_collection(
             self.value.database_name.as_deref(),
@@ -288,6 +296,11 @@ impl DescribeIndexRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - the configured values fail `validate_index_collection` validation
     pub fn build(self) -> Result<DescribeIndexRequest> {
         validate_index_collection(
             self.value.database_name.as_deref(),
@@ -416,6 +429,11 @@ impl ListIndexesRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - the configured values fail `validate_index_collection` validation
     pub fn build(self) -> Result<ListIndexesRequest> {
         validate_index_collection(
             self.value.database_name.as_deref(),
@@ -534,6 +552,11 @@ impl DropIndexRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - the configured values fail `validate_index_collection` validation
     pub fn build(self) -> Result<DropIndexRequest> {
         validate_index_collection(
             self.value.database_name.as_deref(),
@@ -652,6 +675,13 @@ impl AlterIndexPropertiesRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `index_name` must not be empty
+    /// - `properties`: must contain at least one property
+    /// - the configured values fail `validate_index_collection` validation
     pub fn build(self) -> Result<AlterIndexPropertiesRequest> {
         validate_index_collection(
             self.value.database_name.as_deref(),
@@ -777,6 +807,13 @@ impl DropIndexPropertiesRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `index_name` must not be empty
+    /// - `property_keys`: must contain at least one property key
+    /// - the configured values fail `validate_index_collection` validation
     pub fn build(self) -> Result<DropIndexPropertiesRequest> {
         validate_index_collection(
             self.value.database_name.as_deref(),

@@ -355,4 +355,19 @@ mod tests {
         let expected = hex::decode(fixture["blob_hex"].as_str().unwrap()).unwrap();
         assert_eq!(blob, expected);
     }
+
+    #[test]
+    fn string_blob_equals_builder_path_and_rejects_bad_fpr() {
+        let members = ["milvus", "sdk", "rust"];
+        let blob = bloom_filter_blob_string(&members, DEFAULT_FPR).unwrap();
+        let mut builder = BloomFilterBuilder::new(members.len() as u64, DEFAULT_FPR).unwrap();
+        for member in members {
+            builder.add_string(member);
+        }
+        assert_eq!(blob, builder.build());
+
+        assert!(bloom_filter_blob_string(&["x"], f64::NAN).is_err());
+        assert!(bloom_filter_blob_string(&["x"], MAX_FPR + 1e-5).is_err());
+        assert!(bloom_filter_blob_string(&[], DEFAULT_FPR).is_ok());
+    }
 }

@@ -1782,4 +1782,21 @@ mod tests {
         );
         assert_eq!(global.topology().version(), 2);
     }
+
+    #[tokio::test]
+    async fn topology_tls_config_builds_for_valid_names_and_rejects_invalid_ones() {
+        use crate::v2::ConnectConfig;
+
+        let config = ConnectConfig::new();
+        build_topology_tls_config(&config, "milvus-cluster.local")
+            .await
+            .expect("valid server name builds a rustls config");
+
+        let invalid = ConnectConfig::new();
+        assert!(matches!(
+            build_topology_tls_config(&invalid, "bad server name").await,
+            Err(crate::v2::error::Error::Validation(error))
+                if error.parameter() == "tls_server_name"
+        ));
+    }
 }

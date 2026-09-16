@@ -108,6 +108,11 @@ impl CreatePartitionRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - the configured values fail `validate_partition_target` validation
     pub fn build(self) -> Result<CreatePartitionRequest> {
         validate_partition_target(
             self.value.database_name.as_deref(),
@@ -206,6 +211,11 @@ impl DropPartitionRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - the configured values fail `validate_partition_target` validation
     pub fn build(self) -> Result<DropPartitionRequest> {
         validate_partition_target(
             self.value.database_name.as_deref(),
@@ -304,6 +314,11 @@ impl HasPartitionRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - the configured values fail `validate_partition_target` validation
     pub fn build(self) -> Result<HasPartitionRequest> {
         validate_partition_target(
             self.value.database_name.as_deref(),
@@ -402,6 +417,11 @@ impl GetPartitionStatsRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - the configured values fail `validate_partition_target` validation
     pub fn build(self) -> Result<GetPartitionStatsRequest> {
         validate_partition_target(
             self.value.database_name.as_deref(),
@@ -484,6 +504,11 @@ impl ListPartitionsRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - the configured values fail `validate_partition_collection` validation
     pub fn build(self) -> Result<ListPartitionsRequest> {
         validate_partition_collection(
             self.value.database_name.as_deref(),
@@ -741,6 +766,16 @@ impl LoadPartitionsRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `partition_names` must contain at least one value
+    /// - `partition_names` must not contain empty values
+    /// - `replica_number` must be greater than zero
+    /// - `load_fields` must not contain empty values
+    /// - `resource_groups` must not contain empty values
+    /// - the configured values fail `validate_partition_collection` validation
     pub fn build(self) -> Result<LoadPartitionsRequest> {
         validate_partition_collection(
             self.value.database_name.as_deref(),
@@ -843,6 +878,13 @@ impl ReleasePartitionsRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `partition_names` must contain at least one value
+    /// - `partition_names` must not contain empty values
+    /// - the configured values fail `validate_partition_collection` validation
     pub fn build(self) -> Result<ReleasePartitionsRequest> {
         validate_partition_collection(
             self.value.database_name.as_deref(),

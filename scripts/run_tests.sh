@@ -80,6 +80,13 @@ check_tutorials() {
   local manifest
   echo "==> Checking tutorial crates"
   for manifest in "$ROOT_DIR"/tutorial/*/Cargo.toml; do
+    # Tutorial Cargo.lock files are gitignored, so each CI run resolves their
+    # dependencies fresh. yoke-derive 0.8.3 (published 2026-09-15) uses
+    # `inherent_str_constructors`, stabilized only in Rust 1.88, so the pinned
+    # MSRV 1.86 toolchain cannot build it. Pin the last MSRV-compatible version
+    # until upstream fixes the MSRV regression; remove this once a compatible
+    # release is published.
+    cargo update --manifest-path "$manifest" -p yoke-derive --precise 0.8.2
     CARGO_TARGET_DIR="$ROOT_DIR/target/tutorials" \
       cargo check --manifest-path "$manifest" --all-targets \
         --config "patch.crates-io.milvus-sdk-rust.path='$ROOT_DIR'"

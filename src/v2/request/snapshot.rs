@@ -136,6 +136,13 @@ impl CreateSnapshotRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `collection_name` must not be empty
+    /// - `snapshot_name` must not be empty
+    /// - `compaction_protection_seconds` must not be negative
     pub fn build(self) -> Result<CreateSnapshotRequest> {
         required("collection_name", &self.value.collection_name)?;
         required("snapshot_name", &self.value.snapshot_name)?;
@@ -235,6 +242,12 @@ impl DropSnapshotRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `collection_name` must not be empty
+    /// - `snapshot_name` must not be empty
     pub fn build(self) -> Result<DropSnapshotRequest> {
         required("collection_name", &self.value.collection_name)?;
         required("snapshot_name", &self.value.snapshot_name)?;
@@ -411,6 +424,12 @@ impl DescribeSnapshotRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `collection_name` must not be empty
+    /// - `snapshot_name` must not be empty
     pub fn build(self) -> Result<DescribeSnapshotRequest> {
         required("collection_name", &self.value.collection_name)?;
         required("snapshot_name", &self.value.snapshot_name)?;
@@ -539,6 +558,13 @@ impl RestoreSnapshotRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `snapshot_name` must not be empty
+    /// - `source_collection_name` must not be empty
+    /// - `target_collection_name` must not be empty
     pub fn build(self) -> Result<RestoreSnapshotRequest> {
         required("snapshot_name", &self.value.snapshot_name)?;
         required("source_collection_name", &self.value.source_collection_name)?;
@@ -605,6 +631,11 @@ impl GetRestoreSnapshotStateRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `job_id` must be greater than zero
     pub fn build(self) -> Result<GetRestoreSnapshotStateRequest> {
         positive_i64("job_id", self.value.job_id)?;
         Ok(self.value)
@@ -795,6 +826,13 @@ impl PinSnapshotDataRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `collection_name` must not be empty
+    /// - `snapshot_name` must not be empty
+    /// - `ttl_seconds` must not be negative
     pub fn build(self) -> Result<PinSnapshotDataRequest> {
         required("collection_name", &self.value.collection_name)?;
         required("snapshot_name", &self.value.snapshot_name)?;
@@ -861,6 +899,11 @@ impl UnpinSnapshotDataRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `pin_id` must be greater than zero
     pub fn build(self) -> Result<UnpinSnapshotDataRequest> {
         positive_i64("pin_id", self.value.pin_id)?;
         Ok(self.value)

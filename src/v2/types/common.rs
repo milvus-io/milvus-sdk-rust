@@ -26,19 +26,28 @@ use std::time::Duration;
 // ConsistencyLevel
 ///////////////////////////////////////////////////////////////////////////////
 /// Consistency guarantee used by query and search operations.
+///
+/// See also:
+/// - [`crate::v2::request::dql::QueryRequest::builder`], [`crate::v2::request::dql::SearchRequest::builder`],
+///   and [`crate::v2::request::dql::GetRequest::builder`] to set consistency on a read request.
+/// - [`crate::v2::request::collection::CreateCollectionRequest::builder`] to set the collection default.
+/// - [`crate::v2::ClientV2::query`] and [`crate::v2::ClientV2::search`] for the client operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[non_exhaustive]
 pub enum ConsistencyLevel {
-    /// Represents the Strong case.
+    /// Reads see all data committed before the request starts. Strongest guarantee, highest latency.
     Strong,
-    /// Represents the Session case.
+    /// Uses a per-session timestamp shared across operations so a read sees data written earlier by
+    /// the same session.
     Session,
-    /// Represents the Bounded case.
+    /// Reads tolerate staleness within a bounded time window, trading a little recency for lower
+    /// latency.
     Bounded,
-    /// Represents the Eventually case.
+    /// Reads may see data from some time in the past. Weakest guarantee, lowest latency.
     Eventually,
     #[default]
-    /// Represents the Customized case.
+    /// Lets the server apply its own configured consistency policy when the request carries no
+    /// explicit setting.
     Customized,
 }
 
@@ -68,35 +77,43 @@ impl ConsistencyLevel {
 // MetricType
 ///////////////////////////////////////////////////////////////////////////////
 /// Distance or similarity metric used by vector indexes and searches.
+///
+/// See also:
+/// - [`crate::v2::types::IndexParam::metric_type`] to select the metric when building an index.
+/// - [`crate::v2::request::index::CreateIndexRequest::builder`] to attach the metric to an index.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum MetricType {
     /// Lets the Milvus server determine the metric type.
     #[default]
     Default,
-    /// Represents the L2 case.
+    /// Euclidean distance; Milvus returns the squared value `sum((a_i - b_i)^2)`. Smaller is more
+    /// similar.
     L2,
-    /// Represents the Ip case.
+    /// Inner product, `sum(a_i * b_i)`. Larger is more similar.
     Ip,
-    /// Represents the Cosine case.
+    /// Cosine similarity, `cos(a, b)`. Larger is more similar.
     Cosine,
-    /// Represents the Hamming case.
+    /// Hamming distance, the number of positions at which two binary vectors differ. Smaller is
+    /// more similar.
     Hamming,
-    /// Represents the Jaccard case.
+    /// Jaccard distance, `1 - |A ∩ B| / |A ∪ B|`. Smaller is more similar.
     Jaccard,
-    /// Represents the MhJaccard case.
+    /// MinHash Jaccard distance over binary MinHash signatures, `1 - estimated similarity`.
+    /// Smaller is more similar.
     MhJaccard,
-    /// Represents the Bm25 case.
+    /// BM25 relevance score for full-text search over sparse vectors.
     Bm25,
-    /// Represents the MaxSimCosine case.
+    /// MaxSim Cosine, used to search embedding lists stored in array-of-structs vector fields.
     MaxSimCosine,
-    /// Represents the MaxSimIp case.
+    /// MaxSim Inner Product, used to search embedding lists stored in array-of-structs vector
+    /// fields.
     MaxSimIp,
-    /// Represents the MaxSimL2 case.
+    /// MaxSim L2, used to search embedding lists stored in array-of-structs vector fields.
     MaxSimL2,
-    /// Represents the MaxSimJaccard case.
+    /// MaxSim Jaccard, used to search embedding lists stored in array-of-structs vector fields.
     MaxSimJaccard,
-    /// Represents the MaxSimHamming case.
+    /// MaxSim Hamming, used to search embedding lists stored in array-of-structs vector fields.
     MaxSimHamming,
 }
 
@@ -143,49 +160,54 @@ impl MetricType {
 // DataType
 ///////////////////////////////////////////////////////////////////////////////
 /// Milvus field data type.
+///
+/// See also:
+/// - [`crate::v2::types::FieldSchema::data_type`] to declare a field in a collection schema.
+/// - [`crate::v2::types::FieldData`] for the corresponding in-memory column values.
+/// - [`crate::v2::ClientV2::create_collection`] to build a collection from a schema.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum DataType {
     #[default]
-    /// Represents the Unknown case.
+    /// Unspecified or unrecognized field type.
     Unknown,
-    /// Represents the Bool case.
+    /// Boolean value, `true` or `false`.
     Bool,
-    /// Represents the Int8 case.
+    /// 8-bit signed integer.
     Int8,
-    /// Represents the Int16 case.
+    /// 16-bit signed integer.
     Int16,
-    /// Represents the Int32 case.
+    /// 32-bit signed integer.
     Int32,
-    /// Represents the Int64 case.
+    /// 64-bit signed integer.
     Int64,
-    /// Represents the Float case.
+    /// 32-bit IEEE 754 floating-point number.
     Float,
-    /// Represents the Double case.
+    /// 64-bit IEEE 754 floating-point number.
     Double,
-    /// Represents the VarChar case.
+    /// Variable-length UTF-8 string. Constrain its size with `max_length`.
     VarChar,
-    /// Represents the Json case.
+    /// JSON document stored as-is.
     Json,
-    /// Represents the Geometry case.
+    /// Geometry value used by spatial queries (WKT-encoded).
     Geometry,
-    /// Represents the Timestamptz case.
+    /// Timestamp with timezone.
     Timestamptz,
-    /// Represents the Array case.
+    /// Array of scalar elements, all with the same element type.
     Array,
-    /// Represents the Struct case.
+    /// Nested struct of named sub-fields.
     Struct,
-    /// Represents the FloatVector case.
+    /// Dense vector of 32-bit floats.
     FloatVector,
-    /// Represents the BinaryVector case.
+    /// Dense binary vector stored as packed bytes.
     BinaryVector,
-    /// Represents the Float16Vector case.
+    /// Dense vector of IEEE 754 half-precision floats.
     Float16Vector,
-    /// Represents the BFloat16Vector case.
+    /// Dense vector of bfloat16 values.
     BFloat16Vector,
-    /// Represents the SparseFloatVector case.
+    /// Sparse vector stored as a map of dimension index to float value.
     SparseFloatVector,
-    /// Represents the Int8Vector case.
+    /// Dense vector of 8-bit signed integers.
     Int8Vector,
 }
 
@@ -266,15 +288,15 @@ impl DataType {
 #[non_exhaustive]
 pub enum FunctionType {
     #[default]
-    /// Represents the Unknown case.
+    /// Unspecified or unrecognized function type.
     Unknown,
-    /// Represents the Bm25 case.
+    /// BM25 ranking function that turns an input text field into a sparse vector output field.
     Bm25,
-    /// Represents the TextEmbedding case.
+    /// Text-embedding function that turns an input text field into a dense vector output field.
     TextEmbedding,
-    /// Represents the Rerank case.
+    /// Reranking function that applies a configured reranking strategy to a candidate set.
     Rerank,
-    /// Represents the MinHash case.
+    /// MinHash function that turns an input text field into a binary MinHash signature.
     MinHash,
 }
 
@@ -546,9 +568,9 @@ impl From<ModelRerank> for Function {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Ids {
-    /// Represents the Int64 case.
+    /// Integer primary-key values.
     Int64(Vec<i64>),
-    /// Represents the VarChar case.
+    /// String primary-key values.
     VarChar(Vec<String>),
 }
 
@@ -637,189 +659,189 @@ impl Ids {
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum FieldData {
-    /// Represents the Bool case.
+    /// Boolean values.
     Bool {
         /// Field name shared with the collection schema.
         name: String,
         /// Values for this field, in row order.
         values: Vec<bool>,
     },
-    /// Represents the Int8 case.
+    /// 8-bit signed integer values.
     Int8 {
         /// Field name shared with the collection schema.
         name: String,
         /// Values for this field, in row order.
         values: Vec<i8>,
     },
-    /// Represents the Int16 case.
+    /// 16-bit signed integer values.
     Int16 {
         /// Field name shared with the collection schema.
         name: String,
         /// Values for this field, in row order.
         values: Vec<i16>,
     },
-    /// Represents the Int32 case.
+    /// 32-bit signed integer values.
     Int32 {
         /// Field name shared with the collection schema.
         name: String,
         /// Values for this field, in row order.
         values: Vec<i32>,
     },
-    /// Represents the Int64 case.
+    /// 64-bit signed integer values.
     Int64 {
         /// Field name shared with the collection schema.
         name: String,
         /// Values for this field, in row order.
         values: Vec<i64>,
     },
-    /// Represents the Float case.
+    /// 32-bit floating-point values.
     Float {
         /// Field name shared with the collection schema.
         name: String,
         /// Values for this field, in row order.
         values: Vec<f32>,
     },
-    /// Represents the Double case.
+    /// 64-bit floating-point values.
     Double {
         /// Field name shared with the collection schema.
         name: String,
         /// Values for this field, in row order.
         values: Vec<f64>,
     },
-    /// Represents the VarChar case.
+    /// Variable-length UTF-8 string values.
     VarChar {
         /// Field name shared with the collection schema.
         name: String,
         /// Values for this field, in row order.
         values: Vec<String>,
     },
-    /// Represents the Json case.
+    /// JSON document values.
     Json {
         /// Field name shared with the collection schema.
         name: String,
         /// Values for this field, in row order.
         values: Vec<serde_json::Value>,
     },
-    /// Represents the Geometry case.
+    /// Geometry values encoded as WKT strings.
     Geometry {
         /// Field name shared with the collection schema.
         name: String,
         /// Values for this field, in row order.
         values: Vec<String>,
     },
-    /// Represents the Timestamptz case.
+    /// Timestamp-with-timezone values.
     Timestamptz {
         /// Field name shared with the collection schema.
         name: String,
         /// Values for this field, in row order.
         values: Vec<String>,
     },
-    /// Represents the ArrayBool case.
+    /// Array of boolean elements.
     ArrayBool {
         /// Field name shared with the collection schema.
         name: String,
         /// Values for this field, in row order.
         values: Vec<Vec<bool>>,
     },
-    /// Represents the ArrayInt8 case.
+    /// Array of 8-bit signed integer elements.
     ArrayInt8 {
         /// Field name shared with the collection schema.
         name: String,
         /// Values for this field, in row order.
         values: Vec<Vec<i8>>,
     },
-    /// Represents the ArrayInt16 case.
+    /// Array of 16-bit signed integer elements.
     ArrayInt16 {
         /// Field name shared with the collection schema.
         name: String,
         /// Values for this field, in row order.
         values: Vec<Vec<i16>>,
     },
-    /// Represents the ArrayInt32 case.
+    /// Array of 32-bit signed integer elements.
     ArrayInt32 {
         /// Field name shared with the collection schema.
         name: String,
         /// Values for this field, in row order.
         values: Vec<Vec<i32>>,
     },
-    /// Represents the ArrayInt64 case.
+    /// Array of 64-bit signed integer elements.
     ArrayInt64 {
         /// Field name shared with the collection schema.
         name: String,
         /// Values for this field, in row order.
         values: Vec<Vec<i64>>,
     },
-    /// Represents the ArrayFloat case.
+    /// Array of 32-bit floating-point elements.
     ArrayFloat {
         /// Field name shared with the collection schema.
         name: String,
         /// Values for this field, in row order.
         values: Vec<Vec<f32>>,
     },
-    /// Represents the ArrayDouble case.
+    /// Array of 64-bit floating-point elements.
     ArrayDouble {
         /// Field name shared with the collection schema.
         name: String,
         /// Values for this field, in row order.
         values: Vec<Vec<f64>>,
     },
-    /// Represents the ArrayVarChar case.
+    /// Array of UTF-8 string elements.
     ArrayVarChar {
         /// Field name shared with the collection schema.
         name: String,
         /// Values for this field, in row order.
         values: Vec<Vec<String>>,
     },
-    /// Represents the Struct case.
+    /// Struct values, each a list of named sub-field values.
     Struct {
         /// Field name shared with the collection schema.
         name: String,
         /// Values for this field, in row order.
         values: Vec<Vec<StructValue>>,
     },
-    /// Represents the FloatVector case.
+    /// Dense float vectors, one vector per row.
     FloatVector {
         /// Field name shared with the collection schema.
         name: String,
         /// Values for this field, in row order.
         values: Vec<Vec<f32>>,
     },
-    /// Represents the BinaryVector case.
+    /// Dense binary vectors stored as packed bytes, one vector per row.
     BinaryVector {
         /// Field name shared with the collection schema.
         name: String,
         /// Values for this field, in row order.
         values: Vec<Vec<u8>>,
     },
-    /// Represents the Float16Vector case.
+    /// Dense half-precision float vectors, one vector per row.
     Float16Vector {
         /// Field name shared with the collection schema.
         name: String,
         /// Values for this field, in row order.
         values: Vec<Vec<u16>>,
     },
-    /// Represents the BFloat16Vector case.
+    /// Dense bfloat16 vectors, one vector per row.
     BFloat16Vector {
         /// Field name shared with the collection schema.
         name: String,
         /// Values for this field, in row order.
         values: Vec<Vec<u16>>,
     },
-    /// Represents the SparseFloatVector case.
+    /// Sparse float vectors, one per row.
     SparseFloatVector {
         /// Field name shared with the collection schema.
         name: String,
         /// Values for this field, in row order.
         values: Vec<SparseVector>,
     },
-    /// Represents the Int8Vector case.
+    /// Dense int8 vectors, one vector per row.
     Int8Vector {
         /// Field name shared with the collection schema.
         name: String,
         /// Values for this field, in row order.
         values: Vec<Vec<i8>>,
     },
-    /// Represents the Nullable case.
+    /// A nullable field value paired with a per-row validity bitmap.
     Nullable {
         /// Wrapped field data.
         data: Box<FieldData>,
@@ -1042,7 +1064,7 @@ impl FieldData {
         Self::nullable(self, valid_data)
     }
 
-    /// Returns the as bool.
+    /// Returns the values if this field holds [`FieldData::Bool`], otherwise `None`.
     pub fn as_bool(&self) -> Option<&[bool]> {
         match self.inner() {
             Self::Bool { values, .. } => Some(values),
@@ -1050,7 +1072,7 @@ impl FieldData {
         }
     }
 
-    /// Returns the as int8.
+    /// Returns the values if this field holds [`FieldData::Int8`], otherwise `None`.
     pub fn as_int8(&self) -> Option<&[i8]> {
         match self.inner() {
             Self::Int8 { values, .. } => Some(values),
@@ -1058,7 +1080,7 @@ impl FieldData {
         }
     }
 
-    /// Returns the as int16.
+    /// Returns the values if this field holds [`FieldData::Int16`], otherwise `None`.
     pub fn as_int16(&self) -> Option<&[i16]> {
         match self.inner() {
             Self::Int16 { values, .. } => Some(values),
@@ -1066,7 +1088,7 @@ impl FieldData {
         }
     }
 
-    /// Returns the as int32.
+    /// Returns the values if this field holds [`FieldData::Int32`], otherwise `None`.
     pub fn as_int32(&self) -> Option<&[i32]> {
         match self.inner() {
             Self::Int32 { values, .. } => Some(values),
@@ -1074,7 +1096,7 @@ impl FieldData {
         }
     }
 
-    /// Returns the as int64.
+    /// Returns the values if this field holds [`FieldData::Int64`], otherwise `None`.
     pub fn as_int64(&self) -> Option<&[i64]> {
         match self.inner() {
             Self::Int64 { values, .. } => Some(values),
@@ -1082,7 +1104,7 @@ impl FieldData {
         }
     }
 
-    /// Returns the as float.
+    /// Returns the values if this field holds [`FieldData::Float`], otherwise `None`.
     pub fn as_float(&self) -> Option<&[f32]> {
         match self.inner() {
             Self::Float { values, .. } => Some(values),
@@ -1090,7 +1112,7 @@ impl FieldData {
         }
     }
 
-    /// Returns the as double.
+    /// Returns the values if this field holds [`FieldData::Double`], otherwise `None`.
     pub fn as_double(&self) -> Option<&[f64]> {
         match self.inner() {
             Self::Double { values, .. } => Some(values),
@@ -1098,7 +1120,7 @@ impl FieldData {
         }
     }
 
-    /// Returns the as varchar.
+    /// Returns the values if this field holds [`FieldData::VarChar`], otherwise `None`.
     pub fn as_varchar(&self) -> Option<&[String]> {
         match self.inner() {
             Self::VarChar { values, .. } => Some(values),
@@ -1106,7 +1128,7 @@ impl FieldData {
         }
     }
 
-    /// Returns the as json.
+    /// Returns the values if this field holds [`FieldData::Json`], otherwise `None`.
     pub fn as_json(&self) -> Option<&[serde_json::Value]> {
         match self.inner() {
             Self::Json { values, .. } => Some(values),
@@ -1114,7 +1136,7 @@ impl FieldData {
         }
     }
 
-    /// Returns the as geometry.
+    /// Returns the values if this field holds [`FieldData::Geometry`], otherwise `None`.
     pub fn as_geometry(&self) -> Option<&[String]> {
         match self.inner() {
             Self::Geometry { values, .. } => Some(values),
@@ -1122,7 +1144,7 @@ impl FieldData {
         }
     }
 
-    /// Returns the as timestamptz.
+    /// Returns the values if this field holds [`FieldData::Timestamptz`], otherwise `None`.
     pub fn as_timestamptz(&self) -> Option<&[String]> {
         match self.inner() {
             Self::Timestamptz { values, .. } => Some(values),
@@ -1130,7 +1152,7 @@ impl FieldData {
         }
     }
 
-    /// Returns the as array bool.
+    /// Returns the values if this field holds [`FieldData::ArrayBool`], otherwise `None`.
     pub fn as_array_bool(&self) -> Option<&[Vec<bool>]> {
         match self.inner() {
             Self::ArrayBool { values, .. } => Some(values),
@@ -1138,7 +1160,7 @@ impl FieldData {
         }
     }
 
-    /// Returns the as array int8.
+    /// Returns the values if this field holds [`FieldData::ArrayInt8`], otherwise `None`.
     pub fn as_array_int8(&self) -> Option<&[Vec<i8>]> {
         match self.inner() {
             Self::ArrayInt8 { values, .. } => Some(values),
@@ -1146,7 +1168,7 @@ impl FieldData {
         }
     }
 
-    /// Returns the as array int16.
+    /// Returns the values if this field holds [`FieldData::ArrayInt16`], otherwise `None`.
     pub fn as_array_int16(&self) -> Option<&[Vec<i16>]> {
         match self.inner() {
             Self::ArrayInt16 { values, .. } => Some(values),
@@ -1154,7 +1176,7 @@ impl FieldData {
         }
     }
 
-    /// Returns the as array int32.
+    /// Returns the values if this field holds [`FieldData::ArrayInt32`], otherwise `None`.
     pub fn as_array_int32(&self) -> Option<&[Vec<i32>]> {
         match self.inner() {
             Self::ArrayInt32 { values, .. } => Some(values),
@@ -1162,7 +1184,7 @@ impl FieldData {
         }
     }
 
-    /// Returns the as array int64.
+    /// Returns the values if this field holds [`FieldData::ArrayInt64`], otherwise `None`.
     pub fn as_array_int64(&self) -> Option<&[Vec<i64>]> {
         match self.inner() {
             Self::ArrayInt64 { values, .. } => Some(values),
@@ -1170,7 +1192,7 @@ impl FieldData {
         }
     }
 
-    /// Returns the as array float.
+    /// Returns the values if this field holds [`FieldData::ArrayFloat`], otherwise `None`.
     pub fn as_array_float(&self) -> Option<&[Vec<f32>]> {
         match self.inner() {
             Self::ArrayFloat { values, .. } => Some(values),
@@ -1178,7 +1200,7 @@ impl FieldData {
         }
     }
 
-    /// Returns the as array double.
+    /// Returns the values if this field holds [`FieldData::ArrayDouble`], otherwise `None`.
     pub fn as_array_double(&self) -> Option<&[Vec<f64>]> {
         match self.inner() {
             Self::ArrayDouble { values, .. } => Some(values),
@@ -1186,7 +1208,7 @@ impl FieldData {
         }
     }
 
-    /// Returns the as array varchar.
+    /// Returns the values if this field holds [`FieldData::ArrayVarChar`], otherwise `None`.
     pub fn as_array_varchar(&self) -> Option<&[Vec<String>]> {
         match self.inner() {
             Self::ArrayVarChar { values, .. } => Some(values),
@@ -1194,7 +1216,7 @@ impl FieldData {
         }
     }
 
-    /// Returns the as struct.
+    /// Returns the values if this field holds [`FieldData::Struct`], otherwise `None`.
     pub fn as_struct(&self) -> Option<&[Vec<StructValue>]> {
         match self.inner() {
             Self::Struct { values, .. } => Some(values),
@@ -1202,7 +1224,7 @@ impl FieldData {
         }
     }
 
-    /// Returns the as float vectors.
+    /// Returns the values if this field holds [`FieldData::FloatVector`], otherwise `None`.
     pub fn as_float_vectors(&self) -> Option<&[Vec<f32>]> {
         match self.inner() {
             Self::FloatVector { values, .. } => Some(values),
@@ -1210,7 +1232,7 @@ impl FieldData {
         }
     }
 
-    /// Returns the as binary vectors.
+    /// Returns the values if this field holds [`FieldData::BinaryVector`], otherwise `None`.
     pub fn as_binary_vectors(&self) -> Option<&[Vec<u8>]> {
         match self.inner() {
             Self::BinaryVector { values, .. } => Some(values),
@@ -1218,7 +1240,7 @@ impl FieldData {
         }
     }
 
-    /// Returns the as float16 vectors.
+    /// Returns the values if this field holds [`FieldData::Float16Vector`], otherwise `None`.
     pub fn as_float16_vectors(&self) -> Option<&[Vec<u16>]> {
         match self.inner() {
             Self::Float16Vector { values, .. } => Some(values),
@@ -1226,7 +1248,7 @@ impl FieldData {
         }
     }
 
-    /// Returns the as bfloat16 vectors.
+    /// Returns the values if this field holds [`FieldData::BFloat16Vector`], otherwise `None`.
     pub fn as_bfloat16_vectors(&self) -> Option<&[Vec<u16>]> {
         match self.inner() {
             Self::BFloat16Vector { values, .. } => Some(values),
@@ -1234,7 +1256,7 @@ impl FieldData {
         }
     }
 
-    /// Returns the as sparse float vectors.
+    /// Returns the values if this field holds [`FieldData::SparseFloatVector`], otherwise `None`.
     pub fn as_sparse_float_vectors(&self) -> Option<&[SparseVector]> {
         match self.inner() {
             Self::SparseFloatVector { values, .. } => Some(values),
@@ -1242,7 +1264,7 @@ impl FieldData {
         }
     }
 
-    /// Returns the as int8 vectors.
+    /// Returns the values if this field holds [`FieldData::Int8Vector`], otherwise `None`.
     pub fn as_int8_vectors(&self) -> Option<&[Vec<i8>]> {
         match self.inner() {
             Self::Int8Vector { values, .. } => Some(values),
@@ -2886,6 +2908,17 @@ impl Default for TelemetryConfig {
 }
 
 /// Connection settings used to create a ClientV2.
+///
+/// ```
+/// use milvus::v2::ConnectConfig;
+///
+/// let config = ConnectConfig::new()
+///     .uri("http://localhost:19530")
+///     .token("root:Milvus")
+///     .database("books");
+/// assert_eq!(config.get_uri().to_string(), "http://localhost:19530");
+/// assert_eq!(config.get_database(), "books");
+/// ```
 #[derive(Clone)]
 #[non_exhaustive]
 pub struct ConnectConfig {
@@ -3231,6 +3264,17 @@ pub(super) fn pairs(values: HashMap<String, String>) -> Vec<common::KeyValuePair
 pub type StructValue = serde_json::Map<String, serde_json::Value>;
 
 /// JSON object representing one row for row-oriented DML input.
+///
+/// ```
+/// use milvus::v2::prelude::*;
+/// use serde_json::json;
+///
+/// let row: EntityRow = json!({ "id": 1, "title": "book", "vector": [0.1, 0.2] })
+///     .as_object()
+///     .unwrap()
+///     .clone();
+/// assert_eq!(row["id"], 1);
+/// ```
 pub type EntityRow = serde_json::Map<String, serde_json::Value>;
 
 /// Sparse vector represented by dimension indexes and values.

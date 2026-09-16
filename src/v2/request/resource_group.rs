@@ -98,6 +98,11 @@ impl CreateResourceGroupRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `name` must not be empty
     pub fn build(self) -> Result<CreateResourceGroupRequest> {
         required("name", &self.value.name)?;
         Ok(self.value)
@@ -164,6 +169,11 @@ impl DropResourceGroupRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `group_name` must not be empty
     pub fn build(self) -> Result<DropResourceGroupRequest> {
         required("group_name", &self.value.group_name)?;
         Ok(self.value)
@@ -234,6 +244,12 @@ impl UpdateResourceGroupsRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `groups`: must contain at least one resource group
+    /// - `groups`: resource group names must not be empty
     pub fn build(self) -> Result<UpdateResourceGroupsRequest> {
         if self.value.groups.is_empty() {
             return Err(Error::validation(
@@ -339,6 +355,13 @@ impl TransferNodeRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `source_group` must not be empty
+    /// - `target_group` must not be empty
+    /// - `node_count` must be greater than zero
     pub fn build(self) -> Result<TransferNodeRequest> {
         required("source_group", &self.value.source_group)?;
         required("target_group", &self.value.target_group)?;
@@ -465,6 +488,14 @@ impl TransferReplicaRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `collection_name` must not be empty
+    /// - `source_group` must not be empty
+    /// - `target_group` must not be empty
+    /// - `replica_count` must be greater than zero
     pub fn build(self) -> Result<TransferReplicaRequest> {
         required("collection_name", &self.value.collection_name)?;
         required("source_group", &self.value.source_group)?;
@@ -572,6 +603,11 @@ impl DescribeResourceGroupRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `group_name` must not be empty
     pub fn build(self) -> Result<DescribeResourceGroupRequest> {
         required("group_name", &self.value.group_name)?;
         Ok(self.value)
@@ -685,17 +721,6 @@ mod builder_value_tests {
                 .build()
                 .expect("valid request")
                 .into_proto(),
-            milvus::ListResourceGroupsRequest::default()
-        );
-    }
-
-    #[test]
-    fn list_resource_groups_request_populated_values() {
-        let value = ListResourceGroupsRequest::builder()
-            .build()
-            .expect("valid request");
-        assert_eq!(
-            value.into_proto(),
             milvus::ListResourceGroupsRequest::default()
         );
     }

@@ -44,6 +44,20 @@ use std::collections::HashMap;
 // QueryRequest
 ///////////////////////////////////////////////////////////////////////////////
 /// Parameters for the ClientV2 query operation.
+///
+/// ```
+/// use milvus::v2::request::dql::QueryRequest;
+///
+/// let request = QueryRequest::builder()
+///     .collection_name("books")
+///     .filter("id > 0")
+///     .output_fields(["id", "title"])
+///     .limit(10)
+///     .build()?;
+/// assert_eq!(request.collection_name(), "books");
+/// assert_eq!(request.filter(), "id > 0");
+/// # Ok::<(), milvus::v2::error::Error>(())
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub struct QueryRequest {
@@ -365,6 +379,11 @@ impl QueryRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - the configured values fail `validate_query_request` validation
     pub fn build(self) -> Result<QueryRequest> {
         validate_query_request(&self.value)?;
         Ok(self.value)
@@ -522,6 +541,12 @@ impl GetRequestBuilder {
 
     /// Validates the configured values and builds the request.
     ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `collection_name` must not be empty
+    /// - `partition_names` must not contain empty values
+    ///
     /// Empty ids are allowed: the client short-circuits a get with no ids into an
     /// empty result without issuing the RPC, matching pymilvus.
     pub fn build(self) -> Result<GetRequest> {
@@ -535,6 +560,20 @@ impl GetRequestBuilder {
 // SearchRequest
 ///////////////////////////////////////////////////////////////////////////////
 /// Parameters for the ClientV2 search operation.
+///
+/// ```
+/// use milvus::v2::prelude::*;
+///
+/// let request = SearchRequest::builder()
+///     .collection_name("books")
+///     .vectors(SearchVectors::Float(vec![vec![0.1, 0.2, 0.3]]))
+///     .output_fields(["title"])
+///     .limit(10)
+///     .build()?;
+/// assert_eq!(request.collection_name(), "books");
+/// assert_eq!(request.limit(), 10);
+/// # Ok::<(), milvus::v2::error::Error>(())
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub struct SearchRequest {
@@ -1228,6 +1267,11 @@ impl SearchRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - the configured values fail `validate_search_request` validation
     pub fn build(self) -> Result<SearchRequest> {
         validate_search_request(&self.value)?;
         Ok(self.value)
@@ -1450,6 +1494,11 @@ impl SubSearchRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - the configured values fail `validate_sub_search_request` validation
     pub fn build(self) -> Result<SubSearchRequest> {
         validate_sub_search_request(&self.value)?;
         Ok(self.value)
@@ -1771,6 +1820,18 @@ impl HybridSearchRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `collection_name` must not be empty
+    /// - `partition_names` must not contain empty values
+    /// - `sub_requests` must contain at least one value
+    /// - `limit` must be greater than zero
+    /// - `offset` must not be negative
+    /// - `group_size` must be greater than zero
+    /// - `round_decimal`: must be within -1..=6
+    /// - the configured values fail `validate_search_extra_params` validation
     pub fn build(self) -> Result<HybridSearchRequest> {
         required("collection_name", &self.value.collection_name)?;
         non_empty_strings("partition_names", &self.value.partition_names)?;
@@ -1904,6 +1965,12 @@ impl QueryIteratorRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `batch_size` must be greater than zero
+    /// - the configured values fail `validate_query_iterator_query` validation
     pub fn build(self) -> Result<QueryIteratorRequest> {
         validate_query_iterator_query(&self.value.query)?;
         positive_usize("batch_size", self.value.batch_size)?;
@@ -1991,6 +2058,14 @@ impl SearchIteratorRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `batch_size` must be greater than zero
+    /// - `ids`: search iterator does not support IDs as search targets
+    /// - `order_by_fields`: search iterator does not support ORDER BY
+    /// - the configured values fail `validate_search_request` validation
     pub fn build(self) -> Result<SearchIteratorRequest> {
         validate_search_request(&self.value.search)?;
         if !self.value.search.ids.is_empty() {

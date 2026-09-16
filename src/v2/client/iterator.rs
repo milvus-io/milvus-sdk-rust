@@ -1842,4 +1842,31 @@ mod search_iterator_v2_tests {
         );
         assert!(validate_search_iterator_input(&request, 100).is_err());
     }
+
+    #[test]
+    fn single_vector_field_is_returned_and_multi_field_requires_explicit_selection() {
+        use super::{single_search_iterator_vector_field, SearchIteratorCollectionInfo};
+
+        let info = |vector_field_names: Vec<String>| SearchIteratorCollectionInfo {
+            collection_id: 1,
+            primary_field_name: "id".into(),
+            primary_field_type: crate::v2::types::DataType::Int64,
+            vector_field_names,
+        };
+
+        assert_eq!(
+            single_search_iterator_vector_field(&info(vec!["embedding".into()])).unwrap(),
+            "embedding"
+        );
+        assert!(matches!(
+            single_search_iterator_vector_field(&info(vec![])),
+            Err(crate::v2::error::Error::MalformedResponse(_))
+        ));
+        let error = single_search_iterator_vector_field(&info(vec![
+            "embedding".into(),
+            "embedding_2".into(),
+        ]))
+        .unwrap_err();
+        assert!(matches!(error, crate::v2::error::Error::Validation(_)));
+    }
 }

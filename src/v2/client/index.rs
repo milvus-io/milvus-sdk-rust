@@ -33,6 +33,24 @@ impl ClientV2 {
     /// Index creation is asynchronous on the server. Set the request's synchronization and timeout
     /// options when the caller must wait until the index is ready; otherwise this method returns
     /// after the create request is accepted.
+    ///
+    /// ```
+    /// # use milvus::v2::prelude::*;
+    /// # use milvus::v2::error::Result;
+    /// # use std::collections::HashMap;
+    /// # async fn example(client: &ClientV2) -> Result<()> {
+    /// let request = CreateIndexRequest::builder()
+    ///     .collection_name("books")
+    ///     .index_params(vec![IndexParam::new()
+    ///         .field_name("embedding")
+    ///         .index_type(IndexType::Hnsw)
+    ///         .metric_type(MetricType::Cosine)
+    ///         .extra_params(HashMap::from([("M".to_owned(), "16".to_owned())]))])
+    ///     .build()?;
+    /// client.create_index(request).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn create_index(&self, request: request::index::CreateIndexRequest) -> Result<()> {
         let database = self.current_database();
         let (database, collection, index_params, sync, timeout_ms) = request.into_parts(&database);

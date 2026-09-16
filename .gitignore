@@ -27,6 +27,9 @@ src/proto/*.rs
 # docker container data
 /volumes/
 
+# Editor workspace settings
+.vscode/
+
 # Code coverage report
 /code_coverage/
 

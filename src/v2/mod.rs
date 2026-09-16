@@ -41,6 +41,8 @@
 //! existing applications continue to compile, while new features are developed here.
 
 #![warn(missing_docs)]
+#![doc = include_str!("../../doc/guide/v2/quick-start.md")]
+#![doc = include_str!("../../doc/guide/v2/concepts.md")]
 
 pub mod bloom_filter;
 pub mod bulk_import;

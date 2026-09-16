@@ -26,15 +26,15 @@ use crate::proto::milvus;
 #[non_exhaustive]
 pub enum RestoreSnapshotStateCode {
     #[default]
-    /// Represents the Unknown case.
+    /// The restore state is unknown.
     Unknown,
-    /// Represents the Pending case.
+    /// The restore task has been created but has not started running.
     Pending,
-    /// Represents the Executing case.
+    /// The restore task is running.
     Executing,
-    /// Represents the Completed case.
+    /// The restore task completed successfully.
     Completed,
-    /// Represents the Failed case.
+    /// The restore task failed.
     Failed,
 }
 

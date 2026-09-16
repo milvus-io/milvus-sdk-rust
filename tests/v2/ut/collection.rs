@@ -22,7 +22,7 @@ use milvus::v2::request::dml::InsertRequest;
 use milvus::v2::request::dql::QueryRequest;
 use milvus::v2::{
     CollectionSchema, ConsistencyLevel, DataType, FieldData, FieldSchema, Function, FunctionType,
-    IndexParam, LoadState, RetryConfig,
+    IndexParam, LoadState, RetryConfig, StructFieldSchema,
 };
 use std::time::Duration;
 use tonic::Code;
@@ -1198,6 +1198,119 @@ async fn rename_collection_preserves_the_session_timestamp() {
             "old_name: \"old_books\"",
             "new_name: \"new_books\"",
             "new_db_name: \"rename_gts_db\"",
+        ],
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn struct_and_function_field_mutations_reach_the_rpc_server() {
+    let server = MockServer::start().await;
+
+    let struct_field = StructFieldSchema::new()
+        .name("events")
+        .description("event history")
+        .max_capacity(16)
+        .nullable(true)
+        .fields(vec![FieldSchema::new()
+            .name("kind")
+            .data_type(DataType::VarChar)
+            .max_length(64)]);
+    server
+        .client
+        .add_collection_struct_field(
+            AddCollectionStructFieldRequest::builder()
+                .collection_name("books")
+                .struct_field(struct_field)
+                .build()
+                .expect("valid struct field request"),
+        )
+        .await
+        .expect("add collection struct field");
+    server.assert_called("add_collection_struct_field");
+    server.assert_request_contains(
+        "add_collection_struct_field",
+        &[
+            "collection_name: \"books\"",
+            "name: \"events\"",
+            "name: \"kind\"",
+            "element_type: VarChar",
+            r#"key: "max_length", value: "64""#,
+        ],
+    );
+
+    server
+        .client
+        .add_function_field(
+            AddFunctionFieldRequest::builder()
+                .collection_name("books")
+                .field(
+                    FieldSchema::new()
+                        .name("sparse")
+                        .data_type(DataType::SparseFloatVector),
+                )
+                .function(function())
+                .index(
+                    IndexParam::new()
+                        .field_name("sparse")
+                        .index_type(milvus::v2::IndexType::SparseInvertedIndex)
+                        .metric_type(milvus::v2::MetricType::Bm25),
+                )
+                .build()
+                .expect("valid function field request"),
+        )
+        .await
+        .expect("add function field");
+    server.assert_called("alter_collection_schema");
+    server.assert_request_contains(
+        "alter_collection_schema",
+        &[
+            "collection_name: \"books\"",
+            "AddRequest(",
+            "name: \"bm25\"",
+        ],
+    );
+
+    server
+        .client
+        .drop_function_field(
+            DropFunctionFieldRequest::builder()
+                .collection_name("books")
+                .function_name("bm25")
+                .build()
+                .expect("valid drop function field request"),
+        )
+        .await
+        .expect("drop function field");
+    server.assert_request_contains(
+        "alter_collection_schema",
+        &[
+            "collection_name: \"books\"",
+            "DropRequest(",
+            "FunctionName(\"bm25\")",
+            "drop_function_output_fields: true",
+        ],
+    );
+
+    server
+        .client
+        .drop_collection_field(
+            DropCollectionFieldRequest::builder()
+                .collection_name("books")
+                .field_name("extra")
+                .build()
+                .expect("valid drop field request"),
+        )
+        .await
+        .expect("drop collection field");
+    server.assert_request_contains(
+        "alter_collection_schema",
+        &[
+            "collection_name: \"books\"",
+            "DropRequest(",
+            "FieldName(\"extra\")",
+            "drop_function_output_fields: false",
         ],
     );
 

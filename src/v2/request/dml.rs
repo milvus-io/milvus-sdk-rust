@@ -29,6 +29,28 @@ pub use crate::v2::types::{EntityRow, FieldPartialUpdateOp, FieldPartialUpdateOp
 // InsertRequest
 ///////////////////////////////////////////////////////////////////////////////
 /// Parameters for the ClientV2 insert operation.
+///
+/// ```
+/// use milvus::v2::request::dml::InsertRequest;
+/// use milvus::v2::FieldData;
+///
+/// let request = InsertRequest::builder()
+///     .collection_name("books")
+///     .columns(vec![
+///         FieldData::Int64 {
+///             name: "id".into(),
+///             values: vec![1, 2],
+///         },
+///         FieldData::FloatVector {
+///             name: "vector".into(),
+///             values: vec![vec![0.1, 0.2], vec![0.3, 0.4]],
+///         },
+///     ])
+///     .build()?;
+/// assert_eq!(request.collection_name(), "books");
+/// assert_eq!(request.columns().len(), 2);
+/// # Ok::<(), milvus::v2::error::Error>(())
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub struct InsertRequest {
@@ -170,6 +192,12 @@ impl InsertRequestBuilder {
 
     /// Validates the configured values and builds the request.
     ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `collection_name` must not be empty
+    /// - `data`: columns and rows cannot both be provided
+    ///
     /// Empty data is allowed: the client short-circuits an empty insert into an
     /// empty result without issuing the RPC, matching pymilvus.
     pub fn build(self) -> Result<InsertRequest> {
@@ -288,6 +316,13 @@ impl UpsertRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `collection_name` must not be empty
+    /// - `field_ops.field_name` must not be empty
+    /// - `data`: columns and rows cannot both be provided
     ///
     /// Empty data is allowed: the client short-circuits an empty upsert into an
     /// empty result without issuing the RPC, matching pymilvus.
@@ -489,6 +524,13 @@ impl DeleteRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `collection_name` must not be empty
+    /// - `condition`: deletion condition must be specified by primary keys or filter
+    /// - `condition`: only one deletion condition can be specified
     pub fn build(self) -> Result<DeleteRequest> {
         required("collection_name", &self.value.collection_name)?;
         match (self.value.filter.is_empty(), self.value.ids.is_empty()) {

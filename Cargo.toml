@@ -17,6 +17,7 @@ include = [
     "/src/**",
     "/tests/**",
     "/examples/**",
+    "/doc/guide/**",
     "/milvus-proto/proto/**",
     "/README.md",
     "/CHANGELOG.md",

@@ -331,17 +331,17 @@ impl ReplicateConfiguration {
 #[non_exhaustive]
 pub enum WalName {
     #[default]
-    /// Represents the Unknown case.
+    /// The WAL implementation is unknown.
     Unknown,
-    /// Represents the RocksMq case.
+    /// RocksMQ-based WAL.
     RocksMq,
-    /// Represents the Pulsar case.
+    /// Pulsar-backed WAL.
     Pulsar,
-    /// Represents the Kafka case.
+    /// Kafka-backed WAL.
     Kafka,
-    /// Represents the WoodPecker case.
+    /// Woodpecker cloud-native object-storage WAL (zero local-disk dependency).
     WoodPecker,
-    /// Represents the Test case.
+    /// Test WAL implementation used by unit and integration tests.
     Test,
 }
 

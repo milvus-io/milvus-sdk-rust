@@ -63,19 +63,19 @@ use std::collections::HashMap;
 #[non_exhaustive]
 pub enum FunctionChainStage {
     #[default]
-    /// Represents the Unspecified case.
+    /// No stage was specified.
     Unspecified,
-    /// Represents the Ingestion case.
+    /// Runs during data ingestion, transforming raw inputs before storage.
     Ingestion,
-    /// Represents the PreProcess case.
+    /// Runs before a query, transforming the query inputs.
     PreProcess,
-    /// Represents the L0Rerank case.
+    /// Runs an L0 rerank pass over the candidate set.
     L0Rerank,
-    /// Represents the L1Rerank case.
+    /// Runs an L1 rerank pass over the candidate set.
     L1Rerank,
-    /// Represents the L2Rerank case.
+    /// Runs an L2 rerank pass over the candidate set.
     L2Rerank,
-    /// Represents the PostProcess case.
+    /// Runs after query execution, transforming the final results.
     PostProcess,
 }
 

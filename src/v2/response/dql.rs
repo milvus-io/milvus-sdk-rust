@@ -1818,6 +1818,43 @@ mod tests {
     use crate::v2::types::{AggregationBucketValue, DataType, FieldData};
 
     #[test]
+    fn array_values_to_json_serializes_every_primitive_array_kind() {
+        use super::array_values_to_json;
+        assert_eq!(
+            array_values_to_json(vec![vec![true, false], vec![true]]),
+            vec![serde_json::json!([true, false]), serde_json::json!([true])]
+        );
+        assert_eq!(
+            array_values_to_json(vec![vec![1i8, 2], vec![3]]),
+            vec![serde_json::json!([1, 2]), serde_json::json!([3])]
+        );
+        assert_eq!(
+            array_values_to_json(vec![vec![1i16, 2], vec![3]]),
+            vec![serde_json::json!([1, 2]), serde_json::json!([3])]
+        );
+        assert_eq!(
+            array_values_to_json(vec![vec![1i32, 2], vec![3]]),
+            vec![serde_json::json!([1, 2]), serde_json::json!([3])]
+        );
+        assert_eq!(
+            array_values_to_json(vec![vec![1i64, 2], vec![3]]),
+            vec![serde_json::json!([1, 2]), serde_json::json!([3])]
+        );
+        assert_eq!(
+            array_values_to_json(vec![vec![1.5f32, 2.5], vec![3.5]]),
+            vec![serde_json::json!([1.5, 2.5]), serde_json::json!([3.5])]
+        );
+        assert_eq!(
+            array_values_to_json(vec![vec![1.5f64, 2.5], vec![3.5]]),
+            vec![serde_json::json!([1.5, 2.5]), serde_json::json!([3.5])]
+        );
+        assert_eq!(
+            array_values_to_json(vec![vec!["a".to_owned(), "b".to_owned()]]),
+            vec![serde_json::json!(["a", "b"])]
+        );
+    }
+
+    #[test]
     fn decode_field_data_prefers_field_specific_validity() {
         // Server sends the new field-specific validity that contradicts the legacy
         // top-level field; the field-specific channel must win.

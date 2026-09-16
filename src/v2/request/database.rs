@@ -106,6 +106,11 @@ impl CreateDatabaseRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `database_name` must not be empty
     pub fn build(self) -> Result<CreateDatabaseRequest> {
         required("database_name", &self.value.database_name)?;
         Ok(self.value)
@@ -172,6 +177,11 @@ impl DropDatabaseRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `database_name` must not be empty
     pub fn build(self) -> Result<DropDatabaseRequest> {
         required("database_name", &self.value.database_name)?;
         Ok(self.value)
@@ -298,6 +308,12 @@ impl AlterDatabasePropertiesRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `database_name` must not be empty
+    /// - `properties`: must contain at least one property
     pub fn build(self) -> Result<AlterDatabasePropertiesRequest> {
         required("database_name", &self.value.database_name)?;
         if self.value.properties.is_empty() {
@@ -392,6 +408,12 @@ impl DropDatabasePropertiesRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `database_name` must not be empty
+    /// - `property_keys`: must contain at least one property key
     pub fn build(self) -> Result<DropDatabasePropertiesRequest> {
         required("database_name", &self.value.database_name)?;
         if self.value.property_keys.is_empty() {
@@ -464,6 +486,11 @@ impl DescribeDatabaseRequestBuilder {
     }
 
     /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `database_name` must not be empty
     pub fn build(self) -> Result<DescribeDatabaseRequest> {
         required("database_name", &self.value.database_name)?;
         Ok(self.value)
@@ -521,14 +548,6 @@ mod builder_value_tests {
                 .into_proto(),
             milvus::ListDatabasesRequest::default()
         );
-    }
-
-    #[test]
-    fn list_databases_request_populated_values() {
-        let value = ListDatabasesRequest::builder()
-            .build()
-            .expect("valid request");
-        assert_eq!(value.into_proto(), milvus::ListDatabasesRequest::default());
     }
 
     #[test]

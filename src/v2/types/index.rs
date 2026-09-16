@@ -29,17 +29,17 @@ use std::collections::HashMap;
 #[non_exhaustive]
 pub enum IndexStateCode {
     #[default]
-    /// Represents the None case.
+    /// No index has been created for the field.
     None,
-    /// Represents the Unissued case.
+    /// The index build task has been created but has not started running.
     Unissued,
-    /// Represents the InProgress case.
+    /// The index build is currently in progress.
     InProgress,
-    /// Represents the Finished case.
+    /// The index build has completed successfully.
     Finished,
-    /// Represents the Failed case.
+    /// The index build failed.
     Failed,
-    /// Represents the Retry case.
+    /// The index build failed but will be retried.
     Retry,
 }
 
@@ -60,67 +60,73 @@ impl IndexStateCode {
 // IndexType
 ///////////////////////////////////////////////////////////////////////////////
 /// Index implementation used for a field.
+///
+/// See also:
+/// - [`crate::v2::types::IndexParam::index_type`] to select the index in a request.
+/// - [`crate::v2::request::index::CreateIndexRequest::builder`] to create the index.
+/// - [`crate::v2::ClientV2::create_index`] for the client operation.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum IndexType {
     #[default]
-    /// Represents the Invalid case.
+    /// Unspecified or invalid index type.
     Invalid,
-    /// Represents the Flat case.
+    /// Brute-force exact search; no index structure is built.
     Flat,
-    /// Represents the IvfFlat case.
+    /// Inverted-file index with flat storage of vectors in each cluster.
     IvfFlat,
-    /// Represents the IvfSq8 case.
+    /// IVF index with scalar-quantized vector storage.
     IvfSq8,
-    /// Represents the IvfPq case.
+    /// IVF index with product-quantized vector storage.
     IvfPq,
-    /// Represents the Hnsw case.
+    /// Hierarchical navigable small-world graph index for ANN search.
     Hnsw,
-    /// Represents the HnswSq case.
+    /// HNSW index with scalar-quantized vector storage.
     HnswSq,
-    /// Represents the HnswPq case.
+    /// HNSW index with product-quantized vector storage.
     HnswPq,
-    /// Represents the HnswPrq case.
+    /// HNSW index with product residual quantization (PQ + RQ).
     HnswPrq,
-    /// Represents the DiskAnn case.
+    /// Disk-based ANN index that keeps most of the graph on disk.
     DiskAnn,
-    /// Represents the AutoIndex case.
+    /// Lets the server choose an appropriate index automatically.
     AutoIndex,
-    /// Represents the Scann case.
+    /// Scan index using anisotropic vector quantization with re-ranking.
     Scann,
-    /// Represents the IvfRabitq case.
+    /// IVF index with range-approximation binary quantization.
     IvfRabitq,
-    /// Represents the Aisaq case.
+    /// Adaptive index for high-recall ANN search on disk.
     Aisaq,
-    /// Represents the GpuIvfFlat case.
+    /// GPU-accelerated IVF flat index.
     GpuIvfFlat,
-    /// Represents the GpuIvfPq case.
+    /// GPU-accelerated IVF product-quantization index.
     GpuIvfPq,
-    /// Represents the GpuBruteForce case.
+    /// GPU brute-force exact search.
     GpuBruteForce,
-    /// Represents the GpuCagra case.
+    /// GPU-accelerated CAGRA graph index.
     GpuCagra,
-    /// Represents the BinFlat case.
+    /// Exact search index for binary vectors.
     BinFlat,
-    /// Represents the BinIvfFlat case.
+    /// IVF index for binary vectors.
     BinIvfFlat,
-    /// Represents the MinhashLsh case.
+    /// MinHash LSH index for set similarity search.
     MinhashLsh,
-    /// Represents the Trie case.
+    /// Trie index used for string filtering.
     Trie,
-    /// Represents the Ngram case.
+    /// N-gram index used for string matching.
     Ngram,
-    /// Represents the Rtree case.
+    /// R-tree index used for spatial queries.
     Rtree,
-    /// Represents the StlSort case.
+    /// Sorted-list index over scalar values.
     StlSort,
-    /// Represents the Inverted case.
+    /// Inverted index over scalar values for efficient filtering.
     Inverted,
-    /// Represents the Bitmap case.
+    /// Bitmap index over scalar values for efficient filtering.
     Bitmap,
-    /// Represents the SparseInvertedIndex case.
+    /// Inverted index over sparse vector dimensions.
     SparseInvertedIndex,
-    /// Represents the SparseWand case.
+    /// Sparse-WAND index for sparse-vector ranking. Deprecated since Milvus 2.5.4; use
+    /// `inverted_index_algo: DAAT_WAND` on [`IndexType::SparseInvertedIndex`] instead.
     SparseWand,
 }
 

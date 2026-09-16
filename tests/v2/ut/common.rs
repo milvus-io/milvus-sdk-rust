@@ -701,6 +701,10 @@ impl MilvusService for MockMilvus {
     );
     status_method!(alter_collection_field, pb::AlterCollectionFieldRequest);
     status_method!(add_collection_field, pb::AddCollectionFieldRequest);
+    status_method!(
+        add_collection_struct_field,
+        pb::AddCollectionStructFieldRequest
+    );
     response_method_with!(
         alter_collection_schema,
         pb::AlterCollectionSchemaRequest,
