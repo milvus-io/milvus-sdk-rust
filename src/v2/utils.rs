@@ -21,9 +21,8 @@
 
 /// Converts an `f32` to an IEEE 754 binary16 bit pattern.
 ///
-/// This intentionally matches the Milvus C++ SDK conversion: the mantissa is
-/// truncated, values below the normal binary16 range become signed zero, and
-/// overflow becomes infinity.
+/// The mantissa is truncated and overflow becomes infinity. Representable
+/// subnormals and signed zero are preserved, including on decode/encode round trips.
 pub fn f32_to_f16(value: f32) -> u16 {
     let bits = value.to_bits();
     let sign = ((bits >> 31) as u16) << 15;
@@ -37,12 +36,23 @@ pub fn f32_to_f16(value: f32) -> u16 {
         return sign | 0x7c00;
     }
     if value == 0.0 {
-        return 0;
+        return sign;
     }
 
     exponent += 15;
     if exponent <= 0 {
-        sign
+        // With unbiased f32 exponent e = exponent - 15, e <= -25 is below
+        // the smallest binary16 subnormal (2^-24), so truncation yields zero.
+        // The guard handles e < -25; e = -25 shifts the 24-bit significand
+        // by 24 below, also yielding zero.
+        if exponent < -10 {
+            sign
+        } else {
+            // |v| = (2^23 + mantissa) * 2^(e - 23); in units of 2^-24,
+            // the fraction is (2^23 + mantissa) * 2^(e + 1). Thus shift
+            // right by -(e + 1) = 14 - exponent, truncating toward zero.
+            sign | (((mantissa | 0x80_0000) >> (14 - exponent)) as u16)
+        }
     } else if exponent >= 31 {
         sign | 0x7c00
     } else {
@@ -118,22 +128,51 @@ mod tests {
     use super::*;
 
     #[test]
-    fn converts_f16_with_cpp_sdk_semantics() {
+    fn converts_f16_preserving_subnormals_and_signed_zero() {
         assert_eq!(f32_to_f16(0.0), 0x0000);
-        assert_eq!(f32_to_f16(-0.0), 0x0000);
+        assert_eq!(f32_to_f16(-0.0), 0x8000);
         assert_eq!(f32_to_f16(1.0), 0x3c00);
         assert_eq!(f32_to_f16(-1.0), 0xbc00);
         assert_eq!(f32_to_f16(65504.0), 0x7bff);
         assert_eq!(f32_to_f16(f32::INFINITY), 0x7c00);
         assert_eq!(f32_to_f16(f32::NEG_INFINITY), 0xfc00);
         assert_eq!(f32_to_f16(f32::NAN), 0x7e00);
-        assert_eq!(f32_to_f16(2.0_f32.powi(-15)), 0x0000);
+        assert_eq!(f32_to_f16(2.0_f32.powi(-15)), 0x0200);
         assert_eq!(f32_to_f16(65536.0), 0x7c00);
 
         assert_eq!(f16_to_f32(0x3c00), 1.0);
         assert_eq!(f16_to_f32(0xbc00), -1.0);
         assert_eq!(f16_to_f32(0x7c00), f32::INFINITY);
         assert!(f16_to_f32(0x7e00).is_nan());
+    }
+
+    #[test]
+    fn every_finite_half_pattern_survives_a_round_trip() {
+        for bits in 0..=u16::MAX {
+            let value = f16_to_f32(bits);
+            if value.is_finite() {
+                assert_eq!(f32_to_f16(value), bits, "binary16 pattern {bits:#06x}");
+            }
+        }
+    }
+
+    #[test]
+    fn converts_f16_subnormal_boundaries_by_truncating() {
+        let unit = 2.0_f32.powi(-24);
+        for (value, expected) in [
+            (f32::from_bits(1), 0x0000),
+            (unit / 2.0, 0x0000),
+            (unit, 0x0001),
+            (unit * 1.5, 0x0001),
+            (unit * 1023.0, 0x03ff),
+            (unit * 1023.5, 0x03ff),
+            (unit * 1024.0, 0x0400),
+        ] {
+            assert_eq!(f32_to_f16(value), expected);
+            assert_eq!(f32_to_f16(-value), expected | 0x8000);
+        }
+        let bits = [0x0000, 0x8000, 0x0001, 0x8001, 0x03ff, 0x83ff, 0x0400];
+        assert_eq!(array_f32_to_f16(&array_f16_to_f32(&bits)), bits);
     }
 
     #[test]

@@ -56,6 +56,10 @@ lazy_static = "1.4"
 lru = "0.12"
 parking_lot = "0.12"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# Pin reqwest's transitive derive dependency for Rust 1.86: yoke-derive 0.8.3
+# uses str::from_utf8, which is not stable on our MSRV. Remove once upstream
+# provides a compatible release or declares an accurate rust-version.
+yoke-derive = "=0.8.2"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 webpki-roots = "1.0"
 tokio-util = "0.7"
