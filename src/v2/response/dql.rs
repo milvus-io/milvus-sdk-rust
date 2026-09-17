@@ -94,6 +94,19 @@ fn decode_field_data(value: schema::FieldData) -> Option<FieldData> {
                     values: v.data,
                 })
             }
+            // Milvus 3.0 encodes an empty Timestamptz result as LongData.
+            // Accept only the empty representation, never reinterpret nonempty
+            // data or suppress a decoding error to infer iterator exhaustion.
+            scalar_field::Data::LongData(v)
+                if matches!(data_type, Some(schema::DataType::Timestamptz))
+                    && v.data.is_empty()
+                    && valid_count == 0 =>
+            {
+                Some(FieldData::Timestamptz {
+                    name,
+                    values: Vec::new(),
+                })
+            }
             scalar_field::Data::FloatData(v)
                 if matches!(data_type, Some(schema::DataType::Float)) =>
             {
@@ -1816,6 +1829,76 @@ mod tests {
     use super::{field_data, split_field_data, QueryResponse, SearchResponse};
     use crate::proto::{common, milvus, schema};
     use crate::v2::types::{AggregationBucketValue, DataType, FieldData};
+
+    fn timestamp_long_field(
+        values: Vec<i64>,
+        legacy_valid: Vec<bool>,
+        scalar_valid: Vec<bool>,
+    ) -> schema::FieldData {
+        schema::FieldData {
+            r#type: schema::DataType::Timestamptz as i32,
+            field_name: "time".into(),
+            valid_data: legacy_valid,
+            field: Some(schema::field_data::Field::Scalars(schema::ScalarField {
+                data: Some(schema::scalar_field::Data::LongData(schema::LongArray {
+                    data: values,
+                })),
+                valid_data: scalar_valid,
+            })),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn timestamp_empty_long_data_decodes_an_empty_query_page() {
+        let empty = timestamp_long_field(vec![], vec![], vec![]);
+        assert!(
+            matches!(field_data(empty.clone()).unwrap(), FieldData::Timestamptz { values, .. } if values.is_empty())
+        );
+        let query = QueryResponse::from_proto(milvus::QueryResults {
+            fields_data: vec![empty],
+            output_fields: vec!["time".into()],
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(query.results().get_row_count(), 0);
+        assert_eq!(query.results().get_output_field_names(), ["time"]);
+    }
+
+    #[test]
+    fn timestamp_empty_long_data_retains_nulls_and_validity_precedence() {
+        for (legacy, scalar) in [
+            (vec![false, false], vec![]),
+            (vec![], vec![false, false]),
+            (vec![true, true], vec![false, false]),
+        ] {
+            let decoded = field_data(timestamp_long_field(vec![], legacy, scalar)).unwrap();
+            let FieldData::Nullable { data, valid_data } = decoded else {
+                panic!("expected nullable timestamps")
+            };
+            assert_eq!(valid_data, [false, false]);
+            assert!(matches!(*data, FieldData::Timestamptz { values, .. } if values.is_empty()));
+        }
+    }
+
+    #[test]
+    fn timestamp_empty_long_data_does_not_hide_malformed_values() {
+        for field in [
+            timestamp_long_field(vec![1], vec![], vec![]),
+            timestamp_long_field(vec![1], vec![false], vec![]),
+            timestamp_long_field(vec![], vec![true], vec![]),
+            timestamp_long_field(vec![], vec![], vec![true]),
+            timestamp_long_field(vec![], vec![false], vec![true]),
+        ] {
+            assert!(matches!(
+                field_data(field),
+                Err(crate::v2::error::Error::MalformedResponse(_))
+            ));
+        }
+        let mut wrong_type = timestamp_long_field(vec![], vec![], vec![]);
+        wrong_type.r#type = schema::DataType::Double as i32;
+        assert!(field_data(wrong_type).is_err());
+    }
 
     #[test]
     fn array_values_to_json_serializes_every_primitive_array_kind() {
