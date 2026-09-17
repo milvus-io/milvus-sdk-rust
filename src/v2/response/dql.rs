@@ -724,6 +724,25 @@ fn decode_struct_subfield_rows<T>(
 fn field_data_to_json_values(value: FieldData) -> Option<Vec<serde_json::Value>> {
     use serde_json::{json, Value};
 
+    // Struct children are converted to JSON inside the decoder. serde_json
+    // turns non-finite floats into null, which would erase the distinction from
+    // a legitimate nullable child before a caller can validate the result.
+    let finite = match &value {
+        FieldData::Float { values, .. } => values.iter().all(|v| v.is_finite()),
+        FieldData::Double { values, .. } => values.iter().all(|v| v.is_finite()),
+        FieldData::ArrayFloat { values, .. } | FieldData::FloatVector { values, .. } => {
+            values.iter().flatten().all(|v| v.is_finite())
+        }
+        FieldData::ArrayDouble { values, .. } => values.iter().flatten().all(|v| v.is_finite()),
+        FieldData::SparseFloatVector { values, .. } => values
+            .iter()
+            .flat_map(|v| v.values())
+            .all(|v| v.is_finite()),
+        _ => true,
+    };
+    if !finite {
+        return None;
+    }
     Some(match value {
         FieldData::Bool { values, .. } => values.into_iter().map(Value::Bool).collect(),
         FieldData::Int8 { values, .. } => values.into_iter().map(|value| json!(value)).collect(),
@@ -1816,6 +1835,139 @@ mod tests {
     use super::{field_data, split_field_data, QueryResponse, SearchResponse};
     use crate::proto::{common, milvus, schema};
     use crate::v2::types::{AggregationBucketValue, DataType, FieldData};
+
+    #[test]
+    fn nonfinite_struct_children_are_rejected_before_json_conversion() {
+        for value in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            let columns = [
+                FieldData::Float {
+                    name: "x".into(),
+                    values: vec![value],
+                },
+                FieldData::Double {
+                    name: "x".into(),
+                    values: vec![f64::from(value)],
+                },
+                FieldData::ArrayFloat {
+                    name: "x".into(),
+                    values: vec![vec![1.0, value]],
+                },
+                FieldData::ArrayDouble {
+                    name: "x".into(),
+                    values: vec![vec![1.0, f64::from(value)]],
+                },
+                FieldData::FloatVector {
+                    name: "x".into(),
+                    values: vec![vec![1.0, value]],
+                },
+                FieldData::SparseFloatVector {
+                    name: "x".into(),
+                    values: vec![[(7, value)].into_iter().collect()],
+                },
+            ];
+            for column in columns {
+                assert!(
+                    super::field_data_to_json_values(column.clone()).is_none(),
+                    "{column:?}"
+                );
+                assert!(super::field_data_to_json_values(FieldData::Nullable {
+                    data: Box::new(column),
+                    valid_data: vec![true],
+                })
+                .is_none());
+            }
+        }
+        let finite = FieldData::Double {
+            name: "x".into(),
+            values: vec![1.5],
+        };
+        assert_eq!(
+            super::field_data_to_json_values(finite.clone()).unwrap(),
+            vec![serde_json::json!(1.5)]
+        );
+        assert_eq!(
+            super::field_data_to_json_values(FieldData::Nullable {
+                data: Box::new(finite),
+                valid_data: vec![false, true],
+            })
+            .unwrap(),
+            vec![serde_json::Value::Null, serde_json::json!(1.5)]
+        );
+        assert_eq!(
+            super::field_data_to_json_values(FieldData::Nullable {
+                data: Box::new(FieldData::Double {
+                    name: "x".into(),
+                    values: vec![]
+                }),
+                valid_data: vec![false],
+            })
+            .unwrap(),
+            vec![serde_json::Value::Null]
+        );
+    }
+
+    #[test]
+    fn nonfinite_struct_children_fail_query_and_search_decoding() {
+        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let field = schema::FieldData {
+                r#type: schema::DataType::ArrayOfStruct as i32,
+                field_name: "events".into(),
+                field: Some(schema::field_data::Field::StructArrays(
+                    schema::StructArrayField {
+                        fields: vec![schema::FieldData {
+                            r#type: schema::DataType::Array as i32,
+                            field_name: "rating".into(),
+                            field: Some(schema::field_data::Field::Scalars(schema::ScalarField {
+                                data: Some(schema::scalar_field::Data::ArrayData(
+                                    schema::ArrayArray {
+                                        element_type: schema::DataType::Double as i32,
+                                        data: vec![schema::ScalarField {
+                                            data: Some(schema::scalar_field::Data::DoubleData(
+                                                schema::DoubleArray { data: vec![value] },
+                                            )),
+                                            ..Default::default()
+                                        }],
+                                    },
+                                )),
+                                ..Default::default()
+                            })),
+                            ..Default::default()
+                        }],
+                        ..Default::default()
+                    },
+                )),
+                ..Default::default()
+            };
+            let query = QueryResponse::from_proto(milvus::QueryResults {
+                fields_data: vec![field.clone()],
+                ..Default::default()
+            });
+            assert!(matches!(
+                query,
+                Err(crate::v2::error::Error::MalformedResponse(_))
+            ));
+            let search = SearchResponse::from_proto(milvus::SearchResults {
+                results: Some(schema::SearchResultData {
+                    num_queries: 1,
+                    top_k: 1,
+                    topks: vec![1],
+                    scores: vec![0.9],
+                    ids: Some(schema::IDs {
+                        id_field: Some(schema::i_ds::IdField::IntId(schema::LongArray {
+                            data: vec![1],
+                        })),
+                    }),
+                    fields_data: vec![field],
+                    ..Default::default()
+                }),
+                ..Default::default()
+            });
+            assert!(matches!(
+                search,
+                Err(crate::v2::error::Error::MalformedResponse(_))
+            ));
+        }
+    }
 
     #[test]
     fn array_values_to_json_serializes_every_primitive_array_kind() {
