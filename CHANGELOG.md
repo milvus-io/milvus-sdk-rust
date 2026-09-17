@@ -23,6 +23,14 @@
 - Preserve binary16 subnormals and signed zero during f32-to-f16 conversion, so
   Float16/bf16 vectors round-trip without lossy collapse of small magnitudes
 
+### Breaking change
+
+- `filter_templates` on `QueryRequest`, `SearchRequest`, `SubSearchRequest`, and
+  `DeleteRequest` now takes and returns `HashMap<String, FilterTemplateValue>`
+  instead of `HashMap<String, serde_json::Value>`. Pass the typed
+  `FilterTemplateValue` variants (Int64/String/Int64Array/StringArray/Bytes, or
+  the new `add_filter_template` builder method) instead of raw JSON values.
+
 ## milvus-sdk-rust 3.0.1 (2026-09-09)
 
 ### Feature
