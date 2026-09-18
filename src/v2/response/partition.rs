@@ -171,6 +171,9 @@ impl ListPartitionsResponse {
         &self.partitions
     }
 
+    /// The server deprecates the in-memory percentages in favor of the loading-progress RPC,
+    /// but the SDK still surfaces them for C++ parity.
+    #[allow(deprecated)]
     pub(crate) fn from_proto(value: milvus::ShowPartitionsResponse) -> Result<Self> {
         let count = value.partition_names.len();
         validate_parallel_array_len(
@@ -194,6 +197,15 @@ impl ListPartitionsResponse {
             "created_utc_timestamps",
             value.created_utc_timestamps.len(),
         )?;
+        if !value.in_memory_percentages.is_empty() {
+            validate_parallel_array_len(
+                "ShowPartitionsResponse",
+                "partition_names",
+                count,
+                "in_memory_percentages",
+                value.in_memory_percentages.len(),
+            )?;
+        }
 
         let names = value.partition_names;
         let partitions = names
@@ -204,6 +216,7 @@ impl ListPartitionsResponse {
                 id: value.partition_i_ds[i],
                 created_timestamp: value.created_timestamps[i],
                 created_utc_timestamp: value.created_utc_timestamps[i],
+                in_memory_percentage: value.in_memory_percentages.get(i).copied().unwrap_or(0),
             })
             .collect();
         Ok(Self {

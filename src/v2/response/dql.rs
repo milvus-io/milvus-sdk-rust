@@ -819,6 +819,10 @@ fn array_values_to_json<T: serde::Serialize>(values: Vec<Vec<T>>) -> Vec<serde_j
 pub struct QueryResponse {
     pub(crate) results: QueryResults,
     pub(crate) session_timestamp: u64,
+    pub(crate) cost: i64,
+    pub(crate) scanned_remote_bytes: i64,
+    pub(crate) scanned_total_bytes: i64,
+    pub(crate) cache_hit_ratio: f32,
 }
 
 impl QueryResponse {
@@ -829,6 +833,10 @@ impl QueryResponse {
         Self {
             results: QueryResults::new(),
             session_timestamp: 0,
+            cost: -1,
+            scanned_remote_bytes: -1,
+            scanned_total_bytes: -1,
+            cache_hit_ratio: -1.0,
         }
     }
 }
@@ -855,7 +863,33 @@ impl QueryResponse {
         self.session_timestamp
     }
 
+    /// Returns the cost.
+    pub fn cost(&self) -> i64 {
+        self.cost
+    }
+
+    /// Returns the scanned remote bytes.
+    pub fn scanned_remote_bytes(&self) -> i64 {
+        self.scanned_remote_bytes
+    }
+
+    /// Returns the scanned total bytes.
+    pub fn scanned_total_bytes(&self) -> i64 {
+        self.scanned_total_bytes
+    }
+
+    /// Returns the cache hit ratio.
+    pub fn cache_hit_ratio(&self) -> f32 {
+        self.cache_hit_ratio
+    }
+
     pub(crate) fn from_proto(value: milvus::QueryResults) -> Result<Self> {
+        let extra_info = value
+            .status
+            .as_ref()
+            .map(|status| &status.extra_info)
+            .cloned()
+            .unwrap_or_default();
         let output_fields = value
             .fields_data
             .into_iter()
@@ -885,6 +919,10 @@ impl QueryResponse {
                 element_indices,
             },
             session_timestamp: value.session_ts,
+            cost: parse_extra(&extra_info, "report_value", -1_i64),
+            scanned_remote_bytes: parse_extra(&extra_info, "scanned_remote_bytes", -1_i64),
+            scanned_total_bytes: parse_extra(&extra_info, "scanned_total_bytes", -1_i64),
+            cache_hit_ratio: parse_extra(&extra_info, "cache_hit_ratio", -1.0_f32),
         })
     }
 
@@ -917,6 +955,10 @@ impl QueryResponse {
         };
         let output_field_names = self.results.output_field_names;
         let session_timestamp = self.session_timestamp;
+        let cost = self.cost;
+        let scanned_remote_bytes = self.scanned_remote_bytes;
+        let scanned_total_bytes = self.scanned_total_bytes;
+        let cache_hit_ratio = self.cache_hit_ratio;
         Ok((
             Self {
                 results: QueryResults {
@@ -925,6 +967,10 @@ impl QueryResponse {
                     element_indices,
                 },
                 session_timestamp,
+                cost,
+                scanned_remote_bytes,
+                scanned_total_bytes,
+                cache_hit_ratio,
             },
             Some(Self {
                 results: QueryResults {
@@ -933,6 +979,10 @@ impl QueryResponse {
                     element_indices: remaining_indices,
                 },
                 session_timestamp,
+                cost,
+                scanned_remote_bytes,
+                scanned_total_bytes,
+                cache_hit_ratio,
             }),
         ))
     }
@@ -966,6 +1016,30 @@ impl QueryResponseBuilder {
     /// Sets the session timestamp and returns the updated value.
     pub fn session_timestamp(mut self, value: u64) -> Self {
         self.value.session_timestamp = value;
+        self
+    }
+
+    /// Sets the cost and returns the updated value.
+    pub fn cost(mut self, value: i64) -> Self {
+        self.value.cost = value;
+        self
+    }
+
+    /// Sets the scanned remote bytes and returns the updated value.
+    pub fn scanned_remote_bytes(mut self, value: i64) -> Self {
+        self.value.scanned_remote_bytes = value;
+        self
+    }
+
+    /// Sets the scanned total bytes and returns the updated value.
+    pub fn scanned_total_bytes(mut self, value: i64) -> Self {
+        self.value.scanned_total_bytes = value;
+        self
+    }
+
+    /// Sets the cache hit ratio and returns the updated value.
+    pub fn cache_hit_ratio(mut self, value: f32) -> Self {
+        self.value.cache_hit_ratio = value;
         self
     }
 
@@ -3546,6 +3620,39 @@ mod tests {
         .expect_err("element_indices length mismatch must be rejected");
         assert!(error.to_string().contains("element_indices"));
     }
+
+    #[test]
+    fn query_response_decodes_server_extra_info() {
+        let response = QueryResponse::from_proto(milvus::QueryResults {
+            status: Some(crate::proto::common::Status {
+                extra_info: [
+                    ("report_value".into(), "42".into()),
+                    ("scanned_remote_bytes".into(), "1024".into()),
+                    ("scanned_total_bytes".into(), "2048".into()),
+                    ("cache_hit_ratio".into(), "0.75".into()),
+                ]
+                .into_iter()
+                .collect(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
+        .expect("decode query response");
+        assert_eq!(response.cost(), 42);
+        assert_eq!(response.scanned_remote_bytes(), 1024);
+        assert_eq!(response.scanned_total_bytes(), 2048);
+        assert_eq!(response.cache_hit_ratio(), 0.75);
+    }
+
+    #[test]
+    fn query_response_extra_info_defaults_to_sentinels() {
+        let response = QueryResponse::from_proto(milvus::QueryResults::default())
+            .expect("decode query response");
+        assert_eq!(response.cost(), -1);
+        assert_eq!(response.scanned_remote_bytes(), -1);
+        assert_eq!(response.scanned_total_bytes(), -1);
+        assert_eq!(response.cache_hit_ratio(), -1.0);
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -3576,10 +3683,27 @@ mod builder_value_tests {
         let value = QueryResponse::builder()
             .results(results.clone())
             .session_timestamp(session_timestamp.clone())
+            .cost(3)
+            .scanned_remote_bytes(4)
+            .scanned_total_bytes(5)
+            .cache_hit_ratio(0.5)
             .build();
 
         assert_eq!(value.results().to_owned(), results);
         assert_eq!(value.session_timestamp().to_owned(), session_timestamp);
+        assert_eq!(value.cost().to_owned(), 3);
+        assert_eq!(value.scanned_remote_bytes().to_owned(), 4);
+        assert_eq!(value.scanned_total_bytes().to_owned(), 5);
+        assert_eq!(value.cache_hit_ratio().to_owned(), 0.5);
+    }
+
+    #[test]
+    fn query_response_defaults_extra_info_to_absent_sentinels() {
+        let value = QueryResponse::builder().build();
+        assert_eq!(value.cost().to_owned(), -1);
+        assert_eq!(value.scanned_remote_bytes().to_owned(), -1);
+        assert_eq!(value.scanned_total_bytes().to_owned(), -1);
+        assert_eq!(value.cache_hit_ratio().to_owned(), -1.0);
     }
 
     #[test]

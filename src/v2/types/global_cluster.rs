@@ -45,6 +45,13 @@ impl ClusterCapability {
     pub(crate) const READABLE: u8 = 0b01;
     /// Bit for write access.
     pub(crate) const WRITABLE: u8 = 0b10;
+    /// Combination of the readable and writable bits, marking the primary cluster.
+    ///
+    /// Retained as a named constant for C++/Java `ClusterCapability::PRIMARY` parity. Primary
+    /// selection uses the writable bit test like the C++ SDK, so a write-capable cluster is
+    /// selected regardless of its read bit.
+    #[allow(dead_code)]
+    pub(crate) const PRIMARY: u8 = 0b11;
 
     /// Returns whether the cluster is readable.
     #[cfg(test)]
@@ -88,6 +95,9 @@ impl ClusterInfo {
     }
 
     /// Returns whether this cluster is the writable primary.
+    ///
+    /// Matches the C++ SDK's `ClusterInfo::IsPrimary()`, which tests the writable capability
+    /// bit rather than requiring the exact `PRIMARY` combination.
     pub(crate) fn is_primary(&self) -> bool {
         self.capability.is_writable()
     }
