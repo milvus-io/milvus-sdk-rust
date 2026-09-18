@@ -1986,6 +1986,21 @@ impl MilvusService for MockMilvus {
                     results.fields_data = vec![string_field("text", vec!["book", "book"])];
                     results.search_iterator_v2_results = None;
                 }
+            } else if request.dsl.contains("filter_external_iterator") {
+                // One V2 page with five hits; qualifying hits sit past the `limit` window so the
+                // page filter must decode the whole page before the returned rows are capped.
+                if let Some(results) = response.results.as_mut() {
+                    results.top_k = 5;
+                    results.topks = vec![5];
+                    results.scores = vec![0.2, 0.3, 0.9, 0.85, 0.95];
+                    results.ids = Some(schema::IDs {
+                        id_field: Some(schema::i_ds::IdField::IntId(schema::LongArray {
+                            data: vec![1, 2, 3, 4, 5],
+                        })),
+                        ..Default::default()
+                    });
+                    results.fields_data = vec![string_field("text", vec!["a", "b", "c", "d", "e"])];
+                }
             }
             if request.dsl == "zero_session_ts" {
                 response.session_ts = 0;

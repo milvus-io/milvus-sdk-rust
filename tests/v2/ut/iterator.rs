@@ -71,6 +71,59 @@ async fn search_iterator_v2_direct_describe_bypasses_the_schema_cache() {
 }
 
 #[tokio::test]
+async fn search_iterator_filters_the_full_page_before_capping_to_the_limit() {
+    let server = MockServer::start().await;
+    let mut iterator = server
+        .client
+        .search_iterator(
+            SearchIteratorRequest::builder()
+                .search(
+                    SearchRequest::builder()
+                        .collection_name("books")
+                        .vector_field("vector")
+                        .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+                        .metric_type(MetricType::Cosine)
+                        .filter("filter_external_iterator")
+                        .build()
+                        .expect("valid search request"),
+                )
+                .batch_size(10)
+                .limit(2)
+                .external_filter_func(|result| {
+                    let keep = result
+                        .get_scores()
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(index, score)| (*score >= 0.8).then_some(index))
+                        .collect::<Vec<_>>();
+                    result.filter_rows(&keep)
+                })
+                .build()
+                .expect("valid iterator request"),
+        )
+        .await
+        .expect("create search iterator");
+
+    // The server page holds five hits (scores 0.2, 0.3, 0.9, 0.85, 0.95). The filter keeps only
+    // the three hits above 0.8, which sit past the limit window, so the iterator must decode and
+    // filter the whole page before capping the returned rows to the limit of two.
+    let page = iterator
+        .next()
+        .await
+        .expect("fetch search page")
+        .expect("page has rows");
+    let rows = page.results().get_results()[0]
+        .get_output_rows()
+        .expect("materialize rows");
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0]["id"], 3);
+    assert_eq!(rows[1]["id"], 4);
+    assert!(iterator.next().await.expect("finish iterator").is_none());
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn zero_limit_iterators_finish_without_rpc_work() {
     let server = MockServer::start().await;
 

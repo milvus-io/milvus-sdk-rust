@@ -704,7 +704,8 @@ async fn configured_endpoint(param: &ConnectConfig) -> Result<(Endpoint, String)
 }
 
 fn tls_enabled(param: &ConnectConfig) -> bool {
-    param.uri.starts_with("https://")
+    param.secure
+        || param.uri.starts_with("https://")
         || param.tls_server_name.is_some()
         || param.ca_certificate.is_some()
         || param.client_certificate.is_some()
