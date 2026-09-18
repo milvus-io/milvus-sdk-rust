@@ -36,9 +36,11 @@ pub use crate::v2::types::{
     EmbeddingList, HighlightQuery, HighlightType, Highlighter, LexicalHighlighter, SearchVectors,
     SemanticHighlighter,
 };
+use crate::v2::types::{SearchIteratorFilter, SingleResult};
 use prost::Message;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 ///////////////////////////////////////////////////////////////////////////////
 // QueryRequest
@@ -1982,12 +1984,47 @@ impl QueryIteratorRequestBuilder {
 // SearchIteratorRequest
 ///////////////////////////////////////////////////////////////////////////////
 /// Parameters for the ClientV2 search_iterator operation.
-#[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub struct SearchIteratorRequest {
     pub(crate) search: SearchRequest,
     pub(crate) batch_size: usize,
     pub(crate) limit: Option<usize>,
+    pub(crate) external_filter_func: Option<Arc<SearchIteratorFilter>>,
+}
+
+impl Clone for SearchIteratorRequest {
+    fn clone(&self) -> Self {
+        Self {
+            search: self.search.clone(),
+            batch_size: self.batch_size,
+            limit: self.limit,
+            external_filter_func: self.external_filter_func.clone(),
+        }
+    }
+}
+
+/// Equality ignores the configured [`Self::external_filter_func`] callback: two requests compare
+/// equal when their search, batch size, and limit match and either both carry a filter or both
+/// do not. The callback contents are not compared (closures cannot implement `PartialEq`).
+impl PartialEq for SearchIteratorRequest {
+    fn eq(&self, other: &Self) -> bool {
+        self.search == other.search
+            && self.batch_size == other.batch_size
+            && self.limit == other.limit
+            && self.external_filter_func.is_some() == other.external_filter_func.is_some()
+    }
+}
+
+impl std::fmt::Debug for SearchIteratorRequest {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SearchIteratorRequest")
+            .field("search", &self.search)
+            .field("batch_size", &self.batch_size)
+            .field("limit", &self.limit)
+            .field("external_filter_func", &self.external_filter_func.is_some())
+            .finish()
+    }
 }
 
 impl SearchIteratorRequest {
@@ -2017,6 +2054,11 @@ impl SearchIteratorRequest {
     pub fn limit(&self) -> Option<usize> {
         self.limit
     }
+
+    /// Returns the client-side page filter callback, if configured.
+    pub fn external_filter_func(&self) -> Option<&SearchIteratorFilter> {
+        self.external_filter_func.as_deref()
+    }
 }
 
 impl SearchIteratorRequest {
@@ -2025,6 +2067,7 @@ impl SearchIteratorRequest {
             search: SearchRequest::empty(),
             batch_size: 1_000,
             limit: None,
+            external_filter_func: None,
         }
     }
 }
@@ -2054,6 +2097,22 @@ impl SearchIteratorRequestBuilder {
     /// Sets the limit and returns the updated value.
     pub fn limit(mut self, value: usize) -> Self {
         self.value.limit = Some(value);
+        self
+    }
+
+    /// Sets a client-side page filter and returns the updated value.
+    ///
+    /// The callback receives each page of search hits and may drop rows in place
+    /// via [`SingleResult::filter_rows`] (e.g. keeping only hits above a score
+    /// threshold). Returning `Ok(())` continues iteration with the pruned page;
+    /// returning `Err` aborts the iterator. A page that the filter empties is
+    /// skipped and the iterator keeps pulling until a non-empty page or server
+    /// exhaustion, mirroring the C++/Java `externalFilterFunc`.
+    pub fn external_filter_func(
+        mut self,
+        filter: impl Fn(&mut SingleResult) -> Result<()> + Send + Sync + 'static,
+    ) -> Self {
+        self.value.external_filter_func = Some(Arc::new(filter));
         self
     }
 
@@ -3891,6 +3950,32 @@ mod builder_value_tests {
             .expect("zero limit is valid for a search iterator");
 
         assert_eq!(value.limit(), Some(0));
+    }
+
+    #[test]
+    fn search_iterator_request_supports_external_filter_func() {
+        let search = SearchRequest::builder()
+            .collection_name("books")
+            .vectors(SearchVectors::Float(vec![vec![0.0]]))
+            .build()
+            .expect("valid search request");
+        let value = SearchIteratorRequest::builder()
+            .search(search)
+            .external_filter_func(|result| {
+                let keep = result
+                    .get_scores()
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, score)| (*score >= 0.5).then_some(index))
+                    .collect::<Vec<_>>();
+                result.filter_rows(&keep)
+            })
+            .build()
+            .expect("valid request");
+
+        assert!(value.external_filter_func().is_some());
+        let rebuilt = value.into_builder().build().expect("rebuild");
+        assert!(rebuilt.external_filter_func().is_some());
     }
 
     #[test]

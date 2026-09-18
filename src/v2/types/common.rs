@@ -298,6 +298,8 @@ pub enum FunctionType {
     Rerank,
     /// MinHash function that turns an input text field into a binary MinHash signature.
     MinHash,
+    /// Molecular-fingerprint function that turns an input SMILES field into a binary fingerprint.
+    MolFingerprint,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -498,6 +500,7 @@ impl Function {
                 FunctionType::TextEmbedding => schema::FunctionType::TextEmbedding,
                 FunctionType::Rerank => schema::FunctionType::Rerank,
                 FunctionType::MinHash => schema::FunctionType::MinHash,
+                FunctionType::MolFingerprint => schema::FunctionType::MolFingerprint,
             } as i32,
             input_field_names: self.input_fields,
             input_field_ids: self.input_field_ids,
@@ -520,6 +523,7 @@ impl Function {
                 schema::FunctionType::TextEmbedding => FunctionType::TextEmbedding,
                 schema::FunctionType::Rerank => FunctionType::Rerank,
                 schema::FunctionType::MinHash => FunctionType::MinHash,
+                schema::FunctionType::MolFingerprint => FunctionType::MolFingerprint,
                 _ => FunctionType::Unknown,
             },
             input_fields: value.input_field_names,
@@ -630,6 +634,16 @@ impl Ids {
             (self, other),
             (Self::Int64(_), Self::Int64(_)) | (Self::VarChar(_), Self::VarChar(_))
         )
+    }
+
+    /// Selects the rows at `keep` positions, preserving their order.
+    pub(crate) fn select(self, keep: &[usize]) -> Self {
+        match self {
+            Self::Int64(values) => Self::Int64(keep.iter().map(|index| values[*index]).collect()),
+            Self::VarChar(values) => {
+                Self::VarChar(keep.iter().map(|index| values[*index].clone()).collect())
+            }
+        }
     }
 }
 
@@ -2619,6 +2633,146 @@ impl FieldData {
     }
 }
 
+/// Selects the rows at `keep` positions from a field, preserving their order.
+///
+/// Nullable fields keep only the validity entries at `keep` and select the corresponding rows
+/// from the compacted inner payload. Used by the search-iterator page filter to prune hits.
+pub(crate) fn select_field_data_rows(data: FieldData, keep: &[usize]) -> Result<FieldData> {
+    fn collect<T: Clone>(values: Vec<T>, keep: &[usize]) -> Vec<T> {
+        keep.iter().map(|index| values[*index].clone()).collect()
+    }
+    Ok(match data {
+        FieldData::Bool { name, values } => FieldData::Bool {
+            name,
+            values: collect(values, keep),
+        },
+        FieldData::Int8 { name, values } => FieldData::Int8 {
+            name,
+            values: collect(values, keep),
+        },
+        FieldData::Int16 { name, values } => FieldData::Int16 {
+            name,
+            values: collect(values, keep),
+        },
+        FieldData::Int32 { name, values } => FieldData::Int32 {
+            name,
+            values: collect(values, keep),
+        },
+        FieldData::Int64 { name, values } => FieldData::Int64 {
+            name,
+            values: collect(values, keep),
+        },
+        FieldData::Float { name, values } => FieldData::Float {
+            name,
+            values: collect(values, keep),
+        },
+        FieldData::Double { name, values } => FieldData::Double {
+            name,
+            values: collect(values, keep),
+        },
+        FieldData::VarChar { name, values } => FieldData::VarChar {
+            name,
+            values: collect(values, keep),
+        },
+        FieldData::Json { name, values } => FieldData::Json {
+            name,
+            values: collect(values, keep),
+        },
+        FieldData::Geometry { name, values } => FieldData::Geometry {
+            name,
+            values: collect(values, keep),
+        },
+        FieldData::Timestamptz { name, values } => FieldData::Timestamptz {
+            name,
+            values: collect(values, keep),
+        },
+        FieldData::ArrayBool { name, values } => FieldData::ArrayBool {
+            name,
+            values: collect(values, keep),
+        },
+        FieldData::ArrayInt8 { name, values } => FieldData::ArrayInt8 {
+            name,
+            values: collect(values, keep),
+        },
+        FieldData::ArrayInt16 { name, values } => FieldData::ArrayInt16 {
+            name,
+            values: collect(values, keep),
+        },
+        FieldData::ArrayInt32 { name, values } => FieldData::ArrayInt32 {
+            name,
+            values: collect(values, keep),
+        },
+        FieldData::ArrayInt64 { name, values } => FieldData::ArrayInt64 {
+            name,
+            values: collect(values, keep),
+        },
+        FieldData::ArrayFloat { name, values } => FieldData::ArrayFloat {
+            name,
+            values: collect(values, keep),
+        },
+        FieldData::ArrayDouble { name, values } => FieldData::ArrayDouble {
+            name,
+            values: collect(values, keep),
+        },
+        FieldData::ArrayVarChar { name, values } => FieldData::ArrayVarChar {
+            name,
+            values: collect(values, keep),
+        },
+        FieldData::Struct { name, values } => FieldData::Struct {
+            name,
+            values: collect(values, keep),
+        },
+        FieldData::FloatVector { name, values } => FieldData::FloatVector {
+            name,
+            values: collect(values, keep),
+        },
+        FieldData::BinaryVector { name, values } => FieldData::BinaryVector {
+            name,
+            values: collect(values, keep),
+        },
+        FieldData::Float16Vector { name, values } => FieldData::Float16Vector {
+            name,
+            values: collect(values, keep),
+        },
+        FieldData::BFloat16Vector { name, values } => FieldData::BFloat16Vector {
+            name,
+            values: collect(values, keep),
+        },
+        FieldData::SparseFloatVector { name, values } => FieldData::SparseFloatVector {
+            name,
+            values: collect(values, keep),
+        },
+        FieldData::Int8Vector { name, values } => FieldData::Int8Vector {
+            name,
+            values: collect(values, keep),
+        },
+        FieldData::Nullable { data, valid_data } => {
+            let mut kept_inner = Vec::with_capacity(keep.len());
+            let mut kept_valid = Vec::with_capacity(keep.len());
+            for &index in keep {
+                let valid = *valid_data.get(index).ok_or_else(|| {
+                    Error::validation(
+                        "keep".into(),
+                        format!(
+                            "row index {index} is out of range for {} rows",
+                            valid_data.len()
+                        ),
+                    )
+                })?;
+                kept_valid.push(valid);
+                if valid {
+                    kept_inner.push(valid_data[..index].iter().filter(|valid| **valid).count());
+                }
+            }
+            let inner = select_field_data_rows(*data, &kept_inner)?;
+            FieldData::Nullable {
+                data: Box::new(inner),
+                valid_data: kept_valid,
+            }
+        }
+    })
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // RetryConfig
 ///////////////////////////////////////////////////////////////////////////////
@@ -2924,7 +3078,11 @@ impl Default for TelemetryConfig {
 pub struct ConnectConfig {
     pub(crate) uri: String,
     pub(crate) token: Option<String>,
+    pub(crate) token_explicit: bool,
+    pub(crate) username: Option<String>,
+    pub(crate) password: Option<String>,
     pub(crate) tls_server_name: Option<String>,
+    pub(crate) secure: bool,
     pub(crate) ca_certificate: Option<String>,
     pub(crate) client_certificate: Option<String>,
     pub(crate) client_key: Option<String>,
@@ -2942,11 +3100,15 @@ impl std::fmt::Debug for ConnectConfig {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let token = self.token.as_ref().map(|_| "[REDACTED]");
         let client_key = self.client_key.as_ref().map(|_| "[REDACTED]");
+        let password = self.password.as_ref().map(|_| "[REDACTED]");
         formatter
             .debug_struct("ConnectConfig")
             .field("uri", &self.uri)
             .field("token", &token)
+            .field("username", &self.username)
+            .field("password", &password)
             .field("tls_server_name", &self.tls_server_name)
+            .field("secure", &self.secure)
             .field("ca_certificate", &self.ca_certificate)
             .field("client_certificate", &self.client_certificate)
             .field("client_key", &client_key)
@@ -2968,7 +3130,11 @@ impl ConnectConfig {
         Self {
             uri: "http://localhost:19530".to_owned(),
             token: None,
+            token_explicit: false,
+            username: None,
+            password: None,
             tls_server_name: None,
+            secure: false,
             ca_certificate: None,
             client_certificate: None,
             client_key: None,
@@ -3001,16 +3167,24 @@ impl ConnectConfig {
     }
 
     /// Sets the token and returns the updated value.
+    ///
+    /// An explicitly-set token takes precedence over any [`Self::username`] / [`Self::password`]
+    /// credential, matching the Java SDK's `getAuthorizationValue()` precedence.
     pub fn token(mut self, token: impl Into<String>) -> Self {
         use base64::Engine;
         self.token = Some(base64::engine::general_purpose::STANDARD.encode(token.into()));
+        self.token_explicit = true;
         self
     }
 
     /// Sets the token and returns this value for further mutation.
+    ///
+    /// An explicitly-set token takes precedence over any [`Self::username`] / [`Self::password`]
+    /// credential, matching the Java SDK's `getAuthorizationValue()` precedence.
     pub fn set_token(&mut self, token: impl Into<String>) -> &mut Self {
         use base64::Engine;
         self.token = Some(base64::engine::general_purpose::STANDARD.encode(token.into()));
+        self.token_explicit = true;
         self
     }
 
@@ -3034,6 +3208,68 @@ impl ConnectConfig {
         })
     }
 
+    /// Sets the username and returns the updated value.
+    ///
+    /// Together with [`Self::password`] it forms the `username:password` credential used for
+    /// authentication, matching the C++ and Java SDK `username`/`password` connection members.
+    pub fn username(mut self, username: impl Into<String>) -> Self {
+        self.username = optional_config_string(username);
+        self.refresh_credentials();
+        self
+    }
+
+    /// Sets the username and returns this value for further mutation.
+    pub fn set_username(&mut self, username: impl Into<String>) -> &mut Self {
+        self.username = optional_config_string(username);
+        self.refresh_credentials();
+        self
+    }
+
+    /// Returns the configured username.
+    pub fn get_username(&self) -> &Option<String> {
+        &self.username
+    }
+
+    /// Sets the password and returns the updated value.
+    ///
+    /// Together with [`Self::username`] it forms the `username:password` credential used for
+    /// authentication, matching the C++ and Java SDK `username`/`password` connection members.
+    pub fn password(mut self, password: impl Into<String>) -> Self {
+        self.password = optional_config_string(password);
+        self.refresh_credentials();
+        self
+    }
+
+    /// Sets the password and returns this value for further mutation.
+    pub fn set_password(&mut self, password: impl Into<String>) -> &mut Self {
+        self.password = optional_config_string(password);
+        self.refresh_credentials();
+        self
+    }
+
+    /// Returns the configured password.
+    pub fn get_password(&self) -> &Option<String> {
+        &self.password
+    }
+
+    /// Re-derives the gRPC authorization token from the configured username and password.
+    ///
+    /// The derivation fills the token only when it was not explicitly set via [`Self::token`],
+    /// so an explicit token always wins over the username/password credential (matching the Java
+    /// SDK's `getAuthorizationValue()` precedence). Re-running it after a username or password
+    /// change keeps a derived token in sync while leaving an explicit token untouched.
+    fn refresh_credentials(&mut self) {
+        if !self.token_explicit {
+            if let (Some(username), Some(password)) = (&self.username, &self.password) {
+                use base64::Engine;
+                self.token = Some(
+                    base64::engine::general_purpose::STANDARD
+                        .encode(format!("{username}:{password}")),
+                );
+            }
+        }
+    }
+
     /// Overrides the DNS name used to verify the Milvus server's TLS certificate.
     pub fn tls_server_name(mut self, value: impl Into<String>) -> Self {
         self.tls_server_name = optional_config_string(value);
@@ -3049,6 +3285,26 @@ impl ConnectConfig {
     /// Returns the configured TLS server-name override.
     pub fn get_tls_server_name(&self) -> &Option<String> {
         &self.tls_server_name
+    }
+
+    /// Sets whether a secure (TLS) connection is used and returns the updated value.
+    ///
+    /// When enabled, the connection is upgraded to TLS even when the URI scheme is `http://`
+    /// or omitted, matching the Java SDK's `secure` connection member.
+    pub fn secure(mut self, secure: bool) -> Self {
+        self.secure = secure;
+        self
+    }
+
+    /// Sets whether a secure (TLS) connection is used and returns this value for further mutation.
+    pub fn set_secure(&mut self, secure: bool) -> &mut Self {
+        self.secure = secure;
+        self
+    }
+
+    /// Returns whether a secure (TLS) connection is used.
+    pub fn is_secure(&self) -> bool {
+        self.secure
     }
 
     /// Sets the path to a PEM-encoded custom CA certificate file.
@@ -3239,8 +3495,11 @@ impl ConnectConfig {
     }
 
     /// Performs the username password operation.
-    pub fn username_password(self, username: &str, password: &str) -> Self {
-        self.token(format!("{username}:{password}"))
+    pub fn username_password(mut self, username: &str, password: &str) -> Self {
+        self.username = Some(username.to_owned());
+        self.password = Some(password.to_owned());
+        self.refresh_credentials();
+        self
     }
 }
 
@@ -3931,6 +4190,9 @@ mod constructor_value_tests {
 
         assert_eq!(value.get_uri().to_owned(), "http://localhost:19530");
         assert_eq!(value.get_token().to_owned(), None);
+        assert_eq!(value.get_username().to_owned(), None);
+        assert_eq!(value.get_password().to_owned(), None);
+        assert!(!value.is_secure());
         assert_eq!(value.get_tls_server_name().to_owned(), None);
         assert_eq!(value.get_ca_certificate().to_owned(), None);
         assert_eq!(value.get_client_certificate().to_owned(), None);
@@ -4017,6 +4279,49 @@ mod constructor_value_tests {
             credentials.get_token().as_deref(),
             Some("dXNlcjpwYXNzd29yZA==")
         );
+        assert_eq!(credentials.get_username().as_deref(), Some("user"));
+        assert_eq!(credentials.get_password().as_deref(), Some("password"));
+
+        let secure = ConnectConfig::new().uri("http://milvus:19530").secure(true);
+        assert!(secure.is_secure());
+
+        let split = ConnectConfig::new()
+            .uri("http://milvus:19530")
+            .username("user")
+            .password("password");
+        assert_eq!(split.get_token().as_deref(), Some("dXNlcjpwYXNzd29yZA=="));
+        assert_eq!(split.get_username().as_deref(), Some("user"));
+        assert_eq!(split.get_password().as_deref(), Some("password"));
+    }
+
+    #[test]
+    fn connect_config_explicit_token_takes_precedence_over_credentials() {
+        // An explicit token is never overwritten by later username/password settings.
+        let value = ConnectConfig::new()
+            .token("root:Milvus")
+            .username("user")
+            .password("password");
+        assert_eq!(value.get_token().as_deref(), Some("cm9vdDpNaWx2dXM="));
+
+        let value = ConnectConfig::new()
+            .username("user")
+            .password("password")
+            .token("root:Milvus");
+        assert_eq!(value.get_token().as_deref(), Some("cm9vdDpNaWx2dXM="));
+    }
+
+    #[test]
+    fn connect_config_derived_token_tracks_credential_changes() {
+        // A derived token stays in sync when a credential changes, but only until an explicit
+        // token is supplied.
+        let mut value = ConnectConfig::new();
+        value.set_username("user").set_password("old");
+        assert_eq!(value.get_token().as_deref(), Some("dXNlcjpvbGQ="));
+        value.set_password("new");
+        assert_eq!(value.get_token().as_deref(), Some("dXNlcjpuZXc="));
+        value.set_token("root:Milvus");
+        value.set_password("other");
+        assert_eq!(value.get_token().as_deref(), Some("cm9vdDpNaWx2dXM="));
     }
 
     #[test]
@@ -4024,6 +4329,7 @@ mod constructor_value_tests {
         let value = ConnectConfig::new()
             .uri("http://milvus:19530")
             .token("root:Milvus")
+            .password("secret-password")
             .client_key("/secret/client-key.pem")
             .database("default");
 
@@ -4032,6 +4338,7 @@ mod constructor_value_tests {
         assert!(debug.contains("[REDACTED]"));
         assert!(!debug.contains("root:Milvus"));
         assert!(!debug.contains("cm9vdDpNaWx2dXM="));
+        assert!(!debug.contains("secret-password"));
         assert!(!debug.contains("/secret/client-key.pem"));
     }
 
@@ -4185,6 +4492,7 @@ mod enum_conversion_tests {
             FunctionType::TextEmbedding,
             FunctionType::Rerank,
             FunctionType::MinHash,
+            FunctionType::MolFingerprint,
         ];
 
         for value in values {
@@ -4249,5 +4557,54 @@ mod enum_conversion_tests {
 
         assert_eq!(proto.field_name, "text");
         assert_eq!(proto.r#type, schema::DataType::VarChar as i32);
+    }
+}
+
+#[cfg(test)]
+mod select_field_data_rows_tests {
+    use super::*;
+
+    #[test]
+    fn prunes_nullable_fields_mapping_compacted_inner_rows() {
+        // Five logical rows, three valid; the inner payload is compacted to the three valid
+        // values. Keeping rows 1, 3, 4 keeps two null rows and the third valid row, which must
+        // map to compact inner index 2.
+        let data = FieldData::Nullable {
+            data: Box::new(FieldData::Int64 {
+                name: "id".to_owned(),
+                values: vec![10, 20, 30],
+            }),
+            valid_data: vec![true, false, true, false, true],
+        };
+        let pruned = select_field_data_rows(data, &[1, 3, 4]).expect("prune nullable field");
+        assert_eq!(pruned.valid_data(), Some([false, false, true].as_slice()));
+        assert!(matches!(
+            pruned.inner(),
+            FieldData::Int64 { values, .. } if values == &vec![30]
+        ));
+    }
+
+    #[test]
+    fn prunes_vector_and_array_fields() {
+        let vector = FieldData::FloatVector {
+            name: "vector".to_owned(),
+            values: vec![vec![0.1, 0.2], vec![0.3, 0.4], vec![0.5, 0.6]],
+        };
+        let pruned = select_field_data_rows(vector, &[0, 2]).expect("prune vector field");
+        assert!(matches!(
+            pruned,
+            FieldData::FloatVector { values, .. }
+                if values == vec![vec![0.1, 0.2], vec![0.5, 0.6]]
+        ));
+
+        let array = FieldData::ArrayInt64 {
+            name: "tags".to_owned(),
+            values: vec![vec![1], vec![2, 3], vec![4]],
+        };
+        let pruned = select_field_data_rows(array, &[1]).expect("prune array field");
+        assert!(matches!(
+            pruned,
+            FieldData::ArrayInt64 { values, .. } if values == vec![vec![2, 3]]
+        ));
     }
 }

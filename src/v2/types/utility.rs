@@ -902,6 +902,7 @@ pub struct RefreshExternalCollectionJobInfo {
     pub(crate) progress: i32,
     pub(crate) reason: String,
     pub(crate) external_source: String,
+    pub(crate) external_spec: String,
     pub(crate) start_time: u64,
     pub(crate) end_time: u64,
 }
@@ -916,6 +917,7 @@ impl RefreshExternalCollectionJobInfo {
             progress: 0,
             reason: String::new(),
             external_source: String::new(),
+            external_spec: String::new(),
             start_time: 0,
             end_time: 0,
         }
@@ -1023,6 +1025,23 @@ impl RefreshExternalCollectionJobInfo {
         &self.external_source
     }
 
+    /// Sets the external spec and returns the updated value.
+    pub fn external_spec(mut self, value: impl Into<String>) -> Self {
+        self.external_spec = value.into();
+        self
+    }
+
+    /// Sets the external spec and returns this value for further mutation.
+    pub fn set_external_spec(&mut self, value: impl Into<String>) -> &mut Self {
+        self.external_spec = value.into();
+        self
+    }
+
+    /// Returns the external spec.
+    pub fn get_external_spec(&self) -> &str {
+        &self.external_spec
+    }
+
     /// Sets the start time and returns the updated value.
     pub fn start_time(mut self, value: u64) -> Self {
         self.start_time = value;
@@ -1065,6 +1084,7 @@ impl RefreshExternalCollectionJobInfo {
             progress: value.progress as i32,
             reason: value.reason,
             external_source: value.external_source,
+            external_spec: value.external_spec,
             start_time: value.start_time as u64,
             end_time: value.end_time as u64,
         }
@@ -1220,6 +1240,29 @@ mod refresh_external_collection_state_tests {
             RefreshExternalCollectionStateCode::from_proto(i32::MAX),
             RefreshExternalCollectionStateCode::Unknown
         );
+    }
+}
+
+#[cfg(test)]
+mod refresh_external_collection_job_info_tests {
+    use super::RefreshExternalCollectionJobInfo;
+    use crate::proto::milvus;
+
+    #[test]
+    fn job_info_defaults_to_empty_external_spec() {
+        let value = RefreshExternalCollectionJobInfo::new();
+        assert!(value.get_external_spec().is_empty());
+    }
+
+    #[test]
+    fn job_info_decodes_external_spec_from_proto() {
+        let value = RefreshExternalCollectionJobInfo::from_proto(
+            milvus::RefreshExternalCollectionJobInfo {
+                external_spec: r#"{"format":"parquet"}"#.into(),
+                ..Default::default()
+            },
+        );
+        assert_eq!(value.get_external_spec(), r#"{"format":"parquet"}"#);
     }
 }
 

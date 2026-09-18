@@ -17,11 +17,22 @@
 //! Query, search, reranking, highlighting, and result types.
 
 use super::aggregation::AggDirection;
-use super::common::{EntityRow, FieldData, Function, FunctionType, Ids, SparseVector, StructValue};
+use super::common::{
+    select_field_data_rows, EntityRow, FieldData, Function, FunctionType, Ids, SparseVector,
+    StructValue,
+};
 use crate::proto::{common, schema};
 use crate::v2::error::{Error, Result};
 use serde_json::Value;
 use std::collections::HashMap;
+
+/// Client-side page filter callback applied by search iterators.
+///
+/// The callback receives the single search-result page of one query vector and may drop rows in
+/// place via [`SingleResult::filter_rows`]. Returning `Ok(())` continues iteration with the
+/// (possibly pruned) page; returning `Err` aborts the iterator, mirroring the C++/pymilvus
+/// `external_filter_func` semantics.
+pub type SearchIteratorFilter = dyn Fn(&mut SingleResult) -> Result<()> + Send + Sync;
 
 ///////////////////////////////////////////////////////////////////////////////
 // FilterTemplateValue
@@ -1909,6 +1920,43 @@ impl SingleResult {
         Ok(row)
     }
 
+    /// Keeps only the rows whose indices are in `keep`, dropping the rest.
+    ///
+    /// This is used by the client-side page filter of the search iterator to prune
+    /// hits fetched from the server. The order of the kept rows follows `keep`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when a keep index is out of
+    /// range or a field cannot be pruned.
+    pub fn filter_rows(&mut self, keep: &[usize]) -> Result<()> {
+        self.validate_row_counts()?;
+        let row_count = self.len();
+        if keep.iter().any(|index| *index >= row_count) {
+            return Err(Error::validation(
+                "keep".into(),
+                format!("keep index is out of range for {row_count} rows"),
+            ));
+        }
+        self.ids = std::mem::take(&mut self.ids).select(keep);
+        self.scores = keep.iter().map(|index| self.scores[*index]).collect();
+        if let Some(indices) = &mut self.element_indices {
+            *indices = keep.iter().map(|index| indices[*index]).collect();
+        }
+        let mut output_fields = Vec::with_capacity(self.output_fields.len());
+        for field in std::mem::take(&mut self.output_fields) {
+            output_fields.push(select_field_data_rows(field, keep)?);
+        }
+        self.output_fields = output_fields;
+        if !self.highlight_results.is_empty() {
+            self.highlight_results = keep
+                .iter()
+                .map(|index| self.highlight_results[*index].clone())
+                .collect();
+        }
+        Ok(())
+    }
+
     fn validate_row_counts(&self) -> Result<()> {
         let row_count = self.ids.len();
         if row_count > 0 && (self.primary_field_name.is_empty() || self.score_field_name.is_empty())
@@ -3356,6 +3404,11 @@ impl SearchResults {
         &self.results
     }
 
+    /// Returns a mutable reference to one result, used by the search-iterator page filter.
+    pub(crate) fn result_mut(&mut self, index: usize) -> Option<&mut SingleResult> {
+        self.results.get_mut(index)
+    }
+
     /// Iterates over the result associated with each query vector.
     pub fn iter(&self) -> std::slice::Iter<'_, SingleResult> {
         self.results.iter()
@@ -4418,6 +4471,96 @@ mod direct_value_tests {
         );
         assert_eq!(value.get_score_field_name().to_owned(), score_field_name);
         assert_eq!(value.get_highlight_results().to_owned(), highlight_results);
+    }
+
+    #[test]
+    fn single_result_filter_rows_keeps_only_selected_rows() {
+        let mut value = SingleResult::new()
+            .ids(Ids::Int64(vec![1, 2, 3]))
+            .scores(vec![0.9, 0.5, 0.7])
+            .element_indices(Some(vec![10, 20, 30]))
+            .output_fields(vec![FieldData::VarChar {
+                name: "title".to_owned(),
+                values: vec!["a".to_owned(), "b".to_owned(), "c".to_owned()],
+            }])
+            .output_field_names(["title"])
+            .primary_field_name("id")
+            .score_field_name("score");
+
+        value.filter_rows(&[0, 2]).expect("prune rows");
+
+        assert_eq!(value.get_ids().to_owned(), Ids::Int64(vec![1, 3]));
+        assert_eq!(value.get_scores().to_owned(), vec![0.9, 0.7]);
+        assert_eq!(value.get_element_indices(), Some([10, 30].as_slice()));
+        assert_eq!(
+            value.get_output_fields()[0].clone(),
+            FieldData::VarChar {
+                name: "title".to_owned(),
+                values: vec!["a".to_owned(), "c".to_owned()],
+            }
+        );
+    }
+
+    #[test]
+    fn single_result_filter_rows_rejects_out_of_range_index() {
+        let mut value = SingleResult::new()
+            .ids(Ids::Int64(vec![1]))
+            .scores(vec![0.9])
+            .output_fields(vec![FieldData::Int64 {
+                name: "id".to_owned(),
+                values: vec![1],
+            }])
+            .output_field_names(["id"])
+            .primary_field_name("id")
+            .score_field_name("score");
+
+        let error = value.filter_rows(&[1]).expect_err("out of range keep");
+        assert!(error.to_string().contains("out of range"));
+    }
+
+    #[test]
+    fn single_result_filter_rows_prunes_nullable_and_vector_output_fields() {
+        let mut value = SingleResult::new()
+            .ids(Ids::Int64(vec![1, 2, 3, 4]))
+            .scores(vec![0.9, 0.8, 0.7, 0.6])
+            .output_fields(vec![
+                FieldData::Nullable {
+                    data: Box::new(FieldData::Int64 {
+                        name: "id".to_owned(),
+                        values: vec![1, 3],
+                    }),
+                    valid_data: vec![true, false, true, false],
+                },
+                FieldData::FloatVector {
+                    name: "vector".to_owned(),
+                    values: vec![
+                        vec![0.1, 0.2],
+                        vec![0.3, 0.4],
+                        vec![0.5, 0.6],
+                        vec![0.7, 0.8],
+                    ],
+                },
+            ])
+            .output_field_names(["id", "vector"])
+            .primary_field_name("id")
+            .score_field_name("score");
+
+        value.filter_rows(&[0, 2]).expect("prune rows");
+
+        assert_eq!(value.get_ids().to_owned(), Ids::Int64(vec![1, 3]));
+        assert_eq!(value.get_scores().to_owned(), vec![0.9, 0.7]);
+        let fields = value.get_output_fields();
+        assert!(matches!(
+            &fields[0],
+            FieldData::Nullable { data, valid_data }
+                if valid_data == &vec![true, true]
+                    && matches!(data.as_ref(), FieldData::Int64 { values, .. } if values == &vec![1, 3])
+        ));
+        assert!(matches!(
+            &fields[1],
+            FieldData::FloatVector { values, .. }
+                if values == &vec![vec![0.1, 0.2], vec![0.5, 0.6]]
+        ));
     }
 
     #[test]

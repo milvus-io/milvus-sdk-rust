@@ -1094,6 +1094,7 @@ impl GetCompactionStateResponseBuilder {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct GetCompactionPlansResponse {
+    pub(crate) compaction_id: i64,
     pub(crate) state: CompactionStateCode,
     pub(crate) merges: Vec<CompactionMerge>,
 }
@@ -1106,6 +1107,7 @@ impl GetCompactionPlansResponse {
     #[cfg(test)]
     fn empty() -> Self {
         Self {
+            compaction_id: 0,
             state: CompactionStateCode::default(),
             merges: Vec::new(),
         }
@@ -1122,6 +1124,11 @@ impl GetCompactionPlansResponse {
         }
     }
 
+    /// Returns the compaction id.
+    pub fn compaction_id(&self) -> i64 {
+        self.compaction_id
+    }
+
     /// Returns the state.
     pub fn state(&self) -> CompactionStateCode {
         self.state
@@ -1132,8 +1139,12 @@ impl GetCompactionPlansResponse {
         &self.merges
     }
 
-    pub(crate) fn from_proto(value: milvus::GetCompactionPlansResponse) -> Self {
+    pub(crate) fn from_proto(
+        compaction_id: i64,
+        value: milvus::GetCompactionPlansResponse,
+    ) -> Self {
         Self {
+            compaction_id,
             state: CompactionStateCode::from_proto(value.state),
             merges: value
                 .merge_infos
@@ -1166,6 +1177,12 @@ pub(crate) struct GetCompactionPlansResponseBuilder {
 
 #[cfg(test)]
 impl GetCompactionPlansResponseBuilder {
+    /// Sets the compaction id and returns the updated value.
+    pub fn compaction_id(mut self, value: i64) -> Self {
+        self.value.compaction_id = value;
+        self
+    }
+
     /// Sets the state and returns the updated value.
     pub fn state(mut self, value: CompactionStateCode) -> Self {
         self.value.state = value;
@@ -1891,24 +1908,38 @@ mod builder_value_tests {
     #[test]
     fn get_compaction_plans_response_default_values() {
         let value = GetCompactionPlansResponse::builder().build();
+        let expected_compaction_id: i64 = 0;
         let expected_state: CompactionStateCode = Default::default();
         let expected_merges: Vec<CompactionMerge> = Default::default();
 
+        assert_eq!(value.compaction_id().to_owned(), expected_compaction_id);
         assert_eq!(value.state().to_owned(), expected_state);
         assert_eq!(value.merges().to_owned(), expected_merges);
     }
 
     #[test]
     fn get_compaction_plans_response_populated_values() {
+        let compaction_id = 7;
         let state = CompactionStateCode::Completed;
         let merges = vec![CompactionMerge::new()];
         let value = GetCompactionPlansResponse::builder()
+            .compaction_id(compaction_id.clone())
             .state(state.clone())
             .merges(merges.clone())
             .build();
 
+        assert_eq!(value.compaction_id().to_owned(), compaction_id);
         assert_eq!(value.state().to_owned(), state);
         assert_eq!(value.merges().to_owned(), merges);
+    }
+
+    #[test]
+    fn get_compaction_plans_response_keeps_the_request_compaction_id() {
+        let value = GetCompactionPlansResponse::from_proto(
+            7,
+            milvus::GetCompactionPlansResponse::default(),
+        );
+        assert_eq!(value.compaction_id(), 7);
     }
 
     #[test]

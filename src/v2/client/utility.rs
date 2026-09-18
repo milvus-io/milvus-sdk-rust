@@ -582,10 +582,12 @@ impl ClientV2 {
         &self,
         request: request::utility::GetCompactionPlansRequest,
     ) -> Result<response::utility::GetCompactionPlansResponse> {
+        let compaction_id = request.compaction_id();
         let response =
             rpc_with_retry!(self, get_compaction_state_with_plans, request.into_proto())?;
         status_to_result(&response.status)?;
         Ok(response::utility::GetCompactionPlansResponse::from_proto(
+            compaction_id,
             response,
         ))
     }

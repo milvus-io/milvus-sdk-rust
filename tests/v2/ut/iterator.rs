@@ -71,6 +71,216 @@ async fn search_iterator_v2_direct_describe_bypasses_the_schema_cache() {
 }
 
 #[tokio::test]
+async fn search_iterator_filters_the_full_page_before_capping_to_the_limit() {
+    let server = MockServer::start().await;
+    let mut iterator = server
+        .client
+        .search_iterator(
+            SearchIteratorRequest::builder()
+                .search(
+                    SearchRequest::builder()
+                        .collection_name("books")
+                        .vector_field("vector")
+                        .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+                        .metric_type(MetricType::Cosine)
+                        .filter("filter_external_iterator")
+                        .build()
+                        .expect("valid search request"),
+                )
+                .batch_size(10)
+                .limit(2)
+                .external_filter_func(|result| {
+                    let keep = result
+                        .get_scores()
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(index, score)| (*score >= 0.8).then_some(index))
+                        .collect::<Vec<_>>();
+                    result.filter_rows(&keep)
+                })
+                .build()
+                .expect("valid iterator request"),
+        )
+        .await
+        .expect("create search iterator");
+
+    // The server page holds five hits (scores 0.2, 0.3, 0.9, 0.85, 0.95). The filter keeps only
+    // the three hits above 0.8, which sit past the limit window, so the iterator must decode and
+    // filter the whole page before capping the returned rows to the limit of two.
+    let page = iterator
+        .next()
+        .await
+        .expect("fetch search page")
+        .expect("page has rows");
+    let rows = page.results().get_results()[0]
+        .get_output_rows()
+        .expect("materialize rows");
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0]["id"], 3);
+    assert_eq!(rows[1]["id"], 4);
+    assert!(iterator.next().await.expect("finish iterator").is_none());
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn search_iterator_pulls_the_next_page_when_the_whole_page_is_pruned() {
+    let server = MockServer::start().await;
+    let mut iterator = server
+        .client
+        .search_iterator(
+            SearchIteratorRequest::builder()
+                .search(
+                    SearchRequest::builder()
+                        .collection_name("books")
+                        .vector_field("vector")
+                        .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+                        .metric_type(MetricType::Cosine)
+                        .filter("filter_external_iterator")
+                        .build()
+                        .expect("valid search request"),
+                )
+                .batch_size(10)
+                .limit(5)
+                .external_filter_func(|result| {
+                    // Keep nothing: the whole first page is pruned, forcing the iterator to pull
+                    // the next server page, which the mock serves empty.
+                    result.filter_rows(&[])
+                })
+                .build()
+                .expect("valid iterator request"),
+        )
+        .await
+        .expect("create search iterator");
+    assert!(matches!(iterator, SearchIterator::V2(_)));
+
+    assert!(iterator.next().await.expect("finish iterator").is_none());
+
+    // The probe plus the pruned first page, then a pulled page carrying the search token.
+    let requests = server.service.request_texts("search");
+    assert!(requests
+        .iter()
+        .any(|request| request.contains("search_iter_id")));
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn search_iterator_accumulates_filtered_rows_across_server_pages() {
+    let server = MockServer::start().await;
+    let mut iterator = server
+        .client
+        .search_iterator(
+            SearchIteratorRequest::builder()
+                .search(
+                    SearchRequest::builder()
+                        .collection_name("books")
+                        .vector_field("vector")
+                        .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+                        .metric_type(MetricType::Cosine)
+                        .filter("filter_accumulate_iterator")
+                        .build()
+                        .expect("valid search request"),
+                )
+                .batch_size(2)
+                .limit(4)
+                .external_filter_func(|result| {
+                    let keep = result
+                        .get_scores()
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(index, score)| (*score >= 0.8).then_some(index))
+                        .collect::<Vec<_>>();
+                    result.filter_rows(&keep)
+                })
+                .build()
+                .expect("valid iterator request"),
+        )
+        .await
+        .expect("create search iterator");
+    assert!(matches!(iterator, SearchIterator::V2(_)));
+
+    // Each server page contributes one qualifying hit, so a single next() must accumulate rows
+    // across pages until the batch (size 2) is filled: [1] from the first page plus [3] from the
+    // second, mirroring the C++/pymilvus batching.
+    let first = iterator
+        .next()
+        .await
+        .expect("fetch first batch")
+        .expect("first batch has rows");
+    assert_eq!(search_ids(&first), [1, 3]);
+    let second = iterator
+        .next()
+        .await
+        .expect("fetch second batch")
+        .expect("second batch has rows");
+    assert_eq!(search_ids(&second), [3, 3]);
+    assert!(iterator.next().await.expect("finish iterator").is_none());
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn legacy_search_iterator_filters_initial_cache_and_expands_past_pruned_rows() {
+    let server = MockServer::start().await;
+    let mut iterator = server
+        .client
+        .search_iterator(
+            SearchIteratorRequest::builder()
+                .search(
+                    SearchRequest::builder()
+                        .collection_name("books")
+                        .vector_field("vector")
+                        .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+                        .filter("legacy_filter_iterator")
+                        .build()
+                        .expect("valid search request"),
+                )
+                .batch_size(2)
+                .limit(3)
+                .external_filter_func(|result| {
+                    let keep = result
+                        .get_scores()
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(index, score)| (*score >= 0.85).then_some(index))
+                        .collect::<Vec<_>>();
+                    result.filter_rows(&keep)
+                })
+                .build()
+                .expect("valid iterator request"),
+        )
+        .await
+        .expect("create legacy search iterator");
+    assert!(matches!(&iterator, SearchIterator::V1(_)));
+
+    // The initial cached page (ids 1,2 with scores 0.4,0.3) is fully pruned by the filter, so
+    // the iterator must keep pulling: the radius-driven expansion fetches the band with ids 3,4
+    // (scores 0.9,0.7) and returns only the qualifying 0.9 row. Every returned page must only
+    // contain qualifying rows; the static mock re-serves the same expansion page, so the
+    // remaining limit fills with the same qualifying id.
+    let mut pages = Vec::new();
+    for _ in 0..5 {
+        match iterator.next().await.expect("poll legacy iterator") {
+            Some(page) => {
+                assert_eq!(search_ids(&page), [3]);
+                pages.push(());
+            }
+            None => break,
+        }
+    }
+    assert!(!pages.is_empty());
+    assert!(iterator
+        .next()
+        .await
+        .expect("finish legacy iterator")
+        .is_none());
+
+    let requests = server.service.request_texts("search");
+    assert!(requests.iter().any(|request| request.contains("radius")));
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn zero_limit_iterators_finish_without_rpc_work() {
     let server = MockServer::start().await;
 

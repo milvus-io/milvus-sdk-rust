@@ -19,7 +19,7 @@
 use crate::proto::milvus;
 use crate::v2::error::{Error, Result};
 use crate::v2::request::validation::required;
-use crate::v2::types::{FieldData, FilterTemplateValue, Ids};
+use crate::v2::types::{ConsistencyLevel, FieldData, FilterTemplateValue, Ids};
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -354,6 +354,7 @@ pub struct DeleteRequest {
     pub(crate) filter: String,
     pub(crate) filter_templates: HashMap<String, FilterTemplateValue>,
     pub(crate) ids: Ids,
+    pub(crate) consistency_level: ConsistencyLevel,
 }
 
 impl DeleteRequest {
@@ -403,6 +404,11 @@ impl DeleteRequest {
         &self.ids
     }
 
+    /// Returns the consistency level.
+    pub fn consistency_level(&self) -> ConsistencyLevel {
+        self.consistency_level
+    }
+
     pub(crate) fn has_ids(&self) -> bool {
         !self.ids.is_empty()
     }
@@ -438,7 +444,7 @@ impl DeleteRequest {
             partition_name: self.partition_name,
             expr,
             hash_keys: Vec::new(),
-            consistency_level: crate::proto::common::ConsistencyLevel::Strong as i32,
+            consistency_level: self.consistency_level.into_proto() as i32,
             expr_template_values,
             ..Default::default()
         })
@@ -454,6 +460,7 @@ impl DeleteRequest {
             filter: String::new(),
             filter_templates: HashMap::new(),
             ids: Ids::default(),
+            consistency_level: ConsistencyLevel::Strong,
         }
     }
 }
@@ -520,6 +527,12 @@ impl DeleteRequestBuilder {
     /// Sets the ids and returns the updated value.
     pub fn ids(mut self, value: Ids) -> Self {
         self.value.ids = value;
+        self
+    }
+
+    /// Sets the consistency level and returns the updated value.
+    pub fn consistency_level(mut self, value: ConsistencyLevel) -> Self {
+        self.value.consistency_level = value;
         self
     }
 
@@ -982,6 +995,7 @@ mod builder_value_tests {
         assert!(value.filter().is_empty());
         assert!(value.filter_templates().is_empty());
         assert!(value.ids().is_empty());
+        assert_eq!(value.consistency_level(), ConsistencyLevel::Strong);
         assert!(DeleteRequest::builder().build().is_err());
     }
 
@@ -1007,6 +1021,17 @@ mod builder_value_tests {
         assert_eq!(value.filter().to_owned(), "id > {minimum}");
         assert_eq!(value.filter_templates().to_owned(), filter_templates);
         assert!(value.ids().is_empty());
+    }
+
+    #[test]
+    fn delete_request_supports_consistency_level() {
+        let value = DeleteRequest::builder()
+            .collection_name("collection")
+            .filter("id > 0")
+            .consistency_level(ConsistencyLevel::Bounded)
+            .build()
+            .expect("valid filter input");
+        assert_eq!(value.consistency_level(), ConsistencyLevel::Bounded);
     }
 
     #[test]

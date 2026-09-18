@@ -27,6 +27,7 @@ pub struct PartitionInfo {
     pub(crate) id: i64,
     pub(crate) created_timestamp: u64,
     pub(crate) created_utc_timestamp: u64,
+    pub(crate) in_memory_percentage: i64,
 }
 
 impl PartitionInfo {
@@ -37,6 +38,7 @@ impl PartitionInfo {
             id: 0,
             created_timestamp: 0,
             created_utc_timestamp: 0,
+            in_memory_percentage: 0,
         }
     }
 
@@ -107,6 +109,35 @@ impl PartitionInfo {
     pub fn get_created_utc_timestamp(&self) -> u64 {
         self.created_utc_timestamp
     }
+
+    /// Sets the in-memory percentage and returns the updated value.
+    ///
+    /// Deprecated by the server in favor of the loading-progress RPC; retained for
+    /// compatibility with the C++ SDK's `PartitionInfo`.
+    pub fn in_memory_percentage(mut self, value: i64) -> Self {
+        self.in_memory_percentage = value;
+        self
+    }
+
+    /// Sets the in-memory percentage and returns this value for further mutation.
+    pub fn set_in_memory_percentage(&mut self, value: i64) -> &mut Self {
+        self.in_memory_percentage = value;
+        self
+    }
+
+    /// Returns the configured in-memory percentage.
+    pub fn get_in_memory_percentage(&self) -> i64 {
+        self.in_memory_percentage
+    }
+
+    /// Returns whether the partition is fully loaded.
+    ///
+    /// Mirrors the C++ SDK's `PartitionInfo::Loaded()`, which derives the flag from the
+    /// in-memory percentage (`>= 100`). The server deprecates this percentage in favor of the
+    /// loading-progress RPC, so prefer [`ClientV2::get_load_state`](crate::v2::ClientV2::get_load_state).
+    pub fn is_loaded(&self) -> bool {
+        self.in_memory_percentage >= 100
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -124,6 +155,7 @@ mod direct_value_tests {
         let expected_id: i64 = 0;
         let expected_created_timestamp: u64 = 0;
         let expected_created_utc_timestamp: u64 = 0;
+        let expected_in_memory_percentage: i64 = 0;
 
         assert_eq!(value.get_name().to_owned(), expected_name);
         assert_eq!(value.get_id().to_owned(), expected_id);
@@ -135,6 +167,11 @@ mod direct_value_tests {
             value.get_created_utc_timestamp(),
             expected_created_utc_timestamp
         );
+        assert_eq!(
+            value.get_in_memory_percentage().to_owned(),
+            expected_in_memory_percentage
+        );
+        assert!(!value.is_loaded());
     }
 
     #[test]
@@ -143,11 +180,13 @@ mod direct_value_tests {
         let id = 7;
         let created_timestamp = 7;
         let created_utc_timestamp = 7;
+        let in_memory_percentage = 100;
         let value = PartitionInfo::new()
             .name(name.clone())
             .id(id.clone())
             .created_timestamp(created_timestamp.clone())
-            .created_utc_timestamp(created_utc_timestamp.clone());
+            .created_utc_timestamp(created_utc_timestamp.clone())
+            .in_memory_percentage(in_memory_percentage.clone());
 
         assert_eq!(value.get_name().to_owned(), name);
         assert_eq!(value.get_id().to_owned(), id);
@@ -156,5 +195,16 @@ mod direct_value_tests {
             value.get_created_utc_timestamp().to_owned(),
             created_utc_timestamp
         );
+        assert_eq!(
+            value.get_in_memory_percentage().to_owned(),
+            in_memory_percentage
+        );
+        assert!(value.is_loaded());
+    }
+
+    #[test]
+    fn partition_info_is_loaded_derives_from_in_memory_percentage() {
+        assert!(!PartitionInfo::new().in_memory_percentage(99).is_loaded());
+        assert!(PartitionInfo::new().in_memory_percentage(100).is_loaded());
     }
 }

@@ -22,7 +22,9 @@ use crate::proto::{common, milvus, schema};
 use crate::v2::error::status_to_result;
 use crate::v2::error::{Error, Result};
 use crate::v2::{request, response};
-use crate::v2::{DataType, IndexDesc, MetricType, QueryCursor, QueryCursorPk};
+use crate::v2::{
+    DataType, IndexDesc, MetricType, QueryCursor, QueryCursorPk, SearchIteratorFilter,
+};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -350,6 +352,7 @@ pub struct SearchIteratorV1 {
     tail_band: f64,
     width: f64,
     cache: Option<response::dql::SearchResponse>,
+    external_filter_func: Option<Arc<SearchIteratorFilter>>,
     finished: bool,
     closed: Option<Arc<AtomicBool>>,
 }
@@ -381,49 +384,76 @@ impl SearchIteratorV1 {
         let mut fetched = false;
         let mut exhausted = false;
 
-        if self.cache_row_count()? < size {
-            for coefficient in 1..=LEGACY_SEARCH_MAX_TRIES + 1 {
-                trace_debug!(target: "milvus_sdk::iterator", kind = "search_v1", coefficient, batch_size = size, "requesting legacy search iterator expansion page");
-                let page = self.fetch_page(coefficient).await?;
-                if page.row_count()? == 0 {
-                    trace_debug!(target: "milvus_sdk::iterator", kind = "search_v1", coefficient, "legacy search iterator expansion returned no rows");
-                    if coefficient > LEGACY_SEARCH_MAX_TRIES {
-                        exhausted = true;
+        loop {
+            if self.cache_row_count()? < size {
+                for coefficient in 1..=LEGACY_SEARCH_MAX_TRIES + 1 {
+                    trace_debug!(target: "milvus_sdk::iterator", kind = "search_v1", coefficient, batch_size = size, "requesting legacy search iterator expansion page");
+                    let page = self.fetch_page(coefficient).await?;
+                    if page.row_count()? == 0 {
+                        trace_debug!(target: "milvus_sdk::iterator", kind = "search_v1", coefficient, "legacy search iterator expansion returned no rows");
+                        if coefficient > LEGACY_SEARCH_MAX_TRIES {
+                            exhausted = true;
+                        }
+                        continue;
                     }
-                    continue;
-                }
-                fetched = true;
-                self.update_legacy_cursor(&page)?;
-                if let Some(cache) = &mut self.cache {
-                    cache.append(page)?;
-                } else {
-                    self.cache = Some(page);
-                }
-                if self.cache_row_count()? >= self.batch_size {
-                    break;
+                    fetched = true;
+                    self.update_legacy_cursor(&page)?;
+                    if self.external_filter_func.is_some() {
+                        // Derive width from the first batch-sized window of the unfiltered page.
+                        // The raw fetch_page window holds up to LEGACY_SEARCH_EXTENSION_RATE *
+                        // batch_size rows, so comparing the raw page against batch_size would
+                        // never fire; and the page filter below usually prunes rows below batch
+                        // size, so the post-split width update would never fire either. Without
+                        // this the radius expansion would stay frozen at its initial value.
+                        let scores = page.results().get_results()[0].get_scores();
+                        if scores.len() >= self.batch_size {
+                            self.width =
+                                legacy_scores_width(&scores[..self.batch_size], self.metric)?;
+                        }
+                    }
+                    if let Some(cache) = &mut self.cache {
+                        cache.append(page)?;
+                    } else {
+                        self.cache = Some(page);
+                    }
+                    if self.cache_row_count()? >= self.batch_size {
+                        break;
+                    }
                 }
             }
-        }
 
-        let Some(cache) = self.cache.take() else {
-            self.finished = true;
-            return Ok(None);
-        };
-        let (page, remaining_cache) = cache.split_at(size)?;
-        let count = page.row_count()?;
-        if count == 0 {
-            self.finished = true;
-            return Ok(None);
+            let Some(cache) = self.cache.take() else {
+                self.finished = true;
+                return Ok(None);
+            };
+            let (mut page, remaining_cache) = cache.split_at(size)?;
+            let count = page.row_count()?;
+            if count == 0 {
+                self.finished = true;
+                return Ok(None);
+            }
+            // Apply the page filter to the batch being returned (mirrors the C++ flow, so the
+            // cached initial page is filtered too). A fully-pruned batch pulls the next rows
+            // from the cache or the server instead of being returned.
+            if let Some(filter) = &self.external_filter_func {
+                filter_response(&mut page, filter.as_ref())?;
+                if page.row_count()? == 0 {
+                    self.cache = remaining_cache;
+                    trace_debug!(target: "milvus_sdk::iterator", kind = "search_v1", "legacy search iterator batch fully filtered out; pulling next batch");
+                    continue;
+                }
+            }
+            let count = page.row_count()?;
+            if fetched && count == self.batch_size {
+                self.width = legacy_page_width(&page, self.metric)?;
+            }
+            let next_remaining = self.remaining.map(|left| left.saturating_sub(count));
+            self.remaining = next_remaining;
+            self.cache = remaining_cache;
+            self.finished = next_remaining == Some(0) || (exhausted && self.cache.is_none());
+            trace_debug!(target: "milvus_sdk::iterator", kind = "search_v1", rows = count, remaining = ?self.remaining, finished = self.finished, exhausted, "completed legacy search iterator page");
+            return Ok(Some(page));
         }
-        if fetched && count == self.batch_size {
-            self.width = legacy_page_width(&page, self.metric)?;
-        }
-        let next_remaining = self.remaining.map(|left| left.saturating_sub(count));
-        self.remaining = next_remaining;
-        self.cache = remaining_cache;
-        self.finished = next_remaining == Some(0) || (exhausted && self.cache.is_none());
-        trace_debug!(target: "milvus_sdk::iterator", kind = "search_v1", rows = count, remaining = ?self.remaining, finished = self.finished, exhausted, "completed legacy search iterator page");
-        Ok(Some(page))
     }
 
     /// Releases iterator-local legacy search state.
@@ -524,6 +554,8 @@ pub struct SearchIteratorV2 {
     remaining: Option<usize>,
     token: Option<String>,
     primary_field_name: String,
+    cache: Option<response::dql::SearchResponse>,
+    external_filter_func: Option<Arc<SearchIteratorFilter>>,
     finished: bool,
     closed: Option<Arc<AtomicBool>>,
 }
@@ -537,6 +569,8 @@ impl SearchIteratorV2 {
             remaining: Some(0),
             token: None,
             primary_field_name: String::new(),
+            cache: None,
+            external_filter_func: None,
             finished: true,
             closed: None,
         }
@@ -556,7 +590,17 @@ impl SearchIteratorV2 {
         }
     }
 
+    fn cache_row_count(&self) -> Result<usize> {
+        self.cache
+            .as_ref()
+            .map_or(Ok(0), response::dql::SearchResponse::row_count)
+    }
+
     /// Retrieves the next token-based search-result batch, or `None` when iteration is complete.
+    ///
+    /// When a page filter is configured, surviving hits are accumulated across server pages
+    /// until the batch is filled, mirroring the C++/pymilvus `externalFilterFunc` batching; rows
+    /// keep the server order.
     pub async fn next(&mut self) -> Result<Option<response::dql::SearchResponse>> {
         self.ensure_session_open()?;
         if self.finished || self.remaining == Some(0) {
@@ -565,62 +609,99 @@ impl SearchIteratorV2 {
         let size = self
             .remaining
             .map_or(self.batch_size, |left| left.min(self.batch_size));
-        trace_debug!(target: "milvus_sdk::iterator", kind = "search_v2", batch_size = size, remaining = ?self.remaining, has_token = self.token.is_some(), "requesting token-based search iterator page");
-        let mut request = self.request.clone();
-        set_param(
-            &mut request.search_params,
-            "topk",
-            self.batch_size.to_string(),
-        );
-        set_search_extra_param(&mut request.search_params, "iterator", "True");
-        set_search_extra_param(&mut request.search_params, "search_iter_v2", "True");
-        set_search_extra_param(
-            &mut request.search_params,
-            "search_iter_batch_size",
-            &self.batch_size.to_string(),
-        );
-        if let Some(token) = &self.token {
-            set_search_extra_param(&mut request.search_params, "search_iter_id", token);
-        }
-        let mut raw = rpc_with_retry!(self.client, search, request.clone())?;
-        status_to_result(&raw.status)?;
-        let (iterator_token, iterator_bound) = {
-            let iterator = search_iterator_v2_metadata(&raw)?;
-            (iterator.token.clone(), iterator.last_bound)
-        };
-        let next_token = self.token.clone().unwrap_or(iterator_token);
-        set_search_extra_param(
-            &mut request.search_params,
-            "search_iter_last_bound",
-            &format_iterator_bound(iterator_bound),
-        );
-        if search_iterator_result_count(&raw) == Some(0) {
-            trace_debug!(target: "milvus_sdk::iterator", kind = "search_v2", "token-based search iterator reached end of results");
-            self.finished = true;
-            return Ok(None);
-        }
-        if let Some(results) = &mut raw.results {
-            if results.primary_field_name.is_empty() {
-                results.primary_field_name = self.primary_field_name.clone();
+        let mut exhausted = false;
+
+        if self.cache_row_count()? < size {
+            loop {
+                trace_debug!(target: "milvus_sdk::iterator", kind = "search_v2", batch_size = size, remaining = ?self.remaining, has_token = self.token.is_some(), "requesting token-based search iterator page");
+                let mut request = self.request.clone();
+                set_param(
+                    &mut request.search_params,
+                    "topk",
+                    self.batch_size.to_string(),
+                );
+                set_search_extra_param(&mut request.search_params, "iterator", "True");
+                set_search_extra_param(&mut request.search_params, "search_iter_v2", "True");
+                set_search_extra_param(
+                    &mut request.search_params,
+                    "search_iter_batch_size",
+                    &self.batch_size.to_string(),
+                );
+                if let Some(token) = &self.token {
+                    set_search_extra_param(&mut request.search_params, "search_iter_id", token);
+                }
+                let mut raw = rpc_with_retry!(self.client, search, request.clone())?;
+                status_to_result(&raw.status)?;
+                let (iterator_token, iterator_bound) = {
+                    let iterator = search_iterator_v2_metadata(&raw)?;
+                    (iterator.token.clone(), iterator.last_bound)
+                };
+                let next_token = self.token.clone().unwrap_or(iterator_token);
+                set_search_extra_param(
+                    &mut request.search_params,
+                    "search_iter_last_bound",
+                    &format_iterator_bound(iterator_bound),
+                );
+                if search_iterator_result_count(&raw) == Some(0) {
+                    trace_debug!(target: "milvus_sdk::iterator", kind = "search_v2", "token-based search iterator reached end of results");
+                    exhausted = true;
+                    break;
+                }
+                if let Some(results) = &mut raw.results {
+                    if results.primary_field_name.is_empty() {
+                        results.primary_field_name = self.primary_field_name.clone();
+                    }
+                }
+                // Decode the full server page when a page filter is configured so the filter sees
+                // every hit of the page; without a filter, only the rows needed for this batch.
+                let page_limit = if self.external_filter_func.is_some() {
+                    self.batch_size
+                } else {
+                    size
+                };
+                let mut response = response::dql::SearchResponse::from_proto_with_row_limit(
+                    raw,
+                    Some(page_limit),
+                )?;
+                if response.results().len() != 1 {
+                    return Err(Error::MalformedResponse(
+                        "search iterator server response must contain exactly one result".into(),
+                    ));
+                }
+                // Advance the cursor regardless of the filter outcome so a fully pruned page
+                // still moves to the next server page.
+                self.request = request;
+                self.token = Some(next_token);
+                if let Some(filter) = &self.external_filter_func {
+                    filter_response(&mut response, filter.as_ref())?;
+                }
+                if response.results().get_results()[0].len() == 0 {
+                    trace_debug!(target: "milvus_sdk::iterator", kind = "search_v2", "search iterator page fully filtered out; pulling next page");
+                    continue;
+                }
+                if let Some(cache) = &mut self.cache {
+                    cache.append(response)?;
+                } else {
+                    self.cache = Some(response);
+                }
+                if self.cache_row_count()? >= size {
+                    break;
+                }
             }
         }
-        let response = response::dql::SearchResponse::from_proto_with_row_limit(raw, Some(size))?;
-        if response.results().len() != 1 {
-            return Err(Error::MalformedResponse(
-                "search iterator server response must contain exactly one result".into(),
-            ));
-        }
-        let count = response.results().get_results()[0].len();
-        if count == 0 {
+
+        let Some(cache) = self.cache.take() else {
             self.finished = true;
             return Ok(None);
-        }
+        };
+        let (page, remaining_cache) = cache.split_at(size)?;
+        let count = page.results().get_results()[0].len();
         let next_remaining = self.remaining.map(|left| left.saturating_sub(count));
-        self.request = request;
-        self.token = Some(next_token);
         self.remaining = next_remaining;
+        self.cache = remaining_cache;
+        self.finished = next_remaining == Some(0) || (exhausted && self.cache.is_none());
         trace_debug!(target: "milvus_sdk::iterator", kind = "search_v2", rows = count, remaining = ?self.remaining, "completed token-based search iterator page");
-        Ok(Some(response))
+        Ok(Some(page))
     }
 
     /// Releases token-based search iterator state.
@@ -919,6 +1000,7 @@ impl ClientV2 {
             .and_then(|value| value.parse::<usize>().ok());
         request.search.limit = batch_size as i64;
         let consistency_level = request.search.consistency_level;
+        let external_filter_func = request.external_filter_func.take();
         let mut raw = request.search.into_proto(&database, 0)?;
         set_cluster_param(&mut raw.search_params, cluster_id);
         if raw.nq != 1 {
@@ -958,6 +1040,8 @@ impl ClientV2 {
                 remaining,
                 token: None,
                 primary_field_name: direct_info.primary_field_name,
+                cache: None,
+                external_filter_func,
                 finished: false,
                 closed: None,
             }));
@@ -1028,6 +1112,7 @@ impl ClientV2 {
             tail_band,
             width,
             cache: (initial_count > 0).then_some(initial),
+            external_filter_func,
             finished: initial_count == 0,
             closed: None,
         };
@@ -1247,6 +1332,21 @@ fn legacy_initial_state(
     ))
 }
 
+/// Applies the client-side page filter to a single search iterator page.
+///
+/// Iterator pages contain exactly one query result; the filter mutates that result in place and
+/// its error aborts the iteration.
+fn filter_response(
+    response: &mut response::dql::SearchResponse,
+    filter: &SearchIteratorFilter,
+) -> Result<()> {
+    let result = response
+        .results
+        .result_mut(0)
+        .ok_or_else(|| Error::MalformedResponse("search iterator page has no result".into()))?;
+    filter(result)
+}
+
 fn legacy_page_width(page: &response::dql::SearchResponse, metric: MetricType) -> Result<f64> {
     let scores = page
         .results()
@@ -1256,6 +1356,14 @@ fn legacy_page_width(page: &response::dql::SearchResponse, metric: MetricType) -
             Error::MalformedResponse("legacy search iterator page has no result".into())
         })?
         .get_scores();
+    legacy_scores_width(scores, metric)
+}
+
+/// Computes the radius-expansion width from a score window.
+///
+/// The width is the distance spanned by a full batch-sized window of consecutive hits; it drives
+/// the radius step used to expand the legacy range search.
+fn legacy_scores_width(scores: &[f32], metric: MetricType) -> Result<f64> {
     let first = *scores.first().ok_or_else(|| {
         Error::MalformedResponse("legacy search iterator page has no scores".into())
     })?;

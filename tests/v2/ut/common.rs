@@ -1986,6 +1986,47 @@ impl MilvusService for MockMilvus {
                     results.fields_data = vec![string_field("text", vec!["book", "book"])];
                     results.search_iterator_v2_results = None;
                 }
+            } else if request.dsl.contains("legacy_filter_iterator") {
+                // Legacy (Search Iterator V1) pages: the initial search returns a full batch of
+                // low-scoring rows (fully pruned by the filter), and every fetch_page expansion
+                // (range_filter set) returns a higher-scoring band with one qualifying row.
+                let is_range_page = request
+                    .search_params
+                    .iter()
+                    .any(|param| param.key == "range_filter");
+                let (ids, scores) = if is_range_page {
+                    (vec![3, 4], vec![0.9, 0.7])
+                } else {
+                    (vec![1, 2], vec![0.4, 0.3])
+                };
+                if let Some(results) = response.results.as_mut() {
+                    results.top_k = ids.len() as i64;
+                    results.topks = vec![ids.len() as i64];
+                    results.scores = scores;
+                    results.ids = Some(schema::IDs {
+                        id_field: Some(schema::i_ds::IdField::IntId(schema::LongArray {
+                            data: ids,
+                        })),
+                        ..Default::default()
+                    });
+                    results.fields_data = vec![string_field("text", vec!["a", "b"])];
+                    results.search_iterator_v2_results = None;
+                }
+            } else if request.dsl.contains("filter_external_iterator") {
+                // One V2 page with five hits; qualifying hits sit past the `limit` window so the
+                // page filter must decode the whole page before the returned rows are capped.
+                if let Some(results) = response.results.as_mut() {
+                    results.top_k = 5;
+                    results.topks = vec![5];
+                    results.scores = vec![0.2, 0.3, 0.9, 0.85, 0.95];
+                    results.ids = Some(schema::IDs {
+                        id_field: Some(schema::i_ds::IdField::IntId(schema::LongArray {
+                            data: vec![1, 2, 3, 4, 5],
+                        })),
+                        ..Default::default()
+                    });
+                    results.fields_data = vec![string_field("text", vec!["a", "b", "c", "d", "e"])];
+                }
             }
             if request.dsl == "zero_session_ts" {
                 response.session_ts = 0;
@@ -2023,6 +2064,32 @@ impl MilvusService for MockMilvus {
                         field_name: "text".into(),
                         ..Default::default()
                     }];
+                }
+            }
+            if request.dsl.contains("filter_accumulate_iterator") {
+                // First V2 page yields one qualifying hit, every later page one more, so the
+                // iterator must accumulate filtered rows across server pages to fill the batch.
+                let is_next = request
+                    .search_params
+                    .iter()
+                    .any(|param| param.key == "search_iter_id");
+                if let Some(results) = response.results.as_mut() {
+                    let (ids, scores) = if is_next {
+                        (vec![3], vec![0.9])
+                    } else {
+                        (vec![1, 2], vec![0.9, 0.3])
+                    };
+                    results.top_k = ids.len() as i64;
+                    results.topks = vec![ids.len() as i64];
+                    results.scores = scores;
+                    results.ids = Some(schema::IDs {
+                        id_field: Some(schema::i_ds::IdField::IntId(schema::LongArray {
+                            data: ids,
+                        })),
+                        ..Default::default()
+                    });
+                    let values = if is_next { vec!["c"] } else { vec!["a", "b"] };
+                    results.fields_data = vec![string_field("text", values)];
                 }
             }
             if request.collection_name == "missing_primary_field" {
