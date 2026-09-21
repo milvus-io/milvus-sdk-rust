@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Cluster-scoped DQL session views over a parent [`ClientV2`].
+//! **Zilliz Cloud only.** Cluster-scoped DQL session views over a parent [`ClientV2`].
 
 use super::{ClientV2, QueryIterator, SearchIterator};
 use crate::v2::error::{Error, Result};
@@ -26,7 +26,7 @@ use crate::v2::response::dql::{GetResponse, QueryResponse, SearchResponse};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-/// A cluster-scoped view of a [`ClientV2`] exposing the DQL surface only.
+/// **Zilliz Cloud only.** A cluster-scoped view of a [`ClientV2`] exposing the DQL surface only.
 ///
 /// Created through [`ClientV2::session`], the session shares the parent
 /// client's channel, selected database, RPC settings, and caches, and routes

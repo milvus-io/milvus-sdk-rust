@@ -464,7 +464,7 @@ impl ClientV2 {
         self.telemetry.clone()
     }
 
-    /// Creates a cluster-scoped session view bound to the given cluster identifier.
+    /// **Zilliz Cloud only.** Creates a cluster-scoped session view bound to the given cluster identifier.
     ///
     /// The returned [`MilvusClientV2Session`] exposes the DQL surface only and routes every
     /// request to the target global-cluster identifier. It shares this client's channel,

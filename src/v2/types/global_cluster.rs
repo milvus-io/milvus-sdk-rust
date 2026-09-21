@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Global-cluster topology types and discovery.
+//! **Zilliz Cloud only.** Global-cluster topology types and discovery.
 //!
 //! A Milvus deployment may expose a single logical **global-cluster** endpoint that fronts
 //! multiple physical clusters. The global endpoint serves a REST topology describing the member

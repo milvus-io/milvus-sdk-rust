@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Global-cluster topology discovery and primary failover.
+//! **Zilliz Cloud only.** Global-cluster topology discovery and primary failover.
 //!
 //! A Milvus deployment may be fronted by a logical global-cluster endpoint that serves a REST
 //! topology of member clusters. This module fetches that topology, resolves the writable primary,

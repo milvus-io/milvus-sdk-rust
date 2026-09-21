@@ -53,6 +53,13 @@ reviewing code.
   after the member family.
 - Keep enum/protobuf conversions `pub(crate)` unless intentionally public.
 - Do not expose generated protobuf messages in SDK-owned public types.
+- **Zilliz Cloud only APIs carry a fixed rustdoc marker.** Start the `///` doc of every
+  Zilliz Cloud only public item with `**Zilliz Cloud only.**` (e.g. `/// **Zilliz Cloud only.** ...`),
+  and start the `//!` module doc with the same marker when an entire module is cloud-only. This
+  mirrors the Java SDK's `@zillizCloudOnly` javadoc tag and lets generated docs distinguish the
+  cloud-only surface. `scripts/check-zilliz-cloud-tags.sh` enforces the marker on the current
+  cloud-only surface (global-cluster/session and bulk-import cloud targets); keep that list in sync
+  when the surface changes.
 
 ## Request DTOs (`src/v2/request`)
 

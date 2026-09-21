@@ -560,54 +560,54 @@ impl BulkImportRequest {
         &self.files
     }
 
-    /// Returns the deprecated singular object URL.
+    /// **Zilliz Cloud only.** Returns the deprecated singular object URL.
     ///
     /// Prefer [`Self::object_urls`] for new applications.
     pub fn object_url(&self) -> &str {
         &self.object_url
     }
 
-    /// Returns the object urls.
+    /// **Zilliz Cloud only.** Returns the object urls.
     pub fn object_urls(&self) -> &[Vec<String>] {
         &self.object_urls
     }
 
-    /// Returns the cluster id.
+    /// **Zilliz Cloud only.** Returns the cluster id.
     pub fn cluster_id(&self) -> &str {
         &self.cluster_id
     }
 
-    /// Returns the project id.
+    /// **Zilliz Cloud only.** Returns the project id.
     pub fn project_id(&self) -> &str {
         &self.project_id
     }
 
-    /// Returns the region id.
+    /// **Zilliz Cloud only.** Returns the region id.
     pub fn region_id(&self) -> &str {
         &self.region_id
     }
 
-    /// Returns the access key.
+    /// **Zilliz Cloud only.** Returns the access key.
     pub fn access_key(&self) -> &str {
         &self.access_key
     }
 
-    /// Returns the secret key.
+    /// **Zilliz Cloud only.** Returns the secret key.
     pub fn secret_key(&self) -> &str {
         &self.secret_key
     }
 
-    /// Returns the token.
+    /// **Zilliz Cloud only.** Returns the token.
     pub fn token(&self) -> &str {
         &self.token
     }
 
-    /// Returns the volume name.
+    /// **Zilliz Cloud only.** Returns the volume name.
     pub fn volume_name(&self) -> &str {
         &self.volume_name
     }
 
-    /// Returns the data paths.
+    /// **Zilliz Cloud only.** Returns the data paths.
     pub fn data_paths(&self) -> &[Vec<String>] {
         &self.data_paths
     }
@@ -720,7 +720,7 @@ impl BulkImportRequestBuilder {
         self
     }
 
-    /// Sets the deprecated singular object URL accepted by Milvus 2.6.
+    /// **Zilliz Cloud only.** Sets the deprecated singular object URL accepted by Milvus 2.6.
     ///
     /// Prefer [`Self::object_urls`] for new applications.
     pub fn object_url(mut self, value: impl Into<String>) -> Self {
@@ -728,7 +728,7 @@ impl BulkImportRequestBuilder {
         self
     }
 
-    /// Sets the object urls and returns the updated value.
+    /// **Zilliz Cloud only.** Sets the object urls and returns the updated value.
     pub fn object_urls<I, G, S>(mut self, values: I) -> Self
     where
         I: IntoIterator<Item = G>,
@@ -739,7 +739,7 @@ impl BulkImportRequestBuilder {
         self
     }
 
-    /// Sets the object url group and returns the updated value.
+    /// **Zilliz Cloud only.** Sets the object url group and returns the updated value.
     pub fn object_url_group<I, S>(mut self, values: I) -> Self
     where
         I: IntoIterator<Item = S>,
@@ -751,49 +751,49 @@ impl BulkImportRequestBuilder {
         self
     }
 
-    /// Sets the cluster id and returns the updated value.
+    /// **Zilliz Cloud only.** Sets the cluster id and returns the updated value.
     pub fn cluster_id(mut self, value: impl Into<String>) -> Self {
         self.value.cluster_id = value.into();
         self
     }
 
-    /// Sets the project id and returns the updated value.
+    /// **Zilliz Cloud only.** Sets the project id and returns the updated value.
     pub fn project_id(mut self, value: impl Into<String>) -> Self {
         self.value.project_id = value.into();
         self
     }
 
-    /// Sets the region id and returns the updated value.
+    /// **Zilliz Cloud only.** Sets the region id and returns the updated value.
     pub fn region_id(mut self, value: impl Into<String>) -> Self {
         self.value.region_id = value.into();
         self
     }
 
-    /// Sets the access key and returns the updated value.
+    /// **Zilliz Cloud only.** Sets the access key and returns the updated value.
     pub fn access_key(mut self, value: impl Into<String>) -> Self {
         self.value.access_key = value.into();
         self
     }
 
-    /// Sets the secret key and returns the updated value.
+    /// **Zilliz Cloud only.** Sets the secret key and returns the updated value.
     pub fn secret_key(mut self, value: impl Into<String>) -> Self {
         self.value.secret_key = value.into();
         self
     }
 
-    /// Sets the token and returns the updated value.
+    /// **Zilliz Cloud only.** Sets the token and returns the updated value.
     pub fn token(mut self, value: impl Into<String>) -> Self {
         self.value.token = value.into();
         self
     }
 
-    /// Sets the volume name and returns the updated value.
+    /// **Zilliz Cloud only.** Sets the volume name and returns the updated value.
     pub fn volume_name(mut self, value: impl Into<String>) -> Self {
         self.value.volume_name = value.into();
         self
     }
 
-    /// Sets the data paths and returns the updated value.
+    /// **Zilliz Cloud only.** Sets the data paths and returns the updated value.
     pub fn data_paths<I, G, S>(mut self, values: I) -> Self
     where
         I: IntoIterator<Item = G>,
@@ -804,7 +804,7 @@ impl BulkImportRequestBuilder {
         self
     }
 
-    /// Sets the data path group and returns the updated value.
+    /// **Zilliz Cloud only.** Sets the data path group and returns the updated value.
     pub fn data_path_group<I, S>(mut self, values: I) -> Self
     where
         I: IntoIterator<Item = S>,
@@ -917,17 +917,17 @@ impl ListImportJobsRequest {
         &self.collection_name
     }
 
-    /// Returns the cluster id.
+    /// **Zilliz Cloud only.** Returns the cluster id.
     pub fn cluster_id(&self) -> &str {
         &self.cluster_id
     }
 
-    /// Returns the project id.
+    /// **Zilliz Cloud only.** Returns the project id.
     pub fn project_id(&self) -> &str {
         &self.project_id
     }
 
-    /// Returns the region id.
+    /// **Zilliz Cloud only.** Returns the region id.
     pub fn region_id(&self) -> &str {
         &self.region_id
     }
@@ -989,19 +989,19 @@ impl ListImportJobsRequestBuilder {
         self
     }
 
-    /// Sets the cluster id and returns the updated value.
+    /// **Zilliz Cloud only.** Sets the cluster id and returns the updated value.
     pub fn cluster_id(mut self, value: impl Into<String>) -> Self {
         self.value.cluster_id = value.into();
         self
     }
 
-    /// Sets the project id and returns the updated value.
+    /// **Zilliz Cloud only.** Sets the project id and returns the updated value.
     pub fn project_id(mut self, value: impl Into<String>) -> Self {
         self.value.project_id = value.into();
         self
     }
 
-    /// Sets the region id and returns the updated value.
+    /// **Zilliz Cloud only.** Sets the region id and returns the updated value.
     pub fn region_id(mut self, value: impl Into<String>) -> Self {
         self.value.region_id = value.into();
         self
@@ -1079,17 +1079,17 @@ impl GetImportProgressRequest {
         &self.job_id
     }
 
-    /// Returns the cluster id.
+    /// **Zilliz Cloud only.** Returns the cluster id.
     pub fn cluster_id(&self) -> &str {
         &self.cluster_id
     }
 
-    /// Returns the project id.
+    /// **Zilliz Cloud only.** Returns the project id.
     pub fn project_id(&self) -> &str {
         &self.project_id
     }
 
-    /// Returns the region id.
+    /// **Zilliz Cloud only.** Returns the region id.
     pub fn region_id(&self) -> &str {
         &self.region_id
     }
@@ -1136,19 +1136,19 @@ impl GetImportProgressRequestBuilder {
         self
     }
 
-    /// Sets the cluster id and returns the updated value.
+    /// **Zilliz Cloud only.** Sets the cluster id and returns the updated value.
     pub fn cluster_id(mut self, value: impl Into<String>) -> Self {
         self.value.cluster_id = value.into();
         self
     }
 
-    /// Sets the project id and returns the updated value.
+    /// **Zilliz Cloud only.** Sets the project id and returns the updated value.
     pub fn project_id(mut self, value: impl Into<String>) -> Self {
         self.value.project_id = value.into();
         self
     }
 
-    /// Sets the region id and returns the updated value.
+    /// **Zilliz Cloud only.** Sets the region id and returns the updated value.
     pub fn region_id(mut self, value: impl Into<String>) -> Self {
         self.value.region_id = value.into();
         self
