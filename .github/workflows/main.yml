@@ -75,6 +75,9 @@ jobs:
       - name: Check V2 API conventions
         run: python3 scripts/check_v2_api.py
 
+      - name: Check Zilliz Cloud only markers
+        run: bash scripts/check-zilliz-cloud-tags.sh
+
       - name: Check documentation
         env:
           RUSTDOCFLAGS: -D warnings -A rustdoc::bare-urls
