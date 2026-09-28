@@ -1075,11 +1075,18 @@ impl GetCompactionPlansRequestBuilder {
     ///
     /// Returns [`crate::v2::error::Error::Validation`] when:
     /// - `compaction_id` must be greater than zero when no collection name is configured
+    /// - `compaction_id` must not be configured at the same time as a collection name
     /// - the collection name must not be empty when configured; an empty database name uses the
     ///   selected or default database
     pub fn build(self) -> Result<GetCompactionPlansRequest> {
         match &self.value.collection_name {
             Some(collection_name) => {
+                if self.value.compaction_id > 0 {
+                    return Err(Error::validation(
+                        "compaction_id".into(),
+                        "must not be set when collection_name is configured".into(),
+                    ));
+                }
                 validate_collection_target(self.value.database_name.as_deref(), collection_name)?;
             }
             None => {
@@ -2300,6 +2307,16 @@ mod builder_value_tests {
             .collection_name("")
             .build()
             .is_err());
+    }
+
+    #[test]
+    fn get_compaction_plans_request_rejects_combined_selections() {
+        let error = GetCompactionPlansRequest::builder()
+            .compaction_id(7)
+            .collection_name("books")
+            .build()
+            .expect_err("compaction_id and collection_name are mutually exclusive");
+        assert!(error.to_string().contains("compaction_id"));
     }
 
     #[test]
