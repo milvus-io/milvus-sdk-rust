@@ -15,26 +15,32 @@
 // limitations under the License.
 
 pub mod common {
+    #![allow(rustdoc::broken_intra_doc_links, rustdoc::invalid_html_tags)]
     include!(concat!(env!("OUT_DIR"), "/milvus.proto.common.rs"));
 }
 
 pub mod feder {
+    #![allow(rustdoc::broken_intra_doc_links, rustdoc::invalid_html_tags)]
     include!(concat!(env!("OUT_DIR"), "/milvus.proto.feder.rs"));
 }
 
 pub mod milvus {
+    #![allow(rustdoc::broken_intra_doc_links, rustdoc::invalid_html_tags)]
     include!(concat!(env!("OUT_DIR"), "/milvus.proto.milvus.rs"));
 }
 
 pub mod msg {
+    #![allow(rustdoc::broken_intra_doc_links, rustdoc::invalid_html_tags)]
     include!(concat!(env!("OUT_DIR"), "/milvus.proto.msg.rs"));
 }
 
 pub mod rg {
+    #![allow(rustdoc::broken_intra_doc_links, rustdoc::invalid_html_tags)]
     include!(concat!(env!("OUT_DIR"), "/milvus.proto.rg.rs"));
 }
 
 pub mod schema {
+    #![allow(rustdoc::broken_intra_doc_links, rustdoc::invalid_html_tags)]
     include!(concat!(env!("OUT_DIR"), "/milvus.proto.schema.rs"));
 }
 

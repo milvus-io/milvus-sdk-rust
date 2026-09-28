@@ -1028,7 +1028,9 @@ impl GetCompactionPlansRequest {
         milvus::GetCompactionPlansRequest {
             compaction_id: self.compaction_id,
             db_name: if self.collection_name.is_some() {
-                self.database_name.unwrap_or_else(|| default_db.to_owned())
+                self.database_name
+                    .filter(|database| !database.is_empty())
+                    .unwrap_or_else(|| default_db.to_owned())
             } else {
                 String::new()
             },
@@ -1073,7 +1075,8 @@ impl GetCompactionPlansRequestBuilder {
     ///
     /// Returns [`crate::v2::error::Error::Validation`] when:
     /// - `compaction_id` must be greater than zero when no collection name is configured
-    /// - the collection name (and database name when supplied) must not be empty when configured
+    /// - the collection name must not be empty when configured; an empty database name uses the
+    ///   selected or default database
     pub fn build(self) -> Result<GetCompactionPlansRequest> {
         match &self.value.collection_name {
             Some(collection_name) => {
@@ -1133,7 +1136,10 @@ impl ListCompactionTasksRequest {
 
     pub(crate) fn into_proto(self, default_db: &str) -> milvus::GetCompactionPlansRequest {
         milvus::GetCompactionPlansRequest {
-            db_name: self.database_name.unwrap_or_else(|| default_db.to_owned()),
+            db_name: self
+                .database_name
+                .filter(|database| !database.is_empty())
+                .unwrap_or_else(|| default_db.to_owned()),
             collection_name: self.collection_name,
             ..Default::default()
         }
@@ -2261,6 +2267,33 @@ mod builder_value_tests {
     }
 
     #[test]
+    fn get_compaction_plans_request_empty_database_falls_back_to_default() {
+        let value = GetCompactionPlansRequest::builder()
+            .collection_name("books")
+            .database_name("")
+            .build()
+            .expect("an empty database name uses the selected or default database");
+
+        assert_eq!(value.database_name().as_deref(), Some(""));
+        let proto = value.into_proto("selected-db");
+        assert_eq!(proto.db_name, "selected-db");
+    }
+
+    #[test]
+    fn get_compaction_plans_request_compaction_selection_omits_database() {
+        let value = GetCompactionPlansRequest::builder()
+            .compaction_id(7)
+            .database_name("db-value")
+            .build()
+            .expect("valid request");
+
+        let proto = value.into_proto("default");
+        assert_eq!(proto.compaction_id, 7);
+        assert_eq!(proto.collection_name, "");
+        assert_eq!(proto.db_name, "");
+    }
+
+    #[test]
     fn get_compaction_plans_request_rejects_missing_selection() {
         assert!(GetCompactionPlansRequest::builder().build().is_err());
         assert!(GetCompactionPlansRequest::builder()
@@ -2295,6 +2328,19 @@ mod builder_value_tests {
         let proto = value.into_proto("default");
         assert_eq!(proto.collection_name, "collection_name-value");
         assert_eq!(proto.db_name, "database_name-value");
+    }
+
+    #[test]
+    fn list_compaction_tasks_request_empty_database_falls_back_to_default() {
+        let value = ListCompactionTasksRequest::builder()
+            .collection_name("books")
+            .database_name("")
+            .build()
+            .expect("an empty database name uses the selected or default database");
+
+        let proto = value.into_proto("selected-db");
+        assert_eq!(proto.collection_name, "books");
+        assert_eq!(proto.db_name, "selected-db");
     }
 
     #[test]

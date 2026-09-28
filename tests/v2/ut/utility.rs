@@ -504,6 +504,10 @@ async fn utility_interfaces_reach_rpc_server() {
         )
         .await
         .unwrap();
+    server.assert_request_contains(
+        "get_compaction_state_with_plans",
+        &["compaction_id: 1", "collection_name: \"\""],
+    );
     assert_eq!(plans.state().to_owned(), CompactionStateCode::Completed);
     assert_eq!(plans.collection_name().to_owned(), "");
     assert_eq!(plans.merges().len().to_owned(), 1);
@@ -543,6 +547,10 @@ async fn utility_interfaces_reach_rpc_server() {
         )
         .await
         .unwrap();
+    server.assert_request_contains(
+        "get_compaction_state_with_plans",
+        &["collection_name: \"books\"", "db_name: \"default\""],
+    );
     assert_eq!(tasks.state().to_owned(), CompactionStateCode::Completed);
     assert_eq!(tasks.collection_name().to_owned(), "books");
     assert_eq!(tasks.merges().len().to_owned(), 1);
