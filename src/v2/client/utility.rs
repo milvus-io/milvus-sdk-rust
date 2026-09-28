@@ -577,17 +577,46 @@ impl ClientV2 {
         ))
     }
 
-    /// Retrieves the execution plans produced for a compaction action.
+    /// Retrieves the execution plans produced for a compaction action, or the still-retained
+    /// compaction tasks of a collection when the request selects by collection name.
     pub async fn get_compaction_plans(
         &self,
         request: request::utility::GetCompactionPlansRequest,
     ) -> Result<response::utility::GetCompactionPlansResponse> {
         let compaction_id = request.compaction_id();
-        let response =
-            rpc_with_retry!(self, get_compaction_state_with_plans, request.into_proto())?;
+        let collection_name = request.collection_name().unwrap_or_default().to_owned();
+        let database = self.effective_database(request.database_name().as_deref());
+        let response = rpc_with_retry!(
+            self,
+            get_compaction_state_with_plans,
+            request.into_proto(&database)
+        )?;
         status_to_result(&response.status)?;
         Ok(response::utility::GetCompactionPlansResponse::from_proto(
             compaction_id,
+            collection_name,
+            response,
+        ))
+    }
+
+    /// Lists the compaction tasks still retained for a collection.
+    ///
+    /// Terminal tasks are subject to server-side garbage collection and are not an audit log.
+    pub async fn list_compaction_tasks(
+        &self,
+        request: request::utility::ListCompactionTasksRequest,
+    ) -> Result<response::utility::GetCompactionPlansResponse> {
+        let database = self.effective_database(request.database_name().as_deref());
+        let collection_name = request.collection_name().to_owned();
+        let response = rpc_with_retry!(
+            self,
+            get_compaction_state_with_plans,
+            request.into_proto(&database)
+        )?;
+        status_to_result(&response.status)?;
+        Ok(response::utility::GetCompactionPlansResponse::from_proto(
+            0,
+            collection_name,
             response,
         ))
     }

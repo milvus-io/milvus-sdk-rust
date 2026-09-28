@@ -302,7 +302,10 @@ impl Client {
         let resp = self
             .client
             .clone()
-            .get_compaction_state_with_plans(GetCompactionPlansRequest { compaction_id })
+            .get_compaction_state_with_plans(GetCompactionPlansRequest {
+                compaction_id,
+                ..Default::default()
+            })
             .await?
             .into_inner();
         status_to_result(&resp.status)?;

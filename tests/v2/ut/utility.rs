@@ -23,7 +23,9 @@ use milvus::v2::request::database::CreateDatabaseRequest;
 use milvus::v2::request::dml::InsertRequest;
 use milvus::v2::request::partition::LoadPartitionsRequest;
 use milvus::v2::request::utility::*;
-use milvus::v2::{CompactionStateCode, FieldData, SegmentLevel, SegmentState};
+use milvus::v2::{
+    CompactionStateCode, CompactionTaskState, CompactionType, FieldData, SegmentLevel, SegmentState,
+};
 use std::time::{Duration, Instant};
 
 #[tokio::test]
@@ -502,13 +504,60 @@ async fn utility_interfaces_reach_rpc_server() {
         )
         .await
         .unwrap();
+    server.assert_request_contains(
+        "get_compaction_state_with_plans",
+        &["compaction_id: 1", "collection_name: \"\""],
+    );
     assert_eq!(plans.state().to_owned(), CompactionStateCode::Completed);
+    assert_eq!(plans.collection_name().to_owned(), "");
     assert_eq!(plans.merges().len().to_owned(), 1);
     assert_eq!(
         plans.merges()[0].get_source_segment_ids().to_owned(),
         [1, 2]
     );
     assert_eq!(plans.merges()[0].get_target_segment_id().to_owned(), 3);
+    assert_eq!(plans.merges()[0].get_plan_id().to_owned(), 10);
+    assert_eq!(plans.merges()[0].get_trigger_id().to_owned(), 11);
+    assert_eq!(plans.merges()[0].get_collection_id().to_owned(), 12);
+    assert_eq!(plans.merges()[0].get_partition_id().to_owned(), 13);
+    assert_eq!(
+        plans.merges()[0].get_channel().to_owned(),
+        "by-dev-rootcoord-dml_0_1v"
+    );
+    assert_eq!(
+        plans.merges()[0].get_compaction_type().to_owned(),
+        CompactionType::Major
+    );
+    assert_eq!(
+        plans.merges()[0].get_state().to_owned(),
+        CompactionTaskState::Completed
+    );
+    assert_eq!(plans.merges()[0].get_failure_reason().to_owned(), "");
+    assert_eq!(
+        plans.merges()[0].get_target_segment_ids().to_owned(),
+        [3, 4]
+    );
+
+    let tasks = client
+        .list_compaction_tasks(
+            ListCompactionTasksRequest::builder()
+                .collection_name("books")
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .unwrap();
+    server.assert_request_contains(
+        "get_compaction_state_with_plans",
+        &["collection_name: \"books\"", "db_name: \"default\""],
+    );
+    assert_eq!(tasks.state().to_owned(), CompactionStateCode::Completed);
+    assert_eq!(tasks.collection_name().to_owned(), "books");
+    assert_eq!(tasks.merges().len().to_owned(), 1);
+    assert_eq!(
+        tasks.merges()[0].get_target_segment_ids().to_owned(),
+        [3, 4]
+    );
 
     let analyzer = client
         .run_analyzer(

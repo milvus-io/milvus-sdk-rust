@@ -40,6 +40,8 @@ pub enum SegmentState {
     Flushing,
     /// The segment has been dropped.
     Dropped,
+    /// The segment is being imported from external data.
+    Importing,
 }
 
 impl SegmentState {
@@ -51,6 +53,7 @@ impl SegmentState {
             Some(common::SegmentState::Flushed) => Self::Flushed,
             Some(common::SegmentState::Flushing) => Self::Flushing,
             Some(common::SegmentState::Dropped) => Self::Dropped,
+            Some(common::SegmentState::Importing) => Self::Importing,
             _ => Self::Unknown,
         }
     }
@@ -115,6 +118,111 @@ impl CompactionStateCode {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// CompactionType
+///////////////////////////////////////////////////////////////////////////////
+/// Kind of a compaction task executed by the server.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum CompactionType {
+    #[default]
+    /// The compaction type is undefined.
+    Undefined,
+    /// Merge compaction over sealed segments.
+    Merge,
+    /// Mixed compaction.
+    Mix,
+    /// Single-segment compaction.
+    Single,
+    /// Minor compaction.
+    Minor,
+    /// Major compaction.
+    Major,
+    /// Level-0 delete compaction.
+    Level0Delete,
+    /// Clustering compaction.
+    Clustering,
+    /// Sort compaction.
+    Sort,
+    /// Partition-key sort compaction.
+    PartitionKeySort,
+    /// Clustering and partition-key sort compaction.
+    ClusteringPartitionKeySort,
+    /// Compaction that bumps the schema version.
+    BumpSchemaVersion,
+}
+
+impl CompactionType {
+    pub(crate) fn from_proto(value: i32) -> Self {
+        match common::CompactionType::try_from(value).ok() {
+            Some(common::CompactionType::Merge) => Self::Merge,
+            Some(common::CompactionType::Mix) => Self::Mix,
+            Some(common::CompactionType::Single) => Self::Single,
+            Some(common::CompactionType::Minor) => Self::Minor,
+            Some(common::CompactionType::Major) => Self::Major,
+            Some(common::CompactionType::Level0Delete) => Self::Level0Delete,
+            Some(common::CompactionType::Clustering) => Self::Clustering,
+            Some(common::CompactionType::Sort) => Self::Sort,
+            Some(common::CompactionType::PartitionKeySort) => Self::PartitionKeySort,
+            Some(common::CompactionType::ClusteringPartitionKeySort) => {
+                Self::ClusteringPartitionKeySort
+            }
+            Some(common::CompactionType::BumpSchemaVersion) => Self::BumpSchemaVersion,
+            _ => Self::Undefined,
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// CompactionTaskState
+///////////////////////////////////////////////////////////////////////////////
+/// Lifecycle state of a single compaction task.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum CompactionTaskState {
+    #[default]
+    /// The compaction task state is unknown.
+    Unknown,
+    /// The compaction task is currently running.
+    Executing,
+    /// The compaction task is waiting in the pipeline.
+    Pipelining,
+    /// The compaction task has completed.
+    Completed,
+    /// The compaction task has failed.
+    Failed,
+    /// The compaction task timed out.
+    Timeout,
+    /// The compaction task is analyzing segments.
+    Analyzing,
+    /// The compaction task is building indexes.
+    Indexing,
+    /// The compaction task has been cleaned up.
+    Cleaned,
+    /// The compaction task metadata has been saved.
+    MetaSaved,
+    /// The compaction task is collecting statistics.
+    Statistic,
+}
+
+impl CompactionTaskState {
+    pub(crate) fn from_proto(value: i32) -> Self {
+        match common::CompactionTaskState::try_from(value).ok() {
+            Some(common::CompactionTaskState::Executing) => Self::Executing,
+            Some(common::CompactionTaskState::Pipelining) => Self::Pipelining,
+            Some(common::CompactionTaskState::Completed) => Self::Completed,
+            Some(common::CompactionTaskState::Failed) => Self::Failed,
+            Some(common::CompactionTaskState::Timeout) => Self::Timeout,
+            Some(common::CompactionTaskState::Analyzing) => Self::Analyzing,
+            Some(common::CompactionTaskState::Indexing) => Self::Indexing,
+            Some(common::CompactionTaskState::Cleaned) => Self::Cleaned,
+            Some(common::CompactionTaskState::MetaSaved) => Self::MetaSaved,
+            Some(common::CompactionTaskState::Statistic) => Self::Statistic,
+            _ => Self::Unknown,
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // TargetSizeUnit
 ///////////////////////////////////////////////////////////////////////////////
 /// Storage-size unit used to interpret a compaction `target_size`.
@@ -166,6 +274,8 @@ pub struct PersistentSegmentInfo {
     pub(crate) level: SegmentLevel,
     pub(crate) sorted: bool,
     pub(crate) storage_version: i64,
+    pub(crate) insert_channel: String,
+    pub(crate) compaction_from: Vec<i64>,
 }
 
 impl PersistentSegmentInfo {
@@ -181,6 +291,8 @@ impl PersistentSegmentInfo {
             level: SegmentLevel::Unknown,
             sorted: false,
             storage_version: 0,
+            insert_channel: String::new(),
+            compaction_from: Vec::new(),
         }
     }
 
@@ -335,6 +447,48 @@ impl PersistentSegmentInfo {
     /// Returns the configured storage version.
     pub fn get_storage_version(&self) -> i64 {
         self.storage_version
+    }
+
+    /// Sets the insert channel and returns the updated value.
+    pub fn insert_channel(mut self, value: impl Into<String>) -> Self {
+        self.insert_channel = value.into();
+        self
+    }
+
+    /// Sets the insert channel and returns this value for further mutation.
+    pub fn set_insert_channel(&mut self, value: impl Into<String>) -> &mut Self {
+        self.insert_channel = value.into();
+        self
+    }
+
+    /// Returns the configured insert channel.
+    pub fn get_insert_channel(&self) -> &str {
+        &self.insert_channel
+    }
+
+    /// Sets the direct source segment ids consumed to create this segment and returns the updated
+    /// value.
+    pub fn compaction_from(mut self, value: Vec<i64>) -> Self {
+        self.compaction_from = value;
+        self
+    }
+
+    /// Sets the direct source segment ids consumed to create this segment and returns this value
+    /// for further mutation.
+    pub fn set_compaction_from(&mut self, value: Vec<i64>) -> &mut Self {
+        self.compaction_from = value;
+        self
+    }
+
+    /// Returns the direct source segment ids consumed to create this segment.
+    pub fn get_compaction_from(&self) -> &[i64] {
+        &self.compaction_from
+    }
+
+    /// Adds one direct source segment id to the existing values.
+    pub fn add_compaction_from(mut self, value: i64) -> Self {
+        self.compaction_from.push(value);
+        self
     }
 }
 
@@ -611,12 +765,21 @@ impl QuerySegmentInfo {
 ///////////////////////////////////////////////////////////////////////////////
 // CompactionMerge
 ///////////////////////////////////////////////////////////////////////////////
-/// Input and output segments participating in a compaction.
+/// Input and output segments participating in a compaction plan.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct CompactionMerge {
     pub(crate) source_segment_ids: Vec<i64>,
     pub(crate) target_segment_id: i64,
+    pub(crate) plan_id: i64,
+    pub(crate) trigger_id: i64,
+    pub(crate) collection_id: i64,
+    pub(crate) partition_id: i64,
+    pub(crate) channel: String,
+    pub(crate) compaction_type: CompactionType,
+    pub(crate) state: CompactionTaskState,
+    pub(crate) failure_reason: String,
+    pub(crate) target_segment_ids: Vec<i64>,
 }
 
 impl CompactionMerge {
@@ -625,6 +788,15 @@ impl CompactionMerge {
         Self {
             source_segment_ids: Vec::new(),
             target_segment_id: 0,
+            plan_id: 0,
+            trigger_id: 0,
+            collection_id: 0,
+            partition_id: 0,
+            channel: String::new(),
+            compaction_type: CompactionType::Undefined,
+            state: CompactionTaskState::Unknown,
+            failure_reason: String::new(),
+            target_segment_ids: Vec::new(),
         }
     }
 
@@ -662,9 +834,168 @@ impl CompactionMerge {
         self.target_segment_id
     }
 
+    /// Sets the plan id and returns the updated value.
+    pub fn plan_id(mut self, value: i64) -> Self {
+        self.plan_id = value;
+        self
+    }
+
+    /// Sets the plan id and returns this value for further mutation.
+    pub fn set_plan_id(&mut self, value: i64) -> &mut Self {
+        self.plan_id = value;
+        self
+    }
+
+    /// Returns the configured plan id.
+    pub fn get_plan_id(&self) -> i64 {
+        self.plan_id
+    }
+
+    /// Sets the trigger id and returns the updated value.
+    pub fn trigger_id(mut self, value: i64) -> Self {
+        self.trigger_id = value;
+        self
+    }
+
+    /// Sets the trigger id and returns this value for further mutation.
+    pub fn set_trigger_id(&mut self, value: i64) -> &mut Self {
+        self.trigger_id = value;
+        self
+    }
+
+    /// Returns the configured trigger id.
+    pub fn get_trigger_id(&self) -> i64 {
+        self.trigger_id
+    }
+
+    /// Sets the collection id and returns the updated value.
+    pub fn collection_id(mut self, value: i64) -> Self {
+        self.collection_id = value;
+        self
+    }
+
+    /// Sets the collection id and returns this value for further mutation.
+    pub fn set_collection_id(&mut self, value: i64) -> &mut Self {
+        self.collection_id = value;
+        self
+    }
+
+    /// Returns the configured collection id.
+    pub fn get_collection_id(&self) -> i64 {
+        self.collection_id
+    }
+
+    /// Sets the partition id and returns the updated value.
+    pub fn partition_id(mut self, value: i64) -> Self {
+        self.partition_id = value;
+        self
+    }
+
+    /// Sets the partition id and returns this value for further mutation.
+    pub fn set_partition_id(&mut self, value: i64) -> &mut Self {
+        self.partition_id = value;
+        self
+    }
+
+    /// Returns the configured partition id.
+    pub fn get_partition_id(&self) -> i64 {
+        self.partition_id
+    }
+
+    /// Sets the channel and returns the updated value.
+    pub fn channel(mut self, value: impl Into<String>) -> Self {
+        self.channel = value.into();
+        self
+    }
+
+    /// Sets the channel and returns this value for further mutation.
+    pub fn set_channel(&mut self, value: impl Into<String>) -> &mut Self {
+        self.channel = value.into();
+        self
+    }
+
+    /// Returns the configured channel.
+    pub fn get_channel(&self) -> &str {
+        &self.channel
+    }
+
+    /// Sets the compaction type and returns the updated value.
+    pub fn compaction_type(mut self, value: CompactionType) -> Self {
+        self.compaction_type = value;
+        self
+    }
+
+    /// Sets the compaction type and returns this value for further mutation.
+    pub fn set_compaction_type(&mut self, value: CompactionType) -> &mut Self {
+        self.compaction_type = value;
+        self
+    }
+
+    /// Returns the configured compaction type.
+    pub fn get_compaction_type(&self) -> CompactionType {
+        self.compaction_type
+    }
+
+    /// Sets the compaction task state and returns the updated value.
+    pub fn state(mut self, value: CompactionTaskState) -> Self {
+        self.state = value;
+        self
+    }
+
+    /// Sets the compaction task state and returns this value for further mutation.
+    pub fn set_state(&mut self, value: CompactionTaskState) -> &mut Self {
+        self.state = value;
+        self
+    }
+
+    /// Returns the configured compaction task state.
+    pub fn get_state(&self) -> CompactionTaskState {
+        self.state
+    }
+
+    /// Sets the failure reason and returns the updated value.
+    pub fn failure_reason(mut self, value: impl Into<String>) -> Self {
+        self.failure_reason = value.into();
+        self
+    }
+
+    /// Sets the failure reason and returns this value for further mutation.
+    pub fn set_failure_reason(&mut self, value: impl Into<String>) -> &mut Self {
+        self.failure_reason = value.into();
+        self
+    }
+
+    /// Returns the configured failure reason.
+    pub fn get_failure_reason(&self) -> &str {
+        &self.failure_reason
+    }
+
+    /// Sets the target segment ids and returns the updated value.
+    pub fn target_segment_ids(mut self, value: Vec<i64>) -> Self {
+        self.target_segment_ids = value;
+        self
+    }
+
+    /// Sets the target segment ids and returns this value for further mutation.
+    pub fn set_target_segment_ids(&mut self, value: Vec<i64>) -> &mut Self {
+        self.target_segment_ids = value;
+        self
+    }
+
+    /// Returns the configured target segment ids.
+    pub fn get_target_segment_ids(&self) -> &[i64] {
+        &self.target_segment_ids
+    }
+
     /// Adds one add source segment id to the existing values.
     pub fn add_source_segment_id(mut self, value: i64) -> Self {
         self.source_segment_ids.push(value);
+        self
+    }
+
+    /// Adds one target segment id to the existing values.
+    pub fn add_target_segment_id(mut self, value: i64) -> Self {
+        self.target_segment_ids.push(value);
         self
     }
 }
@@ -1159,7 +1490,9 @@ impl FileResourceInfo {
 
 #[cfg(test)]
 mod state_enum_tests {
-    use super::{CompactionStateCode, SegmentLevel, SegmentState};
+    use super::{
+        CompactionStateCode, CompactionTaskState, CompactionType, SegmentLevel, SegmentState,
+    };
     use crate::proto::common;
 
     #[test]
@@ -1170,7 +1503,7 @@ mod state_enum_tests {
         );
         assert_eq!(
             SegmentState::from_proto(common::SegmentState::Importing as i32),
-            SegmentState::Unknown
+            SegmentState::Importing
         );
     }
 
@@ -1192,6 +1525,38 @@ mod state_enum_tests {
         assert_eq!(
             CompactionStateCode::from_proto(i32::MAX),
             CompactionStateCode::Unknown
+        );
+    }
+
+    #[test]
+    fn compaction_type_converts_from_proto() {
+        assert_eq!(
+            CompactionType::from_proto(common::CompactionType::Major as i32),
+            CompactionType::Major
+        );
+        assert_eq!(
+            CompactionType::from_proto(common::CompactionType::Level0Delete as i32),
+            CompactionType::Level0Delete
+        );
+        assert_eq!(
+            CompactionType::from_proto(i32::MAX),
+            CompactionType::Undefined
+        );
+    }
+
+    #[test]
+    fn compaction_task_state_converts_from_proto() {
+        assert_eq!(
+            CompactionTaskState::from_proto(common::CompactionTaskState::Completed as i32),
+            CompactionTaskState::Completed
+        );
+        assert_eq!(
+            CompactionTaskState::from_proto(common::CompactionTaskState::Failed as i32),
+            CompactionTaskState::Failed
+        );
+        assert_eq!(
+            CompactionTaskState::from_proto(i32::MAX),
+            CompactionTaskState::Unknown
         );
     }
 }
@@ -1286,6 +1651,8 @@ mod direct_value_tests {
         let expected_level: SegmentLevel = Default::default();
         let expected_sorted: bool = false;
         let expected_storage_version: i64 = 0;
+        let expected_insert_channel: String = String::new();
+        let expected_compaction_from: Vec<i64> = Default::default();
 
         assert_eq!(value.get_segment_id().to_owned(), expected_segment_id);
         assert_eq!(value.get_collection_id().to_owned(), expected_collection_id);
@@ -1302,6 +1669,14 @@ mod direct_value_tests {
             value.get_storage_version().to_owned(),
             expected_storage_version
         );
+        assert_eq!(
+            value.get_insert_channel().to_owned(),
+            expected_insert_channel
+        );
+        assert_eq!(
+            value.get_compaction_from().to_owned(),
+            expected_compaction_from
+        );
     }
 
     #[test]
@@ -1315,6 +1690,8 @@ mod direct_value_tests {
         let level = SegmentLevel::L1;
         let sorted = true;
         let storage_version = 7;
+        let insert_channel = "insert_channel-value".to_owned();
+        let compaction_from = vec![7];
         let value = PersistentSegmentInfo::new()
             .segment_id(segment_id.clone())
             .collection_id(collection_id.clone())
@@ -1324,7 +1701,9 @@ mod direct_value_tests {
             .collection_name(collection_name.clone())
             .level(level.clone())
             .sorted(sorted.clone())
-            .storage_version(storage_version.clone());
+            .storage_version(storage_version.clone())
+            .insert_channel(insert_channel.clone())
+            .compaction_from(compaction_from.clone());
 
         assert_eq!(value.get_segment_id().to_owned(), segment_id);
         assert_eq!(value.get_collection_id().to_owned(), collection_id);
@@ -1335,6 +1714,8 @@ mod direct_value_tests {
         assert_eq!(value.get_level().to_owned(), level);
         assert_eq!(value.get_sorted().to_owned(), sorted);
         assert_eq!(value.get_storage_version().to_owned(), storage_version);
+        assert_eq!(value.get_insert_channel().to_owned(), insert_channel);
+        assert_eq!(value.get_compaction_from().to_owned(), compaction_from);
     }
 
     #[test]
@@ -1425,6 +1806,15 @@ mod direct_value_tests {
         let value = CompactionMerge::new();
         let expected_source_segment_ids: Vec<i64> = Default::default();
         let expected_target_segment_id: i64 = 0;
+        let expected_plan_id: i64 = 0;
+        let expected_trigger_id: i64 = 0;
+        let expected_collection_id: i64 = 0;
+        let expected_partition_id: i64 = 0;
+        let expected_channel: String = String::new();
+        let expected_compaction_type: CompactionType = Default::default();
+        let expected_state: CompactionTaskState = Default::default();
+        let expected_failure_reason: String = String::new();
+        let expected_target_segment_ids: Vec<i64> = Default::default();
 
         assert_eq!(
             value.get_source_segment_ids().to_owned(),
@@ -1434,21 +1824,69 @@ mod direct_value_tests {
             value.get_target_segment_id().to_owned(),
             expected_target_segment_id
         );
+        assert_eq!(value.get_plan_id().to_owned(), expected_plan_id);
+        assert_eq!(value.get_trigger_id().to_owned(), expected_trigger_id);
+        assert_eq!(value.get_collection_id().to_owned(), expected_collection_id);
+        assert_eq!(value.get_partition_id().to_owned(), expected_partition_id);
+        assert_eq!(value.get_channel().to_owned(), expected_channel);
+        assert_eq!(
+            value.get_compaction_type().to_owned(),
+            expected_compaction_type
+        );
+        assert_eq!(value.get_state().to_owned(), expected_state);
+        assert_eq!(
+            value.get_failure_reason().to_owned(),
+            expected_failure_reason
+        );
+        assert_eq!(
+            value.get_target_segment_ids().to_owned(),
+            expected_target_segment_ids
+        );
     }
 
     #[test]
     fn compaction_merge_populated_values() {
         let source_segment_ids = vec![7];
         let target_segment_id = 7;
+        let plan_id = 7;
+        let trigger_id = 7;
+        let collection_id = 7;
+        let partition_id = 7;
+        let channel = "channel-value".to_owned();
+        let compaction_type = CompactionType::Major;
+        let state = CompactionTaskState::Completed;
+        let failure_reason = "failure_reason-value".to_owned();
+        let target_segment_ids = vec![7];
         let value = CompactionMerge::new()
             .source_segment_ids(source_segment_ids.clone())
-            .target_segment_id(target_segment_id.clone());
+            .target_segment_id(target_segment_id.clone())
+            .plan_id(plan_id.clone())
+            .trigger_id(trigger_id.clone())
+            .collection_id(collection_id.clone())
+            .partition_id(partition_id.clone())
+            .channel(channel.clone())
+            .compaction_type(compaction_type.clone())
+            .state(state.clone())
+            .failure_reason(failure_reason.clone())
+            .target_segment_ids(target_segment_ids.clone());
 
         assert_eq!(
             value.get_source_segment_ids().to_owned(),
             source_segment_ids
         );
         assert_eq!(value.get_target_segment_id().to_owned(), target_segment_id);
+        assert_eq!(value.get_plan_id().to_owned(), plan_id);
+        assert_eq!(value.get_trigger_id().to_owned(), trigger_id);
+        assert_eq!(value.get_collection_id().to_owned(), collection_id);
+        assert_eq!(value.get_partition_id().to_owned(), partition_id);
+        assert_eq!(value.get_channel().to_owned(), channel);
+        assert_eq!(value.get_compaction_type().to_owned(), compaction_type);
+        assert_eq!(value.get_state().to_owned(), state);
+        assert_eq!(value.get_failure_reason().to_owned(), failure_reason);
+        assert_eq!(
+            value.get_target_segment_ids().to_owned(),
+            target_segment_ids
+        );
     }
 
     #[test]

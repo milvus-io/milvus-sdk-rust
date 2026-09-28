@@ -2211,6 +2211,9 @@ impl MilvusService for MockMilvus {
                 level: common::SegmentLevel::L1 as i32,
                 is_sorted: true,
                 storage_version: 2,
+                insert_channel: "by-dev-rootcoord-dml_0_1v".into(),
+                compaction_from: vec![41],
+                ..Default::default()
             }],
         }
     );
@@ -2302,6 +2305,15 @@ impl MilvusService for MockMilvus {
             merge_infos: vec![pb::CompactionMergeInfo {
                 sources: vec![1, 2],
                 target: 3,
+                plan_id: 10,
+                trigger_id: 11,
+                collection_id: 12,
+                partition_id: 13,
+                channel: "by-dev-rootcoord-dml_0_1v".into(),
+                r#type: common::CompactionType::Major as i32,
+                state: common::CompactionTaskState::Completed as i32,
+                failure_reason: String::new(),
+                targets: vec![3, 4],
             }],
         }
     );
@@ -2750,6 +2762,7 @@ impl MilvusService for MockMilvus {
             partition_names: vec!["p1".into(), "p2".into()],
             create_ts: 123,
             s3_location: "s3://bucket/export".into(),
+            ..Default::default()
         }
     );
     response_method!(

@@ -22,7 +22,9 @@ pub use crate::v2::types::{
     AnalyzerResult, AnalyzerToken, CompactionMerge, FileResourceInfo, PersistentSegmentInfo,
     QuerySegmentInfo, RefreshExternalCollectionJobInfo, RefreshExternalCollectionStateCode,
 };
-use crate::v2::types::{CompactionStateCode, SegmentLevel, SegmentState};
+use crate::v2::types::{
+    CompactionStateCode, CompactionTaskState, CompactionType, SegmentLevel, SegmentState,
+};
 use std::collections::HashMap;
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -609,6 +611,8 @@ impl ListPersistentSegmentsResponse {
                     level: SegmentLevel::from_proto(v.level),
                     sorted: v.is_sorted,
                     storage_version: v.storage_version,
+                    insert_channel: v.insert_channel,
+                    compaction_from: v.compaction_from,
                 })
                 .collect(),
         }
@@ -1095,6 +1099,7 @@ impl GetCompactionStateResponseBuilder {
 #[non_exhaustive]
 pub struct GetCompactionPlansResponse {
     pub(crate) compaction_id: i64,
+    pub(crate) collection_name: String,
     pub(crate) state: CompactionStateCode,
     pub(crate) merges: Vec<CompactionMerge>,
 }
@@ -1108,6 +1113,7 @@ impl GetCompactionPlansResponse {
     fn empty() -> Self {
         Self {
             compaction_id: 0,
+            collection_name: String::new(),
             state: CompactionStateCode::default(),
             merges: Vec::new(),
         }
@@ -1129,6 +1135,11 @@ impl GetCompactionPlansResponse {
         self.compaction_id
     }
 
+    /// Returns the collection name the plans were selected for, if any.
+    pub fn collection_name(&self) -> &str {
+        &self.collection_name
+    }
+
     /// Returns the state.
     pub fn state(&self) -> CompactionStateCode {
         self.state
@@ -1141,10 +1152,12 @@ impl GetCompactionPlansResponse {
 
     pub(crate) fn from_proto(
         compaction_id: i64,
+        collection_name: String,
         value: milvus::GetCompactionPlansResponse,
     ) -> Self {
         Self {
             compaction_id,
+            collection_name,
             state: CompactionStateCode::from_proto(value.state),
             merges: value
                 .merge_infos
@@ -1152,6 +1165,19 @@ impl GetCompactionPlansResponse {
                 .map(|v| CompactionMerge {
                     source_segment_ids: v.sources,
                     target_segment_id: v.target,
+                    plan_id: v.plan_id,
+                    trigger_id: v.trigger_id,
+                    collection_id: v.collection_id,
+                    partition_id: v.partition_id,
+                    channel: v.channel,
+                    compaction_type: CompactionType::from_proto(v.r#type),
+                    state: CompactionTaskState::from_proto(v.state),
+                    failure_reason: v.failure_reason,
+                    target_segment_ids: if v.targets.is_empty() && v.target > 0 {
+                        vec![v.target]
+                    } else {
+                        v.targets
+                    },
                 })
                 .collect(),
         }
@@ -1180,6 +1206,12 @@ impl GetCompactionPlansResponseBuilder {
     /// Sets the compaction id and returns the updated value.
     pub fn compaction_id(mut self, value: i64) -> Self {
         self.value.compaction_id = value;
+        self
+    }
+
+    /// Sets the collection name and returns the updated value.
+    pub fn collection_name(mut self, value: impl Into<String>) -> Self {
+        self.value.collection_name = value.into();
         self
     }
 
@@ -1598,6 +1630,8 @@ mod segment_response_tests {
                     level: common::SegmentLevel::L1 as i32,
                     is_sorted: true,
                     storage_version: 2,
+                    insert_channel: "by-dev-rootcoord-dml_0_1v".into(),
+                    compaction_from: vec![101, 102],
                     ..Default::default()
                 }],
                 ..Default::default()
@@ -1608,6 +1642,8 @@ mod segment_response_tests {
         assert_eq!(segment.get_collection_name().to_owned(), "books");
         assert_eq!(segment.get_state().to_owned(), SegmentState::Flushed);
         assert_eq!(segment.get_level().to_owned(), SegmentLevel::L1);
+        assert_eq!(segment.get_insert_channel(), "by-dev-rootcoord-dml_0_1v");
+        assert_eq!(segment.get_compaction_from(), [101, 102]);
 
         let query = ListQuerySegmentsResponse::from_proto(
             milvus::GetQuerySegmentInfoResponse {
@@ -1909,10 +1945,12 @@ mod builder_value_tests {
     fn get_compaction_plans_response_default_values() {
         let value = GetCompactionPlansResponse::builder().build();
         let expected_compaction_id: i64 = 0;
+        let expected_collection_name: String = String::new();
         let expected_state: CompactionStateCode = Default::default();
         let expected_merges: Vec<CompactionMerge> = Default::default();
 
         assert_eq!(value.compaction_id().to_owned(), expected_compaction_id);
+        assert_eq!(value.collection_name().to_owned(), expected_collection_name);
         assert_eq!(value.state().to_owned(), expected_state);
         assert_eq!(value.merges().to_owned(), expected_merges);
     }
@@ -1920,15 +1958,18 @@ mod builder_value_tests {
     #[test]
     fn get_compaction_plans_response_populated_values() {
         let compaction_id = 7;
+        let collection_name = "books".to_owned();
         let state = CompactionStateCode::Completed;
         let merges = vec![CompactionMerge::new()];
         let value = GetCompactionPlansResponse::builder()
             .compaction_id(compaction_id.clone())
+            .collection_name(collection_name.clone())
             .state(state.clone())
             .merges(merges.clone())
             .build();
 
         assert_eq!(value.compaction_id().to_owned(), compaction_id);
+        assert_eq!(value.collection_name().to_owned(), collection_name);
         assert_eq!(value.state().to_owned(), state);
         assert_eq!(value.merges().to_owned(), merges);
     }
@@ -1937,9 +1978,72 @@ mod builder_value_tests {
     fn get_compaction_plans_response_keeps_the_request_compaction_id() {
         let value = GetCompactionPlansResponse::from_proto(
             7,
+            String::new(),
             milvus::GetCompactionPlansResponse::default(),
         );
         assert_eq!(value.compaction_id(), 7);
+    }
+
+    #[test]
+    fn get_compaction_plans_response_decodes_rich_merge_fields() {
+        use crate::proto::common;
+        use crate::v2::types::{CompactionTaskState, CompactionType};
+
+        let value = GetCompactionPlansResponse::from_proto(
+            0,
+            "books".to_owned(),
+            milvus::GetCompactionPlansResponse {
+                state: common::CompactionState::Completed as i32,
+                merge_infos: vec![milvus::CompactionMergeInfo {
+                    sources: vec![1, 2],
+                    target: 3,
+                    plan_id: 10,
+                    trigger_id: 11,
+                    collection_id: 12,
+                    partition_id: 13,
+                    channel: "by-dev-rootcoord-dml_0_1v".into(),
+                    r#type: common::CompactionType::Major as i32,
+                    state: common::CompactionTaskState::Completed as i32,
+                    failure_reason: "boom".into(),
+                    targets: vec![3, 4],
+                }],
+                ..Default::default()
+            },
+        );
+
+        assert_eq!(value.collection_name(), "books");
+        assert_eq!(value.state(), CompactionStateCode::Completed);
+        let merge = &value.merges()[0];
+        assert_eq!(merge.get_source_segment_ids(), [1, 2]);
+        assert_eq!(merge.get_target_segment_id(), 3);
+        assert_eq!(merge.get_plan_id(), 10);
+        assert_eq!(merge.get_trigger_id(), 11);
+        assert_eq!(merge.get_collection_id(), 12);
+        assert_eq!(merge.get_partition_id(), 13);
+        assert_eq!(merge.get_channel(), "by-dev-rootcoord-dml_0_1v");
+        assert_eq!(merge.get_compaction_type(), CompactionType::Major);
+        assert_eq!(merge.get_state(), CompactionTaskState::Completed);
+        assert_eq!(merge.get_failure_reason(), "boom");
+        assert_eq!(merge.get_target_segment_ids(), [3, 4]);
+    }
+
+    #[test]
+    fn get_compaction_plans_response_defaults_targets_to_legacy_target() {
+        let value = GetCompactionPlansResponse::from_proto(
+            0,
+            String::new(),
+            milvus::GetCompactionPlansResponse {
+                merge_infos: vec![milvus::CompactionMergeInfo {
+                    sources: vec![1],
+                    target: 3,
+                    ..Default::default()
+                }],
+                ..Default::default()
+            },
+        );
+        let merge = &value.merges()[0];
+        assert_eq!(merge.get_target_segment_id(), 3);
+        assert_eq!(merge.get_target_segment_ids(), [3]);
     }
 
     #[test]
