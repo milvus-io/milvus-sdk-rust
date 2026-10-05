@@ -18,6 +18,7 @@
 
 use super::dql::set_cluster_param;
 use super::ClientV2;
+use crate::iterator_cursor::{self, CursorMode};
 use crate::proto::{common, milvus, schema};
 use crate::v2::error::status_to_result;
 use crate::v2::error::{Error, Result};
@@ -25,6 +26,7 @@ use crate::v2::{request, response};
 use crate::v2::{
     DataType, IndexDesc, MetricType, QueryCursor, QueryCursorPk, SearchIteratorFilter,
 };
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -546,7 +548,14 @@ impl SearchIteratorV1 {
 ///////////////////////////////////////////////////////////////////////////////
 // SearchIteratorV2
 ///////////////////////////////////////////////////////////////////////////////
-/// Token/bound-based iterator supported by newer Milvus servers.
+/// Search Iterator V2 with negotiated `(score, primary key)` pagination.
+/// Distance-only pagination is the default. Set the generic search parameter
+/// `search_iter_cursor_version` to `2` to opt into score/PK pagination, which may
+/// require more server-side scanning. Servers without the capability retain distance-only pagination.
+/// Negotiated PK mode returns each accepted primary key once and retains a set
+/// of accepted keys whose memory grows with the number of distinct results.
+/// A returned session timestamp pins subsequent pages; old servers that omit it
+/// retain live-read semantics.
 pub struct SearchIteratorV2 {
     client: ClientV2,
     request: milvus::SearchRequest,
@@ -554,7 +563,11 @@ pub struct SearchIteratorV2 {
     remaining: Option<usize>,
     token: Option<String>,
     primary_field_name: String,
+    primary_field_type: DataType,
+    cursor_mode: Option<CursorMode>,
+    accepted_pks: HashSet<String>,
     cache: Option<response::dql::SearchResponse>,
+    pending_response: Option<milvus::SearchResults>,
     external_filter_func: Option<Arc<SearchIteratorFilter>>,
     finished: bool,
     closed: Option<Arc<AtomicBool>>,
@@ -569,7 +582,11 @@ impl SearchIteratorV2 {
             remaining: Some(0),
             token: None,
             primary_field_name: String::new(),
+            primary_field_type: DataType::Int64,
+            cursor_mode: None,
+            accepted_pks: HashSet::new(),
             cache: None,
+            pending_response: None,
             external_filter_func: None,
             finished: true,
             closed: None,
@@ -630,18 +647,20 @@ impl SearchIteratorV2 {
                 if let Some(token) = &self.token {
                     set_search_extra_param(&mut request.search_params, "search_iter_id", token);
                 }
-                let mut raw = rpc_with_retry!(self.client, search, request.clone())?;
-                status_to_result(&raw.status)?;
-                let (iterator_token, iterator_bound) = {
-                    let iterator = search_iterator_v2_metadata(&raw)?;
-                    (iterator.token.clone(), iterator.last_bound)
+                let mut raw = match &self.pending_response {
+                    Some(raw) => raw.clone(),
+                    None => rpc_with_retry!(self.client, search, request.clone())?,
                 };
-                let next_token = self.token.clone().unwrap_or(iterator_token);
-                set_search_extra_param(
-                    &mut request.search_params,
-                    "search_iter_last_bound",
-                    &format_iterator_bound(iterator_bound),
-                );
+                status_to_result(&raw.status)?;
+                let (next_request, next_mode) = iterator_cursor::advance(
+                    &request,
+                    &raw,
+                    self.cursor_mode,
+                    search_iterator_pk_type(self.primary_field_type)?,
+                    self.batch_size,
+                )
+                .map_err(Error::MalformedResponse)?;
+                let next_token = search_iterator_v2_metadata(&raw)?.token.clone();
                 if search_iterator_result_count(&raw) == Some(0) {
                     trace_debug!(target: "milvus_sdk::iterator", kind = "search_v2", "token-based search iterator reached end of results");
                     exhausted = true;
@@ -654,11 +673,13 @@ impl SearchIteratorV2 {
                 }
                 // Decode the full server page when a page filter is configured so the filter sees
                 // every hit of the page; without a filter, only the rows needed for this batch.
-                let page_limit = if self.external_filter_func.is_some() {
-                    self.batch_size
-                } else {
-                    size
-                };
+                let page_limit =
+                    if self.external_filter_func.is_some() || next_mode == CursorMode::PrimaryKey {
+                        self.batch_size
+                    } else {
+                        size
+                    };
+                let pending = (next_mode == CursorMode::PrimaryKey).then(|| raw.clone());
                 let mut response = response::dql::SearchResponse::from_proto_with_row_limit(
                     raw,
                     Some(page_limit),
@@ -668,29 +689,44 @@ impl SearchIteratorV2 {
                         "search iterator server response must contain exactly one result".into(),
                     ));
                 }
-                // Advance the cursor regardless of the filter outcome so a fully pruned page
-                // still moves to the next server page.
-                self.request = request;
-                self.token = Some(next_token);
+                self.pending_response = pending;
                 if let Some(filter) = &self.external_filter_func {
                     filter_response(&mut response, filter.as_ref())?;
                 }
-                if response.results().get_results()[0].len() == 0 {
-                    trace_debug!(target: "milvus_sdk::iterator", kind = "search_v2", "search iterator page fully filtered out; pulling next page");
-                    continue;
-                }
-                if let Some(cache) = &mut self.cache {
-                    cache.append(response)?;
+                let added_pks = if next_mode == CursorMode::PrimaryKey {
+                    retain_distinct_search_pks(&mut response, &self.accepted_pks)?
                 } else {
-                    self.cache = Some(response);
+                    HashSet::new()
+                };
+                // Combine into a candidate cache before committing the wire cursor.
+                let mut next_cache = self.cache.clone();
+                if response.row_count()? > 0 {
+                    if let Some(cache) = &mut next_cache {
+                        cache.append(response)?;
+                    } else {
+                        next_cache = Some(response);
+                    }
                 }
+                self.accepted_pks
+                    .try_reserve(added_pks.len())
+                    .map_err(|error| {
+                        Error::Unexpected(format!(
+                            "search iterator primary-key cache allocation failed: {error}"
+                        ))
+                    })?;
+                self.request = next_request;
+                self.token = Some(next_token);
+                self.cursor_mode = Some(next_mode);
+                self.cache = next_cache;
+                self.accepted_pks.extend(added_pks);
+                self.pending_response = None;
                 if self.cache_row_count()? >= size {
                     break;
                 }
             }
         }
 
-        let Some(cache) = self.cache.take() else {
+        let Some(cache) = self.cache.clone() else {
             self.finished = true;
             return Ok(None);
         };
@@ -950,7 +986,9 @@ impl ClientV2 {
     }
 
     /// Creates an iterator that retrieves search results in batches while preserving the server
-    /// search token/bound and one MVCC session timestamp across pages.
+    /// search cursor and the server-provided MVCC session timestamp across pages.
+    /// The real first page also negotiates capabilities and is cached for `next()`.
+    /// Older V2 servers use distance-only cursors; servers without V2 use range-search fallback.
     pub async fn search_iterator(
         &self,
         request: request::dql::SearchIteratorRequest,
@@ -999,7 +1037,6 @@ impl ClientV2 {
             .get("ef")
             .and_then(|value| value.parse::<usize>().ok());
         request.search.limit = batch_size as i64;
-        let consistency_level = request.search.consistency_level;
         let external_filter_func = request.external_filter_func.take();
         let mut raw = request.search.into_proto(&database, 0)?;
         set_cluster_param(&mut raw.search_params, cluster_id);
@@ -1025,28 +1062,70 @@ impl ClientV2 {
             "search_iter_batch_size",
             &batch_size.to_string(),
         );
-        let mut probe = v2_request.clone();
-        probe.guarantee_timestamp = 0;
-        set_param(&mut probe.search_params, "topk", "1".into());
-        set_search_extra_param(&mut probe.search_params, "search_iter_batch_size", "1");
-        let probe = rpc_with_retry!(self, search, probe)?;
-        status_to_result(&probe.status)?;
-        if search_iterator_v2_metadata(&probe).is_ok() {
-            v2_request.guarantee_timestamp = iterator_session_timestamp(probe.session_ts);
+        let initial_mode = iterator_cursor::configure(&mut v2_request, None)
+            .map_err(|message| Error::validation("extra_params".into(), message))?;
+        let mut initial = rpc_with_retry!(self, search, v2_request.clone())?;
+        status_to_result(&initial.status)?;
+        if initial
+            .results
+            .as_ref()
+            .and_then(|data| data.search_iterator_v2_results.as_ref())
+            .is_some_and(|info| !info.token.is_empty())
+        {
+            let (next_request, mode) = iterator_cursor::advance(
+                &v2_request,
+                &initial,
+                initial_mode,
+                search_iterator_pk_type(direct_info.primary_field_type)?,
+                batch_size,
+            )
+            .map_err(Error::MalformedResponse)?;
+            let token = search_iterator_v2_metadata(&initial)?.token.clone();
+            let finished = search_iterator_result_count(&initial) == Some(0);
+            if let Some(results) = &mut initial.results {
+                if results.primary_field_name.is_empty() {
+                    results.primary_field_name = direct_info.primary_field_name.clone();
+                }
+            }
+            let mut response = response::dql::SearchResponse::from_proto(initial)?;
+            if let Some(filter) = &external_filter_func {
+                filter_response(&mut response, filter.as_ref())?;
+            }
+            let accepted_pks = if mode == CursorMode::PrimaryKey {
+                retain_distinct_search_pks(&mut response, &HashSet::new())?
+            } else {
+                HashSet::new()
+            };
+            let cache = (response.row_count()? > 0).then_some(response);
             return Ok(SearchIterator::V2(SearchIteratorV2 {
                 client: self.clone(),
-                request: v2_request,
+                request: next_request,
                 batch_size,
                 remaining,
-                token: None,
+                token: Some(token),
                 primary_field_name: direct_info.primary_field_name,
-                cache: None,
+                primary_field_type: direct_info.primary_field_type,
+                cursor_mode: Some(mode),
+                accepted_pks,
+                cache,
+                pending_response: None,
                 external_filter_func,
-                finished: false,
+                finished,
                 closed: None,
             }));
         }
+        if initial
+            .status
+            .as_ref()
+            .and_then(|status| status.extra_info.get(iterator_cursor::CURSOR_VERSION))
+            .is_some_and(|version| !version.is_empty())
+        {
+            return Err(Error::MalformedResponse(
+                "search iterator cursor marker has no V2 metadata".into(),
+            ));
+        }
 
+        iterator_cursor::clear_pk_controls(&mut raw);
         let description = self
             .get_collection_description(&database, &collection)
             .await?;
@@ -1074,12 +1153,9 @@ impl ClientV2 {
             "metric_type",
             metric.as_str().into(),
         );
-        raw.guarantee_timestamp = self
-            .deduce_guarantee_timestamp(&database, &collection, consistency_level)
-            .await?;
-        let mut initial = rpc_with_retry!(self, search, raw.clone())?;
-        status_to_result(&initial.status)?;
-        raw.guarantee_timestamp = iterator_session_timestamp(initial.session_ts);
+        // Reuse the real first response from an old server. It has already
+        // selected the snapshot and returned the first useful legacy batch.
+        raw.guarantee_timestamp = initial.session_ts;
         if let Some(results) = &mut initial.results {
             if results.primary_field_name.is_empty() {
                 results.primary_field_name = legacy_info.primary_field_name.clone();
@@ -1347,6 +1423,28 @@ fn filter_response(
     filter(result)
 }
 
+fn retain_distinct_search_pks(
+    response: &mut response::dql::SearchResponse,
+    accepted: &HashSet<String>,
+) -> Result<HashSet<String>> {
+    let result = response
+        .results
+        .result_mut(0)
+        .ok_or_else(|| Error::MalformedResponse("search iterator page has no result".into()))?;
+    let keys: Vec<String> = match result.get_ids() {
+        crate::v2::Ids::Int64(ids) => ids.iter().map(ToString::to_string).collect(),
+        crate::v2::Ids::VarChar(ids) => ids.clone(),
+    };
+    let mut added = HashSet::new();
+    let keep: Vec<usize> = keys
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, key)| (!accepted.contains(&key) && added.insert(key)).then_some(index))
+        .collect();
+    result.filter_rows(&keep)?;
+    Ok(added)
+}
+
 fn legacy_page_width(page: &response::dql::SearchResponse, metric: MetricType) -> Result<f64> {
     let scores = page
         .results()
@@ -1403,6 +1501,16 @@ fn hybrid_timestamp_from_millis(millis: u64) -> u64 {
         << HYBRID_TIMESTAMP_LOGICAL_BITS
 }
 
+fn search_iterator_pk_type(data_type: DataType) -> Result<&'static str> {
+    match data_type {
+        DataType::Int64 => Ok("int64"),
+        DataType::VarChar => Ok("varchar"),
+        _ => Err(Error::MalformedResponse(
+            "unsupported search iterator primary key type".into(),
+        )),
+    }
+}
+
 fn search_iterator_v2_metadata(
     response: &milvus::SearchResults,
 ) -> Result<&schema::SearchIteratorV2Results> {
@@ -1425,10 +1533,6 @@ fn search_iterator_result_count(response: &milvus::SearchResults) -> Option<usiz
         return None;
     }
     usize::try_from(*results.topks.first()?).ok()
-}
-
-fn format_iterator_bound(bound: f32) -> String {
-    format!("{:.15}", f64::from(bound))
 }
 
 fn validate_batch_size(batch_size: usize) -> Result<()> {
@@ -1766,10 +1870,9 @@ fn field_row_count(field: &schema::FieldData) -> usize {
 #[cfg(test)]
 mod search_iterator_v2_tests {
     use super::{
-        format_iterator_bound, hybrid_timestamp_from_millis, is_element_filter_expr,
-        search_iterator_result_count, search_iterator_v2_metadata, set_search_extra_param,
-        set_search_numeric_param, validate_search_iterator_input, validate_search_iterator_range,
-        LegacyFilteredIds,
+        hybrid_timestamp_from_millis, is_element_filter_expr, search_iterator_result_count,
+        search_iterator_v2_metadata, set_search_extra_param, set_search_numeric_param,
+        validate_search_iterator_input, validate_search_iterator_range, LegacyFilteredIds,
     };
     use crate::proto::{common, milvus, schema};
     use crate::v2::request::dql::{SearchRequest, SearchVectors};
@@ -1793,12 +1896,6 @@ mod search_iterator_v2_tests {
         assert!(!is_element_filter_expr("tags[\"element_filter\"] == 1"));
         assert!(!is_element_filter_expr("element_filtered_value > 0"));
         assert!(!is_element_filter_expr(""));
-    }
-
-    #[test]
-    fn last_bound_uses_double_precision_wire_text() {
-        assert_eq!(format_iterator_bound(0.1), "0.100000001490116");
-        assert_eq!(format_iterator_bound(-1.25), "-1.250000000000000");
     }
 
     #[test]
