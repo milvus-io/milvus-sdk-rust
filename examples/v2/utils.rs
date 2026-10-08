@@ -43,7 +43,7 @@ pub fn int8_vector(dimension: usize) -> Vec<i8> {
 pub fn print_query_results(results: &QueryResults) -> Result<()> {
     println!("Query results:");
     for row in results.rows()? {
-        println!("\t{:?}", row.to_entity_row()?);
+        println!("\t{}", serde_json::Value::Object(row.to_entity_row()?));
     }
     Ok(())
 }
@@ -61,7 +61,7 @@ pub fn print_search_results(results: &SearchResults) -> Result<()> {
     for result in results {
         println!("Result of one target vector:");
         for row in result.rows()? {
-            println!("\t{:?}", row.to_entity_row()?);
+            println!("\t{}", serde_json::Value::Object(row.to_entity_row()?));
         }
     }
     Ok(())

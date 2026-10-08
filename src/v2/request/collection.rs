@@ -2823,7 +2823,7 @@ impl DescribeReplicasRequest {
         Self {
             database_name: Default::default(),
             collection_name: Default::default(),
-            with_shard_nodes: Default::default(),
+            with_shard_nodes: true,
         }
     }
 
@@ -5092,7 +5092,7 @@ mod builder_value_tests {
         let value = DescribeReplicasRequest::empty();
         let expected_database_name: Option<String> = None;
         let expected_collection_name: String = String::new();
-        let expected_with_shard_nodes: bool = false;
+        let expected_with_shard_nodes: bool = true;
 
         assert_eq!(value.database_name().to_owned(), expected_database_name);
         assert_eq!(value.collection_name().to_owned(), expected_collection_name);

@@ -191,6 +191,12 @@ pub enum DataType {
     Json,
     /// Geometry value used by spatial queries (WKT-encoded).
     Geometry,
+    /// Full-text searchable text scalar field.
+    ///
+    /// Values are UTF-8 strings that typically feed a server-side BM25
+    /// function. Unlike [`DataType::VarChar`] there is no `max_length`
+    /// constraint.
+    Text,
     /// Timestamp with timezone.
     Timestamptz,
     /// Array of scalar elements, all with the same element type.
@@ -225,6 +231,7 @@ impl DataType {
             Self::VarChar => schema::DataType::VarChar,
             Self::Json => schema::DataType::Json,
             Self::Geometry => schema::DataType::Geometry,
+            Self::Text => schema::DataType::Text,
             Self::Timestamptz => schema::DataType::Timestamptz,
             Self::Array => schema::DataType::Array,
             Self::Struct => schema::DataType::Struct,
@@ -250,6 +257,7 @@ impl DataType {
             schema::DataType::VarChar | schema::DataType::String => Self::VarChar,
             schema::DataType::Json => Self::Json,
             schema::DataType::Geometry => Self::Geometry,
+            schema::DataType::Text => Self::Text,
             schema::DataType::Timestamptz => Self::Timestamptz,
             schema::DataType::Array => Self::Array,
             schema::DataType::Struct => Self::Struct,
@@ -1846,17 +1854,19 @@ impl FieldData {
             Self::VarChar { name, values }
             | Self::Geometry { name, values }
             | Self::Timestamptz { name, values } => {
-                let max_length = field
-                    .type_params
-                    .iter()
-                    .find(|pair| pair.key == "max_length")
-                    .and_then(|pair| pair.value.parse::<usize>().ok());
-                if let Some(max_length) = max_length {
-                    if values.iter().any(|value| value.len() > max_length) {
-                        return Err(Error::validation(
-                            name.clone(),
-                            format!("string exceeds max_length {max_length}"),
-                        ));
+                if field.data_type != schema::DataType::Text as i32 {
+                    let max_length = field
+                        .type_params
+                        .iter()
+                        .find(|pair| pair.key == "max_length")
+                        .and_then(|pair| pair.value.parse::<usize>().ok());
+                    if let Some(max_length) = max_length {
+                        if values.iter().any(|value| value.len() > max_length) {
+                            return Err(Error::validation(
+                                name.clone(),
+                                format!("string exceeds max_length {max_length}"),
+                            ));
+                        }
                     }
                 }
                 Ok(())
@@ -4468,6 +4478,7 @@ mod enum_conversion_tests {
             DataType::VarChar,
             DataType::Json,
             DataType::Geometry,
+            DataType::Text,
             DataType::Timestamptz,
             DataType::Array,
             DataType::Struct,
@@ -4606,5 +4617,42 @@ mod select_field_data_rows_tests {
             pruned,
             FieldData::ArrayInt64 { values, .. } if values == vec![vec![2, 3]]
         ));
+    }
+
+    #[test]
+    fn string_value_constraints_skip_max_length_for_text_fields() {
+        let varchar_field = schema::FieldSchema {
+            name: "note".into(),
+            data_type: schema::DataType::VarChar as i32,
+            type_params: vec![common::KeyValuePair {
+                key: "max_length".into(),
+                value: "5".into(),
+            }],
+            ..Default::default()
+        };
+        let too_long = FieldData::VarChar {
+            name: "note".into(),
+            values: vec!["longer than five".into()],
+        };
+        let error = too_long
+            .validate_value_constraints(&varchar_field)
+            .unwrap_err();
+        assert!(error.to_string().contains("max_length"));
+
+        let text_field = schema::FieldSchema {
+            name: "body".into(),
+            data_type: schema::DataType::Text as i32,
+            type_params: vec![common::KeyValuePair {
+                key: "max_length".into(),
+                value: "5".into(),
+            }],
+            ..Default::default()
+        };
+        FieldData::VarChar {
+            name: "body".into(),
+            values: vec!["longer than five".into()],
+        }
+        .validate_value_constraints(&text_field)
+        .expect("text values are not constrained by max_length");
     }
 }

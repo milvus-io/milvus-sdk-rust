@@ -149,7 +149,7 @@ async fn main() -> Result<()> {
             println!(
                 "\n-----------------------------------------------------------------------------"
             );
-            println!("{:?}", row.to_entity_row()?);
+            println!("{}", serde_json::Value::Object(row.to_entity_row()?));
             for field in [TEXT_FIELD, TITLE_FIELD] {
                 if let Some(highlight) = highlights.get(field) {
                     println!("  highlighted field: {}", highlight.get_field_name());

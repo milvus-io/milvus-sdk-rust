@@ -113,7 +113,7 @@ async fn insert_null_vectors(client: &ClientV2) -> Result<()> {
         if row.is_null(VECTOR)? {
             null_count += 1;
         }
-        println!("  {:?}", row.to_entity_row()?);
+        println!("  {}", serde_json::Value::Object(row.to_entity_row()?));
     }
     println!(
         "Query result: {} valid, {null_count} null",
