@@ -128,12 +128,12 @@ fn decode_field_data(value: schema::FieldData) -> Option<FieldData> {
                     name,
                     values: v.data,
                 }),
-                Some(schema::DataType::String | schema::DataType::VarChar) => {
-                    Some(FieldData::VarChar {
-                        name,
-                        values: v.data,
-                    })
-                }
+                Some(
+                    schema::DataType::String | schema::DataType::VarChar | schema::DataType::Text,
+                ) => Some(FieldData::VarChar {
+                    name,
+                    values: v.data,
+                }),
                 _ => None,
             },
             scalar_field::Data::JsonData(v)
@@ -2253,6 +2253,30 @@ mod tests {
             .unwrap();
             assert_eq!(decoded, expected);
         }
+    }
+
+    #[test]
+    fn text_wire_data_decodes_to_varchar_field_data() {
+        use schema::{field_data::Field, scalar_field};
+
+        let decoded = field_data(schema::FieldData {
+            r#type: schema::DataType::Text as i32,
+            field_name: "body".into(),
+            field: Some(Field::Scalars(schema::ScalarField {
+                valid_data: Vec::new(),
+                data: Some(scalar_field::Data::StringData(schema::StringArray {
+                    data: vec!["full text search".into()],
+                })),
+                ..Default::default()
+            })),
+            ..Default::default()
+        })
+        .unwrap();
+        assert!(matches!(
+            decoded,
+            FieldData::VarChar { name, values }
+                if name == "body" && values == vec!["full text search".to_owned()]
+        ));
     }
 
     #[test]

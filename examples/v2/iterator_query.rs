@@ -69,12 +69,12 @@ async fn iterate(
         total += rows.len();
         println!("No.{pages} page {} rows fetched", rows.len());
         println!(
-            "\tthe first row: {:?}",
-            rows.first().expect("non-empty page").to_entity_row()?
+            "\tthe first row: {}",
+            serde_json::Value::Object(rows.first().expect("non-empty page").to_entity_row()?)
         );
         println!(
-            "\tthe last row: {:?}",
-            rows.last().expect("non-empty page").to_entity_row()?
+            "\tthe last row: {}",
+            serde_json::Value::Object(rows.last().expect("non-empty page").to_entity_row()?)
         );
         for row in rows {
             let id = row.get_i64(PRIMARY)?;

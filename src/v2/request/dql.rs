@@ -1519,6 +1519,7 @@ pub struct HybridSearchRequest {
     pub(crate) partition_names: Vec<String>,
     pub(crate) sub_requests: Vec<SubSearchRequest>,
     pub(crate) rerank: Option<Function>,
+    pub(crate) function_chains: Vec<FunctionChain>,
     pub(crate) limit: i64,
     pub(crate) offset: i64,
     pub(crate) round_decimal: i64,
@@ -1539,6 +1540,7 @@ impl HybridSearchRequest {
             partition_names: Vec::new(),
             sub_requests: Vec::new(),
             rerank: None,
+            function_chains: Vec::new(),
             limit: 10,
             offset: 0,
             round_decimal: -1,
@@ -1589,6 +1591,11 @@ impl HybridSearchRequest {
     /// Returns the rerank.
     pub fn rerank(&self) -> &Option<Function> {
         &self.rerank
+    }
+
+    /// Returns the function chains.
+    pub fn function_chains(&self) -> &[FunctionChain] {
+        &self.function_chains
     }
 
     /// Returns the limit.
@@ -1715,6 +1722,11 @@ impl HybridSearchRequest {
                 .unwrap_or_default(),
             use_default_consistency: self.consistency_level.is_none(),
             function_score: None,
+            function_chains: self
+                .function_chains
+                .into_iter()
+                .map(FunctionChain::into_proto)
+                .collect(),
             namespace: None,
             ..Default::default()
         })
@@ -1758,6 +1770,20 @@ impl HybridSearchRequestBuilder {
     /// Sets the rerank and returns the updated value.
     pub fn rerank(mut self, value: impl Into<Function>) -> Self {
         self.value.rerank = Some(value.into());
+        self
+    }
+
+    /// Sets the function chains and returns the updated value.
+    ///
+    /// Mutually exclusive with [`Self::rerank`]; Milvus rejects a hybrid search carrying both.
+    pub fn function_chains(mut self, values: impl IntoIterator<Item = FunctionChain>) -> Self {
+        self.value.function_chains = values.into_iter().collect();
+        self
+    }
+
+    /// Adds a function chain and returns the updated value.
+    pub fn add_function_chain(mut self, value: FunctionChain) -> Self {
+        self.value.function_chains.push(value);
         self
     }
 
@@ -1833,6 +1859,7 @@ impl HybridSearchRequestBuilder {
     /// - `offset` must not be negative
     /// - `group_size` must be greater than zero
     /// - `round_decimal`: must be within -1..=6
+    /// - `function_chains` cannot be combined with `rerank` and each chain must validate
     /// - the configured values fail `validate_search_extra_params` validation
     pub fn build(self) -> Result<HybridSearchRequest> {
         required("collection_name", &self.value.collection_name)?;
@@ -1847,6 +1874,15 @@ impl HybridSearchRequestBuilder {
                 "round_decimal".into(),
                 "must be within -1..=6".into(),
             ));
+        }
+        if !self.value.function_chains.is_empty() && self.value.rerank.is_some() {
+            return Err(Error::validation(
+                "function_chains".into(),
+                "cannot be used together with rerank".into(),
+            ));
+        }
+        for chain in &self.value.function_chains {
+            chain.validate()?;
         }
         Ok(self.value)
     }
@@ -3355,7 +3391,7 @@ mod query_request_tests {
 #[cfg(test)]
 mod builder_value_tests {
     use super::*;
-    use crate::v2::types::AggDirection;
+    use crate::v2::types::{AggDirection, FunctionChain, FunctionChainStage, RRFRerank};
 
     #[test]
     fn query_request_default_values() {
@@ -3851,6 +3887,69 @@ mod builder_value_tests {
             value.consistency_level().to_owned(),
             Some(consistency_level)
         );
+    }
+
+    #[test]
+    fn hybrid_search_encodes_function_chains_and_rejects_rerank_combination() {
+        let sub_request = SubSearchRequest::builder()
+            .vector_field("embedding")
+            .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+            .limit(3)
+            .build()
+            .expect("valid sub-request");
+        let chain = FunctionChain::new()
+            .stage(FunctionChainStage::L2Rerank)
+            .sort("$score", true, None)
+            .limit(10, 0);
+
+        let request = HybridSearchRequest::builder()
+            .collection_name("books")
+            .sub_requests(vec![sub_request.clone()])
+            .add_function_chain(chain.clone())
+            .build()
+            .expect("valid request");
+        assert_eq!(request.function_chains(), [chain.clone()]);
+
+        let proto = request
+            .into_proto("default", 0)
+            .expect("encode hybrid search");
+        assert_eq!(proto.function_chains.len(), 1);
+        assert_eq!(
+            proto.function_chains[0].stage,
+            FunctionChainStage::L2Rerank.into_proto() as i32
+        );
+        assert_eq!(proto.function_chains[0].ops.len(), 2);
+
+        let conflicting = HybridSearchRequest::builder()
+            .collection_name("books")
+            .sub_requests(vec![sub_request])
+            .rerank(RRFRerank::new())
+            .add_function_chain(chain)
+            .build()
+            .expect_err("function chains are mutually exclusive with rerank");
+        assert!(matches!(
+            conflicting,
+            crate::v2::error::Error::Validation(error)
+                if error.parameter() == "function_chains"
+        ));
+    }
+
+    #[test]
+    fn hybrid_search_builds_without_rerank_or_function_chains() {
+        let sub_request = SubSearchRequest::builder()
+            .vector_field("embedding")
+            .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+            .limit(3)
+            .build()
+            .expect("valid sub-request");
+
+        let request = HybridSearchRequest::builder()
+            .collection_name("books")
+            .sub_requests(vec![sub_request])
+            .build()
+            .expect("hybrid search without rerank or function chains relies on the server default");
+        assert!(request.rerank().is_none());
+        assert!(request.function_chains().is_empty());
     }
 
     #[test]

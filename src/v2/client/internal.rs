@@ -724,7 +724,10 @@ fn validate_column_type(column: &FieldData, field: &schema::FieldSchema) -> Resu
         ))
     })?;
     let compatible = match (column.data_type(), schema_type) {
-        (DataType::VarChar, schema::DataType::String | schema::DataType::VarChar) => true,
+        (
+            DataType::VarChar,
+            schema::DataType::String | schema::DataType::VarChar | schema::DataType::Text,
+        ) => true,
         (input, expected) => input.into_proto() == expected,
     };
     if !compatible {
@@ -1140,7 +1143,7 @@ fn json_values_to_field_data(
                 .map(|value| value.as_f64().ok_or_else(invalid))
                 .collect::<Result<_>>()?,
         },
-        DataType::VarChar => FieldData::VarChar {
+        DataType::VarChar | DataType::Text => FieldData::VarChar {
             name: name.into(),
             values: json_strings(values, invalid)?,
         },
@@ -1575,6 +1578,54 @@ mod tests {
             out_of_range.iter().collect(),
         )
         .is_err());
+    }
+
+    #[test]
+    fn text_fields_accept_varchar_column_data() {
+        let text_schema = field(103, "body", schema::DataType::Text);
+        validate_column_type(
+            &FieldData::VarChar {
+                name: "body".into(),
+                values: vec!["full text search".into()],
+            },
+            &text_schema,
+        )
+        .expect("varchar column must satisfy a text schema field");
+
+        let value = json!("full text search");
+        let column = json_values_to_field_data(
+            "body",
+            crate::v2::types::DataType::Text,
+            &text_schema,
+            vec![&value],
+        )
+        .unwrap();
+        assert!(
+            matches!(column, FieldData::VarChar { values, .. } if values == vec!["full text search".to_owned()])
+        );
+
+        let mut schema = collection_schema();
+        schema.fields.push(text_schema);
+        let columns = vec![
+            FieldData::Int64 {
+                name: "id".into(),
+                values: vec![1],
+            },
+            FieldData::FloatVector {
+                name: "vector".into(),
+                values: vec![vec![0.1, 0.2]],
+            },
+            FieldData::VarChar {
+                name: "body".into(),
+                values: vec!["full text search".into()],
+            },
+        ];
+        let proto = columns_to_proto(columns, &schema).unwrap();
+        let body = proto
+            .iter()
+            .find(|field| field.field_name == "body")
+            .unwrap();
+        assert_eq!(body.r#type, schema::DataType::Text as i32);
     }
 
     #[test]

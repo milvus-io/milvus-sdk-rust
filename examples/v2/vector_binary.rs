@@ -136,7 +136,7 @@ async fn main() -> Result<()> {
         )
         .await?;
     for row in query.results().rows()? {
-        println!("\tRow: {:?}", row.to_entity_row()?);
+        println!("\tRow: {}", serde_json::Value::Object(row.to_entity_row()?));
         let id = row.get_i64(PRIMARY)?;
         let output = row.get_binary_vector(VECTOR)?;
         if output != vectors[id as usize] {

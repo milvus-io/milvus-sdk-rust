@@ -264,6 +264,10 @@ name = "v2_text_match"
 path = "examples/v2/text_match.rs"
 
 [[example]]
+name = "v2_text_field"
+path = "examples/v2/text_field.rs"
+
+[[example]]
 name = "v2_timestamptz_field"
 path = "examples/v2/timestamptz_field.rs"
 

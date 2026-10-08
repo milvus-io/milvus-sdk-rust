@@ -3065,6 +3065,30 @@ mod constructor_value_tests {
     }
 
     #[test]
+    fn text_field_schema_validates_and_round_trips_proto() {
+        let analyzer = serde_json::json!({"tokenizer": "standard"});
+        let field = FieldSchema::new()
+            .name("body")
+            .data_type(DataType::Text)
+            .enable_analyzer(true)
+            .analyzer_params(analyzer.clone());
+        field
+            .validate()
+            .expect("text field must validate without max_length");
+        assert!(field.is_analyzer_enabled());
+        assert_eq!(field.get_analyzer_params().unwrap(), analyzer);
+        assert_eq!(field.get_data_type(), DataType::Text);
+
+        let proto = field.into_proto();
+        assert_eq!(proto.data_type, schema::DataType::Text as i32);
+
+        let decoded = FieldSchema::from_proto(proto).unwrap();
+        assert_eq!(decoded.get_data_type(), DataType::Text);
+        assert!(decoded.is_analyzer_enabled());
+        assert_eq!(decoded.get_analyzer_params().unwrap(), analyzer);
+    }
+
+    #[test]
     fn type_params_merge_without_overwriting_existing_values() {
         let mut value = FieldSchema::new()
             .enable_analyzer(true)
