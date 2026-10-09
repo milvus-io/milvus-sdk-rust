@@ -58,6 +58,8 @@ use thiserror::Error as ThisError;
 const CREATE_PATH: &str = "/v2/vectordb/jobs/import/create";
 const LIST_PATH: &str = "/v2/vectordb/jobs/import/list";
 const DESCRIBE_PATH: &str = "/v2/vectordb/jobs/import/describe";
+const COMMIT_PATH: &str = "/v2/vectordb/jobs/import/commit";
+const ABORT_PATH: &str = "/v2/vectordb/jobs/import/abort";
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(20);
 const MAX_ERROR_BODY_CHARS: usize = 1_024;
 
@@ -431,6 +433,23 @@ impl BulkImport {
             .await
     }
 
+    /// Commits a bulk-import job once all its data files have been uploaded and flushed.
+    pub async fn commit_import(
+        &self,
+        request: DescribeImportRequest,
+    ) -> Result<BulkImportResponse> {
+        let database_name = request.database_name.clone();
+        self.post(COMMIT_PATH, &database_name, request.into_body())
+            .await
+    }
+
+    /// Aborts a bulk-import job.
+    pub async fn abort_import(&self, request: DescribeImportRequest) -> Result<BulkImportResponse> {
+        let database_name = request.database_name.clone();
+        self.post(ABORT_PATH, &database_name, request.into_body())
+            .await
+    }
+
     async fn post(
         &self,
         path: &str,
@@ -484,6 +503,22 @@ impl BulkImport {
 // BulkImportRequest
 ///////////////////////////////////////////////////////////////////////////////
 /// Parameters for creating a bulk-import job.
+///
+/// One request covers all three import modes; configure the builder fields that
+/// belong to exactly one mode:
+///
+/// - **Open-source Milvus** (Java SDK `MilvusImportRequest`): `files`, plus the
+///   shared `database_name`/`collection_name`/`partition_name`.
+/// - **Zilliz Cloud object URL** (Java SDK `CloudImportRequest`): `object_urls`
+///   (or the deprecated singular `object_url`) with `access_key`/`secret_key`/
+///   `token`; an optional cloud target (`cluster_id`, or `project_id` + `region_id`)
+///   may identify a deployment other than the connected one.
+/// - **Zilliz Cloud volume** (Java SDK `VolumeImportRequest`): `volume_name` with
+///   `data_paths`; an optional cloud target (`cluster_id`, or `project_id` + `region_id`)
+///   may identify a deployment other than the connected one.
+///
+/// `build()` rejects any request whose configured sources do not describe exactly
+/// one import mode.
 #[derive(Clone, PartialEq)]
 #[non_exhaustive]
 pub struct BulkImportRequest {
@@ -491,11 +526,11 @@ pub struct BulkImportRequest {
     collection_name: String,
     partition_name: String,
     files: Vec<Vec<String>>,
-    object_url: String,
-    object_urls: Vec<Vec<String>>,
     cluster_id: String,
     project_id: String,
     region_id: String,
+    object_url: String,
+    object_urls: Vec<Vec<String>>,
     access_key: String,
     secret_key: String,
     token: String,
@@ -512,11 +547,11 @@ impl fmt::Debug for BulkImportRequest {
             .field("collection_name", &self.collection_name)
             .field("partition_name", &self.partition_name)
             .field("files", &self.files)
-            .field("object_url", &self.object_url)
-            .field("object_urls", &self.object_urls)
             .field("cluster_id", &self.cluster_id)
             .field("project_id", &self.project_id)
             .field("region_id", &self.region_id)
+            .field("object_url", &self.object_url)
+            .field("object_urls", &self.object_urls)
             .field("access_key", &redacted(&self.access_key))
             .field("secret_key", &redacted(&self.secret_key))
             .field("token", &redacted(&self.token))
@@ -556,58 +591,83 @@ impl BulkImportRequest {
     }
 
     /// Returns the files.
+    ///
+    /// **Open-source Milvus.** Only this import mode uses `files`.
     pub fn files(&self) -> &[Vec<String>] {
         &self.files
     }
 
+    /// **Zilliz Cloud only.** Returns the cloud deployment target.
+    ///
+    /// Shared by the object-URL and volume import modes; optional when the
+    /// connected deployment is the target.
+    pub fn cluster_id(&self) -> &str {
+        &self.cluster_id
+    }
+
+    /// **Zilliz Cloud only.** Returns the cloud project id.
+    ///
+    /// Shared by the object-URL and volume import modes; used together with
+    /// [`Self::region_id`] as an alternative to [`Self::cluster_id`]. Optional
+    /// when the connected deployment is the target.
+    pub fn project_id(&self) -> &str {
+        &self.project_id
+    }
+
+    /// **Zilliz Cloud only.** Returns the cloud region id.
+    ///
+    /// Shared by the object-URL and volume import modes; used together with
+    /// [`Self::project_id`] as an alternative to [`Self::cluster_id`]. Optional
+    /// when the connected deployment is the target.
+    pub fn region_id(&self) -> &str {
+        &self.region_id
+    }
+
     /// **Zilliz Cloud only.** Returns the deprecated singular object URL.
     ///
-    /// Prefer [`Self::object_urls`] for new applications.
+    /// Object-URL import mode. Prefer [`Self::object_urls`] for new applications.
     pub fn object_url(&self) -> &str {
         &self.object_url
     }
 
     /// **Zilliz Cloud only.** Returns the object urls.
+    ///
+    /// Object-URL import mode.
     pub fn object_urls(&self) -> &[Vec<String>] {
         &self.object_urls
     }
 
-    /// **Zilliz Cloud only.** Returns the cluster id.
-    pub fn cluster_id(&self) -> &str {
-        &self.cluster_id
-    }
-
-    /// **Zilliz Cloud only.** Returns the project id.
-    pub fn project_id(&self) -> &str {
-        &self.project_id
-    }
-
-    /// **Zilliz Cloud only.** Returns the region id.
-    pub fn region_id(&self) -> &str {
-        &self.region_id
-    }
-
     /// **Zilliz Cloud only.** Returns the access key.
+    ///
+    /// Object-URL import mode; used together with [`Self::secret_key`].
     pub fn access_key(&self) -> &str {
         &self.access_key
     }
 
     /// **Zilliz Cloud only.** Returns the secret key.
+    ///
+    /// Object-URL import mode; used together with [`Self::access_key`].
     pub fn secret_key(&self) -> &str {
         &self.secret_key
     }
 
     /// **Zilliz Cloud only.** Returns the token.
+    ///
+    /// Object-URL import mode.
     pub fn token(&self) -> &str {
         &self.token
     }
 
     /// **Zilliz Cloud only.** Returns the volume name.
+    ///
+    /// Volume import mode.
     pub fn volume_name(&self) -> &str {
         &self.volume_name
     }
 
     /// **Zilliz Cloud only.** Returns the data paths.
+    ///
+    /// Volume import mode; requires [`Self::volume_name`].
     pub fn data_paths(&self) -> &[Vec<String>] {
         &self.data_paths
     }
@@ -623,11 +683,11 @@ impl BulkImportRequest {
             collection_name: String::new(),
             partition_name: String::new(),
             files: Vec::new(),
-            object_url: String::new(),
-            object_urls: Vec::new(),
             cluster_id: String::new(),
             project_id: String::new(),
             region_id: String::new(),
+            object_url: String::new(),
+            object_urls: Vec::new(),
             access_key: String::new(),
             secret_key: String::new(),
             token: String::new(),
@@ -643,11 +703,11 @@ impl BulkImportRequest {
         insert_string(&mut body, "collectionName", self.collection_name, true);
         insert_string(&mut body, "partitionName", self.partition_name, false);
         insert_groups(&mut body, "files", self.files);
-        insert_string(&mut body, "objectUrl", self.object_url, false);
-        insert_groups(&mut body, "objectUrls", self.object_urls);
         insert_string(&mut body, "clusterId", self.cluster_id, false);
         insert_string(&mut body, "projectId", self.project_id, false);
         insert_string(&mut body, "regionId", self.region_id, false);
+        insert_string(&mut body, "objectUrl", self.object_url, false);
+        insert_groups(&mut body, "objectUrls", self.object_urls);
         insert_string(&mut body, "accessKey", self.access_key, false);
         insert_string(&mut body, "secretKey", self.secret_key, false);
         insert_string(&mut body, "token", self.token, false);
@@ -674,24 +734,35 @@ pub struct BulkImportRequestBuilder {
 
 impl BulkImportRequestBuilder {
     /// Sets the database name and returns the updated value.
+    ///
+    /// Shared by all import modes; defaults to the `default` database when omitted.
     pub fn database_name(mut self, value: impl Into<String>) -> Self {
         self.value.database_name = value.into();
         self
     }
 
     /// Sets the collection name and returns the updated value.
+    ///
+    /// Shared by all import modes.
     pub fn collection_name(mut self, value: impl Into<String>) -> Self {
         self.value.collection_name = value.into();
         self
     }
 
     /// Sets the partition name and returns the updated value.
+    ///
+    /// Shared by all import modes; defaults to the `default` partition when omitted.
     pub fn partition_name(mut self, value: impl Into<String>) -> Self {
         self.value.partition_name = value.into();
         self
     }
 
-    /// Sets local/object-storage paths visible to an open-source Milvus deployment.
+    /// **Open-source Milvus.** Sets local/object-storage paths visible to an
+    /// open-source Milvus deployment.
+    ///
+    /// This is the import mode used against a self-hosted Milvus server (Java SDK
+    /// `MilvusImportRequest`). Cannot be combined with the cloud object-URL or
+    /// volume modes.
     pub fn files<I, G, S>(mut self, values: I) -> Self
     where
         I: IntoIterator<Item = G>,
@@ -702,7 +773,7 @@ impl BulkImportRequestBuilder {
         self
     }
 
-    /// Adds one independently imported file group.
+    /// **Open-source Milvus.** Adds one independently imported file group.
     pub fn file_group<I, S>(mut self, values: I) -> Self
     where
         I: IntoIterator<Item = S>,
@@ -714,21 +785,55 @@ impl BulkImportRequestBuilder {
         self
     }
 
-    /// Adds one JSON, JSONL, CSV, or Parquet file as its own import group.
+    /// **Open-source Milvus.** Adds one JSON, JSONL, CSV, or Parquet file as its
+    /// own import group.
     pub fn file(mut self, value: impl Into<String>) -> Self {
         self.value.files.push(vec![value.into()]);
         self
     }
 
-    /// **Zilliz Cloud only.** Sets the deprecated singular object URL accepted by Milvus 2.6.
+    /// **Zilliz Cloud only.** Sets the cloud deployment target by cluster id.
     ///
-    /// Prefer [`Self::object_urls`] for new applications.
+    /// Shared by the object-URL and volume import modes. Mutually exclusive with
+    /// [`Self::project_id`] + [`Self::region_id`]; optional when the connected
+    /// deployment is the target.
+    pub fn cluster_id(mut self, value: impl Into<String>) -> Self {
+        self.value.cluster_id = value.into();
+        self
+    }
+
+    /// **Zilliz Cloud only.** Sets the cloud project id.
+    ///
+    /// Shared by the object-URL and volume import modes; used together with
+    /// [`Self::region_id`] as an alternative to [`Self::cluster_id`]. Optional
+    /// when the connected deployment is the target.
+    pub fn project_id(mut self, value: impl Into<String>) -> Self {
+        self.value.project_id = value.into();
+        self
+    }
+
+    /// **Zilliz Cloud only.** Sets the cloud region id.
+    ///
+    /// Shared by the object-URL and volume import modes; used together with
+    /// [`Self::project_id`] as an alternative to [`Self::cluster_id`]. Optional
+    /// when the connected deployment is the target.
+    pub fn region_id(mut self, value: impl Into<String>) -> Self {
+        self.value.region_id = value.into();
+        self
+    }
+
+    /// **Zilliz Cloud only.** Sets the deprecated singular object URL accepted by
+    /// Milvus 2.6.
+    ///
+    /// Object-URL import mode. Prefer [`Self::object_urls`] for new applications.
     pub fn object_url(mut self, value: impl Into<String>) -> Self {
         self.value.object_url = value.into();
         self
     }
 
     /// **Zilliz Cloud only.** Sets the object urls and returns the updated value.
+    ///
+    /// Object-URL import mode (Java SDK `CloudImportRequest`).
     pub fn object_urls<I, G, S>(mut self, values: I) -> Self
     where
         I: IntoIterator<Item = G>,
@@ -740,6 +845,8 @@ impl BulkImportRequestBuilder {
     }
 
     /// **Zilliz Cloud only.** Sets the object url group and returns the updated value.
+    ///
+    /// Object-URL import mode.
     pub fn object_url_group<I, S>(mut self, values: I) -> Self
     where
         I: IntoIterator<Item = S>,
@@ -751,49 +858,42 @@ impl BulkImportRequestBuilder {
         self
     }
 
-    /// **Zilliz Cloud only.** Sets the cluster id and returns the updated value.
-    pub fn cluster_id(mut self, value: impl Into<String>) -> Self {
-        self.value.cluster_id = value.into();
-        self
-    }
-
-    /// **Zilliz Cloud only.** Sets the project id and returns the updated value.
-    pub fn project_id(mut self, value: impl Into<String>) -> Self {
-        self.value.project_id = value.into();
-        self
-    }
-
-    /// **Zilliz Cloud only.** Sets the region id and returns the updated value.
-    pub fn region_id(mut self, value: impl Into<String>) -> Self {
-        self.value.region_id = value.into();
-        self
-    }
-
     /// **Zilliz Cloud only.** Sets the access key and returns the updated value.
+    ///
+    /// Object-URL import mode; used together with [`Self::secret_key`].
     pub fn access_key(mut self, value: impl Into<String>) -> Self {
         self.value.access_key = value.into();
         self
     }
 
     /// **Zilliz Cloud only.** Sets the secret key and returns the updated value.
+    ///
+    /// Object-URL import mode; used together with [`Self::access_key`].
     pub fn secret_key(mut self, value: impl Into<String>) -> Self {
         self.value.secret_key = value.into();
         self
     }
 
     /// **Zilliz Cloud only.** Sets the token and returns the updated value.
+    ///
+    /// Object-URL import mode.
     pub fn token(mut self, value: impl Into<String>) -> Self {
         self.value.token = value.into();
         self
     }
 
     /// **Zilliz Cloud only.** Sets the volume name and returns the updated value.
+    ///
+    /// Volume import mode (Java SDK `VolumeImportRequest`); required together with
+    /// [`Self::data_paths`].
     pub fn volume_name(mut self, value: impl Into<String>) -> Self {
         self.value.volume_name = value.into();
         self
     }
 
     /// **Zilliz Cloud only.** Sets the data paths and returns the updated value.
+    ///
+    /// Volume import mode; requires [`Self::volume_name`].
     pub fn data_paths<I, G, S>(mut self, values: I) -> Self
     where
         I: IntoIterator<Item = G>,
@@ -805,6 +905,8 @@ impl BulkImportRequestBuilder {
     }
 
     /// **Zilliz Cloud only.** Sets the data path group and returns the updated value.
+    ///
+    /// Volume import mode; requires [`Self::volume_name`].
     pub fn data_path_group<I, S>(mut self, values: I) -> Self
     where
         I: IntoIterator<Item = S>,
@@ -1113,6 +1215,17 @@ impl GetImportProgressRequest {
         Value::Object(body)
     }
 }
+
+///////////////////////////////////////////////////////////////////////////////
+// DescribeImportRequest
+///////////////////////////////////////////////////////////////////////////////
+/// Alias for [`GetImportProgressRequest`] describing one import job.
+///
+/// Mirrors the Java SDK's `DescribeImportRequest` terminology: the describe
+/// endpoint (`/v2/vectordb/jobs/import/describe`) identifies a job by the same
+/// `job_id` and cloud target that commit and abort use, so this alias is the
+/// natural request type for those operations as well.
+pub type DescribeImportRequest = GetImportProgressRequest;
 
 ///////////////////////////////////////////////////////////////////////////////
 // GetImportProgressRequestBuilder
@@ -1484,6 +1597,21 @@ mod tests {
     }
 
     #[test]
+    fn describe_import_request_alias_builds_the_same_request() {
+        let canonical = GetImportProgressRequest::builder()
+            .job_id("job-1")
+            .cluster_id("cluster-1")
+            .build()
+            .expect("valid request");
+        let aliased = DescribeImportRequest::builder()
+            .job_id("job-1")
+            .cluster_id("cluster-1")
+            .build()
+            .expect("valid request");
+        assert_eq!(canonical, aliased);
+    }
+
+    #[test]
     fn response_exposes_common_import_fields() {
         let response = BulkImportResponse {
             code: 0,
@@ -1620,5 +1748,97 @@ mod tests {
         assert_eq!(truncated.chars().count(), MAX_ERROR_BODY_CHARS + 1);
         assert!(truncated.ends_with('…'));
         assert_eq!(truncate_error_body("short"), "short");
+    }
+
+    #[tokio::test]
+    async fn commit_and_abort_import_hit_the_expected_endpoints() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind listener");
+        let address = listener.local_addr().expect("listener address");
+        let server = tokio::spawn(async move {
+            let mut requests = Vec::new();
+            for _ in 0..2 {
+                let (mut stream, _) = listener.accept().await.expect("accept connection");
+                let mut buffer = [0_u8; 8_192];
+                let mut read = 0;
+                let mut content_length = 0;
+                loop {
+                    let n = stream
+                        .read(&mut buffer[read..])
+                        .await
+                        .expect("read request");
+                    if n == 0 {
+                        break;
+                    }
+                    read += n;
+                    if let Some(header_end) = buffer[..read]
+                        .windows(4)
+                        .position(|window| window == b"\r\n\r\n")
+                    {
+                        if content_length == 0 {
+                            let headers = String::from_utf8_lossy(&buffer[..header_end]);
+                            content_length = headers
+                                .lines()
+                                .find_map(|line| {
+                                    line.strip_prefix("content-length:")
+                                        .and_then(|value| value.trim().parse::<usize>().ok())
+                                })
+                                .unwrap_or(0);
+                        }
+                        if read >= header_end + 4 + content_length {
+                            break;
+                        }
+                    }
+                }
+                requests.push(String::from_utf8_lossy(&buffer[..read]).into_owned());
+                let body = r#"{"code":0,"data":{}}"#;
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                stream
+                    .write_all(response.as_bytes())
+                    .await
+                    .expect("write response");
+            }
+            requests
+        });
+
+        let client = BulkImport::new(
+            &BulkImportConfig::new()
+                .url(format!("http://{address}"))
+                .api_key("token"),
+        )
+        .expect("valid client");
+        let describe = |job_id: &str| {
+            GetImportProgressRequest::builder()
+                .database_name("books_db")
+                .job_id(job_id)
+                .build()
+                .expect("valid request")
+        };
+
+        let commit = client
+            .commit_import(describe("job-1"))
+            .await
+            .expect("commit succeeds");
+        assert_eq!(commit.code(), 0);
+        let abort = client
+            .abort_import(describe("job-2"))
+            .await
+            .expect("abort succeeds");
+        assert_eq!(abort.code(), 0);
+
+        let requests = server.await.expect("server completes");
+        assert!(requests[0].contains("POST /v2/vectordb/jobs/import/commit HTTP/1.1"));
+        assert!(requests[0].contains(r#""jobId":"job-1""#));
+        assert!(requests[0].to_lowercase().contains("db-name: books_db"));
+        assert!(requests[1].contains("POST /v2/vectordb/jobs/import/abort HTTP/1.1"));
+        assert!(requests[1].contains(r#""jobId":"job-2""#));
+        assert!(requests[1].to_lowercase().contains("db-name: books_db"));
     }
 }
