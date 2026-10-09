@@ -61,6 +61,7 @@
 //! targets are `milvus_sdk::retry`, `milvus_sdk::schema_cache`, and `milvus_sdk::polling`.
 
 pub mod error;
+mod iterator_cursor;
 #[doc(hidden)]
 pub mod proto;
 pub mod v1;

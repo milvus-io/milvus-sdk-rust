@@ -46,6 +46,7 @@ struct MockState {
     client_request_ids: HashMap<&'static str, Vec<Option<String>>>,
     authorization_headers: HashMap<&'static str, Vec<Option<String>>>,
     transport_failures: HashMap<&'static str, Vec<tonic::Code>>,
+    search_responses: Vec<pb::SearchResults>,
     alter_collection_schema_unimplemented: bool,
     alter_collection_schema_status: Option<common::Status>,
     aliases: HashMap<(String, String), String>,
@@ -72,6 +73,7 @@ impl Default for MockState {
             client_request_ids: HashMap::new(),
             authorization_headers: HashMap::new(),
             transport_failures: HashMap::new(),
+            search_responses: Vec::new(),
             alter_collection_schema_unimplemented: false,
             alter_collection_schema_status: None,
             aliases: HashMap::new(),
@@ -195,6 +197,46 @@ impl MockMilvus {
             .get(method)
             .cloned()
             .unwrap_or_default()
+    }
+
+    pub fn queue_search_response(&self, response: pb::SearchResults) {
+        self.state.lock().unwrap().search_responses.push(response);
+    }
+
+    pub fn set_search_primary_key_type(&self, data_type: schema::DataType) {
+        let mut state = self.state.lock().unwrap();
+        let collection = state
+            .collections
+            .get_mut(&("default".into(), "books".into()))
+            .unwrap();
+        collection
+            .schema
+            .as_mut()
+            .unwrap()
+            .fields
+            .iter_mut()
+            .find(|field| field.is_primary_key)
+            .unwrap()
+            .data_type = data_type as i32;
+    }
+
+    pub fn set_search_collection_id(&self, collection_id: i64) {
+        self.state
+            .lock()
+            .unwrap()
+            .collections
+            .get_mut(&("default".into(), "books".into()))
+            .unwrap()
+            .collection_id = collection_id;
+    }
+
+    fn take_search_response(&self) -> Option<pb::SearchResults> {
+        let mut state = self.state.lock().unwrap();
+        if state.search_responses.is_empty() {
+            None
+        } else {
+            Some(state.search_responses.remove(0))
+        }
     }
 
     pub fn fail_next_transport(&self, method: &'static str, code: tonic::Code) {
@@ -1931,6 +1973,9 @@ impl MilvusService for MockMilvus {
         pb::SearchRequest,
         pb::SearchResults,
         |service, request| {
+            if let Some(response) = service.take_search_response() {
+                return Ok(Response::new(response));
+            }
             let mut response = search_response();
             if request.dsl.contains("legacy_hamming_gap_iterator") {
                 let radius = request
