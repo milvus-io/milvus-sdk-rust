@@ -76,6 +76,7 @@ pub struct QueryRequest {
     pub(crate) timezone: String,
     pub(crate) consistency_level: Option<ConsistencyLevel>,
     pub(crate) order_by_fields: Vec<OrderByField>,
+    pub(crate) group_by_fields: Vec<String>,
     pub(crate) extra_params: HashMap<String, String>,
 }
 
@@ -95,6 +96,7 @@ impl QueryRequest {
             timezone: Default::default(),
             consistency_level: Default::default(),
             order_by_fields: Default::default(),
+            group_by_fields: Default::default(),
             extra_params: Default::default(),
         }
     }
@@ -180,6 +182,11 @@ impl QueryRequest {
         &self.order_by_fields
     }
 
+    /// Returns the scalar fields used to group query aggregation results.
+    pub fn group_by_fields(&self) -> &[String] {
+        &self.group_by_fields
+    }
+
     /// Returns the extra params.
     pub fn extra_params(&self) -> &HashMap<String, String> {
         &self.extra_params
@@ -209,6 +216,9 @@ impl QueryRequest {
                 "order_by_fields".into(),
                 format_order_by_fields(&self.order_by_fields),
             );
+        }
+        if !self.group_by_fields.is_empty() {
+            params.insert("group_by_fields".into(), self.group_by_fields.join(","));
         }
         let (filter, expr_template_values) = if self.ids.is_empty() {
             (
@@ -371,6 +381,24 @@ impl QueryRequestBuilder {
     /// Sets the fields used to order query results and returns the updated value.
     pub fn order_by_fields(mut self, values: impl IntoIterator<Item = OrderByField>) -> Self {
         self.value.order_by_fields = values.into_iter().collect();
+        self
+    }
+
+    /// Sets the scalar fields used to group query aggregation results and returns
+    /// the updated value.
+    ///
+    /// Query-level group-by aggregation groups matching rows by these fields and
+    /// returns one row per group; combine with aggregate expressions such as
+    /// `count(*)`, `sum(field)`, `min(field)`, `max(field)`, or `avg(field)` in
+    /// [`Self::output_fields`].
+    pub fn group_by_fields(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.value.group_by_fields = values.into_iter().map(Into::into).collect();
+        self
+    }
+
+    /// Adds one group-by field and returns the updated value.
+    pub fn add_group_by_field(mut self, value: impl Into<String>) -> Self {
+        self.value.group_by_fields.push(value.into());
         self
     }
 
@@ -2197,6 +2225,12 @@ fn validate_query_iterator_query(value: &QueryRequest) -> Result<()> {
             "query iterator does not support ORDER BY".into(),
         ));
     }
+    if !value.group_by_fields.is_empty() {
+        return Err(Error::validation(
+            "group_by_fields".into(),
+            "query iterator does not support GROUP BY".into(),
+        ));
+    }
     validate_query_request_limit(value, true)
 }
 
@@ -2204,6 +2238,7 @@ fn validate_query_request_limit(value: &QueryRequest, allow_zero_limit: bool) ->
     required("collection_name", &value.collection_name)?;
     non_empty_strings("partition_names", &value.partition_names)?;
     validate_order_by_fields(&value.order_by_fields)?;
+    non_empty_strings("group_by_fields", &value.group_by_fields)?;
     if !value.ids.is_empty() && !value.filter.is_empty() {
         return Err(Error::validation(
             "ids".into(),
@@ -3409,6 +3444,7 @@ mod builder_value_tests {
         let expected_timezone: String = String::new();
         let expected_consistency_level: Option<ConsistencyLevel> = None;
         let expected_order_by_fields: Vec<OrderByField> = Default::default();
+        let expected_group_by_fields: Vec<String> = Default::default();
         let expected_extra_params: HashMap<String, String> = Default::default();
 
         assert_eq!(value.database_name().to_owned(), expected_database_name);
@@ -3433,6 +3469,7 @@ mod builder_value_tests {
             expected_consistency_level
         );
         assert_eq!(value.order_by_fields().to_owned(), expected_order_by_fields);
+        assert_eq!(value.group_by_fields().to_owned(), expected_group_by_fields);
         assert_eq!(value.extra_params().to_owned(), expected_extra_params);
     }
 
@@ -3455,6 +3492,7 @@ mod builder_value_tests {
         let order_by_fields = vec![OrderByField::new()
             .field_name("price")
             .direction(AggDirection::Desc)];
+        let group_by_fields = vec!["brand".to_owned(), "color".to_owned()];
         let extra_params = HashMap::from([("key-value".to_owned(), "value-value".to_owned())]);
         let value = QueryRequest::builder()
             .database_name(database_name.clone())
@@ -3469,6 +3507,7 @@ mod builder_value_tests {
             .timezone(timezone.clone())
             .consistency_level(consistency_level.clone())
             .order_by_fields(order_by_fields.clone())
+            .group_by_fields(group_by_fields.clone())
             .extra_params(extra_params.clone())
             .build()
             .expect("valid request");
@@ -3488,6 +3527,7 @@ mod builder_value_tests {
             Some(consistency_level)
         );
         assert_eq!(value.order_by_fields().to_owned(), order_by_fields);
+        assert_eq!(value.group_by_fields().to_owned(), group_by_fields);
         assert_eq!(value.extra_params().to_owned(), extra_params);
     }
 
@@ -3501,6 +3541,60 @@ mod builder_value_tests {
             .expect("valid request");
 
         assert_eq!(value.ids(), &ids);
+    }
+
+    #[test]
+    fn query_request_encodes_group_by_fields() {
+        let request = QueryRequest::builder()
+            .collection_name("books")
+            .group_by_fields(["brand", "color"])
+            .build()
+            .expect("valid request");
+        let proto = request
+            .into_proto("default", Some("id"), 0)
+            .expect("encode query");
+        let params: HashMap<_, _> = proto
+            .query_params
+            .iter()
+            .map(|pair| (pair.key.clone(), pair.value.clone()))
+            .collect();
+        assert_eq!(
+            params.get("group_by_fields").map(String::as_str),
+            Some("brand,color")
+        );
+    }
+
+    #[test]
+    fn query_request_rejects_empty_group_by_field() {
+        let error = QueryRequest::builder()
+            .collection_name("books")
+            .group_by_fields(["", "brand"])
+            .build()
+            .expect_err("empty group-by field must be rejected");
+        assert!(matches!(
+            error,
+            crate::v2::error::Error::Validation(validation)
+                if validation.parameter() == "group_by_fields"
+        ));
+    }
+
+    #[test]
+    fn query_iterator_rejects_group_by_fields() {
+        let error = QueryIteratorRequest::builder()
+            .query(
+                QueryRequest::builder()
+                    .collection_name("books")
+                    .group_by_fields(["brand"])
+                    .build()
+                    .expect("valid query request"),
+            )
+            .build()
+            .expect_err("query iterator does not support GROUP BY");
+        assert!(matches!(
+            error,
+            crate::v2::error::Error::Validation(validation)
+                if validation.parameter() == "group_by_fields"
+        ));
     }
 
     #[test]
