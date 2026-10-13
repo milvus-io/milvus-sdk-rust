@@ -218,14 +218,7 @@ impl QueryRequest {
             );
         }
         if !self.group_by_fields.is_empty() {
-            params.insert(
-                "group_by_fields".into(),
-                self.group_by_fields
-                    .iter()
-                    .map(|name| name.trim())
-                    .collect::<Vec<_>>()
-                    .join(","),
-            );
+            params.insert("group_by_fields".into(), self.group_by_fields.join(","));
         }
         let (filter, expr_template_values) = if self.ids.is_empty() {
             (
@@ -394,18 +387,25 @@ impl QueryRequestBuilder {
     /// Sets the scalar fields used to group query aggregation results and returns
     /// the updated value.
     ///
-    /// Query-level group-by aggregation groups matching rows by these fields and
-    /// returns one row per group; combine with aggregate expressions such as
-    /// `count(*)`, `sum(field)`, `min(field)`, `max(field)`, or `avg(field)` in
-    /// [`Self::output_fields`].
+    /// Field names are trimmed. Query-level group-by aggregation groups matching
+    /// rows by these fields and returns one row per group; combine with aggregate
+    /// expressions such as `count(*)`, `sum(field)`, `min(field)`, `max(field)`,
+    /// or `avg(field)` in [`Self::output_fields`].
     pub fn group_by_fields(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
-        self.value.group_by_fields = values.into_iter().map(Into::into).collect();
+        self.value.group_by_fields = values
+            .into_iter()
+            .map(|value| value.into().trim().to_owned())
+            .collect();
         self
     }
 
     /// Adds one group-by field and returns the updated value.
+    ///
+    /// The field name is trimmed.
     pub fn add_group_by_field(mut self, value: impl Into<String>) -> Self {
-        self.value.group_by_fields.push(value.into());
+        self.value
+            .group_by_fields
+            .push(value.into().trim().to_owned());
         self
     }
 
@@ -3596,6 +3596,7 @@ mod builder_value_tests {
             .group_by_fields([" brand ", "color"])
             .build()
             .expect("valid request");
+        assert_eq!(request.group_by_fields(), ["brand", "color"]);
         let proto = request
             .into_proto("default", Some("id"), 0)
             .expect("encode query");
