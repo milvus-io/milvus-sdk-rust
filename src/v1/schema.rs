@@ -644,7 +644,7 @@ impl CollectionSchema {
 
     pub fn validate(&self) -> Result<()> {
         self.primary_column().ok_or_else(|| Error::NoPrimaryKey)?;
-        // TODO addidtional schema checks need to be added here
+        // TODO additional schema checks need to be added here
         Ok(())
     }
 
