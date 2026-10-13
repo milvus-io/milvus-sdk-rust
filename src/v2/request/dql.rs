@@ -218,7 +218,14 @@ impl QueryRequest {
             );
         }
         if !self.group_by_fields.is_empty() {
-            params.insert("group_by_fields".into(), self.group_by_fields.join(","));
+            params.insert(
+                "group_by_fields".into(),
+                self.group_by_fields
+                    .iter()
+                    .map(|name| name.trim())
+                    .collect::<Vec<_>>()
+                    .join(","),
+            );
         }
         let (filter, expr_template_values) = if self.ids.is_empty() {
             (
@@ -2238,7 +2245,14 @@ fn validate_query_request_limit(value: &QueryRequest, allow_zero_limit: bool) ->
     required("collection_name", &value.collection_name)?;
     non_empty_strings("partition_names", &value.partition_names)?;
     validate_order_by_fields(&value.order_by_fields)?;
-    non_empty_strings("group_by_fields", &value.group_by_fields)?;
+    for name in &value.group_by_fields {
+        if name.trim().is_empty() {
+            return Err(Error::validation(
+                "group_by_fields".into(),
+                "must not be empty after trimming".into(),
+            ));
+        }
+    }
     if !value.ids.is_empty() && !value.filter.is_empty() {
         return Err(Error::validation(
             "ids".into(),
@@ -3565,12 +3579,58 @@ mod builder_value_tests {
     }
 
     #[test]
+    fn query_request_add_group_by_field_appends() {
+        let value = QueryRequest::builder()
+            .collection_name("books")
+            .add_group_by_field("brand")
+            .add_group_by_field("color")
+            .build()
+            .expect("valid request");
+        assert_eq!(value.group_by_fields(), ["brand", "color"]);
+    }
+
+    #[test]
+    fn query_request_trims_group_by_field_names() {
+        let request = QueryRequest::builder()
+            .collection_name("books")
+            .group_by_fields([" brand ", "color"])
+            .build()
+            .expect("valid request");
+        let proto = request
+            .into_proto("default", Some("id"), 0)
+            .expect("encode query");
+        let params: HashMap<_, _> = proto
+            .query_params
+            .iter()
+            .map(|pair| (pair.key.clone(), pair.value.clone()))
+            .collect();
+        assert_eq!(
+            params.get("group_by_fields").map(String::as_str),
+            Some("brand,color")
+        );
+    }
+
+    #[test]
     fn query_request_rejects_empty_group_by_field() {
         let error = QueryRequest::builder()
             .collection_name("books")
             .group_by_fields(["", "brand"])
             .build()
             .expect_err("empty group-by field must be rejected");
+        assert!(matches!(
+            error,
+            crate::v2::error::Error::Validation(validation)
+                if validation.parameter() == "group_by_fields"
+        ));
+    }
+
+    #[test]
+    fn query_request_rejects_whitespace_only_group_by_field() {
+        let error = QueryRequest::builder()
+            .collection_name("books")
+            .group_by_fields(["brand", "   "])
+            .build()
+            .expect_err("whitespace-only group-by field must be rejected");
         assert!(matches!(
             error,
             crate::v2::error::Error::Validation(validation)
