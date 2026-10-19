@@ -47,6 +47,7 @@ impl RRFRerank {
                 .function_type(FunctionType::Rerank)
                 .param("reranker", "rrf")
                 .param("strategy", "rrf")
+                .param("k", "60")
                 .param("params", serde_json::json!({ "k": 60 }).to_string()),
         }
     }
@@ -105,6 +106,7 @@ impl WeightedRerank {
                 .function_type(FunctionType::Rerank)
                 .param("reranker", "weighted")
                 .param("strategy", "weighted")
+                .param("weights", "[]")
                 .param("params", serde_json::json!({ "weights": [] }).to_string()),
         }
     }
@@ -3368,6 +3370,7 @@ mod constructor_value_tests {
             value.get_params().get("strategy").map(String::as_str),
             Some("rrf")
         );
+        assert_eq!(value.get_params().get("k").map(String::as_str), Some("60"));
         assert_eq!(
             value.get_params().get("params").map(String::as_str),
             Some(r#"{"k":60}"#)
@@ -3378,6 +3381,7 @@ mod constructor_value_tests {
     fn rrf_rerank_populated_values() {
         let value = RRFRerank::new().k(80);
 
+        assert_eq!(RRFRerank::new(), RRFRerank::new().k(60));
         assert_eq!(
             value.get_params().get("params").map(String::as_str),
             Some(r#"{"k":80}"#)
@@ -3405,6 +3409,10 @@ mod constructor_value_tests {
             Some("weighted")
         );
         assert_eq!(
+            value.get_params().get("weights").map(String::as_str),
+            Some("[]")
+        );
+        assert_eq!(
             value.get_params().get("params").map(String::as_str),
             Some(r#"{"weights":[]}"#)
         );
@@ -3414,6 +3422,10 @@ mod constructor_value_tests {
     fn weighted_rerank_populated_values() {
         let value = WeightedRerank::new().weights(vec![0.25, 0.75]);
 
+        assert_eq!(
+            WeightedRerank::new(),
+            WeightedRerank::new().weights(Vec::new())
+        );
         assert_eq!(
             value.get_params().get("params").map(String::as_str),
             Some(r#"{"weights":[0.25,0.75]}"#)
