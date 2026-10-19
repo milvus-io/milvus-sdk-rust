@@ -28,6 +28,7 @@ mod index;
 mod partition;
 mod rbac;
 mod resource_group;
+mod rls;
 mod snapshot;
 mod utility;
 
@@ -43,5 +44,6 @@ pub use index::*;
 pub use partition::*;
 pub use rbac::*;
 pub use resource_group::*;
+pub use rls::*;
 pub use snapshot::*;
 pub use utility::*;

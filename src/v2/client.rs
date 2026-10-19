@@ -138,6 +138,7 @@ mod iterator;
 mod partition;
 mod rbac;
 mod resource_group;
+mod rls;
 mod session;
 mod snapshot;
 mod telemetry;

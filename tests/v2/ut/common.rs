@@ -62,6 +62,8 @@ struct MockState {
     user_roles: HashSet<(String, String)>,
     grants: Vec<pb::GrantEntity>,
     privilege_groups: HashMap<String, HashSet<String>>,
+    row_policies: HashMap<(String, String), Vec<pb::RowPolicy>>,
+    principal_tags: HashMap<(String, String), HashMap<String, String>>,
 }
 
 impl Default for MockState {
@@ -102,6 +104,8 @@ impl Default for MockState {
             user_roles: HashSet::new(),
             grants: Vec::new(),
             privilege_groups: HashMap::new(),
+            row_policies: HashMap::new(),
+            principal_tags: HashMap::new(),
         }
     }
 }
@@ -593,7 +597,7 @@ impl MilvusService for MockMilvus {
         create_collection,
         pb::CreateCollectionRequest,
         |service, request| {
-            let database = database_name(request.db_name);
+            let database = database_name(request.db_name.clone());
             let schema =
                 schema::CollectionSchema::decode(request.schema.as_slice()).unwrap_or_default();
             let collection_id = if request.collection_name == "books" {
@@ -629,7 +633,7 @@ impl MilvusService for MockMilvus {
         drop_collection,
         pb::DropCollectionRequest,
         |service, request| {
-            let database = database_name(request.db_name);
+            let database = database_name(request.db_name.clone());
             let key = (database, request.collection_name);
             let mut state = service.state.lock().unwrap();
             state.collections.remove(&key);
@@ -642,7 +646,7 @@ impl MilvusService for MockMilvus {
         load_collection,
         pb::LoadCollectionRequest,
         |service, request| {
-            let database = database_name(request.db_name);
+            let database = database_name(request.db_name.clone());
             service
                 .state
                 .lock()
@@ -656,7 +660,7 @@ impl MilvusService for MockMilvus {
         release_collection,
         pb::ReleaseCollectionRequest,
         |service, request| {
-            let database = database_name(request.db_name);
+            let database = database_name(request.db_name.clone());
             service
                 .state
                 .lock()
@@ -739,7 +743,7 @@ impl MilvusService for MockMilvus {
         create_partition,
         pb::CreatePartitionRequest,
         |service, request| {
-            let database = database_name(request.db_name);
+            let database = database_name(request.db_name.clone());
             service
                 .state
                 .lock()
@@ -755,7 +759,7 @@ impl MilvusService for MockMilvus {
         drop_partition,
         pb::DropPartitionRequest,
         |service, request| {
-            let database = database_name(request.db_name);
+            let database = database_name(request.db_name.clone());
             if let Some(partitions) = service
                 .state
                 .lock()
@@ -813,7 +817,7 @@ impl MilvusService for MockMilvus {
         success_status()
     });
     status_method_with!(create_index, pb::CreateIndexRequest, |service, request| {
-        let database = database_name(request.db_name);
+        let database = database_name(request.db_name.clone());
         let index_name = if request.index_name.is_empty() {
             format!("{}_idx", request.field_name)
         } else {
@@ -839,7 +843,7 @@ impl MilvusService for MockMilvus {
     });
     status_method!(alter_index, pb::AlterIndexRequest);
     status_method_with!(drop_index, pb::DropIndexRequest, |service, request| {
-        let database = database_name(request.db_name);
+        let database = database_name(request.db_name.clone());
         service.state.lock().unwrap().indexes.remove(&(
             database,
             request.collection_name,
@@ -1011,6 +1015,177 @@ impl MilvusService for MockMilvus {
                     privileges.insert(privilege.name);
                 } else {
                     privileges.remove(&privilege.name);
+                }
+            }
+            success_status()
+        }
+    );
+    status_method_with!(
+        create_row_policy,
+        pb::CreateRowPolicyRequest,
+        |service, request| {
+            let database = database_name(request.db_name.clone());
+            let mut state = service.state.lock().unwrap();
+            let policies = state
+                .row_policies
+                .entry((database, request.collection_name.clone()))
+                .or_default();
+            if !policies
+                .iter()
+                .any(|policy| policy.policy_name == request.policy_name)
+            {
+                policies.push(pb::RowPolicy {
+                    policy_name: request.policy_name,
+                    actions: request.actions,
+                    roles: Vec::new(),
+                    using_expr: request.using_expr,
+                    check_expr: request.check_expr,
+                    description: request.description,
+                    created_at: 0,
+                    policy_type: request.policy_type.unwrap_or_default(),
+                });
+            }
+            success_status()
+        }
+    );
+    status_method_with!(
+        update_row_policy,
+        pb::UpdateRowPolicyRequest,
+        |service, request| {
+            let database = database_name(request.db_name.clone());
+            let mut state = service.state.lock().unwrap();
+            if let Some(policies) = state
+                .row_policies
+                .get_mut(&(database, request.collection_name.clone()))
+            {
+                if let Some(policy) = policies
+                    .iter_mut()
+                    .find(|policy| policy.policy_name == request.policy_name)
+                {
+                    policy.actions = request.actions;
+                    policy.using_expr = request.using_expr;
+                    policy.check_expr = request.check_expr;
+                    policy.description = request.description;
+                    policy.policy_type = request.policy_type;
+                }
+            }
+            success_status()
+        }
+    );
+    status_method_with!(
+        drop_row_policy,
+        pb::DropRowPolicyRequest,
+        |service, request| {
+            let database = database_name(request.db_name.clone());
+            let mut state = service.state.lock().unwrap();
+            if let Some(policies) = state
+                .row_policies
+                .get_mut(&(database, request.collection_name.clone()))
+            {
+                policies.retain(|policy| policy.policy_name != request.policy_name);
+            }
+            success_status()
+        }
+    );
+    response_method_with!(
+        list_row_policies,
+        pb::ListRowPoliciesRequest,
+        pb::ListRowPoliciesResponse,
+        |service, request| {
+            let database = database_name(request.db_name.clone());
+            let state = service.state.lock().unwrap();
+            let mut policies = state
+                .row_policies
+                .get(&(database, request.collection_name.clone()))
+                .cloned()
+                .unwrap_or_default();
+            policies.sort_by(|left, right| left.policy_name.cmp(&right.policy_name));
+            pb::ListRowPoliciesResponse {
+                status: Some(success_status()),
+                policies,
+                db_name: request.db_name,
+                collection_name: request.collection_name,
+            }
+        }
+    );
+    status_method_with!(
+        set_rls_principal_tags,
+        pb::SetRlsPrincipalTagsRequest,
+        |service, request| {
+            let database = database_name(request.db_name.clone());
+            let mut state = service.state.lock().unwrap();
+            state
+                .principal_tags
+                .entry((database, request.collection_name.clone()))
+                .or_default()
+                .insert(request.principal_name, request.tags);
+            success_status()
+        }
+    );
+    response_method_with!(
+        get_rls_principal_tags,
+        pb::GetRlsPrincipalTagsRequest,
+        pb::GetRlsPrincipalTagsResponse,
+        |service, request| {
+            let database = database_name(request.db_name.clone());
+            let state = service.state.lock().unwrap();
+            let tags = state
+                .principal_tags
+                .get(&(database, request.collection_name.clone()))
+                .and_then(|principals| principals.get(&request.principal_name))
+                .cloned()
+                .unwrap_or_else(|| "{}".into());
+            pb::GetRlsPrincipalTagsResponse {
+                status: Some(success_status()),
+                tags,
+                db_name: request.db_name,
+                collection_name: request.collection_name,
+                principal_name: request.principal_name,
+            }
+        }
+    );
+    response_method_with!(
+        list_rls_principals,
+        pb::ListRlsPrincipalsRequest,
+        pb::ListRlsPrincipalsResponse,
+        |service, request| {
+            let database = database_name(request.db_name.clone());
+            let state = service.state.lock().unwrap();
+            let mut principals: Vec<String> = state
+                .principal_tags
+                .get(&(database, request.collection_name.clone()))
+                .map(|principals| principals.keys().cloned().collect())
+                .unwrap_or_default();
+            principals.sort();
+            pb::ListRlsPrincipalsResponse {
+                status: Some(success_status()),
+                principal_names: principals,
+                db_name: request.db_name,
+                collection_name: request.collection_name,
+            }
+        }
+    );
+    status_method_with!(
+        delete_rls_principal_tags,
+        pb::DeleteRlsPrincipalTagsRequest,
+        |service, request| {
+            let database = database_name(request.db_name.clone());
+            let mut state = service.state.lock().unwrap();
+            if let Some(principals) = state
+                .principal_tags
+                .get_mut(&(database, request.collection_name.clone()))
+            {
+                if let Some(tags) = principals.get_mut(&request.principal_name) {
+                    if request.tag_keys.is_empty() {
+                        principals.remove(&request.principal_name);
+                    } else if let Ok(mut object) = serde_json::from_str::<serde_json::Value>(tags) {
+                        if let Some(object) = object.as_object_mut() {
+                            for key in request.tag_keys {
+                                object.remove(&key);
+                            }
+                            *tags = serde_json::Value::Object(object.clone()).to_string();
+                        }
+                    }
                 }
             }
             success_status()
@@ -1239,7 +1414,7 @@ impl MilvusService for MockMilvus {
         pb::HasCollectionRequest,
         pb::BoolResponse,
         |service, request| {
-            let database = database_name(request.db_name);
+            let database = database_name(request.db_name.clone());
             pb::BoolResponse {
                 status: Some(success_status()),
                 value: service
@@ -1256,7 +1431,7 @@ impl MilvusService for MockMilvus {
         pb::DescribeCollectionRequest,
         pb::DescribeCollectionResponse,
         |service, request| {
-            let database = database_name(request.db_name);
+            let database = database_name(request.db_name.clone());
             let state = service.state.lock().unwrap();
             let collection = state
                 .aliases
@@ -1278,7 +1453,7 @@ impl MilvusService for MockMilvus {
         pb::BatchDescribeCollectionRequest,
         pb::BatchDescribeCollectionResponse,
         |service, request| {
-            let database = database_name(request.db_name);
+            let database = database_name(request.db_name.clone());
             let state = service.state.lock().unwrap();
             let responses = request
                 .collection_name
@@ -1318,7 +1493,7 @@ impl MilvusService for MockMilvus {
         pb::ShowCollectionsRequest,
         pb::ShowCollectionsResponse,
         |service, request| {
-            let database = database_name(request.db_name);
+            let database = database_name(request.db_name.clone());
             let state = service.state.lock().unwrap();
             let mut descriptions: Vec<_> = state
                 .collections
@@ -1372,7 +1547,7 @@ impl MilvusService for MockMilvus {
         pb::HasPartitionRequest,
         pb::BoolResponse,
         |service, request| {
-            let database = database_name(request.db_name);
+            let database = database_name(request.db_name.clone());
             pb::BoolResponse {
                 status: Some(success_status()),
                 value: service
@@ -1390,7 +1565,7 @@ impl MilvusService for MockMilvus {
         pb::ShowPartitionsRequest,
         pb::ShowPartitionsResponse,
         |service, request| {
-            let database = database_name(request.db_name);
+            let database = database_name(request.db_name.clone());
             let state = service.state.lock().unwrap();
             let mut partitions: Vec<_> = state
                 .partitions
@@ -1443,7 +1618,7 @@ impl MilvusService for MockMilvus {
         pb::GetLoadStateRequest,
         pb::GetLoadStateResponse,
         |service, request| {
-            let database = database_name(request.db_name);
+            let database = database_name(request.db_name.clone());
             let loaded = service
                 .state
                 .lock()
@@ -1526,7 +1701,7 @@ impl MilvusService for MockMilvus {
             }
             let first_delayed_poll = request.collection_name == "delayed_index_progress"
                 && service.call_count("describe_index") == 1;
-            let database = database_name(request.db_name);
+            let database = database_name(request.db_name.clone());
             let state = service.state.lock().unwrap();
             let mut indexes: Vec<_> = state
                 .indexes
@@ -1556,7 +1731,7 @@ impl MilvusService for MockMilvus {
         pb::GetIndexStatisticsRequest,
         pb::GetIndexStatisticsResponse,
         |service, request| {
-            let database = database_name(request.db_name);
+            let database = database_name(request.db_name.clone());
             let state = service.state.lock().unwrap();
             let indexes = state
                 .indexes
