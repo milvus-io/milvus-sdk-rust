@@ -205,12 +205,6 @@ impl RRFRerank {
         }
     }
 
-    /// Sets the name and returns the updated value.
-    pub fn name(mut self, value: impl Into<String>) -> Self {
-        self.function.name = value.into();
-        self
-    }
-
     /// Sets the function and returns the updated value.
     pub fn function(mut self, value: Function) -> Self {
         self.function = value;
@@ -267,12 +261,6 @@ impl WeightedRerank {
                 .param("strategy", "weighted")
                 .param("params", serde_json::json!({ "weights": [] }).to_string()),
         }
-    }
-
-    /// Sets the name and returns the updated value.
-    pub fn name(mut self, value: impl Into<String>) -> Self {
-        self.function.name = value.into();
-        self
     }
 
     /// Sets the weights and returns the updated value.
@@ -4635,9 +4623,8 @@ mod constructor_value_tests {
 
     #[test]
     fn rrf_rerank_populated_values() {
-        let value = RRFRerank::new().name("my_rrf").k(80);
+        let value = RRFRerank::new().k(80);
 
-        assert_eq!(value.get_name().to_owned(), "my_rrf");
         assert_eq!(
             value.get_params().get("params").map(String::as_str),
             Some(r#"{"k":80}"#)
@@ -4672,11 +4659,8 @@ mod constructor_value_tests {
 
     #[test]
     fn weighted_rerank_populated_values() {
-        let value = WeightedRerank::new()
-            .name("weighted scores")
-            .weights(vec![0.25, 0.75]);
+        let value = WeightedRerank::new().weights(vec![0.25, 0.75]);
 
-        assert_eq!(value.get_name().to_owned(), "weighted scores");
         assert_eq!(
             value.get_params().get("params").map(String::as_str),
             Some(r#"{"weights":[0.25,0.75]}"#)
