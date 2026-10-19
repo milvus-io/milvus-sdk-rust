@@ -23,6 +23,7 @@ src/proto/*.rs
 /target
 #Cargo.lock
 /.idea/
+.vscode/
 
 # docker container data
 /volumes/
