@@ -67,7 +67,7 @@ jobs:
           echo "Release commit is contained in ${approved_branch}."
 
           check_runs="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${TAG_SHA}/check-runs?per_page=100")"
-          for check_name in 'UT on Ubuntu-22.04' 'UT on Windows'; do
+          for check_name in 'Build and test on Ubuntu-22.04' 'Build and test on Windows'; do
             if ! jq -e --arg name "${check_name}" --arg sha "${TAG_SHA}" \
               '[.check_runs[] | select(.name == $name and .head_sha == $sha and .conclusion == "success")] | length > 0' <<<"${check_runs}" >/dev/null; then
               echo "No successful ${check_name} check was found for ${TAG_SHA}." >&2
