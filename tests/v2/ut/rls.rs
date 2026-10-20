@@ -17,7 +17,8 @@
 use super::common::MockServer;
 use milvus::v2::request::dml::{DeleteRequest, InsertRequest, UpsertRequest};
 use milvus::v2::request::dql::{
-    HybridSearchRequest, QueryRequest, SearchRequest, SubSearchRequest,
+    HybridSearchRequest, QueryIteratorRequest, QueryRequest, SearchIteratorRequest, SearchRequest,
+    SubSearchRequest,
 };
 use milvus::v2::request::rls::*;
 use milvus::v2::types::{FieldData, RowPolicyAction, RowPolicyType, SearchVectors};
@@ -433,4 +434,94 @@ async fn dml_and_dql_requests_carry_rls_fields_on_the_wire() {
         .expect("hybrid search succeeds");
     let text = server.service.request_text("hybrid_search");
     assert!(text.contains("rls_principal: \"alice\""), "{text}");
+}
+
+#[tokio::test]
+async fn iterators_carry_rls_fields_on_the_wire() {
+    let server = MockServer::start().await;
+
+    let query_iterator = QueryIteratorRequest::builder()
+        .query(
+            QueryRequest::builder()
+                .collection_name("books")
+                .filter("id > 0")
+                .rls_principal("alice")
+                .build()
+                .expect("valid query request"),
+        )
+        .batch_size(10)
+        .build()
+        .expect("valid iterator request");
+    let iterator = server
+        .client
+        .query_iterator(query_iterator)
+        .await
+        .expect("create query iterator");
+    let text = server.service.request_text("query");
+    assert!(text.contains("rls_principal: \"alice\""), "{text}");
+    drop(iterator);
+
+    let search_iterator = SearchIteratorRequest::builder()
+        .search(
+            SearchRequest::builder()
+                .collection_name("books")
+                .vector_field("vector")
+                .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+                .rls_principal("alice")
+                .build()
+                .expect("valid search request"),
+        )
+        .batch_size(10)
+        .limit(1)
+        .build()
+        .expect("valid iterator request");
+    let iterator = server
+        .client
+        .search_iterator(search_iterator)
+        .await
+        .expect("create search iterator");
+    let text = server.service.request_text("search");
+    assert!(text.contains("rls_principal: \"alice\""), "{text}");
+    drop(iterator);
+}
+
+#[tokio::test]
+async fn create_row_policy_rejects_duplicates_and_update_rejects_missing() {
+    let server = MockServer::start().await;
+    let request = || {
+        CreateRowPolicyRequest::builder()
+            .collection_name("books")
+            .policy_name("region_filter")
+            .policy_type(RowPolicyType::Restrictive)
+            .actions([RowPolicyAction::Query])
+            .using_expr("region == 'west'")
+            .build()
+            .expect("valid request")
+    };
+
+    server
+        .client
+        .create_row_policy(request())
+        .await
+        .expect("first create succeeds");
+    server
+        .client
+        .create_row_policy(request())
+        .await
+        .expect_err("duplicate create must fail");
+
+    server
+        .client
+        .update_row_policy(
+            UpdateRowPolicyRequest::builder()
+                .collection_name("books")
+                .policy_name("missing_policy")
+                .policy_type(RowPolicyType::Permissive)
+                .actions([RowPolicyAction::Query])
+                .using_expr("region == 'west'")
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect_err("update of a missing policy must fail");
 }

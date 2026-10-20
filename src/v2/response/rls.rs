@@ -177,7 +177,13 @@ impl GetRLSPrincipalTagsResponse {
         let tags = if value.tags.is_empty() {
             Value::Object(Default::default())
         } else {
-            serde_json::from_str(&value.tags)?
+            let decoded: Value = serde_json::from_str(&value.tags)?;
+            if !decoded.is_object() {
+                return Err(crate::v2::error::Error::conversion(
+                    "principal tags must be a JSON object",
+                ));
+            }
+            decoded
         };
         Ok(Self {
             tags,
@@ -410,6 +416,16 @@ mod tests {
             GetRLSPrincipalTagsResponse::from_proto(milvus::GetRlsPrincipalTagsResponse {
                 status: None,
                 tags: "not json".into(),
+                db_name: "default".into(),
+                collection_name: "books".into(),
+                principal_name: "alice".into(),
+            },)
+            .is_err()
+        );
+        assert!(
+            GetRLSPrincipalTagsResponse::from_proto(milvus::GetRlsPrincipalTagsResponse {
+                status: None,
+                tags: "[1, 2]".into(),
                 db_name: "default".into(),
                 collection_name: "books".into(),
                 principal_name: "alice".into(),

@@ -32,6 +32,15 @@ fn success_status() -> common::Status {
     common::Status::default()
 }
 
+fn error_status(reason: impl Into<String>) -> common::Status {
+    common::Status {
+        code: 800,
+        error_code: common::ErrorCode::UnexpectedError as i32,
+        reason: reason.into(),
+        ..Default::default()
+    }
+}
+
 fn database_name(value: String) -> String {
     if value.is_empty() {
         "default".into()
@@ -1030,10 +1039,12 @@ impl MilvusService for MockMilvus {
                 .row_policies
                 .entry((database, request.collection_name.clone()))
                 .or_default();
-            if !policies
+            if policies
                 .iter()
                 .any(|policy| policy.policy_name == request.policy_name)
             {
+                error_status("row policy already exists")
+            } else {
                 policies.push(pb::RowPolicy {
                     policy_name: request.policy_name,
                     actions: request.actions,
@@ -1044,8 +1055,8 @@ impl MilvusService for MockMilvus {
                     created_at: 0,
                     policy_type: request.policy_type.unwrap_or_default(),
                 });
+                success_status()
             }
-            success_status()
         }
     );
     status_method_with!(
@@ -1054,22 +1065,26 @@ impl MilvusService for MockMilvus {
         |service, request| {
             let database = database_name(request.db_name.clone());
             let mut state = service.state.lock().unwrap();
-            if let Some(policies) = state
+            match state
                 .row_policies
                 .get_mut(&(database, request.collection_name.clone()))
             {
-                if let Some(policy) = policies
+                None => success_status(),
+                Some(policies) => match policies
                     .iter_mut()
                     .find(|policy| policy.policy_name == request.policy_name)
                 {
-                    policy.actions = request.actions;
-                    policy.using_expr = request.using_expr;
-                    policy.check_expr = request.check_expr;
-                    policy.description = request.description;
-                    policy.policy_type = request.policy_type;
-                }
+                    None => error_status("row policy does not exist"),
+                    Some(policy) => {
+                        policy.actions = request.actions;
+                        policy.using_expr = request.using_expr;
+                        policy.check_expr = request.check_expr;
+                        policy.description = request.description;
+                        policy.policy_type = request.policy_type;
+                        success_status()
+                    }
+                },
             }
-            success_status()
         }
     );
     status_method_with!(

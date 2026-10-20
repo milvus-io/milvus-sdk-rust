@@ -19,7 +19,7 @@
 //! Row policies attach predicate filters to a collection for specific operations, and principal
 //! tags carry the per-user attribute values those predicates reference.
 
-use super::validation::{required, required_slice};
+use super::validation::{non_empty_strings, required, required_slice};
 use crate::proto::milvus;
 use crate::v2::error::{Error, Result};
 use crate::v2::types::{RowPolicyAction, RowPolicyType};
@@ -1069,9 +1069,11 @@ impl DeleteRLSPrincipalTagsRequestBuilder {
     /// Returns [`crate::v2::error::Error::Validation`] when:
     /// - `collection_name` is empty
     /// - `principal_name` is empty
+    /// - `tag_keys` contains an empty entry
     pub fn build(self) -> Result<DeleteRLSPrincipalTagsRequest> {
         required("collection_name", &self.value.collection_name)?;
         required("principal_name", &self.value.principal_name)?;
+        non_empty_strings("tag_keys", &self.value.tag_keys)?;
         Ok(self.value)
     }
 }
@@ -1342,5 +1344,21 @@ mod tests {
         let proto = value.into_proto("default");
         assert!(proto.tag_keys.is_empty());
         assert!(DeleteRLSPrincipalTagsRequest::builder().build().is_err());
+    }
+
+    #[test]
+    fn delete_rls_principal_tags_request_rejects_empty_tag_key() {
+        assert!(DeleteRLSPrincipalTagsRequest::builder()
+            .collection_name("books")
+            .principal_name("alice")
+            .tag_keys(["", "region"])
+            .build()
+            .is_err());
+        assert!(DeleteRLSPrincipalTagsRequest::builder()
+            .collection_name("books")
+            .principal_name("alice")
+            .tag_keys(["region"])
+            .build()
+            .is_ok());
     }
 }
