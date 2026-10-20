@@ -55,6 +55,37 @@ fn validate_policy_definition(
                 "must not contain duplicate actions".into(),
             ));
         }
+        match action {
+            RowPolicyAction::Query
+            | RowPolicyAction::Search
+            | RowPolicyAction::Delete
+            | RowPolicyAction::QueryIterator
+            | RowPolicyAction::SearchIterator
+            | RowPolicyAction::HybridSearch => {
+                if using_expr.is_empty() {
+                    return Err(Error::validation(
+                        "using_expr".into(),
+                        format!("action {action:?} requires a non-empty using_expr"),
+                    ));
+                }
+            }
+            RowPolicyAction::Insert => {
+                if check_expr.is_empty() {
+                    return Err(Error::validation(
+                        "check_expr".into(),
+                        format!("action {action:?} requires a non-empty check_expr"),
+                    ));
+                }
+            }
+            RowPolicyAction::Upsert => {
+                if using_expr.is_empty() || check_expr.is_empty() {
+                    return Err(Error::validation(
+                        "check_expr".into(),
+                        format!("action {action:?} requires both using_expr and check_expr"),
+                    ));
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -270,6 +301,8 @@ impl CreateRowPolicyRequestBuilder {
     /// - `policy_type` is [`RowPolicyType::Unknown`]
     /// - both `using_expr` and `check_expr` are empty
     /// - `actions` contains duplicates
+    /// - an action is missing the expression it uses (`using_expr` for read/delete actions,
+    ///   `check_expr` for insert, both for upsert)
     pub fn build(self) -> Result<CreateRowPolicyRequest> {
         required("collection_name", &self.value.collection_name)?;
         required("policy_name", &self.value.policy_name)?;
@@ -463,6 +496,8 @@ impl UpdateRowPolicyRequestBuilder {
     /// - `policy_type` is [`RowPolicyType::Unknown`]
     /// - both `using_expr` and `check_expr` are empty
     /// - `actions` contains duplicates
+    /// - an action is missing the expression it uses (`using_expr` for read/delete actions,
+    ///   `check_expr` for insert, both for upsert)
     pub fn build(self) -> Result<UpdateRowPolicyRequest> {
         required("collection_name", &self.value.collection_name)?;
         required("policy_name", &self.value.policy_name)?;
@@ -1180,6 +1215,38 @@ mod tests {
             .build()
             .expect("defaults to permissive");
         assert_eq!(accepted.policy_type(), RowPolicyType::Permissive);
+    }
+
+    #[test]
+    fn policy_definition_rejects_actions_without_their_expression() {
+        assert!(CreateRowPolicyRequest::builder()
+            .collection_name("books")
+            .policy_name("p")
+            .actions([RowPolicyAction::Insert])
+            .using_expr("region == 'west'")
+            .build()
+            .is_err());
+        assert!(CreateRowPolicyRequest::builder()
+            .collection_name("books")
+            .policy_name("p")
+            .actions([RowPolicyAction::Query])
+            .check_expr("region == 'west'")
+            .build()
+            .is_err());
+        assert!(CreateRowPolicyRequest::builder()
+            .collection_name("books")
+            .policy_name("p")
+            .actions([RowPolicyAction::Upsert])
+            .using_expr("region == 'west'")
+            .build()
+            .is_err());
+        assert!(CreateRowPolicyRequest::builder()
+            .collection_name("books")
+            .policy_name("p")
+            .actions([RowPolicyAction::Insert])
+            .check_expr("region == 'west'")
+            .build()
+            .is_ok());
     }
 
     #[test]

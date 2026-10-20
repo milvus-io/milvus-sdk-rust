@@ -56,7 +56,10 @@ async fn main() -> Result<()> {
                 .collection_name(COLLECTION)
                 .schema(schema)
                 // RLS is enforced only when the collection opts in via this property.
-                .properties(HashMap::from([("rls.enabled".to_owned(), "true".to_owned())]))
+                .properties(HashMap::from([(
+                    "rls.enabled".to_owned(),
+                    "true".to_owned(),
+                )]))
                 .build()?,
         )
         .await?;
@@ -170,7 +173,10 @@ async fn main() -> Result<()> {
                 .build()?,
         )
         .await?;
-    println!("visible rows for {PRINCIPAL}: {}", count.results().len());
+    println!(
+        "visible rows for {PRINCIPAL}: {}",
+        query_count(count.results())?
+    );
 
     // Remove a single tag, then remove all remaining tags.
     client
