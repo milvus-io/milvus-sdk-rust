@@ -14,41 +14,65 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Row-level security (RLS) lets you control which rows a principal can read or write.
+// This example manages policies and principal tags, then shows how a request that
+// carries an `rls_principal` is enforced by Milvus (row filtering and write checks).
+// Enable RBAC in Milvus and have the root user credentials ready.
+// Read the doc to know more about RLS in Milvus: https://milvus.io/docs/row-level-security.md
+
 mod utils;
 
 use milvus::v2 as sdk;
 use milvus::v2::error::Result;
 use milvus::v2::prelude::*;
-use serde_json::json;
 use std::collections::HashMap;
 use utils::*;
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    const COLLECTION: &str = "RUST_V2_RLS";
-    const POLICY: &str = "rust_v2_region_policy";
-    const PRINCIPAL: &str = "rust_v2_alice";
-    let client = client().await?;
-    drop_collection(&client, COLLECTION).await;
+const COLLECTION: &str = "RUST_V2_RLS_COLLECTION";
+const POLICY: &str = "rust_v2_rls_policy";
+const ALICE: &str = "alice";
+const BOB: &str = "bob";
+
+fn row(id: i64, team: &str) -> serde_json::Value {
+    serde_json::json!({
+        "id": id,
+        "vector": [1.0f32, 2.0f32],
+        "team": team,
+    })
+}
+
+async fn cleanup(client: &ClientV2) {
+    let _ = client
+        .drop_row_policy(
+            DropRowPolicyRequest::builder()
+                .collection_name(COLLECTION)
+                .policy_name(POLICY)
+                .build()
+                .expect("valid drop-row-policy request"),
+        )
+        .await;
+    drop_collection(client, COLLECTION).await;
+}
+
+async fn create_collection(client: &ClientV2) -> Result<()> {
     let schema = sdk::CollectionSchema::new()
         .add_field(
             sdk::FieldSchema::new()
-                .name("pk")
+                .name("id")
                 .data_type(sdk::DataType::Int64)
-                .primary_key(true)
-                .auto_id(true),
+                .primary_key(true),
         )
         .add_field(
             sdk::FieldSchema::new()
                 .name("vector")
                 .data_type(sdk::DataType::FloatVector)
-                .dimension(8),
+                .dimension(2),
         )
         .add_field(
             sdk::FieldSchema::new()
-                .name("region")
+                .name("team")
                 .data_type(sdk::DataType::VarChar)
-                .max_length(16),
+                .max_length(64),
         );
     client
         .create_collection(
@@ -63,6 +87,160 @@ async fn main() -> Result<()> {
                 .build()?,
         )
         .await?;
+    println!("Collection created: {COLLECTION}");
+    Ok(())
+}
+
+async fn run_rls_example(client: &ClientV2) -> Result<()> {
+    // A policy expression may reference the current principal and its tags:
+    //   $current_principal_tags['team']  ->  the 'team' tag of the request principal.
+    client
+        .create_row_policy(
+            CreateRowPolicyRequest::builder()
+                .collection_name(COLLECTION)
+                .policy_name(POLICY)
+                .policy_type(RowPolicyType::Permissive)
+                .actions([
+                    RowPolicyAction::Search,
+                    RowPolicyAction::Query,
+                    RowPolicyAction::Insert,
+                ])
+                .using_expr("team == $current_principal_tags['team']")
+                .check_expr("team == $current_principal_tags['team']")
+                .description("A principal only sees or writes rows of its own team")
+                .build()?,
+        )
+        .await?;
+    println!("Row policy created: {POLICY}");
+
+    let policies = client
+        .list_row_policies(
+            ListRowPoliciesRequest::builder()
+                .collection_name(COLLECTION)
+                .build()?,
+        )
+        .await?;
+    println!("After create, row policies:");
+    for policy in policies.policies() {
+        println!(
+            "\t{} type={:?} actions={:?} using={} check={}",
+            policy.get_policy_name(),
+            policy.get_policy_type(),
+            policy.get_actions(),
+            policy.get_using_expr(),
+            policy.get_check_expr()
+        );
+    }
+
+    client
+        .update_row_policy(
+            UpdateRowPolicyRequest::builder()
+                .collection_name(COLLECTION)
+                .policy_name(POLICY)
+                .policy_type(RowPolicyType::Permissive)
+                .actions([
+                    RowPolicyAction::Search,
+                    RowPolicyAction::Query,
+                    RowPolicyAction::Insert,
+                    RowPolicyAction::Delete,
+                ])
+                .using_expr("team == $current_principal_tags['team']")
+                .check_expr("team == $current_principal_tags['team']")
+                .description("Updated: a principal sees or writes only rows of its own team")
+                .build()?,
+        )
+        .await?;
+    println!("Row policy updated: {POLICY}");
+
+    client
+        .set_rls_principal_tags(
+            SetRLSPrincipalTagsRequest::builder()
+                .collection_name(COLLECTION)
+                .principal_name(ALICE)
+                .tags(serde_json::json!({"team": "engineering", "level": 3}))
+                .build()?,
+        )
+        .await?;
+    client
+        .set_rls_principal_tags(
+            SetRLSPrincipalTagsRequest::builder()
+                .collection_name(COLLECTION)
+                .principal_name(BOB)
+                .tags(serde_json::json!({"team": "marketing"}))
+                .build()?,
+        )
+        .await?;
+    println!("Principal tags set: {ALICE}=engineering, {BOB}=marketing");
+
+    let tags = client
+        .get_rls_principal_tags(
+            GetRLSPrincipalTagsRequest::builder()
+                .collection_name(COLLECTION)
+                .principal_name(ALICE)
+                .build()?,
+        )
+        .await?;
+    println!("{ALICE} tags: {}", tags.tags());
+
+    let principals = client
+        .list_rls_principals(
+            ListRLSPrincipalsRequest::builder()
+                .collection_name(COLLECTION)
+                .build()?,
+        )
+        .await?;
+    println!("Principals with tags: {:?}", principals.principal_names());
+
+    client
+        .delete_rls_principal_tags(
+            DeleteRLSPrincipalTagsRequest::builder()
+                .collection_name(COLLECTION)
+                .principal_name(ALICE)
+                .tag_keys(["level"])
+                .build()?,
+        )
+        .await?;
+    println!("Alice tag deleted: level");
+
+    // ---- enforcement: writes are checked against the policy ----
+    client
+        .insert(
+            InsertRequest::builder()
+                .collection_name(COLLECTION)
+                .rows([row(1, "engineering")])
+                .rls_principal(ALICE)
+                .build()?,
+        )
+        .await?;
+    println!("Insert engineering row as {ALICE}: allowed");
+
+    match client
+        .insert(
+            InsertRequest::builder()
+                .collection_name(COLLECTION)
+                .rows([row(2, "marketing")])
+                .rls_principal(ALICE)
+                .build()?,
+        )
+        .await
+    {
+        Ok(_) => println!("Insert marketing row as {ALICE}: unexpected success"),
+        Err(_) => println!("Insert marketing row as {ALICE}: rejected by RLS check expression"),
+    }
+
+    client
+        .insert(
+            InsertRequest::builder()
+                .collection_name(COLLECTION)
+                .rows([row(3, "marketing")])
+                .rls_principal(BOB)
+                .build()?,
+        )
+        .await?;
+    println!("Insert marketing row as {BOB}: allowed");
+    flush(client, COLLECTION).await?;
+
+    // Load the collection so query can run.
     client
         .create_index(
             sdk::request::index::CreateIndexRequest::builder()
@@ -84,120 +262,65 @@ async fn main() -> Result<()> {
         )
         .await?;
 
-    // Create a row policy that restricts queries and searches to rows whose region matches the
-    // caller's `region` principal tag.
-    client
-        .create_row_policy(
-            CreateRowPolicyRequest::builder()
-                .collection_name(COLLECTION)
-                .policy_name(POLICY)
-                .policy_type(RowPolicyType::Restrictive)
-                .actions([RowPolicyAction::Query, RowPolicyAction::Search])
-                .using_expr("region == $region")
-                .description("restrict reads by region tag")
-                .build()?,
-        )
-        .await?;
-
-    // Replace the policy definition, preserving its server-side identity.
-    client
-        .update_row_policy(
-            UpdateRowPolicyRequest::builder()
-                .collection_name(COLLECTION)
-                .policy_name(POLICY)
-                .policy_type(RowPolicyType::Restrictive)
-                .actions([
-                    RowPolicyAction::Query,
-                    RowPolicyAction::Search,
-                    RowPolicyAction::QueryIterator,
-                ])
-                .using_expr("region == $region")
-                .build()?,
-        )
-        .await?;
-
-    // List the collection's row policies.
-    let policies = client
-        .list_row_policies(
-            ListRowPoliciesRequest::builder()
-                .collection_name(COLLECTION)
-                .build()?,
-        )
-        .await?;
-    for policy in policies.policies() {
-        println!(
-            "policy {} type={:?} actions={:?} using={}",
-            policy.get_policy_name(),
-            policy.get_policy_type(),
-            policy.get_actions(),
-            policy.get_using_expr()
-        );
-    }
-
-    // Set the principal's tags; `$region` in the policy resolves to this value.
-    client
-        .set_rls_principal_tags(
-            SetRLSPrincipalTagsRequest::builder()
-                .collection_name(COLLECTION)
-                .principal_name(PRINCIPAL)
-                .tags(json!({"region": "west"}))
-                .build()?,
-        )
-        .await?;
-    let tags = client
-        .get_rls_principal_tags(
-            GetRLSPrincipalTagsRequest::builder()
-                .collection_name(COLLECTION)
-                .principal_name(PRINCIPAL)
-                .build()?,
-        )
-        .await?;
-    println!("{PRINCIPAL} tags: {}", tags.tags());
-
-    let principals = client
-        .list_rls_principals(
-            ListRLSPrincipalsRequest::builder()
-                .collection_name(COLLECTION)
-                .build()?,
-        )
-        .await?;
-    println!("principals with tags: {:?}", principals.principal_names());
-
-    // Query and search carry the caller's RLS principal so the server enforces the row policy.
-    let count = client
+    // ---- enforcement: reads are filtered by the principal's tags ----
+    let alice_rows = client
         .query(
             QueryRequest::builder()
                 .collection_name(COLLECTION)
-                .filter("count(*)")
-                .rls_principal(PRINCIPAL)
+                .filter("id > 0")
+                .consistency_level(sdk::ConsistencyLevel::Strong)
+                .rls_principal(ALICE)
                 .build()?,
         )
         .await?;
     println!(
-        "visible rows for {PRINCIPAL}: {}",
-        query_count(count.results())?
+        "Query rows as {ALICE}: {}",
+        alice_rows.results().get_row_count()
     );
 
-    // Remove a single tag, then remove all remaining tags.
-    client
-        .delete_rls_principal_tags(
-            DeleteRLSPrincipalTagsRequest::builder()
+    let bob_rows = client
+        .query(
+            QueryRequest::builder()
                 .collection_name(COLLECTION)
-                .principal_name(PRINCIPAL)
-                .tag_keys(["region"])
+                .filter("id > 0")
+                .consistency_level(sdk::ConsistencyLevel::Strong)
+                .rls_principal(BOB)
                 .build()?,
         )
         .await?;
-    client
-        .delete_rls_principal_tags(
-            DeleteRLSPrincipalTagsRequest::builder()
-                .collection_name(COLLECTION)
-                .principal_name(PRINCIPAL)
-                .build()?,
-        )
-        .await?;
+    println!(
+        "Query rows as {BOB}: {}",
+        bob_rows.results().get_row_count()
+    );
 
-    // Drop the policy and clean up the collection.
+    let all_rows = client
+        .query(
+            QueryRequest::builder()
+                .collection_name(COLLECTION)
+                .filter("id > 0")
+                .consistency_level(sdk::ConsistencyLevel::Strong)
+                .skip_rls(true)
+                .build()?,
+        )
+        .await?;
+    println!(
+        "Query rows with skip_rls: {}",
+        all_rows.results().get_row_count()
+    );
+
+    match client
+        .query(
+            QueryRequest::builder()
+                .collection_name(COLLECTION)
+                .filter("id > 0")
+                .build()?,
+        )
+        .await
+    {
+        Ok(_) => println!("Query without rls_principal: unexpected success"),
+        Err(_) => println!("Query without rls_principal: denied, rls_principal is required"),
+    }
+
     client
         .drop_row_policy(
             DropRowPolicyRequest::builder()
@@ -206,6 +329,16 @@ async fn main() -> Result<()> {
                 .build()?,
         )
         .await?;
-    drop_collection(&client, COLLECTION).await;
+    println!("Row policy dropped: {POLICY}");
+    Ok(())
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let client = client().await?;
+    cleanup(&client).await;
+    create_collection(&client).await?;
+    run_rls_example(&client).await?;
+    cleanup(&client).await;
     Ok(())
 }
