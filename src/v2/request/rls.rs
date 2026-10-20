@@ -132,6 +132,8 @@ fn validate_rls_tags(tags: &Value) -> Result<()> {
 // CreateRowPolicyRequest
 ///////////////////////////////////////////////////////////////////////////////
 /// Parameters for the ClientV2 create_row_policy operation.
+///
+/// `policy_type` and `actions` are required; an existing policy name is an error on the server.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub struct CreateRowPolicyRequest {
@@ -151,7 +153,7 @@ impl CreateRowPolicyRequest {
             database_name: Default::default(),
             collection_name: Default::default(),
             policy_name: Default::default(),
-            policy_type: RowPolicyType::Permissive,
+            policy_type: RowPolicyType::Unknown,
             actions: Default::default(),
             using_expr: Default::default(),
             check_expr: Default::default(),
@@ -1128,7 +1130,7 @@ mod tests {
         assert_eq!(value.database_name(), &None);
         assert!(value.collection_name().is_empty());
         assert!(value.policy_name().is_empty());
-        assert_eq!(value.policy_type(), RowPolicyType::Permissive);
+        assert_eq!(value.policy_type(), RowPolicyType::Unknown);
         assert!(value.actions().is_empty());
         assert!(value.using_expr().is_empty());
         assert!(value.check_expr().is_empty());
@@ -1204,6 +1206,7 @@ mod tests {
             .collection_name("books")
             .policy_name("p")
             .actions([RowPolicyAction::Query, RowPolicyAction::Query])
+            .policy_type(RowPolicyType::Permissive)
             .using_expr("region == 'west'")
             .build()
             .is_err());
@@ -1211,9 +1214,10 @@ mod tests {
             .collection_name("books")
             .policy_name("p")
             .actions([RowPolicyAction::Query])
+            .policy_type(RowPolicyType::Permissive)
             .using_expr("region == 'west'")
             .build()
-            .expect("defaults to permissive");
+            .expect("valid request");
         assert_eq!(accepted.policy_type(), RowPolicyType::Permissive);
     }
 
@@ -1222,6 +1226,7 @@ mod tests {
         assert!(CreateRowPolicyRequest::builder()
             .collection_name("books")
             .policy_name("p")
+            .policy_type(RowPolicyType::Permissive)
             .actions([RowPolicyAction::Insert])
             .using_expr("region == 'west'")
             .build()
@@ -1229,6 +1234,7 @@ mod tests {
         assert!(CreateRowPolicyRequest::builder()
             .collection_name("books")
             .policy_name("p")
+            .policy_type(RowPolicyType::Permissive)
             .actions([RowPolicyAction::Query])
             .check_expr("region == 'west'")
             .build()
@@ -1236,6 +1242,7 @@ mod tests {
         assert!(CreateRowPolicyRequest::builder()
             .collection_name("books")
             .policy_name("p")
+            .policy_type(RowPolicyType::Permissive)
             .actions([RowPolicyAction::Upsert])
             .using_expr("region == 'west'")
             .build()
@@ -1243,6 +1250,7 @@ mod tests {
         assert!(CreateRowPolicyRequest::builder()
             .collection_name("books")
             .policy_name("p")
+            .policy_type(RowPolicyType::Permissive)
             .actions([RowPolicyAction::Insert])
             .check_expr("region == 'west'")
             .build()
