@@ -17,11 +17,11 @@
 use super::common::MockServer;
 use milvus::v2::request::dml::{DeleteRequest, InsertRequest, UpsertRequest};
 use milvus::v2::request::dql::{
-    HybridSearchRequest, QueryIteratorRequest, QueryRequest, SearchIteratorRequest, SearchRequest,
-    SubSearchRequest,
+    GetRequest, HybridSearchRequest, QueryIteratorRequest, QueryRequest, SearchIteratorRequest,
+    SearchRequest, SubSearchRequest,
 };
 use milvus::v2::request::rls::*;
-use milvus::v2::types::{FieldData, RowPolicyAction, RowPolicyType, SearchVectors};
+use milvus::v2::types::{FieldData, Ids, RowPolicyAction, RowPolicyType, SearchVectors};
 
 #[tokio::test]
 async fn create_and_list_row_policies_round_trip() {
@@ -409,6 +409,16 @@ async fn dml_and_dql_requests_carry_rls_fields_on_the_wire() {
         .build()
         .expect("valid query request");
     server.client.query(query).await.expect("query succeeds");
+    let text = server.service.request_text("query");
+    assert!(text.contains("rls_principal: \"alice\""), "{text}");
+
+    let get = GetRequest::builder()
+        .collection_name("books")
+        .ids(Ids::Int64(vec![1]))
+        .rls_principal("alice")
+        .build()
+        .expect("valid get request");
+    server.client.get(get).await.expect("get succeeds");
     let text = server.service.request_text("query");
     assert!(text.contains("rls_principal: \"alice\""), "{text}");
 

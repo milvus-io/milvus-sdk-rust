@@ -46,6 +46,8 @@ fn validate_policy_coupling(
     using_expr: &str,
     check_expr: &str,
 ) -> Option<common::Status> {
+    let using_expr_empty = using_expr.trim().is_empty();
+    let check_expr_empty = check_expr.trim().is_empty();
     let needs_using = actions.iter().any(|action| {
         matches!(
             pb::RowPolicyAction::try_from(*action).ok(),
@@ -66,12 +68,12 @@ fn validate_policy_coupling(
             Some(pb::RowPolicyAction::Insert | pb::RowPolicyAction::Upsert)
         )
     });
-    if !using_expr.is_empty() && !needs_using {
+    if !using_expr_empty && !needs_using {
         return Some(error_status(
             "RLS policy using_expr is not used by selected actions",
         ));
     }
-    if !check_expr.is_empty() && !needs_check {
+    if !check_expr_empty && !needs_check {
         return Some(error_status(
             "RLS policy check_expr is not used by selected actions",
         ));

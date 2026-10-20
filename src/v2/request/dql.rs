@@ -472,6 +472,8 @@ pub struct GetRequest {
     pub(crate) ids: Ids,
     pub(crate) output_fields: Vec<String>,
     pub(crate) consistency_level: Option<ConsistencyLevel>,
+    pub(crate) rls_principal: Option<String>,
+    pub(crate) skip_rls: bool,
 }
 
 impl GetRequest {
@@ -483,6 +485,8 @@ impl GetRequest {
             ids: Default::default(),
             output_fields: Default::default(),
             consistency_level: Default::default(),
+            rls_principal: Default::default(),
+            skip_rls: Default::default(),
         }
     }
 
@@ -528,6 +532,16 @@ impl GetRequest {
         self.consistency_level
     }
 
+    /// Returns the row-level security principal name.
+    pub fn rls_principal(&self) -> &Option<String> {
+        &self.rls_principal
+    }
+
+    /// Returns whether the request explicitly bypasses row-level security.
+    pub fn should_skip_rls(&self) -> bool {
+        self.skip_rls
+    }
+
     pub(crate) fn into_proto(
         self,
         default_db: &str,
@@ -557,6 +571,8 @@ impl GetRequest {
             use_default_consistency: self.consistency_level.is_none(),
             expr_template_values: HashMap::from([(template_name.to_owned(), json_template(ids)?)]),
             namespace: None,
+            rls_principal: self.rls_principal.unwrap_or_default(),
+            skip_rls: self.skip_rls,
             ..Default::default()
         })
     }
@@ -605,6 +621,22 @@ impl GetRequestBuilder {
     /// Sets the consistency level and returns the updated value.
     pub fn consistency_level(mut self, value: ConsistencyLevel) -> Self {
         self.value.consistency_level = Some(value);
+        self
+    }
+
+    /// Sets the row-level security principal name and returns the updated value.
+    ///
+    /// Required on row-bearing requests against collections with RLS enabled unless
+    /// [`Self::skip_rls`] is set.
+    pub fn rls_principal(mut self, value: impl Into<String>) -> Self {
+        self.value.rls_principal = Some(value.into());
+        self
+    }
+
+    /// Sets whether the request explicitly bypasses row-level security and returns the updated
+    /// value.
+    pub fn skip_rls(mut self, value: bool) -> Self {
+        self.value.skip_rls = value;
         self
     }
 
@@ -1965,8 +1997,8 @@ impl HybridSearchRequestBuilder {
     /// Sets the row-level security principal name and returns the updated value.
     ///
     /// Required on row-bearing requests against collections with RLS enabled unless
-    /// [`Self::skip_rls`] is set. Applies to every sub-search and takes precedence over the
-    /// nested sub-search principal.
+    /// [`Self::skip_rls`] is set. Applies to every sub-search; the nested sub-search requests
+    /// always carry an empty principal on the wire.
     pub fn rls_principal(mut self, value: impl Into<String>) -> Self {
         self.value.rls_principal = Some(value.into());
         self
@@ -1975,7 +2007,8 @@ impl HybridSearchRequestBuilder {
     /// Sets whether the request explicitly bypasses row-level security and returns the updated
     /// value.
     ///
-    /// Applies to every sub-search and takes precedence over the nested sub-search flag.
+    /// Applies to every sub-search; the nested sub-search requests always carry the default
+    /// (non-skipping) flag on the wire.
     pub fn skip_rls(mut self, value: bool) -> Self {
         self.value.skip_rls = value;
         self
@@ -3805,6 +3838,32 @@ mod builder_value_tests {
             value.consistency_level().to_owned(),
             Some(consistency_level)
         );
+    }
+
+    #[test]
+    fn get_request_carries_rls_principal_and_skip_rls() {
+        let value = GetRequest::builder()
+            .collection_name("books")
+            .ids(Ids::Int64(vec![1]))
+            .rls_principal("alice")
+            .build()
+            .expect("valid request");
+        assert_eq!(value.rls_principal().as_deref(), Some("alice"));
+        assert!(!value.should_skip_rls());
+        let proto = value.into_proto("default", "id", 0).expect("encode get");
+        assert_eq!(proto.rls_principal, "alice");
+        assert!(!proto.skip_rls);
+
+        let value = GetRequest::builder()
+            .collection_name("books")
+            .ids(Ids::Int64(vec![1]))
+            .skip_rls(true)
+            .build()
+            .expect("valid request");
+        assert!(value.should_skip_rls());
+        let proto = value.into_proto("default", "id", 0).expect("encode get");
+        assert!(proto.skip_rls);
+        assert!(proto.rls_principal.is_empty());
     }
 
     #[test]

@@ -35,13 +35,14 @@ fn validate_policy_type(value: RowPolicyType) -> Result<()> {
     }
     Ok(())
 }
-
 fn validate_policy_definition(
     using_expr: &str,
     check_expr: &str,
     actions: &[RowPolicyAction],
 ) -> Result<()> {
-    if using_expr.is_empty() && check_expr.is_empty() {
+    let using_expr_empty = using_expr.trim().is_empty();
+    let check_expr_empty = check_expr.trim().is_empty();
+    if using_expr_empty && check_expr_empty {
         return Err(Error::validation(
             "using_expr".into(),
             "at least one of using_expr or check_expr is required".into(),
@@ -70,26 +71,26 @@ fn validate_policy_definition(
         let uses_check_expr = matches!(action, RowPolicyAction::Insert | RowPolicyAction::Upsert);
         needs_using_expr |= uses_using_expr;
         needs_check_expr |= uses_check_expr;
-        if uses_using_expr && using_expr.is_empty() {
+        if uses_using_expr && using_expr_empty {
             return Err(Error::validation(
                 "using_expr".into(),
                 format!("action {action:?} requires a non-empty using_expr"),
             ));
         }
-        if uses_check_expr && check_expr.is_empty() {
+        if uses_check_expr && check_expr_empty {
             return Err(Error::validation(
                 "check_expr".into(),
                 format!("action {action:?} requires a non-empty check_expr"),
             ));
         }
     }
-    if !using_expr.is_empty() && !needs_using_expr {
+    if !using_expr_empty && !needs_using_expr {
         return Err(Error::validation(
             "using_expr".into(),
             "is not used by the selected actions".into(),
         ));
     }
-    if !check_expr.is_empty() && !needs_check_expr {
+    if !check_expr_empty && !needs_check_expr {
         return Err(Error::validation(
             "check_expr".into(),
             "is not used by the selected actions".into(),
@@ -109,6 +110,18 @@ fn validate_rls_tags(tags: &Value) -> Result<()> {
         return Err(Error::validation("tags".into(), "must not be empty".into()));
     }
     for (key, value) in object {
+        if key.trim().is_empty() {
+            return Err(Error::validation(
+                "tags".into(),
+                "tag keys must not be empty".into(),
+            ));
+        }
+        if key.contains('\'') {
+            return Err(Error::validation(
+                format!("tags[{key}]"),
+                "tag keys must not contain a single quote".into(),
+            ));
+        }
         let Some(values) = (match value {
             Value::Array(values) if !values.is_empty() => Some(values.as_slice()),
             Value::Array(_) => None,
@@ -1307,6 +1320,48 @@ mod tests {
             ])
             .using_expr("region == 'west'")
             .check_expr("region == 'west'")
+            .build()
+            .is_ok());
+    }
+
+    #[test]
+    fn policy_definition_rejects_whitespace_only_expressions() {
+        assert!(CreateRowPolicyRequest::builder()
+            .collection_name("books")
+            .policy_name("p")
+            .policy_type(RowPolicyType::Permissive)
+            .actions([RowPolicyAction::Query])
+            .using_expr("   ")
+            .build()
+            .is_err());
+        assert!(CreateRowPolicyRequest::builder()
+            .collection_name("books")
+            .policy_name("p")
+            .policy_type(RowPolicyType::Permissive)
+            .actions([RowPolicyAction::Insert])
+            .check_expr("  \t")
+            .build()
+            .is_err());
+    }
+
+    #[test]
+    fn set_rls_principal_tags_request_rejects_invalid_keys() {
+        assert!(SetRLSPrincipalTagsRequest::builder()
+            .collection_name("books")
+            .principal_name("alice")
+            .tags(serde_json::json!({"": "west"}))
+            .build()
+            .is_err());
+        assert!(SetRLSPrincipalTagsRequest::builder()
+            .collection_name("books")
+            .principal_name("alice")
+            .tags(serde_json::json!({"a'b": 1}))
+            .build()
+            .is_err());
+        assert!(SetRLSPrincipalTagsRequest::builder()
+            .collection_name("books")
+            .principal_name("alice")
+            .tags(serde_json::json!({"team": "west"}))
             .build()
             .is_ok());
     }
