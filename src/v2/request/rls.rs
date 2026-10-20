@@ -70,15 +70,12 @@ fn validate_rls_tags(tags: &Value) -> Result<()> {
         return Err(Error::validation("tags".into(), "must not be empty".into()));
     }
     for (key, value) in object {
-        let values = match value {
-            Value::Array(values) if !values.is_empty() => values,
-            Value::Array(_) => {
-                return Err(Error::validation(
-                    format!("tags[{key}]"),
-                    "must not be an empty array".into(),
-                ))
-            }
-            other => std::slice::from_ref(other),
+        let Some(values) = (match value {
+            Value::Array(values) if !values.is_empty() => Some(values.as_slice()),
+            Value::Array(_) => None,
+            other => Some(std::slice::from_ref(other)),
+        }) else {
+            continue;
         };
         for item in values {
             if item.is_boolean() || !(item.is_string() || item.is_number()) {
@@ -772,7 +769,7 @@ impl SetRLSPrincipalTagsRequestBuilder {
     /// - `collection_name` is empty
     /// - `principal_name` is empty
     /// - `tags` is not a non-empty JSON object, or a tag value is not a string, number, or
-    ///   non-empty array of them
+    ///   array of them
     pub fn build(self) -> Result<SetRLSPrincipalTagsRequest> {
         required("collection_name", &self.value.collection_name)?;
         required("principal_name", &self.value.principal_name)?;
@@ -1276,12 +1273,6 @@ mod tests {
         assert!(SetRLSPrincipalTagsRequest::builder()
             .collection_name("books")
             .principal_name("alice")
-            .tags(serde_json::json!({"level": []}))
-            .build()
-            .is_err());
-        assert!(SetRLSPrincipalTagsRequest::builder()
-            .collection_name("books")
-            .principal_name("alice")
             .tags(serde_json::json!({"admin": true}))
             .build()
             .is_err());
@@ -1291,6 +1282,22 @@ mod tests {
             .tags(serde_json::json!({"region": "west", "ok": true}))
             .build()
             .is_err());
+    }
+
+    #[test]
+    fn set_rls_principal_tags_request_accepts_empty_array_tags() {
+        assert!(SetRLSPrincipalTagsRequest::builder()
+            .collection_name("books")
+            .principal_name("alice")
+            .tags(serde_json::json!({"group": []}))
+            .build()
+            .is_ok());
+        assert!(SetRLSPrincipalTagsRequest::builder()
+            .collection_name("books")
+            .principal_name("alice")
+            .tags(serde_json::json!({"region": "west", "group": []}))
+            .build()
+            .is_ok());
     }
 
     #[test]

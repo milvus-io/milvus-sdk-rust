@@ -20,6 +20,7 @@ use milvus::v2 as sdk;
 use milvus::v2::error::Result;
 use milvus::v2::prelude::*;
 use serde_json::json;
+use std::collections::HashMap;
 use utils::*;
 
 #[tokio::main]
@@ -54,6 +55,8 @@ async fn main() -> Result<()> {
             sdk::request::collection::CreateCollectionRequest::builder()
                 .collection_name(COLLECTION)
                 .schema(schema)
+                // RLS is enforced only when the collection opts in via this property.
+                .properties(HashMap::from([("rls.enabled".to_owned(), "true".to_owned())]))
                 .build()?,
         )
         .await?;
