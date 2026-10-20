@@ -34,7 +34,11 @@ async fn create_and_list_row_policies_round_trip() {
                 .collection_name("books")
                 .policy_name("region_filter")
                 .policy_type(RowPolicyType::Restrictive)
-                .actions([RowPolicyAction::Query, RowPolicyAction::Search])
+                .actions([
+                    RowPolicyAction::Query,
+                    RowPolicyAction::Search,
+                    RowPolicyAction::Insert,
+                ])
                 .using_expr("region == 'west'")
                 .check_expr("region == 'west'")
                 .description("west only")
@@ -63,7 +67,11 @@ async fn create_and_list_row_policies_round_trip() {
     assert_eq!(policy.get_policy_type(), RowPolicyType::Restrictive);
     assert_eq!(
         policy.get_actions(),
-        [RowPolicyAction::Query, RowPolicyAction::Search]
+        [
+            RowPolicyAction::Query,
+            RowPolicyAction::Search,
+            RowPolicyAction::Insert,
+        ]
     );
     assert_eq!(policy.get_using_expr(), "region == 'west'");
     assert_eq!(policy.get_check_expr(), "region == 'west'");

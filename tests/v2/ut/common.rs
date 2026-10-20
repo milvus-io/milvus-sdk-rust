@@ -41,6 +41,44 @@ fn error_status(reason: impl Into<String>) -> common::Status {
     }
 }
 
+fn validate_policy_coupling(
+    actions: &[i32],
+    using_expr: &str,
+    check_expr: &str,
+) -> Option<common::Status> {
+    let needs_using = actions.iter().any(|action| {
+        matches!(
+            pb::RowPolicyAction::try_from(*action).ok(),
+            Some(
+                pb::RowPolicyAction::Query
+                    | pb::RowPolicyAction::Search
+                    | pb::RowPolicyAction::Delete
+                    | pb::RowPolicyAction::QueryIterator
+                    | pb::RowPolicyAction::SearchIterator
+                    | pb::RowPolicyAction::HybridSearch
+                    | pb::RowPolicyAction::Upsert
+            )
+        )
+    });
+    let needs_check = actions.iter().any(|action| {
+        matches!(
+            pb::RowPolicyAction::try_from(*action).ok(),
+            Some(pb::RowPolicyAction::Insert | pb::RowPolicyAction::Upsert)
+        )
+    });
+    if !using_expr.is_empty() && !needs_using {
+        return Some(error_status(
+            "RLS policy using_expr is not used by selected actions",
+        ));
+    }
+    if !check_expr.is_empty() && !needs_check {
+        return Some(error_status(
+            "RLS policy check_expr is not used by selected actions",
+        ));
+    }
+    None
+}
+
 fn database_name(value: String) -> String {
     if value.is_empty() {
         "default".into()
@@ -1039,7 +1077,11 @@ impl MilvusService for MockMilvus {
                 .row_policies
                 .entry((database, request.collection_name.clone()))
                 .or_default();
-            if policies
+            if let Some(status) =
+                validate_policy_coupling(&request.actions, &request.using_expr, &request.check_expr)
+            {
+                status
+            } else if policies
                 .iter()
                 .any(|policy| policy.policy_name == request.policy_name)
             {
@@ -1069,7 +1111,7 @@ impl MilvusService for MockMilvus {
                 .row_policies
                 .get_mut(&(database, request.collection_name.clone()))
             {
-                None => success_status(),
+                None => error_status("row policy does not exist"),
                 Some(policies) => match policies
                     .iter_mut()
                     .find(|policy| policy.policy_name == request.policy_name)

@@ -48,6 +48,8 @@ fn validate_policy_definition(
         ));
     }
     let mut seen = HashSet::new();
+    let mut needs_using_expr = false;
+    let mut needs_check_expr = false;
     for action in actions {
         if !seen.insert(action) {
             return Err(Error::validation(
@@ -55,37 +57,43 @@ fn validate_policy_definition(
                 "must not contain duplicate actions".into(),
             ));
         }
-        match action {
+        let uses_using_expr = matches!(
+            action,
             RowPolicyAction::Query
-            | RowPolicyAction::Search
-            | RowPolicyAction::Delete
-            | RowPolicyAction::QueryIterator
-            | RowPolicyAction::SearchIterator
-            | RowPolicyAction::HybridSearch => {
-                if using_expr.is_empty() {
-                    return Err(Error::validation(
-                        "using_expr".into(),
-                        format!("action {action:?} requires a non-empty using_expr"),
-                    ));
-                }
-            }
-            RowPolicyAction::Insert => {
-                if check_expr.is_empty() {
-                    return Err(Error::validation(
-                        "check_expr".into(),
-                        format!("action {action:?} requires a non-empty check_expr"),
-                    ));
-                }
-            }
-            RowPolicyAction::Upsert => {
-                if using_expr.is_empty() || check_expr.is_empty() {
-                    return Err(Error::validation(
-                        "check_expr".into(),
-                        format!("action {action:?} requires both using_expr and check_expr"),
-                    ));
-                }
-            }
+                | RowPolicyAction::Search
+                | RowPolicyAction::Delete
+                | RowPolicyAction::QueryIterator
+                | RowPolicyAction::SearchIterator
+                | RowPolicyAction::HybridSearch
+                | RowPolicyAction::Upsert
+        );
+        let uses_check_expr = matches!(action, RowPolicyAction::Insert | RowPolicyAction::Upsert);
+        needs_using_expr |= uses_using_expr;
+        needs_check_expr |= uses_check_expr;
+        if uses_using_expr && using_expr.is_empty() {
+            return Err(Error::validation(
+                "using_expr".into(),
+                format!("action {action:?} requires a non-empty using_expr"),
+            ));
         }
+        if uses_check_expr && check_expr.is_empty() {
+            return Err(Error::validation(
+                "check_expr".into(),
+                format!("action {action:?} requires a non-empty check_expr"),
+            ));
+        }
+    }
+    if !using_expr.is_empty() && !needs_using_expr {
+        return Err(Error::validation(
+            "using_expr".into(),
+            "is not used by the selected actions".into(),
+        ));
+    }
+    if !check_expr.is_empty() && !needs_check_expr {
+        return Err(Error::validation(
+            "check_expr".into(),
+            "is not used by the selected actions".into(),
+        ));
     }
     Ok(())
 }
@@ -305,6 +313,7 @@ impl CreateRowPolicyRequestBuilder {
     /// - `actions` contains duplicates
     /// - an action is missing the expression it uses (`using_expr` for read/delete actions,
     ///   `check_expr` for insert, both for upsert)
+    /// - an expression is supplied but no selected action uses it
     pub fn build(self) -> Result<CreateRowPolicyRequest> {
         required("collection_name", &self.value.collection_name)?;
         required("policy_name", &self.value.policy_name)?;
@@ -500,6 +509,7 @@ impl UpdateRowPolicyRequestBuilder {
     /// - `actions` contains duplicates
     /// - an action is missing the expression it uses (`using_expr` for read/delete actions,
     ///   `check_expr` for insert, both for upsert)
+    /// - an expression is supplied but no selected action uses it
     pub fn build(self) -> Result<UpdateRowPolicyRequest> {
         required("collection_name", &self.value.collection_name)?;
         required("policy_name", &self.value.policy_name)?;
@@ -1145,7 +1155,11 @@ mod tests {
             .collection_name("books")
             .policy_name("region_filter")
             .policy_type(RowPolicyType::Restrictive)
-            .actions([RowPolicyAction::Query, RowPolicyAction::Search])
+            .actions([
+                RowPolicyAction::Query,
+                RowPolicyAction::Search,
+                RowPolicyAction::Insert,
+            ])
             .using_expr("region == 'west'")
             .check_expr("region == 'west'")
             .description("restrict reads to west")
@@ -1157,7 +1171,11 @@ mod tests {
         assert_eq!(value.policy_type(), RowPolicyType::Restrictive);
         assert_eq!(
             value.actions(),
-            [RowPolicyAction::Query, RowPolicyAction::Search]
+            [
+                RowPolicyAction::Query,
+                RowPolicyAction::Search,
+                RowPolicyAction::Insert,
+            ]
         );
         assert_eq!(value.using_expr(), "region == 'west'");
         assert_eq!(value.check_expr(), "region == 'west'");
@@ -1175,7 +1193,8 @@ mod tests {
             proto.actions,
             vec![
                 RowPolicyAction::Query.into_proto(),
-                RowPolicyAction::Search.into_proto()
+                RowPolicyAction::Search.into_proto(),
+                RowPolicyAction::Insert.into_proto(),
             ]
         );
         assert!(proto.roles.is_empty());
@@ -1252,6 +1271,41 @@ mod tests {
             .policy_name("p")
             .policy_type(RowPolicyType::Permissive)
             .actions([RowPolicyAction::Insert])
+            .check_expr("region == 'west'")
+            .build()
+            .is_ok());
+    }
+
+    #[test]
+    fn policy_definition_rejects_unused_expressions() {
+        assert!(CreateRowPolicyRequest::builder()
+            .collection_name("books")
+            .policy_name("p")
+            .policy_type(RowPolicyType::Permissive)
+            .actions([RowPolicyAction::Query])
+            .using_expr("region == 'west'")
+            .check_expr("region == 'west'")
+            .build()
+            .is_err());
+        assert!(CreateRowPolicyRequest::builder()
+            .collection_name("books")
+            .policy_name("p")
+            .policy_type(RowPolicyType::Permissive)
+            .actions([RowPolicyAction::Insert])
+            .using_expr("region == 'west'")
+            .check_expr("region == 'west'")
+            .build()
+            .is_err());
+        assert!(CreateRowPolicyRequest::builder()
+            .collection_name("books")
+            .policy_name("p")
+            .policy_type(RowPolicyType::Permissive)
+            .actions([
+                RowPolicyAction::Query,
+                RowPolicyAction::Search,
+                RowPolicyAction::Insert,
+            ])
+            .using_expr("region == 'west'")
             .check_expr("region == 'west'")
             .build()
             .is_ok());
