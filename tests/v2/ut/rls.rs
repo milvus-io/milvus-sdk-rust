@@ -132,6 +132,7 @@ async fn drop_row_policy_removes_policy() {
                 .policy_name("region_filter")
                 .policy_type(RowPolicyType::Permissive)
                 .actions([RowPolicyAction::Query])
+                .using_expr("region == 'east'")
                 .build()
                 .expect("valid request"),
         )
@@ -176,6 +177,7 @@ async fn row_policy_requests_default_to_client_database() {
                 .policy_name("p")
                 .policy_type(RowPolicyType::Permissive)
                 .actions([RowPolicyAction::Query])
+                .using_expr("region == 'east'")
                 .build()
                 .expect("valid request"),
         )
@@ -195,13 +197,27 @@ async fn set_get_and_list_rls_principal_tags_round_trip() {
             SetRLSPrincipalTagsRequest::builder()
                 .collection_name("books")
                 .principal_name("alice")
-                .tags(serde_json::json!({"region": "west", "level": [1, 2]}))
+                .tags(serde_json::json!({"region": "west"}))
                 .build()
                 .expect("valid request"),
         )
         .await
         .expect("set principal tags");
     assert_eq!(server.service.call_count("set_rls_principal_tags"), 1);
+
+    // A subsequent call upserts only the provided keys onto the existing tags.
+    server
+        .client
+        .set_rls_principal_tags(
+            SetRLSPrincipalTagsRequest::builder()
+                .collection_name("books")
+                .principal_name("alice")
+                .tags(serde_json::json!({"level": [1, 2]}))
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("merge principal tags");
 
     let response = server
         .client

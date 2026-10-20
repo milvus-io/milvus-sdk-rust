@@ -597,7 +597,7 @@ impl MilvusService for MockMilvus {
         create_collection,
         pb::CreateCollectionRequest,
         |service, request| {
-            let database = database_name(request.db_name.clone());
+            let database = database_name(request.db_name);
             let schema =
                 schema::CollectionSchema::decode(request.schema.as_slice()).unwrap_or_default();
             let collection_id = if request.collection_name == "books" {
@@ -633,7 +633,7 @@ impl MilvusService for MockMilvus {
         drop_collection,
         pb::DropCollectionRequest,
         |service, request| {
-            let database = database_name(request.db_name.clone());
+            let database = database_name(request.db_name);
             let key = (database, request.collection_name);
             let mut state = service.state.lock().unwrap();
             state.collections.remove(&key);
@@ -646,7 +646,7 @@ impl MilvusService for MockMilvus {
         load_collection,
         pb::LoadCollectionRequest,
         |service, request| {
-            let database = database_name(request.db_name.clone());
+            let database = database_name(request.db_name);
             service
                 .state
                 .lock()
@@ -660,7 +660,7 @@ impl MilvusService for MockMilvus {
         release_collection,
         pb::ReleaseCollectionRequest,
         |service, request| {
-            let database = database_name(request.db_name.clone());
+            let database = database_name(request.db_name);
             service
                 .state
                 .lock()
@@ -674,7 +674,7 @@ impl MilvusService for MockMilvus {
         alter_collection,
         pb::AlterCollectionRequest,
         |service, request| {
-            let database = database_name(request.db_name.clone());
+            let database = database_name(request.db_name);
             if let Some(description) = service
                 .state
                 .lock()
@@ -743,7 +743,7 @@ impl MilvusService for MockMilvus {
         create_partition,
         pb::CreatePartitionRequest,
         |service, request| {
-            let database = database_name(request.db_name.clone());
+            let database = database_name(request.db_name);
             service
                 .state
                 .lock()
@@ -759,7 +759,7 @@ impl MilvusService for MockMilvus {
         drop_partition,
         pb::DropPartitionRequest,
         |service, request| {
-            let database = database_name(request.db_name.clone());
+            let database = database_name(request.db_name);
             if let Some(partitions) = service
                 .state
                 .lock()
@@ -817,7 +817,7 @@ impl MilvusService for MockMilvus {
         success_status()
     });
     status_method_with!(create_index, pb::CreateIndexRequest, |service, request| {
-        let database = database_name(request.db_name.clone());
+        let database = database_name(request.db_name);
         let index_name = if request.index_name.is_empty() {
             format!("{}_idx", request.field_name)
         } else {
@@ -843,7 +843,7 @@ impl MilvusService for MockMilvus {
     });
     status_method!(alter_index, pb::AlterIndexRequest);
     status_method_with!(drop_index, pb::DropIndexRequest, |service, request| {
-        let database = database_name(request.db_name.clone());
+        let database = database_name(request.db_name);
         service.state.lock().unwrap().indexes.remove(&(
             database,
             request.collection_name,
@@ -1114,11 +1114,26 @@ impl MilvusService for MockMilvus {
         |service, request| {
             let database = database_name(request.db_name.clone());
             let mut state = service.state.lock().unwrap();
+            // The server upserts only the provided keys onto the existing tags, so mirror that
+            // merge here to keep partial-tag round trips exerciseable.
+            let incoming = serde_json::from_str::<serde_json::Value>(&request.tags)
+                .unwrap_or(serde_json::Value::Object(Default::default()));
+            let mut stored: serde_json::Value = state
+                .principal_tags
+                .get(&(database.clone(), request.collection_name.clone()))
+                .and_then(|principals| principals.get(&request.principal_name))
+                .and_then(|tags| serde_json::from_str(tags).ok())
+                .unwrap_or(serde_json::Value::Object(Default::default()));
+            if let (Some(stored), Some(incoming)) = (stored.as_object_mut(), incoming.as_object()) {
+                for (key, value) in incoming {
+                    stored.insert(key.clone(), value.clone());
+                }
+            }
             state
                 .principal_tags
-                .entry((database, request.collection_name.clone()))
+                .entry((database, request.collection_name))
                 .or_default()
-                .insert(request.principal_name, request.tags);
+                .insert(request.principal_name, stored.to_string());
             success_status()
         }
     );
@@ -1414,7 +1429,7 @@ impl MilvusService for MockMilvus {
         pb::HasCollectionRequest,
         pb::BoolResponse,
         |service, request| {
-            let database = database_name(request.db_name.clone());
+            let database = database_name(request.db_name);
             pb::BoolResponse {
                 status: Some(success_status()),
                 value: service
@@ -1431,7 +1446,7 @@ impl MilvusService for MockMilvus {
         pb::DescribeCollectionRequest,
         pb::DescribeCollectionResponse,
         |service, request| {
-            let database = database_name(request.db_name.clone());
+            let database = database_name(request.db_name);
             let state = service.state.lock().unwrap();
             let collection = state
                 .aliases
@@ -1453,7 +1468,7 @@ impl MilvusService for MockMilvus {
         pb::BatchDescribeCollectionRequest,
         pb::BatchDescribeCollectionResponse,
         |service, request| {
-            let database = database_name(request.db_name.clone());
+            let database = database_name(request.db_name);
             let state = service.state.lock().unwrap();
             let responses = request
                 .collection_name
@@ -1493,7 +1508,7 @@ impl MilvusService for MockMilvus {
         pb::ShowCollectionsRequest,
         pb::ShowCollectionsResponse,
         |service, request| {
-            let database = database_name(request.db_name.clone());
+            let database = database_name(request.db_name);
             let state = service.state.lock().unwrap();
             let mut descriptions: Vec<_> = state
                 .collections
@@ -1547,7 +1562,7 @@ impl MilvusService for MockMilvus {
         pb::HasPartitionRequest,
         pb::BoolResponse,
         |service, request| {
-            let database = database_name(request.db_name.clone());
+            let database = database_name(request.db_name);
             pb::BoolResponse {
                 status: Some(success_status()),
                 value: service
@@ -1565,7 +1580,7 @@ impl MilvusService for MockMilvus {
         pb::ShowPartitionsRequest,
         pb::ShowPartitionsResponse,
         |service, request| {
-            let database = database_name(request.db_name.clone());
+            let database = database_name(request.db_name);
             let state = service.state.lock().unwrap();
             let mut partitions: Vec<_> = state
                 .partitions
@@ -1618,7 +1633,7 @@ impl MilvusService for MockMilvus {
         pb::GetLoadStateRequest,
         pb::GetLoadStateResponse,
         |service, request| {
-            let database = database_name(request.db_name.clone());
+            let database = database_name(request.db_name);
             let loaded = service
                 .state
                 .lock()
@@ -1701,7 +1716,7 @@ impl MilvusService for MockMilvus {
             }
             let first_delayed_poll = request.collection_name == "delayed_index_progress"
                 && service.call_count("describe_index") == 1;
-            let database = database_name(request.db_name.clone());
+            let database = database_name(request.db_name);
             let state = service.state.lock().unwrap();
             let mut indexes: Vec<_> = state
                 .indexes
@@ -1731,7 +1746,7 @@ impl MilvusService for MockMilvus {
         pb::GetIndexStatisticsRequest,
         pb::GetIndexStatisticsResponse,
         |service, request| {
-            let database = database_name(request.db_name.clone());
+            let database = database_name(request.db_name);
             let state = service.state.lock().unwrap();
             let indexes = state
                 .indexes

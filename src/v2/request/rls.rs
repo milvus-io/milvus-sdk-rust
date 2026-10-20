@@ -24,6 +24,7 @@ use crate::proto::milvus;
 use crate::v2::error::{Error, Result};
 use crate::v2::types::{RowPolicyAction, RowPolicyType};
 use serde_json::Value;
+use std::collections::HashSet;
 
 fn validate_policy_type(value: RowPolicyType) -> Result<()> {
     if matches!(value, RowPolicyType::Unknown) {
@@ -31,6 +32,29 @@ fn validate_policy_type(value: RowPolicyType) -> Result<()> {
             "policy_type".into(),
             "must be permissive or restrictive".into(),
         ));
+    }
+    Ok(())
+}
+
+fn validate_policy_definition(
+    using_expr: &str,
+    check_expr: &str,
+    actions: &[RowPolicyAction],
+) -> Result<()> {
+    if using_expr.is_empty() && check_expr.is_empty() {
+        return Err(Error::validation(
+            "using_expr".into(),
+            "at least one of using_expr or check_expr is required".into(),
+        ));
+    }
+    let mut seen = HashSet::new();
+    for action in actions {
+        if !seen.insert(action) {
+            return Err(Error::validation(
+                "actions".into(),
+                "must not contain duplicate actions".into(),
+            ));
+        }
     }
     Ok(())
 }
@@ -247,11 +271,18 @@ impl CreateRowPolicyRequestBuilder {
     /// - `policy_name` is empty
     /// - `actions` is empty
     /// - `policy_type` is [`RowPolicyType::Unknown`]
+    /// - both `using_expr` and `check_expr` are empty
+    /// - `actions` contains duplicates
     pub fn build(self) -> Result<CreateRowPolicyRequest> {
         required("collection_name", &self.value.collection_name)?;
         required("policy_name", &self.value.policy_name)?;
         required_slice("actions", &self.value.actions)?;
         validate_policy_type(self.value.policy_type)?;
+        validate_policy_definition(
+            &self.value.using_expr,
+            &self.value.check_expr,
+            &self.value.actions,
+        )?;
         Ok(self.value)
     }
 }
@@ -263,7 +294,9 @@ impl CreateRowPolicyRequestBuilder {
 ///
 /// Replace the named policy definition, preserving its server-side identity. The policy must
 /// exist. All definition fields replace their old values; omitted expressions and description
-/// become empty strings.
+/// become empty strings. `policy_type` is required: because the server replaces every definition
+/// field, an omitted type would silently reset the policy to permissive and could weaken a
+/// restrictive policy.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub struct UpdateRowPolicyRequest {
@@ -283,7 +316,7 @@ impl UpdateRowPolicyRequest {
             database_name: Default::default(),
             collection_name: Default::default(),
             policy_name: Default::default(),
-            policy_type: RowPolicyType::Permissive,
+            policy_type: RowPolicyType::Unknown,
             actions: Default::default(),
             using_expr: Default::default(),
             check_expr: Default::default(),
@@ -431,11 +464,18 @@ impl UpdateRowPolicyRequestBuilder {
     /// - `policy_name` is empty
     /// - `actions` is empty
     /// - `policy_type` is [`RowPolicyType::Unknown`]
+    /// - both `using_expr` and `check_expr` are empty
+    /// - `actions` contains duplicates
     pub fn build(self) -> Result<UpdateRowPolicyRequest> {
         required("collection_name", &self.value.collection_name)?;
         required("policy_name", &self.value.policy_name)?;
         required_slice("actions", &self.value.actions)?;
         validate_policy_type(self.value.policy_type)?;
+        validate_policy_definition(
+            &self.value.using_expr,
+            &self.value.check_expr,
+            &self.value.actions,
+        )?;
         Ok(self.value)
     }
 }
@@ -1120,13 +1160,46 @@ mod tests {
             .policy_type(RowPolicyType::Unknown)
             .build()
             .is_err());
-        let accepted = CreateRowPolicyRequest::builder()
+        assert!(CreateRowPolicyRequest::builder()
             .collection_name("books")
             .policy_name("p")
             .actions([RowPolicyAction::Query])
             .build()
+            .is_err());
+        assert!(CreateRowPolicyRequest::builder()
+            .collection_name("books")
+            .policy_name("p")
+            .actions([RowPolicyAction::Query, RowPolicyAction::Query])
+            .using_expr("region == 'west'")
+            .build()
+            .is_err());
+        let accepted = CreateRowPolicyRequest::builder()
+            .collection_name("books")
+            .policy_name("p")
+            .actions([RowPolicyAction::Query])
+            .using_expr("region == 'west'")
+            .build()
             .expect("defaults to permissive");
         assert_eq!(accepted.policy_type(), RowPolicyType::Permissive);
+    }
+
+    #[test]
+    fn update_row_policy_request_requires_policy_type() {
+        assert!(UpdateRowPolicyRequest::builder()
+            .collection_name("books")
+            .policy_name("p")
+            .actions([RowPolicyAction::Query])
+            .using_expr("region == 'west'")
+            .build()
+            .is_err());
+        assert!(UpdateRowPolicyRequest::builder()
+            .collection_name("books")
+            .policy_name("p")
+            .policy_type(RowPolicyType::Restrictive)
+            .actions([RowPolicyAction::Query])
+            .using_expr("region == 'west'")
+            .build()
+            .is_ok());
     }
 
     #[test]
