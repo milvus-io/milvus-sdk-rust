@@ -15,8 +15,12 @@
 // limitations under the License.
 
 use super::common::MockServer;
+use milvus::v2::request::dml::{DeleteRequest, InsertRequest, UpsertRequest};
+use milvus::v2::request::dql::{
+    HybridSearchRequest, QueryRequest, SearchRequest, SubSearchRequest,
+};
 use milvus::v2::request::rls::*;
-use milvus::v2::types::{RowPolicyAction, RowPolicyType};
+use milvus::v2::types::{FieldData, RowPolicyAction, RowPolicyType, SearchVectors};
 
 #[tokio::test]
 async fn create_and_list_row_policies_round_trip() {
@@ -319,4 +323,114 @@ async fn delete_rls_principal_tags_removes_selected_or_all_tags() {
         .expect("list principals");
     assert!(response.principal_names().is_empty());
     assert_eq!(server.service.call_count("delete_rls_principal_tags"), 2);
+}
+
+#[tokio::test]
+async fn dml_and_dql_requests_carry_rls_fields_on_the_wire() {
+    let server = MockServer::start().await;
+
+    let insert = InsertRequest::builder()
+        .collection_name("books")
+        .rls_principal("alice")
+        .columns(vec![
+            FieldData::Int64 {
+                name: "id".into(),
+                values: vec![1],
+            },
+            FieldData::VarChar {
+                name: "text".into(),
+                values: vec!["book".into()],
+            },
+            FieldData::FloatVector {
+                name: "vector".into(),
+                values: vec![vec![0.1, 0.2]],
+            },
+        ])
+        .build()
+        .expect("valid insert request");
+    server.client.insert(insert).await.expect("insert succeeds");
+    let text = server.service.request_text("insert");
+    assert!(text.contains("rls_principal: \"alice\""), "{text}");
+    assert!(text.contains("skip_rls: false"), "{text}");
+
+    let upsert = UpsertRequest::builder()
+        .insert(
+            InsertRequest::builder()
+                .collection_name("books")
+                .rls_principal("bob")
+                .skip_rls(true)
+                .columns(vec![
+                    FieldData::Int64 {
+                        name: "id".into(),
+                        values: vec![1],
+                    },
+                    FieldData::VarChar {
+                        name: "text".into(),
+                        values: vec!["book".into()],
+                    },
+                    FieldData::FloatVector {
+                        name: "vector".into(),
+                        values: vec![vec![0.1, 0.2]],
+                    },
+                ])
+                .build()
+                .expect("valid insert request"),
+        )
+        .build()
+        .expect("valid upsert request");
+    server.client.upsert(upsert).await.expect("upsert succeeds");
+    let text = server.service.request_text("upsert");
+    assert!(text.contains("rls_principal: \"bob\""), "{text}");
+    assert!(text.contains("skip_rls: true"), "{text}");
+
+    let delete = DeleteRequest::builder()
+        .collection_name("books")
+        .filter("id > 0")
+        .rls_principal("alice")
+        .build()
+        .expect("valid delete request");
+    server.client.delete(delete).await.expect("delete succeeds");
+    let text = server.service.request_text("delete");
+    assert!(text.contains("rls_principal: \"alice\""), "{text}");
+
+    let query = QueryRequest::builder()
+        .collection_name("books")
+        .filter("id > 0")
+        .rls_principal("alice")
+        .build()
+        .expect("valid query request");
+    server.client.query(query).await.expect("query succeeds");
+    let text = server.service.request_text("query");
+    assert!(text.contains("rls_principal: \"alice\""), "{text}");
+
+    let search = SearchRequest::builder()
+        .collection_name("books")
+        .vector_field("vector")
+        .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+        .limit(5)
+        .rls_principal("alice")
+        .build()
+        .expect("valid search request");
+    server.client.search(search).await.expect("search succeeds");
+    let text = server.service.request_text("search");
+    assert!(text.contains("rls_principal: \"alice\""), "{text}");
+
+    let hybrid = HybridSearchRequest::builder()
+        .collection_name("books")
+        .sub_requests(vec![SubSearchRequest::builder()
+            .vector_field("vector")
+            .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+            .limit(5)
+            .build()
+            .expect("valid sub-search request")])
+        .rls_principal("alice")
+        .build()
+        .expect("valid hybrid-search request");
+    server
+        .client
+        .hybrid_search(hybrid)
+        .await
+        .expect("hybrid search succeeds");
+    let text = server.service.request_text("hybrid_search");
+    assert!(text.contains("rls_principal: \"alice\""), "{text}");
 }

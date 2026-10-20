@@ -171,6 +171,8 @@ impl ClientV2 {
                                     .cloned()
                                     .map(crate::v2::types::FieldPartialUpdateOp::into_proto)
                                     .collect(),
+                                rls_principal: insert.rls_principal,
+                                skip_rls: insert.skip_rls,
                                 ..Default::default()
                             })
                         },

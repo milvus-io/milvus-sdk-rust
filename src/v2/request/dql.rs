@@ -78,6 +78,8 @@ pub struct QueryRequest {
     pub(crate) order_by_fields: Vec<OrderByField>,
     pub(crate) group_by_fields: Vec<String>,
     pub(crate) extra_params: HashMap<String, String>,
+    pub(crate) rls_principal: Option<String>,
+    pub(crate) skip_rls: bool,
 }
 
 impl QueryRequest {
@@ -98,6 +100,8 @@ impl QueryRequest {
             order_by_fields: Default::default(),
             group_by_fields: Default::default(),
             extra_params: Default::default(),
+            rls_principal: Default::default(),
+            skip_rls: Default::default(),
         }
     }
 
@@ -192,6 +196,16 @@ impl QueryRequest {
         &self.extra_params
     }
 
+    /// Returns the row-level security principal name.
+    pub fn rls_principal(&self) -> &Option<String> {
+        &self.rls_principal
+    }
+
+    /// Returns whether the request explicitly bypasses row-level security.
+    pub fn should_skip_rls(&self) -> bool {
+        self.skip_rls
+    }
+
     pub(crate) fn into_proto(
         self,
         default_db: &str,
@@ -271,6 +285,8 @@ impl QueryRequest {
             use_default_consistency: self.consistency_level.is_none(),
             expr_template_values,
             namespace: None,
+            rls_principal: self.rls_principal.unwrap_or_default(),
+            skip_rls: self.skip_rls,
             ..Default::default()
         })
     }
@@ -412,6 +428,22 @@ impl QueryRequestBuilder {
     /// Sets the extra params and returns the updated value.
     pub fn extra_params(mut self, value: HashMap<String, String>) -> Self {
         self.value.extra_params = value;
+        self
+    }
+
+    /// Sets the row-level security principal name and returns the updated value.
+    ///
+    /// Required on row-bearing requests against collections with RLS enabled unless
+    /// [`Self::skip_rls`] is set.
+    pub fn rls_principal(mut self, value: impl Into<String>) -> Self {
+        self.value.rls_principal = Some(value.into());
+        self
+    }
+
+    /// Sets whether the request explicitly bypasses row-level security and returns the updated
+    /// value.
+    pub fn skip_rls(mut self, value: bool) -> Self {
+        self.value.skip_rls = value;
         self
     }
 
@@ -641,6 +673,8 @@ pub struct SearchRequest {
     pub(crate) consistency_level: Option<ConsistencyLevel>,
     pub(crate) function_chains: Vec<FunctionChain>,
     pub(crate) search_aggregation: Option<SearchAggregation>,
+    pub(crate) rls_principal: Option<String>,
+    pub(crate) skip_rls: bool,
 }
 
 impl SearchRequest {
@@ -793,6 +827,16 @@ impl SearchRequest {
     /// Returns the search aggregation.
     pub fn search_aggregation(&self) -> &Option<SearchAggregation> {
         &self.search_aggregation
+    }
+
+    /// Returns the row-level security principal name.
+    pub fn rls_principal(&self) -> &Option<String> {
+        &self.rls_principal
+    }
+
+    /// Returns whether the request explicitly bypasses row-level security.
+    pub fn should_skip_rls(&self) -> bool {
+        self.skip_rls
     }
 
     #[allow(deprecated)]
@@ -1058,6 +1102,8 @@ impl SearchRequest {
                 .into_iter()
                 .map(FunctionChain::into_proto)
                 .collect(),
+            rls_principal: self.rls_principal.unwrap_or_default(),
+            skip_rls: self.skip_rls,
             ..Default::default()
         })
     }
@@ -1093,6 +1139,8 @@ impl SearchRequest {
             consistency_level: None,
             function_chains: Vec::new(),
             search_aggregation: None,
+            rls_principal: None,
+            skip_rls: false,
         }
     }
 }
@@ -1300,6 +1348,22 @@ impl SearchRequestBuilder {
     /// `offset` must remain zero.
     pub fn search_aggregation(mut self, value: SearchAggregation) -> Self {
         self.value.search_aggregation = Some(value);
+        self
+    }
+
+    /// Sets the row-level security principal name and returns the updated value.
+    ///
+    /// Required on row-bearing requests against collections with RLS enabled unless
+    /// [`Self::skip_rls`] is set.
+    pub fn rls_principal(mut self, value: impl Into<String>) -> Self {
+        self.value.rls_principal = Some(value.into());
+        self
+    }
+
+    /// Sets whether the request explicitly bypasses row-level security and returns the updated
+    /// value.
+    pub fn skip_rls(mut self, value: bool) -> Self {
+        self.value.skip_rls = value;
         self
     }
 
@@ -1565,6 +1629,8 @@ pub struct HybridSearchRequest {
     pub(crate) strict_group_size: bool,
     pub(crate) output_fields: Vec<String>,
     pub(crate) consistency_level: Option<ConsistencyLevel>,
+    pub(crate) rls_principal: Option<String>,
+    pub(crate) skip_rls: bool,
 }
 
 impl HybridSearchRequest {
@@ -1586,6 +1652,8 @@ impl HybridSearchRequest {
             strict_group_size: false,
             output_fields: Vec::new(),
             consistency_level: None,
+            rls_principal: None,
+            skip_rls: false,
         }
     }
 }
@@ -1683,6 +1751,16 @@ impl HybridSearchRequest {
         self.consistency_level
     }
 
+    /// Returns the row-level security principal name.
+    pub fn rls_principal(&self) -> &Option<String> {
+        &self.rls_principal
+    }
+
+    /// Returns whether the request explicitly bypasses row-level security.
+    pub fn should_skip_rls(&self) -> bool {
+        self.skip_rls
+    }
+
     pub(crate) fn into_proto(
         self,
         default_db: &str,
@@ -1763,6 +1841,8 @@ impl HybridSearchRequest {
                 .map(FunctionChain::into_proto)
                 .collect(),
             namespace: None,
+            rls_principal: self.rls_principal.unwrap_or_default(),
+            skip_rls: self.skip_rls,
             ..Default::default()
         })
     }
@@ -1879,6 +1959,25 @@ impl HybridSearchRequestBuilder {
     /// Sets the consistency level and returns the updated value.
     pub fn consistency_level(mut self, value: ConsistencyLevel) -> Self {
         self.value.consistency_level = Some(value);
+        self
+    }
+
+    /// Sets the row-level security principal name and returns the updated value.
+    ///
+    /// Required on row-bearing requests against collections with RLS enabled unless
+    /// [`Self::skip_rls`] is set. Applies to every sub-search and takes precedence over the
+    /// nested sub-search principal.
+    pub fn rls_principal(mut self, value: impl Into<String>) -> Self {
+        self.value.rls_principal = Some(value.into());
+        self
+    }
+
+    /// Sets whether the request explicitly bypasses row-level security and returns the updated
+    /// value.
+    ///
+    /// Applies to every sub-search and takes precedence over the nested sub-search flag.
+    pub fn skip_rls(mut self, value: bool) -> Self {
+        self.value.skip_rls = value;
         self
     }
 
@@ -3869,6 +3968,85 @@ mod builder_value_tests {
             value.consistency_level().to_owned(),
             Some(consistency_level)
         );
+    }
+
+    #[test]
+    fn query_request_carries_rls_principal_and_skip_rls() {
+        let value = QueryRequest::builder()
+            .collection_name("books")
+            .filter("region == 'west'")
+            .rls_principal("alice")
+            .build()
+            .expect("valid request");
+        assert_eq!(value.rls_principal().as_deref(), Some("alice"));
+        assert!(!value.should_skip_rls());
+        let proto = value
+            .into_proto("default", Some("id"), 0)
+            .expect("encode query");
+        assert_eq!(proto.rls_principal, "alice");
+        assert!(!proto.skip_rls);
+
+        let value = QueryRequest::builder()
+            .collection_name("books")
+            .filter("region == 'west'")
+            .skip_rls(true)
+            .build()
+            .expect("valid request");
+        assert!(value.should_skip_rls());
+        let proto = value
+            .into_proto("default", Some("id"), 0)
+            .expect("encode query");
+        assert!(proto.skip_rls);
+        assert!(proto.rls_principal.is_empty());
+    }
+
+    #[test]
+    fn search_request_carries_rls_principal_and_skip_rls() {
+        let value = SearchRequest::builder()
+            .collection_name("books")
+            .vectors(SearchVectors::Float(vec![vec![1.0, 2.0]]))
+            .rls_principal("alice")
+            .build()
+            .expect("valid request");
+        assert_eq!(value.rls_principal().as_deref(), Some("alice"));
+        let proto = value.into_proto("default", 0).expect("encode search");
+        assert_eq!(proto.rls_principal, "alice");
+        assert!(!proto.skip_rls);
+
+        let value = SearchRequest::builder()
+            .collection_name("books")
+            .vectors(SearchVectors::Float(vec![vec![1.0, 2.0]]))
+            .skip_rls(true)
+            .build()
+            .expect("valid request");
+        assert!(value.should_skip_rls());
+        let proto = value.into_proto("default", 0).expect("encode search");
+        assert!(proto.skip_rls);
+        assert!(proto.rls_principal.is_empty());
+    }
+
+    #[test]
+    fn hybrid_search_request_carries_rls_principal_and_skip_rls() {
+        let sub_request = SubSearchRequest::builder()
+            .vector_field("embedding")
+            .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+            .limit(3)
+            .build()
+            .expect("valid sub-request");
+        let value = HybridSearchRequest::builder()
+            .collection_name("books")
+            .sub_requests(vec![sub_request])
+            .rls_principal("alice")
+            .skip_rls(true)
+            .build()
+            .expect("valid request");
+        assert_eq!(value.rls_principal().as_deref(), Some("alice"));
+        assert!(value.should_skip_rls());
+        let proto = value
+            .into_proto("default", 0)
+            .expect("encode hybrid search");
+        assert_eq!(proto.rls_principal, "alice");
+        assert!(proto.skip_rls);
     }
 
     #[test]

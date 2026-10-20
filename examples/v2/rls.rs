@@ -160,6 +160,18 @@ async fn main() -> Result<()> {
         .await?;
     println!("principals with tags: {:?}", principals.principal_names());
 
+    // Query and search carry the caller's RLS principal so the server enforces the row policy.
+    let count = client
+        .query(
+            QueryRequest::builder()
+                .collection_name(COLLECTION)
+                .filter("count(*)")
+                .rls_principal(PRINCIPAL)
+                .build()?,
+        )
+        .await?;
+    println!("visible rows for {PRINCIPAL}: {}", count.results().len());
+
     // Remove a single tag, then remove all remaining tags.
     client
         .delete_rls_principal_tags(
