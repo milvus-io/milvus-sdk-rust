@@ -686,8 +686,8 @@ impl BulkImportRequest {
     pub fn should_skip_rls(&self) -> bool {
         self.options
             .get("skip_rls")
-            .and_then(Value::as_bool)
-            .unwrap_or(false)
+            .and_then(Value::as_str)
+            .map_or(false, |value| value.eq_ignore_ascii_case("true"))
     }
 
     fn empty() -> Self {
@@ -958,10 +958,14 @@ impl BulkImportRequestBuilder {
 
     /// Sets whether the import explicitly bypasses row-level security in the import options and
     /// returns the updated value.
+    ///
+    /// The REST import endpoint accepts string-typed option values only, so the flag is sent as
+    /// the lower-case string `"true"`/`"false"`, matching pymilvus and the Java SDK.
     pub fn skip_rls(mut self, value: bool) -> Self {
-        self.value
-            .options
-            .insert("skip_rls".into(), Value::Bool(value));
+        self.value.options.insert(
+            "skip_rls".into(),
+            Value::String(value.to_string().to_ascii_lowercase()),
+        );
         self
     }
 
@@ -1565,7 +1569,7 @@ mod tests {
                 "dbName": "",
                 "collectionName": "books",
                 "files": [["one.parquet"]],
-                "options": {"rls_principal": "alice", "skip_rls": true}
+                "options": {"rls_principal": "alice", "skip_rls": "true"}
             })
         );
 
