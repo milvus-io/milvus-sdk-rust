@@ -28,6 +28,7 @@ mod iterator;
 mod partition;
 mod rbac;
 mod resource_group;
+mod rls;
 mod utility;
 
 use milvus::v2::request::cdc::{DumpMessagesRequest, ReplicateMessageId, WalName};

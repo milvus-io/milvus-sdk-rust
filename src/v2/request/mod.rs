@@ -44,6 +44,7 @@ pub mod index;
 pub mod partition;
 pub mod rbac;
 pub mod resource_group;
+pub mod rls;
 pub mod utility;
 
 mod validation;
