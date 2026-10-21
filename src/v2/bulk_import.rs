@@ -677,6 +677,19 @@ impl BulkImportRequest {
         &self.options
     }
 
+    /// Returns the row-level security principal name carried in the import options, if any.
+    pub fn rls_principal(&self) -> Option<&str> {
+        self.options.get("rls_principal").and_then(Value::as_str)
+    }
+
+    /// Returns whether the import explicitly bypasses row-level security.
+    pub fn should_skip_rls(&self) -> bool {
+        self.options
+            .get("skip_rls")
+            .and_then(Value::as_str)
+            .map_or(false, |value| value.eq_ignore_ascii_case("true"))
+    }
+
     fn empty() -> Self {
         Self {
             database_name: String::new(),
@@ -927,6 +940,32 @@ impl BulkImportRequestBuilder {
     /// Sets the option and returns the updated value.
     pub fn option(mut self, key: impl Into<String>, value: impl Into<Value>) -> Self {
         self.value.options.insert(key.into(), value.into());
+        self
+    }
+
+    /// Sets the row-level security principal name in the import options and returns the updated
+    /// value.
+    ///
+    /// RLS-enabled collections reject imports whose rows do not satisfy the policy for this
+    /// principal unless [`Self::skip_rls`] is set. The server maps import options verbatim to the
+    /// underlying `ImportRequest.options` key-value pairs.
+    pub fn rls_principal(mut self, value: impl Into<String>) -> Self {
+        self.value
+            .options
+            .insert("rls_principal".into(), Value::String(value.into()));
+        self
+    }
+
+    /// Sets whether the import explicitly bypasses row-level security in the import options and
+    /// returns the updated value.
+    ///
+    /// The REST import endpoint accepts string-typed option values only, so the flag is sent as
+    /// the lower-case string `"true"`/`"false"`, matching pymilvus and the Java SDK.
+    pub fn skip_rls(mut self, value: bool) -> Self {
+        self.value.options.insert(
+            "skip_rls".into(),
+            Value::String(value.to_string().to_ascii_lowercase()),
+        );
         self
     }
 
@@ -1511,6 +1550,36 @@ mod tests {
                 "options": {"auto_commit": false}
             })
         );
+    }
+
+    #[test]
+    fn create_request_serializes_rls_principal_and_skip_rls_options() {
+        let request = BulkImportRequest::builder()
+            .collection_name("books")
+            .file("one.parquet")
+            .rls_principal("alice")
+            .skip_rls(true)
+            .build()
+            .expect("valid request");
+        assert_eq!(request.rls_principal(), Some("alice"));
+        assert!(request.should_skip_rls());
+        assert_eq!(
+            request.into_body(),
+            json!({
+                "dbName": "",
+                "collectionName": "books",
+                "files": [["one.parquet"]],
+                "options": {"rls_principal": "alice", "skip_rls": "true"}
+            })
+        );
+
+        let request = BulkImportRequest::builder()
+            .collection_name("books")
+            .file("one.parquet")
+            .build()
+            .expect("valid request");
+        assert_eq!(request.rls_principal(), None);
+        assert!(!request.should_skip_rls());
     }
 
     #[test]

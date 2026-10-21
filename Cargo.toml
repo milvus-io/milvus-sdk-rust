@@ -244,6 +244,10 @@ name = "v2_rerank_function"
 path = "examples/v2/rerank_function.rs"
 
 [[example]]
+name = "v2_rls"
+path = "examples/v2/rls.rs"
+
+[[example]]
 name = "v2_run_analyzer"
 path = "examples/v2/run_analyzer.rs"
 

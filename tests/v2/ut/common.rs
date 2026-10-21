@@ -32,6 +32,55 @@ fn success_status() -> common::Status {
     common::Status::default()
 }
 
+fn error_status(reason: impl Into<String>) -> common::Status {
+    common::Status {
+        code: 800,
+        error_code: common::ErrorCode::UnexpectedError as i32,
+        reason: reason.into(),
+        ..Default::default()
+    }
+}
+
+fn validate_policy_coupling(
+    actions: &[i32],
+    using_expr: &str,
+    check_expr: &str,
+) -> Option<common::Status> {
+    let using_expr_empty = using_expr.trim().is_empty();
+    let check_expr_empty = check_expr.trim().is_empty();
+    let needs_using = actions.iter().any(|action| {
+        matches!(
+            pb::RowPolicyAction::try_from(*action).ok(),
+            Some(
+                pb::RowPolicyAction::Query
+                    | pb::RowPolicyAction::Search
+                    | pb::RowPolicyAction::Delete
+                    | pb::RowPolicyAction::QueryIterator
+                    | pb::RowPolicyAction::SearchIterator
+                    | pb::RowPolicyAction::HybridSearch
+                    | pb::RowPolicyAction::Upsert
+            )
+        )
+    });
+    let needs_check = actions.iter().any(|action| {
+        matches!(
+            pb::RowPolicyAction::try_from(*action).ok(),
+            Some(pb::RowPolicyAction::Insert | pb::RowPolicyAction::Upsert)
+        )
+    });
+    if !using_expr_empty && !needs_using {
+        return Some(error_status(
+            "RLS policy using_expr is not used by selected actions",
+        ));
+    }
+    if !check_expr_empty && !needs_check {
+        return Some(error_status(
+            "RLS policy check_expr is not used by selected actions",
+        ));
+    }
+    None
+}
+
 fn database_name(value: String) -> String {
     if value.is_empty() {
         "default".into()
@@ -62,6 +111,8 @@ struct MockState {
     user_roles: HashSet<(String, String)>,
     grants: Vec<pb::GrantEntity>,
     privilege_groups: HashMap<String, HashSet<String>>,
+    row_policies: HashMap<(String, String), Vec<pb::RowPolicy>>,
+    principal_tags: HashMap<(String, String), HashMap<String, String>>,
 }
 
 impl Default for MockState {
@@ -102,6 +153,8 @@ impl Default for MockState {
             user_roles: HashSet::new(),
             grants: Vec::new(),
             privilege_groups: HashMap::new(),
+            row_policies: HashMap::new(),
+            principal_tags: HashMap::new(),
         }
     }
 }
@@ -670,7 +723,7 @@ impl MilvusService for MockMilvus {
         alter_collection,
         pb::AlterCollectionRequest,
         |service, request| {
-            let database = database_name(request.db_name.clone());
+            let database = database_name(request.db_name);
             if let Some(description) = service
                 .state
                 .lock()
@@ -1011,6 +1064,202 @@ impl MilvusService for MockMilvus {
                     privileges.insert(privilege.name);
                 } else {
                     privileges.remove(&privilege.name);
+                }
+            }
+            success_status()
+        }
+    );
+    status_method_with!(
+        create_row_policy,
+        pb::CreateRowPolicyRequest,
+        |service, request| {
+            let database = database_name(request.db_name.clone());
+            let mut state = service.state.lock().unwrap();
+            let policies = state
+                .row_policies
+                .entry((database, request.collection_name.clone()))
+                .or_default();
+            if let Some(status) =
+                validate_policy_coupling(&request.actions, &request.using_expr, &request.check_expr)
+            {
+                status
+            } else if policies
+                .iter()
+                .any(|policy| policy.policy_name == request.policy_name)
+            {
+                error_status("row policy already exists")
+            } else {
+                policies.push(pb::RowPolicy {
+                    policy_name: request.policy_name,
+                    actions: request.actions,
+                    roles: Vec::new(),
+                    using_expr: request.using_expr,
+                    check_expr: request.check_expr,
+                    description: request.description,
+                    created_at: 0,
+                    policy_type: request.policy_type.unwrap_or_default(),
+                });
+                success_status()
+            }
+        }
+    );
+    status_method_with!(
+        update_row_policy,
+        pb::UpdateRowPolicyRequest,
+        |service, request| {
+            let database = database_name(request.db_name.clone());
+            let mut state = service.state.lock().unwrap();
+            match state
+                .row_policies
+                .get_mut(&(database, request.collection_name.clone()))
+            {
+                None => error_status("row policy does not exist"),
+                Some(policies) => match policies
+                    .iter_mut()
+                    .find(|policy| policy.policy_name == request.policy_name)
+                {
+                    None => error_status("row policy does not exist"),
+                    Some(policy) => {
+                        policy.actions = request.actions;
+                        policy.using_expr = request.using_expr;
+                        policy.check_expr = request.check_expr;
+                        policy.description = request.description;
+                        policy.policy_type = request.policy_type;
+                        success_status()
+                    }
+                },
+            }
+        }
+    );
+    status_method_with!(
+        drop_row_policy,
+        pb::DropRowPolicyRequest,
+        |service, request| {
+            let database = database_name(request.db_name.clone());
+            let mut state = service.state.lock().unwrap();
+            if let Some(policies) = state
+                .row_policies
+                .get_mut(&(database, request.collection_name.clone()))
+            {
+                policies.retain(|policy| policy.policy_name != request.policy_name);
+            }
+            success_status()
+        }
+    );
+    response_method_with!(
+        list_row_policies,
+        pb::ListRowPoliciesRequest,
+        pb::ListRowPoliciesResponse,
+        |service, request| {
+            let database = database_name(request.db_name.clone());
+            let state = service.state.lock().unwrap();
+            let mut policies = state
+                .row_policies
+                .get(&(database, request.collection_name.clone()))
+                .cloned()
+                .unwrap_or_default();
+            policies.sort_by(|left, right| left.policy_name.cmp(&right.policy_name));
+            pb::ListRowPoliciesResponse {
+                status: Some(success_status()),
+                policies,
+                db_name: request.db_name,
+                collection_name: request.collection_name,
+            }
+        }
+    );
+    status_method_with!(
+        set_rls_principal_tags,
+        pb::SetRlsPrincipalTagsRequest,
+        |service, request| {
+            let database = database_name(request.db_name.clone());
+            let mut state = service.state.lock().unwrap();
+            // The server upserts only the provided keys onto the existing tags, so mirror that
+            // merge here to keep partial-tag round trips exerciseable.
+            let incoming = serde_json::from_str::<serde_json::Value>(&request.tags)
+                .unwrap_or(serde_json::Value::Object(Default::default()));
+            let mut stored: serde_json::Value = state
+                .principal_tags
+                .get(&(database.clone(), request.collection_name.clone()))
+                .and_then(|principals| principals.get(&request.principal_name))
+                .and_then(|tags| serde_json::from_str(tags).ok())
+                .unwrap_or(serde_json::Value::Object(Default::default()));
+            if let (Some(stored), Some(incoming)) = (stored.as_object_mut(), incoming.as_object()) {
+                for (key, value) in incoming {
+                    stored.insert(key.clone(), value.clone());
+                }
+            }
+            state
+                .principal_tags
+                .entry((database, request.collection_name))
+                .or_default()
+                .insert(request.principal_name, stored.to_string());
+            success_status()
+        }
+    );
+    response_method_with!(
+        get_rls_principal_tags,
+        pb::GetRlsPrincipalTagsRequest,
+        pb::GetRlsPrincipalTagsResponse,
+        |service, request| {
+            let database = database_name(request.db_name.clone());
+            let state = service.state.lock().unwrap();
+            let tags = state
+                .principal_tags
+                .get(&(database, request.collection_name.clone()))
+                .and_then(|principals| principals.get(&request.principal_name))
+                .cloned()
+                .unwrap_or_else(|| "{}".into());
+            pb::GetRlsPrincipalTagsResponse {
+                status: Some(success_status()),
+                tags,
+                db_name: request.db_name,
+                collection_name: request.collection_name,
+                principal_name: request.principal_name,
+            }
+        }
+    );
+    response_method_with!(
+        list_rls_principals,
+        pb::ListRlsPrincipalsRequest,
+        pb::ListRlsPrincipalsResponse,
+        |service, request| {
+            let database = database_name(request.db_name.clone());
+            let state = service.state.lock().unwrap();
+            let mut principals: Vec<String> = state
+                .principal_tags
+                .get(&(database, request.collection_name.clone()))
+                .map(|principals| principals.keys().cloned().collect())
+                .unwrap_or_default();
+            principals.sort();
+            pb::ListRlsPrincipalsResponse {
+                status: Some(success_status()),
+                principal_names: principals,
+                db_name: request.db_name,
+                collection_name: request.collection_name,
+            }
+        }
+    );
+    status_method_with!(
+        delete_rls_principal_tags,
+        pb::DeleteRlsPrincipalTagsRequest,
+        |service, request| {
+            let database = database_name(request.db_name.clone());
+            let mut state = service.state.lock().unwrap();
+            if let Some(principals) = state
+                .principal_tags
+                .get_mut(&(database, request.collection_name.clone()))
+            {
+                if let Some(tags) = principals.get_mut(&request.principal_name) {
+                    if request.tag_keys.is_empty() {
+                        principals.remove(&request.principal_name);
+                    } else if let Ok(mut object) = serde_json::from_str::<serde_json::Value>(tags) {
+                        if let Some(object) = object.as_object_mut() {
+                            for key in request.tag_keys {
+                                object.remove(&key);
+                            }
+                            *tags = serde_json::Value::Object(object.clone()).to_string();
+                        }
+                    }
                 }
             }
             success_status()
