@@ -32,7 +32,7 @@ use std::time::Duration;
 ///   and [`crate::v2::request::dql::GetRequest::builder`] to set consistency on a read request.
 /// - [`crate::v2::request::collection::CreateCollectionRequest::builder`] to set the collection default.
 /// - [`crate::v2::ClientV2::query`] and [`crate::v2::ClientV2::search`] for the client operations.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ConsistencyLevel {
     /// Reads see all data committed before the request starts. Strongest guarantee, highest latency.
@@ -45,13 +45,27 @@ pub enum ConsistencyLevel {
     Bounded,
     /// Reads may see data from some time in the past. Weakest guarantee, lowest latency.
     Eventually,
-    #[default]
+    #[deprecated(
+        note = "Prefer leaving the consistency level unset so the request uses the default."
+    )]
     /// Lets the server apply its own configured consistency policy when the request carries no
     /// explicit setting.
+    ///
+    /// Deprecated: the Java SDK removed this value and the Node SDK deprecated it; the proto
+    /// documents that Customized means callers pass their own guarantee_timestamp. Prefer leaving
+    /// the consistency level unset so the request uses the default.
     Customized,
 }
 
+impl Default for ConsistencyLevel {
+    #[allow(deprecated)]
+    fn default() -> Self {
+        Self::Customized
+    }
+}
+
 impl ConsistencyLevel {
+    #[allow(deprecated)]
     pub(crate) fn into_proto(self) -> common::ConsistencyLevel {
         match self {
             Self::Strong => common::ConsistencyLevel::Strong,
@@ -62,6 +76,7 @@ impl ConsistencyLevel {
         }
     }
 
+    #[allow(deprecated)]
     pub(crate) fn from_proto(value: i32) -> Self {
         match common::ConsistencyLevel::try_from(value).ok() {
             Some(common::ConsistencyLevel::Strong) => Self::Strong,
@@ -4418,6 +4433,7 @@ mod enum_conversion_tests {
     use super::*;
 
     #[test]
+    #[allow(deprecated)]
     fn consistency_level_round_trips_proto() {
         let values = [
             ConsistencyLevel::Strong,
@@ -4437,6 +4453,12 @@ mod enum_conversion_tests {
             ConsistencyLevel::from_proto(i32::MAX),
             ConsistencyLevel::Customized
         );
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn consistency_level_default_is_preserved() {
+        assert_eq!(ConsistencyLevel::default(), ConsistencyLevel::Customized);
     }
 
     #[test]
