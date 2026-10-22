@@ -32,6 +32,7 @@ fn success_status() -> common::Status {
     common::Status::default()
 }
 
+#[allow(deprecated)]
 fn error_status(reason: impl Into<String>) -> common::Status {
     common::Status {
         code: 800,

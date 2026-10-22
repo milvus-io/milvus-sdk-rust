@@ -1795,6 +1795,7 @@ impl CollectionDesc {
     }
 
     /// Returns the consistency level name, e.g. `"Strong"`, `"Bounded"`.
+    #[allow(deprecated)]
     pub fn consistency_level_name(&self) -> &'static str {
         match self.consistency_level {
             ConsistencyLevel::Strong => "Strong",
