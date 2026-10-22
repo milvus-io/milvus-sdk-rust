@@ -540,6 +540,7 @@ impl CollectionTsCache {
         collection: &str,
         consistency: ConsistencyLevel,
     ) -> u64 {
+        #[allow(deprecated)]
         match consistency {
             ConsistencyLevel::Strong | ConsistencyLevel::Customized => 0,
             ConsistencyLevel::Eventually => 1,

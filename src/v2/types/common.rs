@@ -26,7 +26,7 @@ use std::time::Duration;
 // ConsistencyLevel
 ///////////////////////////////////////////////////////////////////////////////
 /// Consistency guarantee used by query and search operations.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ConsistencyLevel {
     /// Represents the Strong case.
@@ -37,12 +37,26 @@ pub enum ConsistencyLevel {
     Bounded,
     /// Represents the Eventually case.
     Eventually,
-    #[default]
+    #[deprecated(
+        note = "Prefer leaving the consistency level unset so the request uses the default."
+    )]
     /// Represents the Customized case.
+    ///
+    /// Deprecated: the Java SDK removed this value and the Node SDK deprecated it; the proto
+    /// documents that Customized means callers pass their own guarantee_timestamp. Prefer leaving
+    /// the consistency level unset so the request uses the default.
     Customized,
 }
 
+impl Default for ConsistencyLevel {
+    #[allow(deprecated)]
+    fn default() -> Self {
+        Self::Customized
+    }
+}
+
 impl ConsistencyLevel {
+    #[allow(deprecated)]
     pub(crate) fn into_proto(self) -> common::ConsistencyLevel {
         match self {
             Self::Strong => common::ConsistencyLevel::Strong,
@@ -53,6 +67,7 @@ impl ConsistencyLevel {
         }
     }
 
+    #[allow(deprecated)]
     pub(crate) fn from_proto(value: i32) -> Self {
         match common::ConsistencyLevel::try_from(value).ok() {
             Some(common::ConsistencyLevel::Strong) => Self::Strong,
@@ -3641,6 +3656,7 @@ mod enum_conversion_tests {
     use super::*;
 
     #[test]
+    #[allow(deprecated)]
     fn consistency_level_round_trips_proto() {
         let values = [
             ConsistencyLevel::Strong,
@@ -3660,6 +3676,12 @@ mod enum_conversion_tests {
             ConsistencyLevel::from_proto(i32::MAX),
             ConsistencyLevel::Customized
         );
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn consistency_level_default_is_preserved() {
+        assert_eq!(ConsistencyLevel::default(), ConsistencyLevel::Customized);
     }
 
     #[test]
