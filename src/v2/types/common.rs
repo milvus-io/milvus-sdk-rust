@@ -49,8 +49,9 @@ pub enum ConsistencyLevel {
     /// Lets the server apply its own configured consistency policy when the request carries no
     /// explicit setting.
     ///
-    /// Deprecated: newer SDKs (Java, C++) no longer expose this value, and the proto marks it
-    /// deprecated. Prefer leaving the consistency level unset so the request uses the default.
+    /// Deprecated: the Java SDK removed this value and the Node SDK deprecated it; the proto
+    /// documents that Customized means callers pass their own guarantee_timestamp. Prefer leaving
+    /// the consistency level unset so the request uses the default.
     Customized,
 }
 
@@ -4450,6 +4451,12 @@ mod enum_conversion_tests {
             ConsistencyLevel::from_proto(i32::MAX),
             ConsistencyLevel::Customized
         );
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn consistency_level_default_is_preserved() {
+        assert_eq!(ConsistencyLevel::default(), ConsistencyLevel::Customized);
     }
 
     #[test]
