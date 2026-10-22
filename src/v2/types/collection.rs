@@ -730,6 +730,7 @@ pub struct StructFieldSchema {
     pub(crate) description: String,
     pub(crate) max_capacity: u32,
     pub(crate) fields: Vec<FieldSchema>,
+    pub(crate) type_params: HashMap<String, String>,
 }
 
 impl StructFieldSchema {
@@ -740,6 +741,7 @@ impl StructFieldSchema {
             description: String::new(),
             max_capacity: 0,
             fields: Vec::new(),
+            type_params: HashMap::new(),
         }
     }
 
@@ -814,6 +816,42 @@ impl StructFieldSchema {
     /// Adds one add field to the existing values.
     pub fn add_field(mut self, field: FieldSchema) -> Self {
         self.fields.push(field);
+        self
+    }
+
+    /// Sets the type params and returns the updated value.
+    ///
+    /// Existing entries are preserved: a key already present is never overwritten, so use
+    /// [`Self::type_param`] before a key exists (e.g. `mmap.enabled`) to set or update it.
+    pub fn type_params(mut self, value: HashMap<String, String>) -> Self {
+        for (key, value) in value {
+            self.type_params.entry(key).or_insert(value);
+        }
+        self
+    }
+
+    /// Sets the type params and returns this value for further mutation.
+    ///
+    /// Existing entries are preserved: a key already present is never overwritten, so use
+    /// [`Self::type_param`] before a key exists (e.g. `mmap.enabled`) to set or update it.
+    pub fn set_type_params(&mut self, value: HashMap<String, String>) -> &mut Self {
+        for (key, value) in value {
+            self.type_params.entry(key).or_insert(value);
+        }
+        self
+    }
+
+    /// Returns the configured type params.
+    pub fn get_type_params(&self) -> &HashMap<String, String> {
+        &self.type_params
+    }
+
+    /// Sets the type param and returns the updated value.
+    ///
+    /// The parameter is inserted only if the key is not already present, matching
+    /// [`FieldSchema::type_param`] and the merge semantics of [`Self::type_params`].
+    pub fn type_param(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.type_params.entry(key.into()).or_insert(value.into());
         self
     }
 
@@ -942,7 +980,15 @@ impl StructFieldSchema {
                     value
                 })
                 .collect(),
-            type_params: Vec::new(),
+            type_params: self
+                .type_params
+                .into_iter()
+                .map(|(key, value)| common::KeyValuePair {
+                    key,
+                    value,
+                    ..Default::default()
+                })
+                .collect(),
         }
     }
 
@@ -982,6 +1028,11 @@ impl StructFieldSchema {
             name: value.name,
             description: value.description,
             max_capacity,
+            type_params: value
+                .type_params
+                .into_iter()
+                .map(|pair| (pair.key, pair.value))
+                .collect(),
             fields: value
                 .fields
                 .into_iter()
@@ -2952,6 +3003,40 @@ mod constructor_value_tests {
         assert!(value.get_description().is_empty());
         assert_eq!(value.get_max_capacity().to_owned(), 0);
         assert!(value.get_fields().is_empty());
+        assert!(value.get_type_params().is_empty());
+    }
+
+    #[test]
+    fn struct_field_schema_carries_type_params_on_the_wire() {
+        let value = StructFieldSchema::new()
+            .name("items")
+            .max_capacity(16)
+            .add_field(
+                FieldSchema::new()
+                    .name("text")
+                    .data_type(DataType::VarChar)
+                    .max_length(128),
+            )
+            .type_param("mmap.enabled", "true")
+            .type_param("warmup", "full")
+            .type_param("custom", "value");
+
+        assert_eq!(value.get_type_params()["mmap.enabled"], "true");
+        assert_eq!(value.get_type_params()["warmup"], "full");
+        assert_eq!(value.get_type_params()["custom"], "value");
+
+        let proto = value.clone().into_proto();
+        let wire = proto
+            .type_params
+            .iter()
+            .map(|pair| (pair.key.clone(), pair.value.clone()))
+            .collect::<HashMap<_, _>>();
+        assert_eq!(wire.get("mmap.enabled").map(String::as_str), Some("true"));
+        assert_eq!(wire.get("warmup").map(String::as_str), Some("full"));
+        assert_eq!(wire.get("custom").map(String::as_str), Some("value"));
+
+        let round_tripped = StructFieldSchema::from_proto(proto).expect("decode struct field");
+        assert_eq!(round_tripped.get_type_params(), value.get_type_params());
     }
 
     #[test]
