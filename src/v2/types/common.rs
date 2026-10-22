@@ -37,7 +37,9 @@ pub enum ConsistencyLevel {
     Bounded,
     /// Represents the Eventually case.
     Eventually,
-    #[deprecated]
+    #[deprecated(
+        note = "Prefer leaving the consistency level unset so the request uses the default."
+    )]
     /// Represents the Customized case.
     ///
     /// Deprecated: the Java SDK removed this value and the Node SDK deprecated it; the proto

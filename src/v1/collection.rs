@@ -94,7 +94,6 @@ fn guarantee_timestamp_from_explicit(
     cached_timestamp: Option<Timestamp>,
     consistency_level: ConsistencyLevel,
 ) -> Timestamp {
-    #[allow(deprecated)]
     match consistency_level {
         ConsistencyLevel::Strong => 0,
         ConsistencyLevel::Bounded => 2,
