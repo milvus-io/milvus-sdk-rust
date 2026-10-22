@@ -45,7 +45,9 @@ pub enum ConsistencyLevel {
     Bounded,
     /// Reads may see data from some time in the past. Weakest guarantee, lowest latency.
     Eventually,
-    #[deprecated]
+    #[deprecated(
+        note = "Prefer leaving the consistency level unset so the request uses the default."
+    )]
     /// Lets the server apply its own configured consistency policy when the request carries no
     /// explicit setting.
     ///
