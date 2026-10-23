@@ -71,6 +71,16 @@ jobs:
       - name: Check V2 API conventions
         run: python3 scripts/check_v2_api.py
 
+      # Cargo.lock is gitignored in this repository, so resolve a fresh lockfile
+      # before auditing. The generated lockfile is a working-tree artifact only.
+      - name: Generate lockfile for dependency audit
+        run: cargo generate-lockfile
+
+      - name: Audit dependencies
+        uses: rustsec/audit-check@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Check documentation
         env:
           RUSTDOCFLAGS: -D warnings -A rustdoc::bare-urls
