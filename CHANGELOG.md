@@ -1,5 +1,45 @@
 # Changelog
 
+## milvus-sdk-rust 3.0.3 (2026-10-23)
+
+### Feature
+
+- Add row-level security (RLS): create/update/drop/list row policies, set/get/list/delete
+  principal tags, and `rls_principal` / `skip_rls` enforcement on insert, upsert, delete,
+  query, search, hybrid search, and the corresponding iterators
+- Expose query-level group-by aggregation through `QueryRequest.group_by_fields`, combined
+  with aggregate expressions such as `count(*)`, `sum(field)`, `min(field)`, `max(field)`,
+  or `avg(field)` in `output_fields`
+- Add `DataType::Text` for BM25-backed text fields (DML/DQL accept VarChar data against a
+  Text schema); add `HybridSearchRequest.function_chains`; default
+  `DescribeReplicasRequest.with_shard_nodes` to `true`
+- Add `list_compaction_tasks` and enrich compaction/segment observability:
+  `GetCompactionPlansResponse` carries `collection_name` and the full `CompactionMergeInfo`
+  fields (`plan_id`, `trigger_id`, `state`, `failure_reason`, `targets`, ...), and
+  `PersistentSegmentInfo` exposes `insert_channel` / `compaction_from`
+- Add bulk-import `commit_import` / `abort_import` APIs and the `DescribeImportRequest` alias
+- Support struct-level `type_params` (`mmap.enabled`, `warmup`) on `StructFieldSchema`
+- Close C++/Java parity gaps: `SearchIteratorRequest.external_filter_func` page filter,
+  `QueryResponse` `cost` / `scanned_remote_bytes` / `scanned_total_bytes` / `cache_hit_ratio`,
+  `DeleteRequest.consistency_level`, `GetCompactionPlansResponse.compaction_id`,
+  `RefreshExternalCollectionJobInfo.external_spec`, `FunctionType::MolFingerprint`,
+  `ClusterCapability::PRIMARY`, `ConnectConfig` `username` / `password` / `secure`, and
+  `PartitionInfo.in_memory_percentage` / `loaded`
+
+### Bug
+
+- Decode empty `Timestamptz` `LongData` responses on empty query/iterator pages instead of
+  treating them as malformed
+- Emit the `reranker` parameter for RRF and weighted rerankers so the Milvus FunctionScore
+  path accepts them
+
+### Improvement
+
+- Deprecate `ConsistencyLevel::Customized` to match newer SDKs and the proto; behavior is
+  unchanged for existing client code (the variant still encodes/decodes as proto value 4).
+  Leave the consistency level unset to use the server default.
+- Tag Zilliz Cloud only public APIs with a `**Zilliz Cloud only.**` rustdoc marker
+
 ## milvus-sdk-rust 3.0.2 (2026-09-16)
 
 ### Feature
