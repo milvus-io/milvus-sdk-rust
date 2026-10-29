@@ -156,7 +156,7 @@ async fn search_iterator_pulls_the_next_page_when_the_whole_page_is_pruned() {
 
     assert!(iterator.next().await.expect("finish iterator").is_none());
 
-    // The probe plus the pruned first page, then a pulled page carrying the search token.
+    // The cached real first page was pruned, then a token-bearing request pulled the next page.
     let requests = server.service.request_texts("search");
     assert!(requests
         .iter()
@@ -471,17 +471,15 @@ async fn search_iterator_falls_back_to_legacy_range_search() {
         .is_none());
 
     let requests = server.service.request_texts("search");
-    assert_eq!(requests.len(), 3);
+    assert_eq!(requests.len(), 2);
     assert!(requests[0].contains("search_iter_v2"));
     assert!(!requests[1].contains("search_iter_v2"));
-    assert!(!requests[2].contains("search_iter_v2"));
     assert!(!requests[0].contains("metric_type"));
     assert!(requests[1].contains("key: \"metric_type\", value: \"COSINE\""));
-    assert!(requests[2].contains("key: \"metric_type\", value: \"COSINE\""));
-    assert!(requests[2].contains("range_filter"));
-    assert!(requests[2].contains("radius"));
-    assert!(requests[2].contains("id not in [2]"));
-    assert_eq!(guarantee_timestamp(&requests[2]), 301);
+    assert!(requests[1].contains("range_filter"));
+    assert!(requests[1].contains("radius"));
+    assert!(requests[1].contains("id not in [2]"));
+    assert_eq!(guarantee_timestamp(&requests[1]), 301);
     assert_eq!(server.service.call_count("describe_index"), 1);
     assert_eq!(server.service.call_count("describe_collection"), 2);
 
@@ -622,7 +620,7 @@ async fn iterators_treat_empty_database_name_as_the_selected_database() {
 }
 
 #[tokio::test]
-async fn iterators_pin_a_client_timestamp_when_probe_session_ts_is_zero() {
+async fn query_iterator_fallback_timestamp_and_legacy_search_live_reads() {
     let server = MockServer::start().await;
     let client = &server.client;
 
@@ -683,17 +681,18 @@ async fn iterators_pin_a_client_timestamp_when_probe_session_ts_is_zero() {
         .is_none());
 
     let search_requests = server.service.request_texts("search");
-    assert_eq!(search_requests.len(), 3);
+    assert_eq!(search_requests.len(), 2);
     assert_eq!(guarantee_timestamp(&search_requests[0]), 0);
-    let search_fallback = guarantee_timestamp(&search_requests[1]);
-    assert_hybrid_timestamp(search_fallback);
-    assert_eq!(guarantee_timestamp(&search_requests[2]), search_fallback);
-
+    assert_eq!(
+        guarantee_timestamp(&search_requests[1]),
+        0,
+        "old V2 without session_ts preserves live semantics"
+    );
     server.shutdown().await;
 }
 
 #[tokio::test]
-async fn search_iterator_does_not_advance_state_when_decoding_fails() {
+async fn search_iterator_reuses_partial_first_page_before_empty_reply() {
     let server = MockServer::start().await;
     let mut iterator = server
         .client
@@ -705,7 +704,6 @@ async fn search_iterator_does_not_advance_state_when_decoding_fails() {
                         .vector_field("vector")
                         .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
                         .metric_type(MetricType::Cosine)
-                        .filter("decode_failure_search_iterator")
                         .build()
                         .expect("valid search request"),
                 )
@@ -717,32 +715,12 @@ async fn search_iterator_does_not_advance_state_when_decoding_fails() {
         .await
         .expect("create search iterator");
 
-    assert!(iterator.next().await.is_err());
-    let page = iterator
-        .next()
-        .await
-        .expect("retry failed search page")
-        .expect("search page");
-    assert_search_response(&page);
-    assert!(iterator
-        .next()
-        .await
-        .expect("finish search iterator")
-        .is_none());
-
+    assert!(iterator.next().await.unwrap().is_some());
+    assert!(iterator.next().await.unwrap().is_none());
     let requests = server.service.request_texts("search");
-    assert_eq!(requests.len(), 4);
-    assert_eq!(guarantee_timestamp(&requests[0]), 0);
-    for request in &requests[1..=2] {
-        assert!(!request.contains("search_iter_id"));
-        assert!(!request.contains("search_iter_last_bound"));
-        assert_eq!(guarantee_timestamp(request), 301);
-        assert!(request.contains("KeyValuePair { key: \"topk\", value: \"10\" }"));
-    }
-    assert!(requests[3].contains("search_iter_id"));
-    assert!(requests[3].contains("search_iter_last_bound"));
-    assert_eq!(guarantee_timestamp(&requests[3]), 301);
-    assert!(requests[3].contains("KeyValuePair { key: \"topk\", value: \"10\" }"));
+    assert_eq!(requests.len(), 2);
+    assert_eq!(guarantee_timestamp(&requests[1]), 301);
+    assert!(requests[1].contains("search_iter_id"));
 
     server.shutdown().await;
 }
@@ -1620,4 +1598,1126 @@ fn guarantee_timestamp(request: &str) -> u64 {
 fn assert_hybrid_timestamp(timestamp: u64) {
     assert!(timestamp > 0);
     assert_eq!(timestamp & ((1_u64 << 18) - 1), 0);
+}
+
+fn cursor_page(
+    ids: Vec<i64>,
+    scores: Vec<f32>,
+    version: Option<&str>,
+    session_ts: u64,
+) -> milvus::proto::milvus::SearchResults {
+    use milvus::proto::{common, milvus as pb, schema};
+    let mut extra_info = std::collections::HashMap::new();
+    if let Some(version) = version {
+        extra_info.insert("search_iter_cursor_version".into(), version.into());
+        if let Some(last_pk) = ids.last() {
+            extra_info.insert("search_iter_last_pk_type".into(), "int64".into());
+            extra_info.insert("search_iter_last_pk".into(), last_pk.to_string());
+        }
+    }
+    pb::SearchResults {
+        status: Some(common::Status {
+            extra_info,
+            ..Default::default()
+        }),
+        session_ts,
+        results: Some(schema::SearchResultData {
+            num_queries: 1,
+            top_k: ids.len() as i64,
+            topks: vec![ids.len() as i64],
+            search_iterator_v2_results: Some(schema::SearchIteratorV2Results {
+                token: "4ea6247d-4b47-4e95-a65c-3bca62bbf7c1".into(),
+                last_bound: scores.last().copied().unwrap_or(0.0),
+            }),
+            scores,
+            ids: Some(schema::IDs {
+                id_field: Some(schema::i_ds::IdField::IntId(schema::LongArray {
+                    data: ids,
+                })),
+            }),
+            primary_field_name: "id".into(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    }
+}
+
+fn cursor_request(batch: usize, limit: usize) -> SearchIteratorRequest {
+    SearchIteratorRequest::builder()
+        .search(
+            SearchRequest::builder()
+                .collection_name("books")
+                .vector_field("vector")
+                .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+                .metric_type(MetricType::Cosine)
+                .extra_params(std::collections::HashMap::from([(
+                    "search_iter_cursor_version".into(),
+                    "2".into(),
+                )]))
+                .build()
+                .unwrap(),
+        )
+        .batch_size(batch)
+        .limit(limit)
+        .build()
+        .unwrap()
+}
+
+#[tokio::test]
+async fn search_iterator_pk_cursor_caches_first_batch_and_preserves_snapshot() {
+    let server = MockServer::start().await;
+    server.service.queue_search_response(cursor_page(
+        vec![i64::MIN, i64::MAX],
+        vec![0.9, 0.8],
+        Some("2"),
+        301,
+    ));
+    let mut iterator = server
+        .client
+        .search_iterator(cursor_request(2, 3))
+        .await
+        .unwrap();
+    assert_eq!(server.service.call_count("search"), 1);
+    let first = iterator.next().await.unwrap().unwrap();
+    assert_eq!(search_ids(&first), [i64::MIN, i64::MAX]);
+    assert_eq!(
+        server.service.call_count("search"),
+        1,
+        "first Next must use cached real batch"
+    );
+    server
+        .service
+        .queue_search_response(cursor_page(vec![3, 4], vec![0.7, 0.6], Some("2"), 0));
+    assert_eq!(search_ids(&iterator.next().await.unwrap().unwrap()), [3]);
+    assert!(iterator.next().await.unwrap().is_none());
+    let requests = server.service.request_texts("search");
+    assert_eq!(requests.len(), 2);
+    assert!(requests[0].contains("key: \"topk\", value: \"2\""));
+    assert!(!requests[0].contains("key: \"topk\", value: \"1\""));
+    assert_eq!(guarantee_timestamp(&requests[1]), 301);
+    assert!(requests[1].contains("key: \"search_iter_last_pk\", value: \"9223372036854775807\""));
+    assert!(requests[1].contains("key: \"search_iter_last_pk_type\", value: \"int64\""));
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn search_iterator_pk_cursor_distinct_rows_fill_batch_and_limit() {
+    let server = MockServer::start().await;
+    for (ids, scores, ts) in [
+        (vec![1, 1], vec![0.9, 0.8], 301),
+        (vec![1, 2], vec![0.7, 0.6], 0),
+        (vec![2, 3], vec![0.5, 0.4], 0),
+    ] {
+        server
+            .service
+            .queue_search_response(cursor_page(ids, scores, Some("2"), ts));
+    }
+    let mut iterator = server
+        .client
+        .search_iterator(cursor_request(2, 3))
+        .await
+        .unwrap();
+    assert_eq!(search_ids(&iterator.next().await.unwrap().unwrap()), [1, 2]);
+    assert_eq!(search_ids(&iterator.next().await.unwrap().unwrap()), [3]);
+    assert!(iterator.next().await.unwrap().is_none());
+    let requests = server.service.request_texts("search");
+    assert_eq!(requests.len(), 3);
+    assert!(requests[1].contains("key: \"search_iter_last_bound\", value: \"0.8\""));
+    assert!(requests[2].contains("key: \"search_iter_last_pk\", value: \"2\""));
+    assert!(requests[2].contains("key: \"search_iter_last_bound\", value: \"0.6\""));
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn search_iterator_pk_cursor_deduplicates_exact_varchar_keys() {
+    use milvus::proto::schema;
+    let server = MockServer::start().await;
+    server
+        .service
+        .set_search_primary_key_type(schema::DataType::VarChar);
+    let quoted = "quoted\"\\中文";
+    for (ids, scores, ts) in [
+        (vec!["", quoted], vec![0.9, 0.8], 301),
+        (vec![quoted, "last"], vec![0.7, 0.6], 0),
+    ] {
+        let mut page = cursor_page(vec![1, 2], scores, Some("2"), ts);
+        page.results.as_mut().unwrap().ids = Some(schema::IDs {
+            id_field: Some(schema::i_ds::IdField::StrId(schema::StringArray {
+                data: ids.iter().map(|id| (*id).to_owned()).collect(),
+            })),
+        });
+        let extra = &mut page.status.as_mut().unwrap().extra_info;
+        extra.insert("search_iter_last_pk_type".into(), "varchar".into());
+        extra.insert(
+            "search_iter_last_pk".into(),
+            ids.last().unwrap().to_string(),
+        );
+        server.service.queue_search_response(page);
+    }
+    let mut iterator = server
+        .client
+        .search_iterator(cursor_request(2, 3))
+        .await
+        .unwrap();
+    assert_eq!(
+        iterator
+            .next()
+            .await
+            .unwrap()
+            .unwrap()
+            .results()
+            .get_results()[0]
+            .get_ids(),
+        &Ids::VarChar(vec!["".into(), quoted.into()])
+    );
+    assert_eq!(
+        iterator
+            .next()
+            .await
+            .unwrap()
+            .unwrap()
+            .results()
+            .get_results()[0]
+            .get_ids(),
+        &Ids::VarChar(vec!["last".into()])
+    );
+    assert!(iterator.next().await.unwrap().is_none());
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn search_iterator_pk_cursor_filter_failure_keeps_pending_raw_page_and_seen_state() {
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+    let server = MockServer::start().await;
+    server
+        .service
+        .queue_search_response(cursor_page(vec![1], vec![0.9], Some("2"), 301));
+    let calls = Arc::new(AtomicUsize::new(0));
+    let filter_calls = calls.clone();
+    let request = cursor_request(2, 2)
+        .into_builder()
+        .external_filter_func(move |result| {
+            if filter_calls.fetch_add(1, Ordering::SeqCst) == 1 {
+                result.filter_rows(&[])?;
+                return Err(Error::MalformedResponse("filter failed".into()));
+            }
+            Ok(())
+        })
+        .build()
+        .unwrap();
+    let mut iterator = server.client.search_iterator(request).await.unwrap();
+    server
+        .service
+        .queue_search_response(cursor_page(vec![2], vec![0.8], Some("2"), 0));
+    assert!(iterator.next().await.is_err());
+    assert_eq!(server.service.call_count("search"), 2);
+    assert_eq!(search_ids(&iterator.next().await.unwrap().unwrap()), [1, 2]);
+    assert_eq!(
+        server.service.call_count("search"),
+        2,
+        "filter retries decode the pending response"
+    );
+    assert!(iterator.next().await.unwrap().is_none());
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn search_iterator_distance_mode_keeps_duplicate_primary_keys() {
+    let server = MockServer::start().await;
+    server
+        .service
+        .queue_search_response(cursor_page(vec![1], vec![0.9], None, 301));
+    let mut iterator = server
+        .client
+        .search_iterator(cursor_request(1, 2))
+        .await
+        .unwrap();
+    assert_eq!(search_ids(&iterator.next().await.unwrap().unwrap()), [1]);
+    server
+        .service
+        .queue_search_response(cursor_page(vec![1], vec![0.8], None, 0));
+    assert_eq!(search_ids(&iterator.next().await.unwrap().unwrap()), [1]);
+    assert!(iterator.next().await.unwrap().is_none());
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn search_iterator_pk_cursor_preserves_raw_quoted_varchar() {
+    use milvus::proto::schema;
+    let server = MockServer::start().await;
+    server
+        .service
+        .set_search_primary_key_type(schema::DataType::VarChar);
+    let last_pk = "quoted\"id\\next\n中文";
+    let mut first = cursor_page(vec![1], vec![0.9], Some("2"), 301);
+    first.results.as_mut().unwrap().ids = Some(schema::IDs {
+        id_field: Some(schema::i_ds::IdField::StrId(schema::StringArray {
+            data: vec![last_pk.into()],
+        })),
+    });
+    let extra = &mut first.status.as_mut().unwrap().extra_info;
+    extra.insert("search_iter_last_pk_type".into(), "varchar".into());
+    extra.insert("search_iter_last_pk".into(), last_pk.into());
+    server.service.queue_search_response(first);
+    let mut iterator = server
+        .client
+        .search_iterator(cursor_request(1, 2))
+        .await
+        .unwrap();
+    assert!(iterator.next().await.unwrap().is_some());
+    let mut empty = cursor_page(vec![], vec![], Some("2"), 0);
+    empty.results.as_mut().unwrap().ids = Some(schema::IDs::default());
+    server.service.queue_search_response(empty);
+    assert!(iterator.next().await.unwrap().is_none());
+    assert!(iterator.next().await.unwrap().is_none());
+    let request = server.service.request_text("search");
+    assert!(request.contains(&format!("key: \"search_iter_last_pk\", value: {last_pk:?}")));
+    assert!(request.contains("key: \"search_iter_last_pk_type\", value: \"varchar\""));
+    assert_eq!(server.service.call_count("search"), 2);
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn search_iterator_pk_cursor_errors_do_not_advance_page() {
+    let server = MockServer::start().await;
+    server
+        .service
+        .queue_search_response(cursor_page(vec![1], vec![0.9], Some("2"), 301));
+    let mut iterator = server
+        .client
+        .search_iterator(cursor_request(1, 2))
+        .await
+        .unwrap();
+    assert!(iterator.next().await.unwrap().is_some());
+    let mut wrong_pk = cursor_page(vec![2], vec![0.8], Some("2"), 0);
+    wrong_pk
+        .status
+        .as_mut()
+        .unwrap()
+        .extra_info
+        .insert("search_iter_last_pk".into(), "3".into());
+    let mut bad_decode = cursor_page(vec![2], vec![0.8], Some("2"), 0);
+    bad_decode.results.as_mut().unwrap().fields_data = vec![milvus::proto::schema::FieldData {
+        r#type: milvus::proto::schema::DataType::Json as i32,
+        field_name: "bad_json".into(),
+        field: Some(milvus::proto::schema::field_data::Field::Scalars(
+            milvus::proto::schema::ScalarField {
+                data: Some(milvus::proto::schema::scalar_field::Data::JsonData(
+                    milvus::proto::schema::JsonArray {
+                        data: vec![b"not-json".to_vec()],
+                    },
+                )),
+                ..Default::default()
+            },
+        )),
+        ..Default::default()
+    }];
+    for response in [
+        cursor_page(vec![2], vec![0.8], None, 0),
+        cursor_page(vec![2], vec![0.8], Some("3"), 0),
+        wrong_pk,
+        bad_decode,
+    ] {
+        server.service.queue_search_response(response);
+        assert!(iterator.next().await.is_err());
+    }
+    server
+        .service
+        .fail_next_transport("search", tonic::Code::Cancelled);
+    assert!(iterator.next().await.is_err());
+    server
+        .service
+        .queue_search_response(cursor_page(vec![2], vec![0.8], Some("2"), 0));
+    assert_eq!(search_ids(&iterator.next().await.unwrap().unwrap()), [2]);
+    let requests = server.service.request_texts("search");
+    assert!(
+        requests.len() >= 7,
+        "centralized transport retry may replay a request"
+    );
+    for request in &requests[1..] {
+        assert_eq!(
+            request, &requests[1],
+            "error must retry identical cursor and snapshot"
+        );
+    }
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn search_iterator_distance_mode_is_latched_and_empty_first_page_finishes() {
+    let server = MockServer::start().await;
+    server
+        .service
+        .queue_search_response(cursor_page(vec![1], vec![0.9], None, 301));
+    let mut iterator = server
+        .client
+        .search_iterator(cursor_request(1, 2))
+        .await
+        .unwrap();
+    iterator.next().await.unwrap().unwrap();
+    server
+        .service
+        .queue_search_response(cursor_page(vec![], vec![], None, 0));
+    assert!(iterator.next().await.unwrap().is_none());
+    let request = server.service.request_text("search");
+    assert!(!request.contains("search_iter_cursor_version"));
+    assert!(!request.contains("search_iter_last_pk"));
+    assert_eq!(guarantee_timestamp(&request), 301);
+    server
+        .service
+        .queue_search_response(cursor_page(vec![], vec![], Some("2"), 301));
+    let mut empty = server
+        .client
+        .search_iterator(cursor_request(1, 2))
+        .await
+        .unwrap();
+    let calls = server.service.call_count("search");
+    assert!(empty.next().await.unwrap().is_none());
+    assert!(empty.next().await.unwrap().is_none());
+    assert_eq!(server.service.call_count("search"), calls);
+    server
+        .service
+        .queue_search_response(cursor_page(vec![1], vec![0.9], Some("2"), 0));
+    assert!(server
+        .client
+        .search_iterator(cursor_request(1, 2))
+        .await
+        .is_err());
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn legacy_api_search_iterator_counts_hits_and_preserves_three_page_snapshot() {
+    let server = MockServer::start().await;
+    let client = milvus::v1::client::Client::new(server.uri.clone())
+        .await
+        .unwrap();
+    let mut iterator = client
+        .search_iterator(
+            "books",
+            vec![vec![0.1_f32, 0.2].into()],
+            milvus::v1::iterator::SearchIteratorOptions::default()
+                .add_search_param("search_iter_cursor_version".into(), "2".into())
+                .batch_size(2)
+                .limit(5),
+        )
+        .await
+        .unwrap();
+    for (ids, scores, ts) in [
+        (vec![1, 2], vec![0.9, 0.8], 301),
+        (vec![3, 4], vec![0.7, 0.6], 0),
+        (vec![5], vec![0.5], 0),
+    ] {
+        server
+            .service
+            .queue_search_response(cursor_page(ids.clone(), scores, Some("2"), ts));
+        let result = iterator.next().await.unwrap().unwrap();
+        assert_eq!(
+            result.iter().map(|query| query.size).sum::<i64>(),
+            ids.len() as i64
+        );
+    }
+    assert!(iterator.next().await.unwrap().is_none());
+    let requests = server.service.request_texts("search");
+    assert_eq!(requests.len(), 3);
+    assert_eq!(guarantee_timestamp(&requests[0]), 0);
+    assert_eq!(guarantee_timestamp(&requests[1]), 301);
+    assert_eq!(guarantee_timestamp(&requests[2]), 301);
+    assert!(requests[2].contains("key: \"search_iter_batch_size\", value: \"1\""));
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn legacy_api_search_iterator_rejects_missing_v2_and_retains_cursor_on_error() {
+    let server = MockServer::start().await;
+    let client = milvus::v1::client::Client::new(server.uri.clone())
+        .await
+        .unwrap();
+    let mut iterator = client
+        .search_iterator(
+            "books",
+            vec![vec![0.1_f32, 0.2].into()],
+            milvus::v1::iterator::SearchIteratorOptions::default()
+                .add_search_param("search_iter_cursor_version".into(), "2".into())
+                .batch_size(1)
+                .limit(2),
+        )
+        .await
+        .unwrap();
+    let mut unsupported = cursor_page(vec![1], vec![0.9], None, 301);
+    unsupported
+        .results
+        .as_mut()
+        .unwrap()
+        .search_iterator_v2_results = None;
+    server.service.queue_search_response(unsupported);
+    assert!(iterator
+        .next()
+        .await
+        .unwrap_err()
+        .to_string()
+        .contains("does not support Search Iterator V2"));
+    server
+        .service
+        .queue_search_response(cursor_page(vec![1], vec![0.9], Some("2"), 301));
+    iterator.next().await.unwrap().unwrap();
+    server
+        .service
+        .queue_search_response(cursor_page(vec![2], vec![0.8], None, 0));
+    assert!(iterator.next().await.is_err());
+    server
+        .service
+        .queue_search_response(cursor_page(vec![2], vec![0.8], Some("2"), 0));
+    iterator.next().await.unwrap().unwrap();
+    assert!(iterator.next().await.unwrap().is_none());
+    let requests = server.service.request_texts("search");
+    assert_eq!(requests[2], requests[3]);
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn legacy_api_pk_checkpoint_restores_snapshot_bound_and_consumed_hits() {
+    let server = MockServer::start().await;
+    let client = milvus::v1::client::Client::new(server.uri.clone())
+        .await
+        .unwrap();
+    let checkpoint =
+        std::env::temp_dir().join(format!("rust-search-iterator-{}.cp", uuid::Uuid::new_v4()));
+    let options = milvus::v1::iterator::SearchIteratorOptions::default()
+        .add_search_param("search_iter_cursor_version".into(), "2".into())
+        .batch_size(2)
+        .limit(4)
+        .iterator_cp_file(Some(checkpoint.to_string_lossy().into_owned()));
+    let mut original = client
+        .search_iterator("books", vec![vec![0.1_f32, 0.2].into()], options.clone())
+        .await
+        .unwrap();
+    server
+        .service
+        .queue_search_response(cursor_page(vec![1, 2], vec![0.9, 0.8], Some("2"), 301));
+    original.next().await.unwrap().unwrap();
+    original.close();
+    let checkpoint_text = std::fs::read_to_string(&checkpoint).unwrap();
+    assert!(checkpoint_text.starts_with("301\n"));
+    assert!(checkpoint_text.contains("\"format_version\":2"));
+    // The previous SDK reader parsed exactly the first and last lines.
+    let old_reader_lines: Vec<_> = checkpoint_text.lines().collect();
+    assert_eq!(old_reader_lines.len(), 3);
+    let old_snapshot = old_reader_lines[0].parse::<u64>().unwrap();
+    let old_token = old_reader_lines[old_reader_lines.len() - 1];
+    assert_eq!(old_snapshot, 301);
+    assert_eq!(old_token, "4ea6247d-4b47-4e95-a65c-3bca62bbf7c1");
+    assert!(uuid::Uuid::parse_str(old_token).is_ok());
+    let mut resumed_options = options;
+    resumed_options
+        .search_params
+        .remove("search_iter_cursor_version");
+    let mut resumed = client
+        .search_iterator("books", vec![vec![0.1_f32, 0.2].into()], resumed_options)
+        .await
+        .unwrap();
+    server
+        .service
+        .queue_search_response(cursor_page(vec![3, 4], vec![0.7, 0.6], Some("2"), 0));
+    resumed.next().await.unwrap().unwrap();
+    assert_eq!(resumed.returned_count(), 4);
+    assert!(resumed.next().await.unwrap().is_none());
+    let request = server.service.request_text("search");
+    assert_eq!(guarantee_timestamp(&request), 301);
+    assert!(request.contains("key: \"search_iter_last_pk\", value: \"2\""));
+    assert!(request.contains("key: \"search_iter_last_bound\", value: \"0.8\""));
+    resumed.close();
+    std::fs::remove_file(checkpoint).unwrap();
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn legacy_api_pk_checkpoint_preserves_distinct_keys_across_resume_and_duplicate_only_pages() {
+    let server = MockServer::start().await;
+    let client = milvus::v1::client::Client::new(server.uri.clone())
+        .await
+        .unwrap();
+    let checkpoint = std::env::temp_dir().join(format!("rust-dedup-{}.cp", uuid::Uuid::new_v4()));
+    let options = milvus::v1::iterator::SearchIteratorOptions::default()
+        .add_search_param("search_iter_cursor_version".into(), "2".into())
+        .batch_size(1)
+        .limit(2)
+        .iterator_cp_file(Some(checkpoint.to_string_lossy().into_owned()));
+    let mut first = client
+        .search_iterator("books", vec![vec![0.1_f32, 0.2].into()], options.clone())
+        .await
+        .unwrap();
+    server
+        .service
+        .queue_search_response(cursor_page(vec![1], vec![0.9], Some("2"), 301));
+    assert_eq!(first.next().await.unwrap().unwrap()[0].size, 1);
+    first.close();
+    let saved: serde_json::Value = serde_json::from_str(
+        std::fs::read_to_string(&checkpoint)
+            .unwrap()
+            .lines()
+            .nth(1)
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(saved["accepted_pks"], serde_json::json!(["1"]));
+    let original_checkpoint = std::fs::read_to_string(&checkpoint).unwrap();
+    for missing in [false, true] {
+        let mut invalid = saved.clone();
+        if missing {
+            invalid.as_object_mut().unwrap().remove("accepted_pks");
+        } else {
+            invalid["accepted_pks"] = serde_json::json!([]);
+        }
+        std::fs::write(
+            &checkpoint,
+            format!("301\n{invalid}\n4ea6247d-4b47-4e95-a65c-3bca62bbf7c1\n"),
+        )
+        .unwrap();
+        let calls = server.service.call_count("search");
+        let mut rejected = client
+            .search_iterator("books", vec![vec![0.1_f32, 0.2].into()], options.clone())
+            .await
+            .unwrap();
+        assert!(rejected.next().await.is_err());
+        assert_eq!(
+            server.service.call_count("search"),
+            calls,
+            "invalid accepted state must fail before Search"
+        );
+        rejected.close();
+    }
+    std::fs::write(&checkpoint, original_checkpoint).unwrap();
+    let mut resumed = client
+        .search_iterator("books", vec![vec![0.1_f32, 0.2].into()], options)
+        .await
+        .unwrap();
+    server
+        .service
+        .queue_search_response(cursor_page(vec![1], vec![0.8], Some("2"), 0));
+    server
+        .service
+        .queue_search_response(cursor_page(vec![2], vec![0.7], Some("2"), 0));
+    let next = resumed.next().await.unwrap().unwrap();
+    assert!(matches!(next[0].id[0], milvus::v1::value::Value::Long(2)));
+    assert_eq!(next[0].score, [0.7]);
+    assert_eq!(resumed.returned_count(), 2);
+    assert!(resumed.next().await.unwrap().is_none());
+    let requests = server.service.request_texts("search");
+    assert_eq!(requests.len(), 3);
+    assert!(requests[2].contains("key: \"search_iter_last_bound\", value: \"0.8\""));
+    resumed.close();
+    std::fs::remove_file(checkpoint).unwrap();
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn legacy_api_pk_checkpoint_rejects_wrong_search_or_recreated_collection_before_search() {
+    use milvus::proto::schema;
+
+    let server = MockServer::start().await;
+    let client = milvus::v1::client::Client::new(server.uri.clone())
+        .await
+        .unwrap();
+    let checkpoint =
+        std::env::temp_dir().join(format!("rust-search-identity-{}.cp", uuid::Uuid::new_v4()));
+    let options = milvus::v1::iterator::SearchIteratorOptions::default()
+        .add_search_param("search_iter_cursor_version".into(), "2".into())
+        .add_search_param("metric_type".into(), "COSINE".into())
+        .add_search_param(
+            "params".into(),
+            r#"{"radius":0.95,"range_filter":0.1,"nested":{"a":1,"b":2},"limit":50,"topk":7}"#
+                .into(),
+        )
+        .filter("id > {limit}".into())
+        .add_template_value(
+            "limit".into(),
+            schema::TemplateValue {
+                val: Some(schema::template_value::Val::Int64Val(0)),
+            },
+        )
+        .anns_field("vector".into())
+        .batch_size(2)
+        .iterator_cp_file(Some(checkpoint.to_string_lossy().into_owned()));
+    let mut original = client
+        .search_iterator("books", vec![vec![0.1_f32, 0.2].into()], options.clone())
+        .await
+        .unwrap();
+    server
+        .service
+        .queue_search_response(cursor_page(vec![1, 2], vec![0.9, 0.8], Some("2"), 301));
+    original.next().await.unwrap().unwrap();
+    original.close();
+    let before = std::fs::read_to_string(&checkpoint).unwrap();
+    let saved: serde_json::Value = serde_json::from_str(before.lines().nth(1).unwrap()).unwrap();
+    assert_eq!(saved["collection_id"], 1);
+    assert_eq!(saved["request_fingerprint"].as_str().unwrap().len(), 64);
+    let wrong_options = [
+        options.clone().filter("id > 10".into()),
+        options.clone().batch_size(1),
+        options.clone().anns_field("other_vector".into()),
+        options.clone().add_template_value(
+            "limit".into(),
+            schema::TemplateValue {
+                val: Some(schema::template_value::Val::Int64Val(10)),
+            },
+        ),
+        options.clone().add_search_param(
+            "params".into(),
+            r#"{"radius":0.95,"range_filter":0.1,"nested":{"a":1,"b":2},"limit":51,"topk":7}"#
+                .into(),
+        ),
+        options.clone().add_search_param(
+            "params".into(),
+            r#"{"radius":0.8,"range_filter":0.1,"nested":{"a":1,"b":2},"limit":50,"topk":7}"#
+                .into(),
+        ),
+    ];
+    for wrong in wrong_options {
+        let mut resumed = client
+            .search_iterator("books", vec![vec![0.1_f32, 0.2].into()], wrong)
+            .await
+            .unwrap();
+        let calls = server.service.call_count("search");
+        let error = resumed.next().await.unwrap_err().to_string();
+        assert!(error.contains("search definition"), "{error}");
+        assert_eq!(server.service.call_count("search"), calls);
+        assert_eq!(std::fs::read_to_string(&checkpoint).unwrap(), before);
+        resumed.close();
+    }
+    let mut wrong_vector = client
+        .search_iterator("books", vec![vec![0.4_f32, 0.2].into()], options.clone())
+        .await
+        .unwrap();
+    let calls = server.service.call_count("search");
+    assert!(wrong_vector
+        .next()
+        .await
+        .unwrap_err()
+        .to_string()
+        .contains("search definition"));
+    assert_eq!(server.service.call_count("search"), calls);
+    assert_eq!(std::fs::read_to_string(&checkpoint).unwrap(), before);
+    wrong_vector.close();
+    let mut wrong_snapshot = client
+        .search_iterator(
+            "books",
+            vec![vec![0.1_f32, 0.2].into()],
+            options.clone().guarantee_timestamp(302),
+        )
+        .await
+        .unwrap();
+    assert!(wrong_snapshot
+        .next()
+        .await
+        .unwrap_err()
+        .to_string()
+        .contains("snapshot"));
+    assert_eq!(server.service.call_count("search"), calls);
+    assert_eq!(std::fs::read_to_string(&checkpoint).unwrap(), before);
+    wrong_snapshot.close();
+    server.service.set_search_collection_id(2);
+    let mut recreated = client
+        .search_iterator("books", vec![vec![0.1_f32, 0.2].into()], options.clone())
+        .await
+        .unwrap();
+    assert!(recreated
+        .next()
+        .await
+        .unwrap_err()
+        .to_string()
+        .contains("collection ID"));
+    assert_eq!(server.service.call_count("search"), calls);
+    assert_eq!(std::fs::read_to_string(&checkpoint).unwrap(), before);
+    recreated.close();
+    server.service.set_search_collection_id(1);
+    let mut reordered = options.guarantee_timestamp(301).add_search_param(
+        "params".into(),
+        r#"{"topk":7,"limit":50,"nested":{"b":2,"a":1},"range_filter":0.1,"radius":0.95}"#.into(),
+    );
+    reordered.search_params.remove("search_iter_cursor_version");
+    let mut matching = client
+        .search_iterator("books", vec![vec![0.1_f32, 0.2].into()], reordered)
+        .await
+        .unwrap();
+    server
+        .service
+        .queue_search_response(cursor_page(vec![3], vec![0.7], Some("2"), 0));
+    matching.next().await.unwrap().unwrap();
+    assert_eq!(matching.returned_count(), 3);
+    assert_eq!(
+        guarantee_timestamp(&server.service.request_text("search")),
+        301
+    );
+    matching.close();
+    std::fs::remove_file(checkpoint).unwrap();
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn legacy_api_pk_cursor_preserves_explicit_snapshot_when_response_omits_it() {
+    let server = MockServer::start().await;
+    let client = milvus::v1::client::Client::new(server.uri.clone())
+        .await
+        .unwrap();
+    let mut iterator = client
+        .search_iterator(
+            "books",
+            vec![vec![0.1_f32, 0.2].into()],
+            milvus::v1::iterator::SearchIteratorOptions::default()
+                .add_search_param("search_iter_cursor_version".into(), "2".into())
+                .batch_size(1)
+                .limit(1)
+                .guarantee_timestamp(444),
+        )
+        .await
+        .unwrap();
+    server
+        .service
+        .queue_search_response(cursor_page(vec![1], vec![0.9], Some("2"), 0));
+    iterator.next().await.unwrap().unwrap();
+    assert_eq!(
+        guarantee_timestamp(&server.service.request_text("search")),
+        444
+    );
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn search_iterator_tiny_distance_cursor_round_trips() {
+    let server = MockServer::start().await;
+    server
+        .service
+        .queue_search_response(cursor_page(vec![1], vec![1.0e-30], Some("2"), 301));
+    let mut iterator = server
+        .client
+        .search_iterator(cursor_request(1, 2))
+        .await
+        .unwrap();
+    iterator.next().await.unwrap().unwrap();
+    server
+        .service
+        .queue_search_response(cursor_page(vec![], vec![], Some("2"), 0));
+    assert!(iterator.next().await.unwrap().is_none());
+    let request = server.service.request_text("search");
+    assert!(request.contains(&format!(
+        "key: \"search_iter_last_bound\", value: {:?}",
+        1.0e-30_f32.to_string()
+    )));
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn legacy_api_old_v2_latches_distance_mode() {
+    let server = MockServer::start().await;
+    let client = milvus::v1::client::Client::new(server.uri.clone())
+        .await
+        .unwrap();
+    let mut iterator = client
+        .search_iterator(
+            "books",
+            vec![vec![0.1_f32, 0.2].into()],
+            milvus::v1::iterator::SearchIteratorOptions::default()
+                .batch_size(1)
+                .limit(2),
+        )
+        .await
+        .unwrap();
+    server
+        .service
+        .queue_search_response(cursor_page(vec![1], vec![0.9], None, 301));
+    iterator.next().await.unwrap().unwrap();
+    server
+        .service
+        .queue_search_response(cursor_page(vec![2], vec![0.8], None, 0));
+    iterator.next().await.unwrap().unwrap();
+    assert!(iterator.next().await.unwrap().is_none());
+    let request = server.service.request_text("search");
+    assert_eq!(guarantee_timestamp(&request), 301);
+    assert!(!request.contains("search_iter_cursor_version"));
+    assert!(!request.contains("search_iter_last_pk"));
+    assert!(request.contains("search_iter_last_bound"));
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn legacy_api_pk_checkpoint_write_failure_does_not_advance_cursor() {
+    let server = MockServer::start().await;
+    let client = milvus::v1::client::Client::new(server.uri.clone())
+        .await
+        .unwrap();
+    let checkpoint =
+        std::env::temp_dir().join(format!("rust-search-iterator-{}.cp", uuid::Uuid::new_v4()));
+    std::fs::create_dir(&checkpoint).unwrap();
+    let mut iterator = client
+        .search_iterator(
+            "books",
+            vec![vec![0.1_f32, 0.2].into()],
+            milvus::v1::iterator::SearchIteratorOptions::default()
+                .add_search_param("search_iter_cursor_version".into(), "2".into())
+                .batch_size(1)
+                .limit(1)
+                .iterator_cp_file(Some(checkpoint.to_string_lossy().into_owned())),
+        )
+        .await
+        .unwrap();
+    server
+        .service
+        .queue_search_response(cursor_page(vec![1], vec![0.9], Some("2"), 301));
+    assert!(iterator.next().await.is_err());
+    assert_eq!(iterator.returned_count(), 0);
+    std::fs::remove_dir(&checkpoint).unwrap();
+    server
+        .service
+        .queue_search_response(cursor_page(vec![1], vec![0.9], Some("2"), 301));
+    iterator.next().await.unwrap().unwrap();
+    let requests = server.service.request_texts("search");
+    assert_eq!(requests.len(), 2);
+    assert_eq!(requests[0], requests[1]);
+    std::fs::remove_file(checkpoint).unwrap();
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn manual_distance_cursor_continuation_does_not_opt_in_to_pk_mode() {
+    let server = MockServer::start().await;
+    let token = "4ea6247d-4b47-4e95-a65c-3bca62bbf7c1";
+    let request = SearchIteratorRequest::builder()
+        .search(
+            SearchRequest::builder()
+                .collection_name("books")
+                .vector_field("vector")
+                .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+                .metric_type(MetricType::Cosine)
+                .extra_params(std::collections::HashMap::from([
+                    ("search_iter_id".into(), token.into()),
+                    ("search_iter_last_bound".into(), "0.5".into()),
+                ]))
+                .build()
+                .unwrap(),
+        )
+        .batch_size(1)
+        .limit(1)
+        .build()
+        .unwrap();
+    server
+        .service
+        .queue_search_response(cursor_page(vec![2], vec![0.7], None, 301));
+    let mut iterator = server.client.search_iterator(request).await.unwrap();
+    assert_eq!(search_ids(&iterator.next().await.unwrap().unwrap()), [2]);
+    let wire = server.service.request_text("search");
+    assert!(wire.contains("search_iter_id"));
+    assert!(wire.contains("key: \"search_iter_last_bound\", value: \"0.5\""));
+    assert!(!wire.contains("search_iter_cursor_version"));
+    let client = milvus::v1::client::Client::new(server.uri.clone())
+        .await
+        .unwrap();
+    let options = milvus::v1::iterator::SearchIteratorOptions::default()
+        .batch_size(1)
+        .limit(1)
+        .add_search_param("search_iter_id".into(), token.into())
+        .add_search_param("search_iter_last_bound".into(), "0.5".into());
+    let mut legacy = client
+        .search_iterator("books", vec![vec![0.1_f32, 0.2].into()], options)
+        .await
+        .unwrap();
+    server
+        .service
+        .queue_search_response(cursor_page(vec![2], vec![0.7], None, 301));
+    legacy.next().await.unwrap().unwrap();
+    let wire = server.service.request_text("search");
+    assert!(wire.contains("key: \"search_iter_last_bound\", value: \"0.5\""));
+    assert!(!wire.contains("search_iter_cursor_version"));
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn explicit_pk_opt_in_rejects_partial_manual_distance_cursor_before_search() {
+    let server = MockServer::start().await;
+    let token = "4ea6247d-4b47-4e95-a65c-3bca62bbf7c1";
+    let request = SearchIteratorRequest::builder()
+        .search(
+            SearchRequest::builder()
+                .collection_name("books")
+                .vector_field("vector")
+                .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+                .extra_params(std::collections::HashMap::from([
+                    ("search_iter_cursor_version".into(), "2".into()),
+                    ("search_iter_id".into(), token.into()),
+                    ("search_iter_last_bound".into(), "0.5".into()),
+                ]))
+                .build()
+                .unwrap(),
+        )
+        .batch_size(1)
+        .build()
+        .unwrap();
+    assert!(server.client.search_iterator(request).await.is_err());
+    assert_eq!(server.service.call_count("search"), 0);
+    let client = milvus::v1::client::Client::new(server.uri.clone())
+        .await
+        .unwrap();
+    let options = milvus::v1::iterator::SearchIteratorOptions::default()
+        .add_search_param("search_iter_cursor_version".into(), "2".into())
+        .add_search_param("search_iter_id".into(), token.into())
+        .add_search_param("search_iter_last_bound".into(), "0.5".into());
+    let mut legacy = client
+        .search_iterator("books", vec![vec![0.1_f32, 0.2].into()], options)
+        .await
+        .unwrap();
+    assert!(legacy.next().await.is_err());
+    assert_eq!(server.service.call_count("search"), 0);
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn legacy_api_latches_declined_pk_mode_and_replaces_manual_distance_cursor() {
+    let server = MockServer::start().await;
+    let client = milvus::v1::client::Client::new(server.uri.clone())
+        .await
+        .unwrap();
+    for manual in [false, true] {
+        let mut options = milvus::v1::iterator::SearchIteratorOptions::default()
+            .batch_size(1)
+            .limit(2)
+            // These dynamic controls are iterator-owned despite generic options.
+            .add_search_param("topk".into(), "100".into())
+            .add_search_param("search_iter_batch_size".into(), "100".into());
+        if manual {
+            options = options
+                .add_search_param(
+                    "search_iter_id".into(),
+                    "4ea6247d-4b47-4e95-a65c-3bca62bbf7c1".into(),
+                )
+                .add_search_param("search_iter_last_bound".into(), "0.5".into());
+        } else {
+            options = options.add_search_param("search_iter_cursor_version".into(), "2".into());
+        }
+        let mut iterator = client
+            .search_iterator("books", vec![vec![0.1_f32, 0.2].into()], options)
+            .await
+            .unwrap();
+        server
+            .service
+            .queue_search_response(cursor_page(vec![1], vec![0.9], None, 301));
+        iterator.next().await.unwrap().unwrap();
+        let first = server.service.request_text("search");
+        assert_eq!(first.contains("search_iter_cursor_version"), !manual);
+        assert!(first.contains("key: \"topk\", value: \"1\""));
+        assert!(!first.contains("value: \"100\""));
+        server
+            .service
+            .queue_search_response(cursor_page(vec![2], vec![0.8], None, 0));
+        iterator.next().await.unwrap().unwrap();
+        let second = server.service.request_text("search");
+        assert_eq!(guarantee_timestamp(&second), 301);
+        assert!(!second.contains("search_iter_cursor_version"));
+        assert_eq!(second.matches("key: \"search_iter_last_bound\"").count(), 1);
+        assert!(second.contains("key: \"search_iter_last_bound\", value: \"0.9\""));
+        assert!(!second.contains("value: \"0.5\""));
+        let calls = server.service.call_count("search");
+        assert!(iterator.next().await.unwrap().is_none());
+        assert_eq!(server.service.call_count("search"), calls);
+    }
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn empty_v2_token_without_pk_marker_uses_real_legacy_first_page() {
+    let server = MockServer::start().await;
+    let mut reply = cursor_page(vec![1], vec![0.9], None, 301);
+    reply
+        .results
+        .as_mut()
+        .unwrap()
+        .search_iterator_v2_results
+        .as_mut()
+        .unwrap()
+        .token
+        .clear();
+    server.service.queue_search_response(reply);
+    let mut iterator = server
+        .client
+        .search_iterator(cursor_request(1, 1))
+        .await
+        .unwrap();
+    assert!(matches!(iterator, SearchIterator::V1(_)));
+    assert_eq!(search_ids(&iterator.next().await.unwrap().unwrap()), [1]);
+    assert_eq!(server.service.call_count("search"), 1);
+    let mut bad = cursor_page(vec![1], vec![0.9], Some("2"), 301);
+    bad.results
+        .as_mut()
+        .unwrap()
+        .search_iterator_v2_results
+        .as_mut()
+        .unwrap()
+        .token
+        .clear();
+    server.service.queue_search_response(bad);
+    assert!(server
+        .client
+        .search_iterator(cursor_request(1, 1))
+        .await
+        .is_err());
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn search_iterator_pk_cursor_requires_explicit_opt_in() {
+    let server = MockServer::start().await;
+    let request = SearchIteratorRequest::builder()
+        .search(
+            SearchRequest::builder()
+                .collection_name("books")
+                .vector_field("vector")
+                .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+                .metric_type(MetricType::Cosine)
+                .build()
+                .unwrap(),
+        )
+        .batch_size(2)
+        .limit(2)
+        .build()
+        .unwrap();
+    server
+        .service
+        .queue_search_response(cursor_page(vec![1, 2], vec![0.9, 0.8], None, 301));
+    let mut iterator = server
+        .client
+        .search_iterator(request.clone())
+        .await
+        .unwrap();
+    assert_eq!(search_ids(&iterator.next().await.unwrap().unwrap()), [1, 2]);
+    assert_eq!(server.service.call_count("search"), 1);
+    let wire = server.service.request_text("search");
+    assert!(!wire.contains("search_iter_cursor_version"));
+    assert!(wire.contains("key: \"topk\", value: \"2\""));
+    server
+        .service
+        .queue_search_response(cursor_page(vec![1, 2], vec![0.9, 0.8], Some("2"), 301));
+    assert!(server.client.search_iterator(request).await.is_err());
+    let unsupported = SearchIteratorRequest::builder()
+        .search(
+            SearchRequest::builder()
+                .collection_name("books")
+                .vector_field("vector")
+                .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+                .metric_type(MetricType::Cosine)
+                .extra_params(std::collections::HashMap::from([(
+                    "search_iter_cursor_version".into(),
+                    "3".into(),
+                )]))
+                .build()
+                .unwrap(),
+        )
+        .batch_size(1)
+        .build()
+        .unwrap();
+    let calls = server.service.call_count("search");
+    assert!(server.client.search_iterator(unsupported).await.is_err());
+    assert_eq!(server.service.call_count("search"), calls);
+    server.shutdown().await;
 }
