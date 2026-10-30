@@ -192,6 +192,8 @@ impl BoostRerank {
     }
 
     /// Sets the filter and returns the updated value.
+    ///
+    /// An empty string is ignored, leaving the filter unset.
     pub fn filter(mut self, value: impl Into<String>) -> Self {
         let value = value.into();
         if !value.is_empty() {
@@ -201,6 +203,8 @@ impl BoostRerank {
     }
 
     /// Sets the weight and returns the updated value.
+    ///
+    /// A value of `0.0` or less is ignored, leaving the weight unset.
     pub fn weight(mut self, value: f32) -> Self {
         if value > 0.0 {
             self.function
@@ -292,6 +296,8 @@ impl DecayRerank {
     }
 
     /// Sets the decay function and returns the updated value.
+    ///
+    /// An empty string is ignored, leaving the decay function unset.
     pub fn decay_function(mut self, value: impl Into<String>) -> Self {
         let value = value.into();
         if !value.is_empty() {
@@ -425,7 +431,7 @@ impl std::ops::Deref for ModelRerank {
 ///////////////////////////////////////////////////////////////////////////////
 /// Reranking functions and combination settings used by search.
 ///
-/// This type is used both as a V2 request input and as a response domain object.
+/// This type is used as a V2 request input for reranking search results.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub struct FunctionScore {
@@ -476,7 +482,7 @@ impl FunctionScore {
         &self.params
     }
 
-    /// Adds one add function to the existing values.
+    /// Adds one function to the existing values.
     pub fn add_function(mut self, value: impl Into<Function>) -> Self {
         self.functions.push(value.into());
         self
@@ -570,7 +576,7 @@ impl EmbeddingList {
         &self.vectors
     }
 
-    /// Adds one add vector to the existing values.
+    /// Adds one vector to the existing values.
     pub fn add_vector(mut self, value: Vec<f32>) -> Self {
         self.vectors.push(value);
         self
@@ -988,19 +994,19 @@ impl LexicalHighlighter {
         self.num_of_fragments
     }
 
-    /// Adds one add highlight query to the existing values.
+    /// Adds one highlight query to the existing values.
     pub fn add_highlight_query(mut self, value: HighlightQuery) -> Self {
         self.highlight_queries.push(value);
         self
     }
 
-    /// Adds one add pre tag to the existing values.
+    /// Adds one pre tag to the existing values.
     pub fn add_pre_tag(mut self, value: impl Into<String>) -> Self {
         self.pre_tags.push(value.into());
         self
     }
 
-    /// Adds one add post tag to the existing values.
+    /// Adds one post tag to the existing values.
     pub fn add_post_tag(mut self, value: impl Into<String>) -> Self {
         self.post_tags.push(value.into());
         self
@@ -1187,25 +1193,25 @@ impl SemanticHighlighter {
         self.max_client_batch_size
     }
 
-    /// Adds one add query to the existing values.
+    /// Adds one query to the existing values.
     pub fn add_query(mut self, value: impl Into<String>) -> Self {
         self.queries.push(value.into());
         self
     }
 
-    /// Adds one add input field to the existing values.
+    /// Adds one input field to the existing values.
     pub fn add_input_field(mut self, value: impl Into<String>) -> Self {
         self.input_fields.push(value.into());
         self
     }
 
-    /// Adds one add pre tag to the existing values.
+    /// Adds one pre tag to the existing values.
     pub fn add_pre_tag(mut self, value: impl Into<String>) -> Self {
         self.pre_tags.push(value.into());
         self
     }
 
-    /// Adds one add post tag to the existing values.
+    /// Adds one post tag to the existing values.
     pub fn add_post_tag(mut self, value: impl Into<String>) -> Self {
         self.post_tags.push(value.into());
         self
@@ -1249,7 +1255,7 @@ impl QueryResults {
         &self.output_fields
     }
 
-    /// Performs the output field names operation.
+    /// Sets the output field names and returns the updated value.
     pub fn output_field_names(
         mut self,
         values: impl IntoIterator<Item = impl Into<String>>,
@@ -1272,7 +1278,7 @@ impl QueryResults {
         &self.output_field_names
     }
 
-    /// Adds one add output field to the existing values.
+    /// Adds one output field to the existing values.
     pub fn add_output_field(mut self, value: FieldData) -> Self {
         self.output_fields.push(value);
         self
@@ -1298,7 +1304,7 @@ impl QueryResults {
             .map_or(0, |field| field.len() as u64)
     }
 
-    /// Adds one add output field name to the existing values.
+    /// Adds one output field name to the existing values.
     pub fn add_output_field_name(mut self, value: impl Into<String>) -> Self {
         self.output_field_names.push(value.into());
         self
@@ -1333,6 +1339,11 @@ impl QueryResults {
     /// Use this when rows must be owned, mutated, serialized, or passed to a
     /// JSON-oriented API. Prefer [`Self::rows`] for borrowing typed access
     /// without allocating a map and JSON values for every row.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::MalformedResponse`] when the output fields have
+    /// inconsistent row counts.
     pub fn get_output_rows(&self) -> Result<Vec<EntityRow>> {
         let row_count = output_row_count(&self.output_fields)?;
         (0..row_count)
@@ -1345,6 +1356,12 @@ impl QueryResults {
     /// Use this when an owned or serializable row is required. Prefer
     /// [`Self::rows`] when processing result values through borrowing typed
     /// accessors.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::MalformedResponse`] when the output fields have
+    /// inconsistent row counts, or [`Error::Validation`] when `index` is out of
+    /// bounds.
     pub fn get_output_row(&self, index: usize) -> Result<EntityRow> {
         let row_count = output_row_count(&self.output_fields)?;
         if index >= row_count {
@@ -1430,13 +1447,13 @@ impl HighlightResult {
         &self.scores
     }
 
-    /// Adds one add fragment to the existing values.
+    /// Adds one fragment to the existing values.
     pub fn add_fragment(mut self, value: impl Into<String>) -> Self {
         self.fragments.push(value.into());
         self
     }
 
-    /// Adds one add score to the existing values.
+    /// Adds one score to the existing values.
     pub fn add_score(mut self, value: f32) -> Self {
         self.scores.push(value);
         self
@@ -1528,7 +1545,7 @@ impl SingleResult {
         self.element_indices.as_deref()
     }
 
-    /// Adds one add element index to the existing values.
+    /// Adds one element index to the existing values.
     pub fn add_element_index(mut self, value: i64) -> Self {
         self.element_indices
             .get_or_insert_with(Vec::new)
@@ -1553,7 +1570,7 @@ impl SingleResult {
         &self.output_fields
     }
 
-    /// Performs the output field names operation.
+    /// Sets the output field names and returns the updated value.
     pub fn output_field_names(
         mut self,
         values: impl IntoIterator<Item = impl Into<String>>,
@@ -1640,13 +1657,13 @@ impl SingleResult {
         self.ids.is_empty()
     }
 
-    /// Adds one add score to the existing values.
+    /// Adds one score to the existing values.
     pub fn add_score(mut self, value: f32) -> Self {
         self.scores.push(value);
         self
     }
 
-    /// Adds one add output field to the existing values.
+    /// Adds one output field to the existing values.
     pub fn add_output_field(mut self, value: FieldData) -> Self {
         self.output_fields.push(value);
         self
@@ -1657,13 +1674,13 @@ impl SingleResult {
         self.output_fields.iter().find(|field| field.name() == name)
     }
 
-    /// Adds one add output field name to the existing values.
+    /// Adds one output field name to the existing values.
     pub fn add_output_field_name(mut self, value: impl Into<String>) -> Self {
         self.output_field_names.push(value.into());
         self
     }
 
-    /// Adds one add highlight result to the existing values.
+    /// Adds one highlight result to the existing values.
     pub fn add_highlight_result(mut self, value: HashMap<String, HighlightResult>) -> Self {
         self.highlight_results.push(value);
         self
@@ -1694,6 +1711,11 @@ impl SingleResult {
     /// fields. Use this when rows must be owned, mutated, serialized, or passed
     /// to a JSON-oriented API. Prefer [`Self::rows`] for borrowing typed access
     /// without allocating a map and JSON values for every row.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::MalformedResponse`] when the result fields have
+    /// inconsistent row counts.
     pub fn get_output_rows(&self) -> Result<Vec<EntityRow>> {
         self.validate_row_counts()?;
         (0..self.len())
@@ -1707,6 +1729,12 @@ impl SingleResult {
     /// fields. Use this when an owned or serializable row is required. Prefer
     /// [`Self::rows`] when processing result values through borrowing typed
     /// accessors.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::MalformedResponse`] when the result fields have
+    /// inconsistent row counts, or [`Error::Validation`] when `index` is out of
+    /// bounds.
     pub fn get_output_row(&self, index: usize) -> Result<EntityRow> {
         self.validate_row_counts()?;
         if index >= self.len() {
@@ -2413,7 +2441,7 @@ impl SearchResults {
         &self.recalls
     }
 
-    /// Adds one add result to the existing values.
+    /// Adds one result to the existing values.
     pub fn add_result(mut self, value: SingleResult) -> Self {
         self.results.push(value);
         self
@@ -2429,7 +2457,7 @@ impl SearchResults {
         self.results.is_empty()
     }
 
-    /// Adds one add recall to the existing values.
+    /// Adds one recall to the existing values.
     pub fn add_recall(mut self, value: f32) -> Self {
         self.recalls.push(value);
         self

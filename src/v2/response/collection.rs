@@ -96,7 +96,7 @@ impl DescribeCollectionResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> DescribeCollectionResponse {
         self.value
     }
@@ -186,7 +186,7 @@ impl BatchDescribeCollectionsResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> BatchDescribeCollectionsResponse {
         self.value
     }
@@ -283,7 +283,7 @@ impl DescribeReplicasResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> DescribeReplicasResponse {
         self.value
     }
@@ -359,7 +359,7 @@ impl GetCollectionStatsResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> GetCollectionStatsResponse {
         self.value
     }
@@ -449,7 +449,7 @@ impl GetLoadStateResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> GetLoadStateResponse {
         self.value
     }
@@ -589,7 +589,7 @@ impl ListCollectionsResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> ListCollectionsResponse {
         self.value
     }
@@ -624,7 +624,7 @@ impl HasCollectionResponse {
         }
     }
 
-    /// Returns the exists.
+    /// Returns whether the collection exists.
     pub fn exists(&self) -> bool {
         self.0
     }
@@ -649,13 +649,13 @@ pub(crate) struct HasCollectionResponseBuilder {
 
 #[cfg(test)]
 impl HasCollectionResponseBuilder {
-    /// Sets the has and returns the updated value.
+    /// Sets whether the collection exists and returns the updated value.
     pub fn has(mut self, value: bool) -> Self {
         self.value.0 = value;
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> HasCollectionResponse {
         self.value
     }

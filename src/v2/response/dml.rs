@@ -187,7 +187,7 @@ impl DmlResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> DmlResponse {
         self.value
     }

@@ -116,7 +116,7 @@ impl DescribeAliasResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> DescribeAliasResponse {
         self.value
     }
@@ -220,7 +220,7 @@ impl ListAliasesResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> ListAliasesResponse {
         self.value
     }

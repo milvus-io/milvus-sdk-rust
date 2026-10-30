@@ -80,7 +80,7 @@ impl ClientV2 {
         self.status(status)
     }
 
-    /// Lists resource groups visible in the current database.
+    /// Lists resource groups visible to the caller.
     pub async fn list_resource_groups(
         &self,
         request: request::resource_group::ListResourceGroupsRequest,

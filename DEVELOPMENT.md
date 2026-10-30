@@ -29,8 +29,10 @@ On supported Linux distributions and macOS, install the development dependencies
 
 The script installs the Rust toolchain, formatting and linting components, and platform build
 dependencies. It attempts to install the optional coverage tools `cargo-llvm-cov` and the `lcov`
-package that provides `genhtml`; failed optional installations produce warnings rather than failing
-the complete setup. Set `SKIP_COVERAGE_TOOLS=true` to omit them.
+package that provides `genhtml`; failed optional installations — `cargo-llvm-cov`, and `lcov` via
+Homebrew on macOS — produce warnings rather than failing the complete setup. On Linux, `lcov` is
+installed together with the mandatory system packages, so a failed install aborts the script. Set
+`SKIP_COVERAGE_TOOLS=true` to omit them.
 
 On Linux, the script also installs Python 3 and Docker when needed, starts Docker when possible,
 and verifies daemon access. On macOS, it uses Homebrew and prepares the compile and non-server test

@@ -16,7 +16,7 @@
 
 //! Response types returned by query and search operations.
 //!
-//! Query and search responses may contain multiple result groups when a request has multiple query
+//! Search responses may contain multiple result groups when a request has multiple query
 //! vectors. Iterate each group and then its rows before reading IDs, scores, or output fields. The
 //! borrowed row iterators avoid materializing every result as an owned JSON map.
 
@@ -814,7 +814,7 @@ impl QueryResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> QueryResponse {
         self.value
     }
@@ -1609,7 +1609,7 @@ impl SearchResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> SearchResponse {
         self.value
     }

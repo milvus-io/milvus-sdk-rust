@@ -89,7 +89,7 @@ impl ListDatabasesResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> ListDatabasesResponse {
         self.value
     }
@@ -211,7 +211,7 @@ impl DescribeDatabaseResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> DescribeDatabaseResponse {
         self.value
     }

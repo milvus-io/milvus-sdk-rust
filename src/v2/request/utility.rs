@@ -760,8 +760,8 @@ fn size_to_mb(size: i64, unit: TargetSizeUnit) -> Result<i64> {
 pub struct OptimizeRequest {
     pub(crate) database_name: Option<String>,
     pub(crate) collection_name: String,
-    /// Target segment size such as `512MB` or `1GB`. Empty means that no
-    /// explicit target size is sent to Milvus.
+    /// Target segment size such as `512MB` or `1GB`. Empty sends a `0` target
+    /// size so the server uses its default.
     pub(crate) target_size: String,
     /// Start the optimization in a Tokio task and return immediately.
     pub(crate) async_mode: bool,
@@ -1117,13 +1117,13 @@ impl RunAnalyzerRequestBuilder {
         self
     }
 
-    /// Returns this value configured with with detail.
+    /// Sets whether the request should include detail and returns the updated value.
     pub fn with_detail(mut self, value: bool) -> Self {
         self.value.with_detail = value;
         self
     }
 
-    /// Returns this value configured with with hash.
+    /// Sets whether the request should include hash and returns the updated value.
     pub fn with_hash(mut self, value: bool) -> Self {
         self.value.with_hash = value;
         self

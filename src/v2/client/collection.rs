@@ -145,7 +145,8 @@ impl ClientV2 {
         .await
     }
 
-    /// Refreshes a loaded collection or its partitions on query nodes.
+    /// Refreshes the loaded data of a collection on query nodes (its partitions are refreshed
+    /// together).
     ///
     /// Synchronous requests poll until the refreshed load is complete. Use this after new data or
     /// index changes when the existing loaded view must be updated.
@@ -370,8 +371,8 @@ impl ClientV2 {
 
     /// Removes all entities while retaining the collection schema, indexes, and properties.
     ///
-    /// Truncation is destructive and non-idempotent. A successful operation updates the shared DML
-    /// timestamp state used by Session-consistency reads.
+    /// Truncation is destructive and non-idempotent. A successful operation invalidates the shared
+    /// DML timestamp entry so Session-consistency reads do not reuse a stale session timestamp.
     pub async fn truncate_collection(
         &self,
         request: request::collection::TruncateCollectionRequest,

@@ -164,13 +164,13 @@ impl ResourceGroupConfig {
         &self.node_labels
     }
 
-    /// Adds one add transfer from to the existing values.
+    /// Adds one transfer from to the existing values.
     pub fn add_transfer_from(mut self, value: impl Into<String>) -> Self {
         self.transfer_from.push(value.into());
         self
     }
 
-    /// Adds one add transfer to to the existing values.
+    /// Adds one transfer to to the existing values.
     pub fn add_transfer_to(mut self, value: impl Into<String>) -> Self {
         self.transfer_to.push(value.into());
         self
@@ -451,7 +451,7 @@ impl ResourceGroupDescription {
         &self.nodes
     }
 
-    /// Adds one add node to the existing values.
+    /// Adds one node to the existing values.
     pub fn add_node(mut self, value: ResourceGroupNode) -> Self {
         self.nodes.push(value);
         self
