@@ -453,6 +453,8 @@ impl FieldSchema {
     }
 
     /// Sets the dimension and returns the updated value.
+    ///
+    /// A value of `0` is ignored, leaving the dimension unset.
     pub fn dimension(mut self, dimension: u32) -> Self {
         if dimension > 0 {
             self.type_params.insert("dim".into(), dimension.to_string());
@@ -461,6 +463,8 @@ impl FieldSchema {
     }
 
     /// Sets the dimension and returns this value for further mutation.
+    ///
+    /// A value of `0` is ignored, leaving the dimension unset.
     pub fn set_dimension(&mut self, dimension: u32) -> &mut Self {
         if dimension > 0 {
             self.type_params.insert("dim".into(), dimension.to_string());
@@ -892,7 +896,7 @@ impl StructFieldSchema {
         &self.fields
     }
 
-    /// Adds one add field to the existing values.
+    /// Adds one field to the existing values.
     pub fn add_field(mut self, field: FieldSchema) -> Self {
         self.fields.push(field);
         self
@@ -1339,19 +1343,19 @@ impl CollectionSchema {
         &self.properties
     }
 
-    /// Adds one add field to the existing values.
+    /// Adds one field to the existing values.
     pub fn add_field(mut self, field: FieldSchema) -> Self {
         self.fields.push(field);
         self
     }
 
-    /// Adds one add struct field to the existing values.
+    /// Adds one struct field to the existing values.
     pub fn add_struct_field(mut self, field: StructFieldSchema) -> Self {
         self.struct_fields.push(field);
         self
     }
 
-    /// Adds one add function to the existing values.
+    /// Adds one function to the existing values.
     pub fn add_function(mut self, function: impl Into<Function>) -> Self {
         self.functions.push(function.into());
         self
@@ -1632,7 +1636,7 @@ impl CollectionDesc {
         &self.field_names
     }
 
-    /// Performs the vector field names operation.
+    /// Sets the vector field names and returns the updated value.
     pub fn vector_field_names(
         mut self,
         values: impl IntoIterator<Item = impl Into<String>>,
@@ -1884,19 +1888,19 @@ impl CollectionDesc {
         self.schema.get_external_spec()
     }
 
-    /// Adds one add field name to the existing values.
+    /// Adds one field name to the existing values.
     pub fn add_field_name(mut self, value: impl Into<String>) -> Self {
         self.field_names.push(value.into());
         self
     }
 
-    /// Adds one add vector field name to the existing values.
+    /// Adds one vector field name to the existing values.
     pub fn add_vector_field_name(mut self, value: impl Into<String>) -> Self {
         self.vector_field_names.push(value.into());
         self
     }
 
-    /// Adds one add alias to the existing values.
+    /// Adds one alias to the existing values.
     pub fn add_alias(mut self, value: impl Into<String>) -> Self {
         self.aliases.push(value.into());
         self
@@ -2067,7 +2071,7 @@ impl ShardReplica {
         &self.node_ids
     }
 
-    /// Adds one add node id to the existing values.
+    /// Adds one node id to the existing values.
     pub fn add_node_id(mut self, value: i64) -> Self {
         self.node_ids.push(value);
         self
@@ -2223,19 +2227,19 @@ impl ReplicaInfo {
         &self.outbound_nodes
     }
 
-    /// Adds one add partition id to the existing values.
+    /// Adds one partition id to the existing values.
     pub fn add_partition_id(mut self, value: i64) -> Self {
         self.partition_ids.push(value);
         self
     }
 
-    /// Adds one add shard to the existing values.
+    /// Adds one shard to the existing values.
     pub fn add_shard(mut self, value: ShardReplica) -> Self {
         self.shards.push(value);
         self
     }
 
-    /// Adds one add node id to the existing values.
+    /// Adds one node id to the existing values.
     pub fn add_node_id(mut self, value: i64) -> Self {
         self.node_ids.push(value);
         self

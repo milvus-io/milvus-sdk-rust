@@ -755,7 +755,7 @@ impl QuerySegmentInfo {
         self.storage_version
     }
 
-    /// Adds one add node id to the existing values.
+    /// Adds one node id to the existing values.
     pub fn add_node_id(mut self, value: i64) -> Self {
         self.node_ids.push(value);
         self
@@ -987,7 +987,7 @@ impl CompactionMerge {
         &self.target_segment_ids
     }
 
-    /// Adds one add source segment id to the existing values.
+    /// Adds one source segment id to the existing values.
     pub fn add_source_segment_id(mut self, value: i64) -> Self {
         self.source_segment_ids.push(value);
         self
@@ -1164,7 +1164,7 @@ impl AnalyzerResult {
         &self.tokens
     }
 
-    /// Adds one add token to the existing values.
+    /// Adds one token to the existing values.
     pub fn add_token(mut self, value: AnalyzerToken) -> Self {
         self.tokens.push(value);
         self

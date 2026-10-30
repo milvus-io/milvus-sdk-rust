@@ -125,7 +125,7 @@ invalidations, and progress from index, load, compaction, and flush polling:
 
 ```toml
 [dependencies]
-milvus-sdk-rust = { version = "2.6", features = ["tracing"] }
+milvus-sdk-rust = { version = "3", features = ["tracing"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 ```
 

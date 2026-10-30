@@ -220,7 +220,7 @@ impl RoleDescription {
         &self.grant_items
     }
 
-    /// Adds one add grant item to the existing values.
+    /// Adds one grant item to the existing values.
     pub fn add_grant_item(mut self, value: GrantItem) -> Self {
         self.grant_items.push(value);
         self
@@ -300,7 +300,7 @@ impl UserDescription {
         &self.roles
     }
 
-    /// Adds one add role to the existing values.
+    /// Adds one role to the existing values.
     pub fn add_role(mut self, value: impl Into<String>) -> Self {
         self.roles.push(value.into());
         self
@@ -364,7 +364,7 @@ impl PrivilegeGroupInfo {
         &self.privileges
     }
 
-    /// Adds one add privilege to the existing values.
+    /// Adds one privilege to the existing values.
     pub fn add_privilege(mut self, value: impl Into<String>) -> Self {
         self.privileges.push(value.into());
         self

@@ -292,7 +292,7 @@ impl HasPartitionResponse {
         }
     }
 
-    /// Returns the exists.
+    /// Returns whether the partition exists.
     pub fn exists(&self) -> bool {
         self.0
     }
@@ -317,7 +317,7 @@ pub(crate) struct HasPartitionResponseBuilder {
 
 #[cfg(test)]
 impl HasPartitionResponseBuilder {
-    /// Sets the has and returns the updated value.
+    /// Sets whether the partition exists and returns the updated value.
     pub fn has(mut self, value: bool) -> Self {
         self.value.0 = value;
         self

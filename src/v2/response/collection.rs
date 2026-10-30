@@ -677,7 +677,7 @@ pub(crate) struct HasCollectionResponseBuilder {
 
 #[cfg(test)]
 impl HasCollectionResponseBuilder {
-    /// Sets the has and returns the updated value.
+    /// Sets whether the collection exists and returns the updated value.
     pub fn has(mut self, value: bool) -> Self {
         self.value.0 = value;
         self
