@@ -40,6 +40,23 @@
   Leave the consistency level unset to use the server default.
 - Tag Zilliz Cloud only public APIs with a `**Zilliz Cloud only.**` rustdoc marker
 
+## milvus-sdk-rust 2.6.2 (2026-10-23)
+
+### Feature
+
+- Support struct-level `type_params` (`mmap.enabled`, `warmup`) on `StructFieldSchema`
+
+### Bug
+
+- Emit the `reranker` parameter for RRF and weighted rerankers so the Milvus FunctionScore
+  path accepts them
+
+### Improvement
+
+- Deprecate `ConsistencyLevel::Customized` to match newer SDKs and the proto; behavior is
+  unchanged for existing client code (the variant still encodes/decodes as proto value 4).
+  Leave the consistency level unset to use the server default.
+
 ## milvus-sdk-rust 3.0.2 (2026-09-16)
 
 ### Feature

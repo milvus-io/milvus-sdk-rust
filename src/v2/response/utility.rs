@@ -271,7 +271,7 @@ pub(crate) struct CheckHealthResponseBuilder {
 
 #[cfg(test)]
 impl CheckHealthResponseBuilder {
-    /// Returns whether healthy.
+    /// Sets whether healthy and returns the updated value.
     pub fn is_healthy(mut self, value: bool) -> Self {
         self.value.is_healthy = value;
         self

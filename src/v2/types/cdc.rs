@@ -107,7 +107,7 @@ impl ReplicateCluster {
         &self.token
     }
 
-    /// Performs the physical channels operation.
+    /// Sets the physical channels and returns the updated value.
     pub fn physical_channels(
         mut self,
         values: impl IntoIterator<Item = impl Into<String>>,
@@ -130,7 +130,7 @@ impl ReplicateCluster {
         &self.physical_channels
     }
 
-    /// Adds one add physical channel to the existing values.
+    /// Adds one physical channel to the existing values.
     pub fn add_physical_channel(mut self, value: impl Into<String>) -> Self {
         self.physical_channels.push(value.into());
         self
@@ -291,13 +291,13 @@ impl ReplicateConfiguration {
         &self.topology
     }
 
-    /// Adds one add cluster to the existing values.
+    /// Adds one cluster to the existing values.
     pub fn add_cluster(mut self, value: ReplicateCluster) -> Self {
         self.clusters.push(value);
         self
     }
 
-    /// Adds one add topology to the existing values.
+    /// Adds one topology to the existing values.
     pub fn add_topology(mut self, value: CrossClusterTopology) -> Self {
         self.topology.push(value);
         self
@@ -607,7 +607,7 @@ impl DumpedMessage {
         &self.properties
     }
 
-    /// Adds one add payload to the existing values.
+    /// Adds one payload to the existing values.
     pub fn add_payload(mut self, value: u8) -> Self {
         self.payload.push(value);
         self

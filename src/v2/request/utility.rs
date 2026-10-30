@@ -1315,13 +1315,13 @@ impl RunAnalyzerRequestBuilder {
         self
     }
 
-    /// Returns this value configured with with detail.
+    /// Sets whether the request should include detail and returns the updated value.
     pub fn with_detail(mut self, value: bool) -> Self {
         self.value.with_detail = value;
         self
     }
 
-    /// Returns this value configured with with hash.
+    /// Sets whether the request should include hash and returns the updated value.
     pub fn with_hash(mut self, value: bool) -> Self {
         self.value.with_hash = value;
         self

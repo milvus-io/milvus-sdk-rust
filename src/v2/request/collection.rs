@@ -712,7 +712,7 @@ impl DropCollectionRequestBuilder {
     /// # Errors
     ///
     /// Returns [`crate::v2::error::Error::Validation`] when:
-    /// - the collection name (and database name when supplied) must not be empty
+    /// - the collection name must not be empty
     pub fn build(self) -> Result<DropCollectionRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -798,7 +798,7 @@ impl HasCollectionRequestBuilder {
     /// # Errors
     ///
     /// Returns [`crate::v2::error::Error::Validation`] when:
-    /// - the collection name (and database name when supplied) must not be empty
+    /// - the collection name must not be empty
     pub fn build(self) -> Result<HasCollectionRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -884,7 +884,7 @@ impl ReleaseCollectionRequestBuilder {
     /// # Errors
     ///
     /// Returns [`crate::v2::error::Error::Validation`] when:
-    /// - the collection name (and database name when supplied) must not be empty
+    /// - the collection name must not be empty
     pub fn build(self) -> Result<ReleaseCollectionRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -970,7 +970,7 @@ impl DescribeCollectionRequestBuilder {
     /// # Errors
     ///
     /// Returns [`crate::v2::error::Error::Validation`] when:
-    /// - the collection name (and database name when supplied) must not be empty
+    /// - the collection name must not be empty
     pub fn build(self) -> Result<DescribeCollectionRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -1179,7 +1179,7 @@ impl LoadCollectionRequestBuilder {
     /// - `replica_number` must be greater than zero
     /// - `load_fields` must not contain empty values
     /// - `resource_groups` must not contain empty values
-    /// - the collection name (and database name when supplied) must not be empty
+    /// - the collection name must not be empty
     pub fn build(self) -> Result<LoadCollectionRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -1301,7 +1301,7 @@ impl RefreshLoadRequestBuilder {
     /// # Errors
     ///
     /// Returns [`crate::v2::error::Error::Validation`] when:
-    /// - the collection name (and database name when supplied) must not be empty
+    /// - the collection name must not be empty
     pub fn build(self) -> Result<RefreshLoadRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -1504,7 +1504,7 @@ impl GetCollectionStatsRequestBuilder {
     /// # Errors
     ///
     /// Returns [`crate::v2::error::Error::Validation`] when:
-    /// - the collection name (and database name when supplied) must not be empty
+    /// - the collection name must not be empty
     pub fn build(self) -> Result<GetCollectionStatsRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -1702,7 +1702,7 @@ impl GetLoadStateRequestBuilder {
     ///
     /// Returns [`crate::v2::error::Error::Validation`] when:
     /// - `partition_names` must not contain empty values
-    /// - the collection name (and database name when supplied) must not be empty
+    /// - the collection name must not be empty
     pub fn build(self) -> Result<GetLoadStateRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -1814,7 +1814,7 @@ impl AlterCollectionPropertiesRequestBuilder {
     ///
     /// Returns [`crate::v2::error::Error::Validation`] when:
     /// - `properties`: must contain at least one property
-    /// - the collection name (and database name when supplied) must not be empty
+    /// - the collection name must not be empty
     pub fn build(self) -> Result<AlterCollectionPropertiesRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -1931,7 +1931,7 @@ impl DropCollectionPropertiesRequestBuilder {
     ///
     /// Returns [`crate::v2::error::Error::Validation`] when:
     /// - `property_keys`: must contain at least one property key
-    /// - the collection name (and database name when supplied) must not be empty
+    /// - the collection name must not be empty
     pub fn build(self) -> Result<DropCollectionPropertiesRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -2062,7 +2062,7 @@ impl AlterCollectionFieldPropertiesRequestBuilder {
     /// Returns [`crate::v2::error::Error::Validation`] when:
     /// - `field_name` must not be empty
     /// - `properties`: must contain at least one property
-    /// - the collection name (and database name when supplied) must not be empty
+    /// - the collection name must not be empty
     pub fn build(self) -> Result<AlterCollectionFieldPropertiesRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -2194,7 +2194,7 @@ impl DropCollectionFieldPropertiesRequestBuilder {
     /// Returns [`crate::v2::error::Error::Validation`] when:
     /// - `field_name` must not be empty
     /// - `property_keys`: must contain at least one property key
-    /// - the collection name (and database name when supplied) must not be empty
+    /// - the collection name must not be empty
     pub fn build(self) -> Result<DropCollectionFieldPropertiesRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -2341,7 +2341,7 @@ impl AddCollectionFieldRequestBuilder {
     /// - `field.data_type`: must be specified
     /// - `field.nullable`: adding a vector field to an existing collection requires nullable = true
     /// - the field fails its data-type-specific validation
-    /// - the collection name (and database name when supplied) must not be empty
+    /// - the collection name must not be empty
     pub fn build(self) -> Result<AddCollectionFieldRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -2474,7 +2474,7 @@ impl AddCollectionFunctionRequestBuilder {
     /// Returns [`crate::v2::error::Error::Validation`] when:
     /// - `function.name` must not be empty
     /// - `function`: must be specified
-    /// - the collection name (and database name when supplied) must not be empty
+    /// - the collection name must not be empty
     pub fn build(self) -> Result<AddCollectionFunctionRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -2590,7 +2590,7 @@ impl AlterCollectionFunctionRequestBuilder {
     /// Returns [`crate::v2::error::Error::Validation`] when:
     /// - `function.name` must not be empty
     /// - `function`: must be specified
-    /// - the collection name (and database name when supplied) must not be empty
+    /// - the collection name must not be empty
     pub fn build(self) -> Result<AlterCollectionFunctionRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -2709,7 +2709,7 @@ impl DropCollectionFunctionRequestBuilder {
     ///
     /// Returns [`crate::v2::error::Error::Validation`] when:
     /// - `function_name` must not be empty
-    /// - the collection name (and database name when supplied) must not be empty
+    /// - the collection name must not be empty
     pub fn build(self) -> Result<DropCollectionFunctionRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -2796,7 +2796,7 @@ impl TruncateCollectionRequestBuilder {
     /// # Errors
     ///
     /// Returns [`crate::v2::error::Error::Validation`] when:
-    /// - the collection name (and database name when supplied) must not be empty
+    /// - the collection name must not be empty
     pub fn build(self) -> Result<TruncateCollectionRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -2888,7 +2888,7 @@ impl DescribeReplicasRequestBuilder {
         self
     }
 
-    /// Returns this value configured with with shard nodes.
+    /// Sets whether the request should include shard nodes and returns the updated value.
     pub fn with_shard_nodes(mut self, value: bool) -> Self {
         self.value.with_shard_nodes = value;
         self
@@ -2899,7 +2899,7 @@ impl DescribeReplicasRequestBuilder {
     /// # Errors
     ///
     /// Returns [`crate::v2::error::Error::Validation`] when:
-    /// - the collection name (and database name when supplied) must not be empty
+    /// - the collection name must not be empty
     pub fn build(self) -> Result<DescribeReplicasRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -3024,7 +3024,7 @@ impl RenameCollectionRequestBuilder {
     ///
     /// Returns [`crate::v2::error::Error::Validation`] when:
     /// - `new_collection_name` must not be empty
-    /// - the collection name (and database name when supplied) must not be empty
+    /// - the collection name must not be empty
     pub fn build(self) -> Result<RenameCollectionRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -3153,7 +3153,7 @@ impl AddCollectionStructFieldRequestBuilder {
     /// - `struct_field.name`: must be specified
     /// - `struct_field.nullable`: must be true when adding a struct field to an existing collection
     /// - the struct field fails its data-type-specific validation
-    /// - the collection name (and database name when supplied) must not be empty
+    /// - the collection name must not be empty
     pub fn build(self) -> Result<AddCollectionStructFieldRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -3379,7 +3379,7 @@ impl AddFunctionFieldRequestBuilder {
     ///   collection
     /// - `field.data_type` must match the output type required by the function type
     /// - the bound `index` fails its validation
-    /// - the collection name (and database name when supplied) must not be empty
+    /// - the collection name must not be empty
     pub fn build(self) -> Result<AddFunctionFieldRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -3541,7 +3541,7 @@ impl DropFunctionFieldRequestBuilder {
     ///
     /// Returns [`crate::v2::error::Error::Validation`] when:
     /// - `function_name` must not be empty
-    /// - the collection name (and database name when supplied) must not be empty
+    /// - the collection name must not be empty
     pub fn build(self) -> Result<DropFunctionFieldRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),
@@ -3676,7 +3676,7 @@ impl DropCollectionFieldRequestBuilder {
     ///
     /// Returns [`crate::v2::error::Error::Validation`] when:
     /// - `field_name/field_id`: exactly one of field_name or field_id must be specified
-    /// - the collection name (and database name when supplied) must not be empty
+    /// - the collection name must not be empty
     pub fn build(self) -> Result<DropCollectionFieldRequest> {
         validate_collection_name(
             self.value.database_name.as_deref(),

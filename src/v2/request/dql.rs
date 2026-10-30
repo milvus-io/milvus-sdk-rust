@@ -18,8 +18,9 @@
 //!
 //! Choose [`QueryRequest`] for scalar/filter reads and [`SearchRequest`] for nearest-neighbor
 //! vector search. Both builders require a collection name; search additionally requires query
-//! vectors and an approximate-nearest-neighbor field. Set `output_fields` to select returned
-//! fields, and use `limit` to control the number of rows per query vector.
+//! vectors unless the request targets primary-key IDs. The approximate-nearest-neighbor field
+//! is optional. Set `output_fields` to select returned fields, and use `limit` to control the
+//! number of rows per query vector.
 
 use crate::proto::{common, milvus, schema};
 use crate::v2::error::{Error, Result};

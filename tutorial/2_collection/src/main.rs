@@ -169,7 +169,7 @@ async fn demonstrate_collection_interfaces(
         .await?;
     println!("get_load_state completed");
     println!(
-        "Load state: {:?}, progress={}%%",
+        "Load state: {:?}, progress={}%",
         load_state.state(),
         load_state.progress()
     );

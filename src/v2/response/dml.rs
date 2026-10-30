@@ -129,6 +129,9 @@ impl DmlResponse {
 
     /// Returns the cost reported by the server, or `-1` when the server did
     /// not report one.
+    ///
+    /// When the client short-circuits an empty insert, upsert, or delete
+    /// before issuing the RPC, no server cost is reported and this returns `0`.
     pub fn cost(&self) -> i64 {
         self.cost
     }
