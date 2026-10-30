@@ -181,7 +181,7 @@ impl ClientV2 {
         Ok(response::utility::CheckHealthResponse::from_proto(response))
     }
 
-    /// Flushes pending insert data for a collection into durable storage.
+    /// Flushes pending insert data for the requested collection(s) into durable storage.
     pub async fn flush(
         &self,
         mut request: request::utility::FlushRequest,
@@ -197,9 +197,9 @@ impl ClientV2 {
     }
 
     /// Flushes pending insert data for all collections into durable storage.
-    // Milvus 2.6 still returns the deprecated aggregate flush timestamp.
+    ///
+    /// Milvus 2.6 still returns the deprecated aggregate flush timestamp.
     #[allow(deprecated)]
-    /// Performs the flush all operation.
     pub async fn flush_all(
         &self,
         mut request: request::utility::FlushAllRequest,
@@ -282,10 +282,12 @@ impl ClientV2 {
         Ok(response::utility::CompactResponse::from_proto(response))
     }
 
-    /// Starts an asynchronous collection-optimization task.
+    /// Starts a collection-optimization task.
     ///
-    /// Use the returned [`OptimizeTask`] to observe progress, wait for completion, or request
-    /// cooperative cancellation. Optimization may involve multiple server-side stages.
+    /// With the request's `async_mode` set, the task runs in a background Tokio task and this
+    /// method returns immediately; otherwise it runs to completion before returning. Use the
+    /// returned [`OptimizeTask`] to observe progress, wait for completion, or request cooperative
+    /// cancellation. Optimization may involve multiple server-side stages.
     pub async fn optimize(
         &self,
         request: request::utility::OptimizeRequest,

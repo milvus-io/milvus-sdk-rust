@@ -2571,7 +2571,7 @@ impl DescribeReplicasRequestBuilder {
         self
     }
 
-    /// Returns this value configured with with shard nodes.
+    /// Sets whether the request should include shard nodes and returns the updated value.
     pub fn with_shard_nodes(mut self, value: bool) -> Self {
         self.value.with_shard_nodes = value;
         self

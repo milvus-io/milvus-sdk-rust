@@ -283,7 +283,7 @@ impl UpsertRequestBuilder {
         self
     }
 
-    /// Adds one add field op to the existing values.
+    /// Adds one field op to the existing values.
     pub fn add_field_op(mut self, value: FieldPartialUpdateOp) -> Self {
         self.value.field_ops.push(value);
         self

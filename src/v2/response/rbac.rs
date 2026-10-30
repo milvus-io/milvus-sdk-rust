@@ -90,7 +90,7 @@ impl ListUsersResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> ListUsersResponse {
         self.value
     }
@@ -174,7 +174,7 @@ impl ListRolesResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> ListRolesResponse {
         self.value
     }
@@ -295,7 +295,7 @@ impl DescribeRoleResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> DescribeRoleResponse {
         self.value
     }
@@ -382,7 +382,7 @@ impl DescribeUserResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> DescribeUserResponse {
         self.value
     }
@@ -463,7 +463,7 @@ impl ListPrivilegeGroupsResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> ListPrivilegeGroupsResponse {
         self.value
     }

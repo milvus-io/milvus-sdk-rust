@@ -150,7 +150,7 @@ impl GetServerVersionResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> GetServerVersionResponse {
         self.value
     }
@@ -268,7 +268,7 @@ pub(crate) struct CheckHealthResponseBuilder {
 
 #[cfg(test)]
 impl CheckHealthResponseBuilder {
-    /// Returns whether healthy.
+    /// Sets whether healthy and returns the updated value.
     pub fn is_healthy(mut self, value: bool) -> Self {
         self.value.is_healthy = value;
         self
@@ -286,7 +286,7 @@ impl CheckHealthResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> CheckHealthResponse {
         self.value
     }
@@ -394,7 +394,7 @@ impl FlushResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> FlushResponse {
         self.value
     }
@@ -472,7 +472,7 @@ impl FlushAllResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> FlushAllResponse {
         self.value
     }
@@ -546,7 +546,7 @@ impl GetFlushAllStateResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> GetFlushAllStateResponse {
         self.value
     }
@@ -639,7 +639,7 @@ impl ListPersistentSegmentsResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> ListPersistentSegmentsResponse {
         self.value
     }
@@ -736,7 +736,7 @@ impl ListQuerySegmentsResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> ListQuerySegmentsResponse {
         self.value
     }
@@ -826,7 +826,7 @@ impl CompactResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> CompactResponse {
         self.value
     }
@@ -948,7 +948,7 @@ impl OptimizeResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> OptimizeResponse {
         self.value
     }
@@ -1080,7 +1080,7 @@ impl GetCompactionStateResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> GetCompactionStateResponse {
         self.value
     }
@@ -1177,7 +1177,7 @@ impl GetCompactionPlansResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> GetCompactionPlansResponse {
         self.value
     }
@@ -1270,7 +1270,7 @@ impl RunAnalyzerResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> RunAnalyzerResponse {
         self.value
     }

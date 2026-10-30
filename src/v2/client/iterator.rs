@@ -143,7 +143,9 @@ impl QueryIterator {
         Ok(Some(response))
     }
 
-    /// Releases cached rows and marks the query iterator closed.
+    /// Discards any locally cached surplus rows. Subsequent calls to
+    /// [`Self::next`] still fetch from the server unless the iterator has
+    /// already reached the end of the result set.
     pub async fn close(&mut self) -> Result<()> {
         self.cache = None;
         Ok(())

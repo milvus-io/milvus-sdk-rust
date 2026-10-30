@@ -427,13 +427,13 @@ impl Function {
         &self.params
     }
 
-    /// Adds one add input field to the existing values.
+    /// Adds one input field to the existing values.
     pub fn add_input_field(mut self, value: impl Into<String>) -> Self {
         self.input_fields.push(value.into());
         self
     }
 
-    /// Adds one add output field to the existing values.
+    /// Adds one output field to the existing values.
     pub fn add_output_field(mut self, value: impl Into<String>) -> Self {
         self.output_fields.push(value.into());
         self
@@ -800,7 +800,7 @@ pub enum FieldData {
 }
 
 impl FieldData {
-    /// Performs the boolean operation.
+    /// Creates a [`FieldData::Bool`] column for `name` with the given row values.
     pub fn boolean(name: impl Into<String>, values: Vec<bool>) -> Self {
         Self::Bool {
             name: name.into(),
@@ -808,7 +808,7 @@ impl FieldData {
         }
     }
 
-    /// Performs the int8 operation.
+    /// Creates a [`FieldData::Int8`] column for `name` with the given row values.
     pub fn int8(name: impl Into<String>, values: Vec<i8>) -> Self {
         Self::Int8 {
             name: name.into(),
@@ -816,7 +816,7 @@ impl FieldData {
         }
     }
 
-    /// Performs the int16 operation.
+    /// Creates a [`FieldData::Int16`] column for `name` with the given row values.
     pub fn int16(name: impl Into<String>, values: Vec<i16>) -> Self {
         Self::Int16 {
             name: name.into(),
@@ -824,7 +824,7 @@ impl FieldData {
         }
     }
 
-    /// Performs the int32 operation.
+    /// Creates a [`FieldData::Int32`] column for `name` with the given row values.
     pub fn int32(name: impl Into<String>, values: Vec<i32>) -> Self {
         Self::Int32 {
             name: name.into(),
@@ -832,7 +832,7 @@ impl FieldData {
         }
     }
 
-    /// Performs the int64 operation.
+    /// Creates a [`FieldData::Int64`] column for `name` with the given row values.
     pub fn int64(name: impl Into<String>, values: Vec<i64>) -> Self {
         Self::Int64 {
             name: name.into(),
@@ -840,7 +840,7 @@ impl FieldData {
         }
     }
 
-    /// Performs the float operation.
+    /// Creates a [`FieldData::Float`] column for `name` with the given row values.
     pub fn float(name: impl Into<String>, values: Vec<f32>) -> Self {
         Self::Float {
             name: name.into(),
@@ -848,7 +848,7 @@ impl FieldData {
         }
     }
 
-    /// Performs the double operation.
+    /// Creates a [`FieldData::Double`] column for `name` with the given row values.
     pub fn double(name: impl Into<String>, values: Vec<f64>) -> Self {
         Self::Double {
             name: name.into(),
@@ -856,7 +856,7 @@ impl FieldData {
         }
     }
 
-    /// Performs the varchar operation.
+    /// Creates a [`FieldData::VarChar`] column for `name` with the given row values.
     pub fn varchar(name: impl Into<String>, values: Vec<String>) -> Self {
         Self::VarChar {
             name: name.into(),
@@ -864,7 +864,7 @@ impl FieldData {
         }
     }
 
-    /// Performs the json operation.
+    /// Creates a [`FieldData::Json`] column for `name` with the given row values.
     pub fn json(name: impl Into<String>, values: Vec<serde_json::Value>) -> Self {
         Self::Json {
             name: name.into(),
@@ -872,7 +872,7 @@ impl FieldData {
         }
     }
 
-    /// Performs the geometry operation.
+    /// Creates a [`FieldData::Geometry`] column for `name` with the given row values.
     pub fn geometry(name: impl Into<String>, values: Vec<String>) -> Self {
         Self::Geometry {
             name: name.into(),
@@ -880,7 +880,7 @@ impl FieldData {
         }
     }
 
-    /// Performs the timestamptz operation.
+    /// Creates a [`FieldData::Timestamptz`] column for `name` with the given row values.
     pub fn timestamptz(name: impl Into<String>, values: Vec<String>) -> Self {
         Self::Timestamptz {
             name: name.into(),
@@ -888,7 +888,7 @@ impl FieldData {
         }
     }
 
-    /// Performs the array bool operation.
+    /// Creates a [`FieldData::ArrayBool`] column for `name` with the given per-row values.
     pub fn array_bool(name: impl Into<String>, values: Vec<Vec<bool>>) -> Self {
         Self::ArrayBool {
             name: name.into(),
@@ -896,7 +896,7 @@ impl FieldData {
         }
     }
 
-    /// Performs the array int8 operation.
+    /// Creates a [`FieldData::ArrayInt8`] column for `name` with the given per-row values.
     pub fn array_int8(name: impl Into<String>, values: Vec<Vec<i8>>) -> Self {
         Self::ArrayInt8 {
             name: name.into(),
@@ -904,7 +904,7 @@ impl FieldData {
         }
     }
 
-    /// Performs the array int16 operation.
+    /// Creates a [`FieldData::ArrayInt16`] column for `name` with the given per-row values.
     pub fn array_int16(name: impl Into<String>, values: Vec<Vec<i16>>) -> Self {
         Self::ArrayInt16 {
             name: name.into(),
@@ -912,7 +912,7 @@ impl FieldData {
         }
     }
 
-    /// Performs the array int32 operation.
+    /// Creates a [`FieldData::ArrayInt32`] column for `name` with the given per-row values.
     pub fn array_int32(name: impl Into<String>, values: Vec<Vec<i32>>) -> Self {
         Self::ArrayInt32 {
             name: name.into(),
@@ -920,7 +920,7 @@ impl FieldData {
         }
     }
 
-    /// Performs the array int64 operation.
+    /// Creates a [`FieldData::ArrayInt64`] column for `name` with the given per-row values.
     pub fn array_int64(name: impl Into<String>, values: Vec<Vec<i64>>) -> Self {
         Self::ArrayInt64 {
             name: name.into(),
@@ -928,7 +928,7 @@ impl FieldData {
         }
     }
 
-    /// Performs the array float operation.
+    /// Creates a [`FieldData::ArrayFloat`] column for `name` with the given per-row values.
     pub fn array_float(name: impl Into<String>, values: Vec<Vec<f32>>) -> Self {
         Self::ArrayFloat {
             name: name.into(),
@@ -936,7 +936,7 @@ impl FieldData {
         }
     }
 
-    /// Performs the array double operation.
+    /// Creates a [`FieldData::ArrayDouble`] column for `name` with the given per-row values.
     pub fn array_double(name: impl Into<String>, values: Vec<Vec<f64>>) -> Self {
         Self::ArrayDouble {
             name: name.into(),
@@ -944,7 +944,7 @@ impl FieldData {
         }
     }
 
-    /// Performs the array varchar operation.
+    /// Creates a [`FieldData::ArrayVarChar`] column for `name` with the given per-row values.
     pub fn array_varchar(name: impl Into<String>, values: Vec<Vec<String>>) -> Self {
         Self::ArrayVarChar {
             name: name.into(),
@@ -952,7 +952,7 @@ impl FieldData {
         }
     }
 
-    /// Performs the struct field operation.
+    /// Creates a [`FieldData::Struct`] column for `name` with the given per-row values.
     pub fn struct_field(name: impl Into<String>, values: Vec<Vec<StructValue>>) -> Self {
         Self::Struct {
             name: name.into(),
@@ -960,7 +960,7 @@ impl FieldData {
         }
     }
 
-    /// Performs the float vector operation.
+    /// Creates a [`FieldData::FloatVector`] column for `name` with the given per-row vectors.
     pub fn float_vector(name: impl Into<String>, values: Vec<Vec<f32>>) -> Self {
         Self::FloatVector {
             name: name.into(),
@@ -968,7 +968,7 @@ impl FieldData {
         }
     }
 
-    /// Performs the binary vector operation.
+    /// Creates a [`FieldData::BinaryVector`] column for `name` with the given per-row vectors.
     pub fn binary_vector(name: impl Into<String>, values: Vec<Vec<u8>>) -> Self {
         Self::BinaryVector {
             name: name.into(),
@@ -976,7 +976,7 @@ impl FieldData {
         }
     }
 
-    /// Performs the float16 vector operation.
+    /// Creates a [`FieldData::Float16Vector`] column for `name` with the given per-row vectors.
     pub fn float16_vector(name: impl Into<String>, values: Vec<Vec<u16>>) -> Self {
         Self::Float16Vector {
             name: name.into(),
@@ -984,7 +984,7 @@ impl FieldData {
         }
     }
 
-    /// Performs the bfloat16 vector operation.
+    /// Creates a [`FieldData::BFloat16Vector`] column for `name` with the given per-row vectors.
     pub fn bfloat16_vector(name: impl Into<String>, values: Vec<Vec<u16>>) -> Self {
         Self::BFloat16Vector {
             name: name.into(),
@@ -992,7 +992,7 @@ impl FieldData {
         }
     }
 
-    /// Performs the sparse float vector operation.
+    /// Creates a [`FieldData::SparseFloatVector`] column for `name` with the given per-row vectors.
     pub fn sparse_float_vector(name: impl Into<String>, values: Vec<SparseVector>) -> Self {
         Self::SparseFloatVector {
             name: name.into(),
@@ -1000,7 +1000,7 @@ impl FieldData {
         }
     }
 
-    /// Performs the int8 vector operation.
+    /// Creates a [`FieldData::Int8Vector`] column for `name` with the given per-row vectors.
     pub fn int8_vector(name: impl Into<String>, values: Vec<Vec<i8>>) -> Self {
         Self::Int8Vector {
             name: name.into(),
@@ -1008,7 +1008,7 @@ impl FieldData {
         }
     }
 
-    /// Returns this value configured with with validity.
+    /// Wraps this field data as a nullable field carrying the given per-row validity bitmap.
     pub fn with_validity(self, valid_data: Vec<bool>) -> Result<Self> {
         Self::nullable(self, valid_data)
     }
@@ -1307,7 +1307,12 @@ impl FieldData {
             .is_some_and(|valid| !valid)
     }
 
-    /// Performs the nullable operation.
+    /// Wraps `data` as a nullable field with the given per-row validity bitmap.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Validation`] when the number of valid rows in the
+    /// validity bitmap does not match the number of values in `data`.
     pub fn nullable(data: FieldData, valid_data: Vec<bool>) -> Result<Self> {
         let valid_count = valid_data.iter().filter(|valid| **valid).count();
         if data.len() != valid_count {
@@ -2656,6 +2661,8 @@ impl ConnectConfig {
     }
 
     /// Sets the token and returns the updated value.
+    ///
+    /// The value is base64-encoded before it is stored; [`Self::get_token`] returns the encoded form.
     pub fn token(mut self, token: impl Into<String>) -> Self {
         use base64::Engine;
         self.token = Some(base64::engine::general_purpose::STANDARD.encode(token.into()));
@@ -2663,6 +2670,8 @@ impl ConnectConfig {
     }
 
     /// Sets the token and returns this value for further mutation.
+    ///
+    /// The value is base64-encoded before it is stored; [`Self::get_token`] returns the encoded form.
     pub fn set_token(&mut self, token: impl Into<String>) -> &mut Self {
         use base64::Engine;
         self.token = Some(base64::engine::general_purpose::STANDARD.encode(token.into()));
@@ -2861,7 +2870,8 @@ impl ConnectConfig {
         &self.retry
     }
 
-    /// Performs the username password operation.
+    /// Sets the token to the base64-encoded `username:password` credentials and
+    /// returns the updated value.
     pub fn username_password(self, username: &str, password: &str) -> Self {
         self.token(format!("{username}:{password}"))
     }

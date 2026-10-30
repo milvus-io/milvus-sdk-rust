@@ -94,7 +94,7 @@ impl DescribeIndexResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> DescribeIndexResponse {
         self.value
     }
@@ -194,7 +194,7 @@ impl ListIndexesResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> ListIndexesResponse {
         self.value
     }

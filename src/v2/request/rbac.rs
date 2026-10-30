@@ -1051,7 +1051,8 @@ impl DescribeUserRequestBuilder {
 ///
 /// Grants a privilege to a role. Two forms are supported:
 ///
-/// - The default V2 form targets a collection: set `collection_name`.
+/// - The default V2 form targets a collection: set `collection_name` and a
+///   non-empty `database_name`.
 /// - The V1 object-scoped form targets an arbitrary object identified by
 ///   `object_type` (e.g. `Global`, `Database`, `Collection`, `User`) and
 ///   `object_name`. When `object_type` is set, the V1 `OperatePrivilege` RPC is
@@ -1250,7 +1251,8 @@ impl GrantPrivilegeRequestBuilder {
 ///
 /// Revokes a privilege from a role. Two forms are supported:
 ///
-/// - The default V2 form targets a collection: set `collection_name`.
+/// - The default V2 form targets a collection: set `collection_name` and a
+///   non-empty `database_name`.
 /// - The V1 object-scoped form targets an arbitrary object identified by
 ///   `object_type` (e.g. `Global`, `Database`, `Collection`, `User`) and
 ///   `object_name`. When `object_type` is set, the V1 `OperatePrivilege` RPC is

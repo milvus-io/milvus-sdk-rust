@@ -98,7 +98,7 @@ impl GetReplicateConfigurationResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> GetReplicateConfigurationResponse {
         self.value
     }
@@ -196,7 +196,7 @@ impl GetReplicateInfoResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> GetReplicateInfoResponse {
         self.value
     }

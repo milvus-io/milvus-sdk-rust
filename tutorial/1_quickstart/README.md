@@ -26,7 +26,7 @@ The collection name is unique for each run. The program cleans it up on normal c
 The IDs and scores vary, but the run should include messages like:
 
 ```text
-Calling create_collection: create "RUST_V2_QUICKSTART_..."
+Calling create_collection: create "RUST_V2_QUICKSTART_..." with schema and vector index
 create_collection completed
 Calling search: find the two nearest embedding matches
 search completed

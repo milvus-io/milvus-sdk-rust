@@ -90,7 +90,7 @@ impl ListResourceGroupsResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> ListResourceGroupsResponse {
         self.value
     }
@@ -190,7 +190,7 @@ impl DescribeResourceGroupResponseBuilder {
         self
     }
 
-    /// Validates the configured values and builds the request.
+    /// Builds the response.
     pub fn build(self) -> DescribeResourceGroupResponse {
         self.value
     }
