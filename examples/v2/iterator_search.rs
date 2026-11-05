@@ -190,6 +190,82 @@ async fn iterate(
     Ok(())
 }
 
+// Demonstrates the client-side page filter (the C++/Java `externalFilterFunc`): the callback
+// receives each page of hits fetched by the iterator and prunes rows in place via
+// `SingleResult::filter_rows`. Here we keep only rows whose user_age is even.
+async fn iterate_with_external_filter(
+    client: &ClientV2,
+    batch_size: usize,
+    limit: Option<usize>,
+    filter: &str,
+) -> Result<()> {
+    println!("=====================================================");
+    println!(
+        "Iterate with external filter, batch: {batch_size} limit: {} filter: {filter}",
+        limit.map_or(-1, |v| v as i64)
+    );
+    let search = SearchRequest::builder()
+        .collection_name(COLLECTION)
+        .vector_field(FACE)
+        .vectors(SearchVectors::Float(vec![vec![1.0; DIMENSION]]))
+        .filter(filter)
+        .output_fields([NAME, AGE, "b"])
+        .limit(batch_size as i64)
+        .consistency_level(sdk::ConsistencyLevel::Bounded)
+        .build()?;
+    let mut builder = SearchIteratorRequest::builder()
+        .search(search)
+        .batch_size(batch_size)
+        // Keep only rows where user_age is even. filter_rows keeps the rows whose indices are
+        // listed, in the order they appear in the list.
+        .external_filter_func(|result| {
+            let keep = match result.get_output_field(AGE) {
+                Some(FieldData::Int8 { values, .. }) => values
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, age)| **age % 2 == 0)
+                    .map(|(index, _)| index)
+                    .collect::<Vec<_>>(),
+                field => {
+                    return Err(Error::Unexpected(format!(
+                        "unexpected user_age field: {field:?}"
+                    )))
+                }
+            };
+            result.filter_rows(&keep)
+        });
+    if let Some(limit) = limit {
+        builder = builder.limit(limit);
+    }
+    let mut iterator = client.search_iterator(builder.build()?).await?;
+    let mut ids = HashSet::new();
+    let mut pages = 0;
+    let mut total = 0usize;
+    while let Some(page) = iterator.next().await? {
+        let result =
+            page.results().iter().next().ok_or_else(|| {
+                Error::Unexpected("search iterator returned no result set".into())
+            })?;
+        let rows: Vec<_> = result.rows()?.collect::<Vec<_>>();
+        pages += 1;
+        total += rows.len();
+        println!("No.{pages} page {} rows fetched", rows.len());
+        for row in rows {
+            let age = row.get_i8(AGE)?;
+            if age % 2 != 0 {
+                return Err(Error::Unexpected(format!(
+                    "a row with odd user_age {age} slipped through the external filter"
+                )));
+            }
+            ids.insert(row.get_i64(PRIMARY)?);
+        }
+    }
+    println!("search iteration with external filter finished");
+    println!("Total fetched rows (external filter): {total}");
+    println!("=====================================================");
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let client = client().await?;
@@ -201,6 +277,7 @@ async fn main() -> Result<()> {
         iterate(&client, 100, None, "user_age == 8").await?;
         iterate(&client, 1000, Some(2500), "user_age > 30").await?;
         iterate(&client, 1000, Some(100_000), "user_age in [30, 40, 50]").await?;
+        iterate_with_external_filter(&client, 3000, Some(100_000), "").await?;
     }
     drop_collection(&client, COLLECTION).await;
     Ok(())

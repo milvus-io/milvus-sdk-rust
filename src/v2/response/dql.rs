@@ -22,6 +22,7 @@
 
 use crate::proto::{milvus, schema};
 use crate::v2::error::{Error, Result};
+use crate::v2::types::select_field_data_rows;
 use crate::v2::types::Ids;
 use crate::v2::types::{group_aggregation_buckets, DataType, FieldData, SparseVector};
 pub use crate::v2::types::{HighlightResult, QueryResults, SearchResults, SingleResult};
@@ -913,11 +914,10 @@ impl QueryResponse {
             )));
         }
         Ok(Self {
-            results: QueryResults {
-                output_fields,
-                output_field_names: value.output_fields,
-                element_indices,
-            },
+            results: QueryResults::new()
+                .output_fields(output_fields)
+                .output_field_names(value.output_fields)
+                .element_indices(element_indices),
             session_timestamp: value.session_ts,
             cost: parse_extra(&extra_info, "report_value", -1_i64),
             scanned_remote_bytes: parse_extra(&extra_info, "scanned_remote_bytes", -1_i64),
@@ -961,11 +961,10 @@ impl QueryResponse {
         let cache_hit_ratio = self.cache_hit_ratio;
         Ok((
             Self {
-                results: QueryResults {
-                    output_fields: first_fields,
-                    output_field_names: output_field_names.clone(),
-                    element_indices,
-                },
+                results: QueryResults::new()
+                    .output_fields(first_fields)
+                    .output_field_names(output_field_names.clone())
+                    .element_indices(element_indices),
                 session_timestamp,
                 cost,
                 scanned_remote_bytes,
@@ -973,11 +972,10 @@ impl QueryResponse {
                 cache_hit_ratio,
             },
             Some(Self {
-                results: QueryResults {
-                    output_fields: remaining_fields,
-                    output_field_names,
-                    element_indices: remaining_indices,
-                },
+                results: QueryResults::new()
+                    .output_fields(remaining_fields)
+                    .output_field_names(output_field_names)
+                    .element_indices(remaining_indices),
                 session_timestamp,
                 cost,
                 scanned_remote_bytes,
@@ -986,6 +984,134 @@ impl QueryResponse {
             }),
         ))
     }
+
+    /// Truncates the response to at most `max_elements` matched elements.
+    ///
+    /// Element-filter responses are truncated at element granularity, mirroring pymilvus's
+    /// element-counted `limit`: whole entities are kept while they fit the element budget and the
+    /// final kept entity's element indices are trimmed to the remaining budget. Responses without
+    /// element indices fall back to entity-row truncation.
+    pub(crate) fn truncate_elements(self, max_elements: usize) -> Result<Self> {
+        let indices = &self.results.element_indices;
+        if indices.is_empty() {
+            return self.split_at(max_elements).map(|(first, _)| first);
+        }
+        if max_elements >= indices.iter().map(Vec::len).sum::<usize>() {
+            return Ok(self);
+        }
+        let (keep_entities, keep_last) = element_cut(indices, max_elements);
+        let mut element_indices = indices[..keep_entities].to_vec();
+        element_indices[keep_entities - 1].truncate(keep_last);
+        let keep = (0..keep_entities).collect::<Vec<_>>();
+        let mut output_fields = Vec::with_capacity(self.results.output_fields.len());
+        for field in self.results.output_fields {
+            output_fields.push(select_field_data_rows(field, &keep)?);
+        }
+        Ok(Self {
+            results: QueryResults::new()
+                .output_fields(output_fields)
+                .output_field_names(self.results.output_field_names)
+                .element_indices(element_indices),
+            session_timestamp: self.session_timestamp,
+            cost: self.cost,
+            scanned_remote_bytes: self.scanned_remote_bytes,
+            scanned_total_bytes: self.scanned_total_bytes,
+            cache_hit_ratio: self.cache_hit_ratio,
+        })
+    }
+
+    /// Splits the response at `count` matched elements.
+    ///
+    /// Element-filter responses are split at element granularity (the boundary entity's element
+    /// indices are trimmed, and its remaining elements open the second half), so `batch_size`
+    /// bounds the delivered page even when the server over-returns elements (e.g. with
+    /// `reduce_stop_for_best=true`). Responses without element indices fall back to entity-row
+    /// splitting.
+    pub(crate) fn split_elements(self, count: usize) -> Result<(Self, Option<Self>)> {
+        let indices = &self.results.element_indices;
+        if indices.is_empty() {
+            return self.split_at(count);
+        }
+        if count >= indices.iter().map(Vec::len).sum::<usize>() {
+            return Ok((self, None));
+        }
+        let (keep_entities, keep_last) = element_cut(indices, count);
+        let boundary = &indices[keep_entities - 1];
+        let mut first_indices = indices[..keep_entities].to_vec();
+        first_indices[keep_entities - 1].truncate(keep_last);
+        // When the cut lands exactly on the boundary entity's last element it is fully consumed by
+        // the first half, so the remaining half starts at the next entity; otherwise its leftover
+        // elements open the second half.
+        let split_boundary = keep_last < boundary.len();
+        let mut remaining_indices = Vec::with_capacity(indices.len() - keep_entities + 1);
+        if split_boundary {
+            remaining_indices.push(boundary[keep_last..].to_vec());
+        }
+        remaining_indices.extend(indices[keep_entities..].iter().cloned());
+
+        let first_keep = (0..keep_entities).collect::<Vec<_>>();
+        let remaining_keep = if split_boundary {
+            (keep_entities - 1..indices.len()).collect::<Vec<_>>()
+        } else {
+            (keep_entities..indices.len()).collect::<Vec<_>>()
+        };
+        let mut first_fields = Vec::with_capacity(self.results.output_fields.len());
+        let mut remaining_fields = Vec::with_capacity(self.results.output_fields.len());
+        for field in self.results.output_fields {
+            let first = select_field_data_rows(field.clone(), &first_keep)?;
+            let remaining = select_field_data_rows(field, &remaining_keep)?;
+            first_fields.push(first);
+            remaining_fields.push(remaining);
+        }
+        let output_field_names = self.results.output_field_names;
+        let session_timestamp = self.session_timestamp;
+        let cost = self.cost;
+        let scanned_remote_bytes = self.scanned_remote_bytes;
+        let scanned_total_bytes = self.scanned_total_bytes;
+        let cache_hit_ratio = self.cache_hit_ratio;
+        Ok((
+            Self {
+                results: QueryResults::new()
+                    .output_fields(first_fields)
+                    .output_field_names(output_field_names.clone())
+                    .element_indices(first_indices),
+                session_timestamp,
+                cost,
+                scanned_remote_bytes,
+                scanned_total_bytes,
+                cache_hit_ratio,
+            },
+            Some(Self {
+                results: QueryResults::new()
+                    .output_fields(remaining_fields)
+                    .output_field_names(output_field_names)
+                    .element_indices(remaining_indices),
+                session_timestamp,
+                cost,
+                scanned_remote_bytes,
+                scanned_total_bytes,
+                cache_hit_ratio,
+            }),
+        ))
+    }
+}
+
+/// Computes how many entities to keep and how many elements of the boundary entity to keep when
+/// cutting `indices` at `budget` matched elements. The caller guarantees `budget` is smaller than
+/// the total element count.
+fn element_cut(indices: &[Vec<i64>], budget: usize) -> (usize, usize) {
+    let mut remaining = budget;
+    for (entity, list) in indices.iter().enumerate() {
+        if list.len() <= remaining {
+            remaining -= list.len();
+            if remaining == 0 {
+                return (entity + 1, list.len());
+            }
+        } else {
+            return (entity + 1, remaining);
+        }
+    }
+    (indices.len(), 0)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1313,20 +1439,34 @@ impl SearchResponse {
                 "search iterator page must contain exactly one result".into(),
             ));
         };
-        if left.output_field_names != right.output_field_names
-            || left.primary_field_name != right.primary_field_name
+        if left.primary_field_name != right.primary_field_name
             || left.score_field_name != right.score_field_name
             || left.output_fields.len() != right.output_fields.len()
             || !left.ids.is_compatible_with(&right.ids)
-            || left
-                .output_fields
-                .iter()
-                .zip(&right.output_fields)
-                .any(|(left, right)| !left.is_compatible_with(right))
+            || !same_name_set(&left.output_field_names, &right.output_field_names)
         {
             return Err(Error::MalformedResponse(
                 "search iterator pages contain incompatible result schemas".into(),
             ));
+        }
+        // The server may return the output fields (and their names) in a different order on
+        // different iterator pages (notably the dynamic `$meta` field position), so match fields by
+        // name instead of by position when checking compatibility and when merging.
+        let mut right_fields = std::mem::take(&mut right.output_fields)
+            .into_iter()
+            .map(|field| (field.name().to_owned(), field))
+            .collect::<HashMap<_, _>>();
+        for left_field in left.output_fields.iter() {
+            let right_field = right_fields.get(left_field.name()).ok_or_else(|| {
+                Error::MalformedResponse(
+                    "search iterator pages contain incompatible result schemas".into(),
+                )
+            })?;
+            if !left_field.is_compatible_with(right_field) {
+                return Err(Error::MalformedResponse(
+                    "search iterator pages contain incompatible result schemas".into(),
+                ));
+            }
         }
         left.ids.append(std::mem::take(&mut right.ids))?;
         left.scores.append(&mut right.scores);
@@ -1339,16 +1479,28 @@ impl SearchResponse {
                 ));
             }
         }
-        for (left, right) in left
-            .output_fields
-            .iter_mut()
-            .zip(std::mem::take(&mut right.output_fields))
-        {
-            left.append(right)?;
+        for left_field in left.output_fields.iter_mut() {
+            let right_field = right_fields
+                .remove(left_field.name())
+                .expect("matched field above");
+            left_field.append(right_field)?;
         }
         left.highlight_results.append(&mut right.highlight_results);
         Ok(())
     }
+}
+
+/// Compares two output-field name lists as unordered sets (the server may return the names in a
+/// different order on different iterator pages).
+fn same_name_set(left: &[String], right: &[String]) -> bool {
+    if left.len() != right.len() {
+        return false;
+    }
+    let mut left = left.to_vec();
+    let mut right = right.to_vec();
+    left.sort();
+    right.sort();
+    left == right
 }
 
 fn split_single_result(value: SingleResult, count: usize) -> Result<(SingleResult, SingleResult)> {
@@ -3548,6 +3700,78 @@ mod tests {
     }
 
     #[test]
+    fn search_iterator_append_matches_fields_by_name_regardless_of_order() {
+        let field = |name: &str, values: Vec<i64>| schema::FieldData {
+            r#type: schema::DataType::Int64 as i32,
+            field_name: name.into(),
+            field: Some(schema::field_data::Field::Scalars(schema::ScalarField {
+                data: Some(schema::scalar_field::Data::LongData(schema::LongArray {
+                    data: values,
+                    ..Default::default()
+                })),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let page = |names: Vec<&str>, fields: Vec<schema::FieldData>| {
+            SearchResponse::from_proto(milvus::SearchResults {
+                results: Some(schema::SearchResultData {
+                    num_queries: 1,
+                    top_k: 2,
+                    topks: vec![2],
+                    scores: vec![0.9, 0.8],
+                    ids: Some(schema::IDs {
+                        id_field: Some(schema::i_ds::IdField::IntId(schema::LongArray {
+                            data: vec![10, 20],
+                            ..Default::default()
+                        })),
+                        ..Default::default()
+                    }),
+                    fields_data: fields,
+                    output_fields: names.into_iter().map(str::to_owned).collect(),
+                    primary_field_name: "id".into(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            })
+            .expect("decode search iterator page")
+        };
+
+        // The server may return the output fields (and their names) in a different order on
+        // different pages; append must match fields by name.
+        let mut first = page(
+            vec!["a", "b", "c"],
+            vec![
+                field("a", vec![1, 2]),
+                field("b", vec![3, 4]),
+                field("c", vec![5, 6]),
+            ],
+        );
+        let second = page(
+            vec!["c", "b", "a"],
+            vec![
+                field("c", vec![7, 8]),
+                field("b", vec![9, 10]),
+                field("a", vec![11, 12]),
+            ],
+        );
+        first
+            .append(second)
+            .expect("append reordered search iterator pages");
+
+        let merged = &first.results().get_results()[0];
+        assert_eq!(merged.len(), 4);
+        assert_eq!(
+            merged.get_output_field("a").map(FieldData::as_int64),
+            Some(Some([1, 2, 11, 12].as_slice()))
+        );
+        assert_eq!(
+            merged.get_output_field("c").map(FieldData::as_int64),
+            Some(Some([5, 6, 7, 8].as_slice()))
+        );
+    }
+
+    #[test]
     fn search_zero_row_page_ignores_empty_field_descriptors() {
         let search = SearchResponse::from_proto_with_row_limit(
             milvus::SearchResults {
@@ -3643,6 +3867,226 @@ mod tests {
         })
         .expect_err("element_indices length mismatch must be rejected");
         assert!(error.to_string().contains("element_indices"));
+    }
+
+    #[test]
+    fn query_response_truncate_elements_cuts_within_an_entity() {
+        let int_field = |values: Vec<i64>| schema::FieldData {
+            r#type: schema::DataType::Int64 as i32,
+            field_name: "id".into(),
+            field: Some(schema::field_data::Field::Scalars(schema::ScalarField {
+                data: Some(schema::scalar_field::Data::LongData(schema::LongArray {
+                    data: values,
+                    ..Default::default()
+                })),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let element_indices = |data: Vec<i64>| milvus::ElementIndices {
+            indices: Some(schema::LongArray {
+                data,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let response = QueryResponse::from_proto(milvus::QueryResults {
+            fields_data: vec![int_field(vec![1, 2, 3])],
+            output_fields: vec!["id".into()],
+            primary_field_name: "id".into(),
+            element_indices: vec![
+                element_indices(vec![0, 1]),
+                element_indices(vec![2]),
+                element_indices(vec![3, 4]),
+            ],
+            ..Default::default()
+        })
+        .expect("decode element-filter response");
+
+        // 2 + 1 + 2 = 5 elements; truncating to 3 keeps entity 0 (2 elements) plus one element of
+        // entity 1, mirroring pymilvus's element-counted limit.
+        let truncated = response
+            .clone()
+            .truncate_elements(3)
+            .expect("truncate to three elements");
+        let results = truncated.results();
+        assert_eq!(results.get_element_indices(), &[vec![0, 1], vec![2]]);
+        let rows = results
+            .rows()
+            .expect("borrow element rows")
+            .collect::<Vec<_>>();
+        assert_eq!(rows.len(), 3);
+        assert_eq!(rows[0].get_i64("id").unwrap(), 1);
+        assert_eq!(rows[0].element_offset(), Some(0));
+        assert_eq!(rows[1].element_offset(), Some(1));
+        assert_eq!(rows[2].get_i64("id").unwrap(), 2);
+        assert_eq!(rows[2].element_offset(), Some(2));
+
+        // A budget at or beyond the total element count leaves the response untouched.
+        let untouched = response
+            .clone()
+            .truncate_elements(5)
+            .expect("no truncation needed");
+        assert_eq!(
+            untouched.results().get_element_indices(),
+            &[vec![0, 1], vec![2], vec![3, 4]]
+        );
+
+        // Responses without element indices fall back to entity-row truncation.
+        let plain = QueryResponse::from_proto(milvus::QueryResults {
+            fields_data: vec![int_field(vec![1, 2, 3])],
+            output_fields: vec!["id".into()],
+            primary_field_name: "id".into(),
+            ..Default::default()
+        })
+        .expect("decode plain query response");
+        let truncated = plain.truncate_elements(2).expect("truncate entity rows");
+        assert_eq!(truncated.results().get_row_count(), 2);
+    }
+
+    #[test]
+    fn query_response_split_elements_divides_the_boundary_entity() {
+        let int_field = |values: Vec<i64>| schema::FieldData {
+            r#type: schema::DataType::Int64 as i32,
+            field_name: "id".into(),
+            field: Some(schema::field_data::Field::Scalars(schema::ScalarField {
+                data: Some(schema::scalar_field::Data::LongData(schema::LongArray {
+                    data: values,
+                    ..Default::default()
+                })),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let element_indices = |data: Vec<i64>| milvus::ElementIndices {
+            indices: Some(schema::LongArray {
+                data,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let response = QueryResponse::from_proto(milvus::QueryResults {
+            fields_data: vec![int_field(vec![1, 2, 3])],
+            output_fields: vec!["id".into()],
+            primary_field_name: "id".into(),
+            element_indices: vec![
+                element_indices(vec![0, 1]),
+                element_indices(vec![2, 3]),
+                element_indices(vec![4]),
+            ],
+            ..Default::default()
+        })
+        .expect("decode element-filter response");
+
+        // Splitting at 3 elements keeps entity 0 whole and trims entity 1 to its first element;
+        // entity 1's remaining element opens the second half.
+        let (first, remaining) = response
+            .clone()
+            .split_elements(3)
+            .expect("split at three elements");
+        let remaining = remaining.expect("split has remaining elements");
+        assert_eq!(
+            first.results().get_element_indices(),
+            &[vec![0, 1], vec![2]]
+        );
+        assert_eq!(
+            remaining.results().get_element_indices(),
+            &[vec![3], vec![4]]
+        );
+        let first_rows = first
+            .results()
+            .rows()
+            .expect("borrow first rows")
+            .collect::<Vec<_>>();
+        assert_eq!(first_rows.len(), 3);
+        assert_eq!(first_rows[2].get_i64("id").unwrap(), 2);
+        assert_eq!(first_rows[2].element_offset(), Some(2));
+        let remaining_rows = remaining
+            .results()
+            .rows()
+            .expect("borrow remaining rows")
+            .collect::<Vec<_>>();
+        assert_eq!(remaining_rows.len(), 2);
+        assert_eq!(remaining_rows[0].get_i64("id").unwrap(), 2);
+        assert_eq!(remaining_rows[0].element_offset(), Some(3));
+        assert_eq!(remaining_rows[1].get_i64("id").unwrap(), 3);
+        assert_eq!(remaining_rows[1].element_offset(), Some(4));
+
+        // A count at or beyond the total element count yields no remainder.
+        let (first, remaining) = response.clone().split_elements(5).expect("no split needed");
+        assert!(remaining.is_none());
+        assert_eq!(
+            first.results().get_element_indices(),
+            &[vec![0, 1], vec![2, 3], vec![4]]
+        );
+    }
+
+    #[test]
+    fn query_response_split_elements_exact_boundary_has_no_phantom_entity() {
+        let int_field = |values: Vec<i64>| schema::FieldData {
+            r#type: schema::DataType::Int64 as i32,
+            field_name: "id".into(),
+            field: Some(schema::field_data::Field::Scalars(schema::ScalarField {
+                data: Some(schema::scalar_field::Data::LongData(schema::LongArray {
+                    data: values,
+                    ..Default::default()
+                })),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let element_indices = |data: Vec<i64>| milvus::ElementIndices {
+            indices: Some(schema::LongArray {
+                data,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let response = QueryResponse::from_proto(milvus::QueryResults {
+            fields_data: vec![int_field(vec![1, 2, 3, 4])],
+            output_fields: vec!["id".into()],
+            primary_field_name: "id".into(),
+            element_indices: vec![
+                element_indices(vec![0, 1]),
+                element_indices(vec![2, 3]),
+                element_indices(vec![4, 5]),
+                element_indices(vec![6, 7]),
+            ],
+            ..Default::default()
+        })
+        .expect("decode element-filter response");
+
+        // The cut lands exactly on entity 1's last element (2 + 2 == 4): the boundary entity is
+        // fully consumed by the first half, so the remaining half must not carry a phantom empty
+        // entity row.
+        let (first, remaining) = response
+            .split_elements(4)
+            .expect("split at an exact entity boundary");
+        let remaining = remaining.expect("split has remaining elements");
+        assert_eq!(
+            first.results().get_element_indices(),
+            &[vec![0, 1], vec![2, 3]]
+        );
+        assert_eq!(
+            remaining.results().get_element_indices(),
+            &[vec![4, 5], vec![6, 7]]
+        );
+        assert_eq!(first.results().get_row_count(), 2);
+        assert_eq!(remaining.results().get_row_count(), 2);
+        let first_rows = first
+            .results()
+            .rows()
+            .expect("borrow first rows")
+            .collect::<Vec<_>>();
+        assert_eq!(first_rows.len(), 4);
+        let remaining_rows = remaining
+            .results()
+            .rows()
+            .expect("borrow remaining rows")
+            .collect::<Vec<_>>();
+        assert_eq!(remaining_rows.len(), 4);
+        assert_eq!(remaining_rows[0].get_i64("id").unwrap(), 3);
+        assert_eq!(remaining_rows[0].element_offset(), Some(4));
     }
 
     #[test]

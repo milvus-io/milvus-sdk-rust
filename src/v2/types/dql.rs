@@ -1384,6 +1384,12 @@ pub struct QueryResults {
     pub(crate) output_fields: Vec<FieldData>,
     pub(crate) output_field_names: Vec<String>,
     pub(crate) element_indices: Vec<Vec<i64>>,
+    // Flattened view of `element_indices`: one offset per matched element, plus the entity row
+    // each element belongs to. These are derived from `element_indices` so that the row
+    // materializers (`rows`, `get_output_rows`, `get_output_row`) can yield one row per matched
+    // element while still reading the parent entity's columnar field data.
+    pub(crate) element_offsets: Vec<i64>,
+    pub(crate) element_entity_index: Vec<usize>,
 }
 
 impl QueryResults {
@@ -1393,7 +1399,21 @@ impl QueryResults {
             output_fields: Vec::new(),
             output_field_names: Vec::new(),
             element_indices: Vec::new(),
+            element_offsets: Vec::new(),
+            element_entity_index: Vec::new(),
         }
+    }
+
+    /// Recomputes the flattened element rows from the entity-level [`Self::element_indices`].
+    fn sync_element_rows(&mut self) {
+        let mut offsets = Vec::new();
+        let mut entity_index = Vec::new();
+        for (entity, indices) in self.element_indices.iter().enumerate() {
+            entity_index.extend(std::iter::repeat_n(entity, indices.len()));
+            offsets.extend(indices.iter().copied());
+        }
+        self.element_offsets = offsets;
+        self.element_entity_index = entity_index;
     }
 
     /// Sets the output fields and returns the updated value.
@@ -1448,6 +1468,11 @@ impl QueryResults {
     }
 
     /// Returns the configured row count.
+    ///
+    /// This counts the entity rows backing the columnar field data. When the result came from an
+    /// `element_filter` query the row materializers ([`Self::rows`], [`Self::get_output_rows`],
+    /// [`Self::get_output_row`]) instead yield one row per matched element; use
+    /// [`Self::get_element_row_count`] to count the matched elements those rows address.
     pub fn get_row_count(&self) -> u64 {
         if self.output_fields.len() == 1 && self.output_fields[0].name() == "count(*)" {
             if let FieldData::Int64 { values, .. } = self.output_fields[0].inner() {
@@ -1462,6 +1487,19 @@ impl QueryResults {
             .map_or(0, |field| field.len() as u64)
     }
 
+    /// Returns the number of rows yielded by the row materializers.
+    ///
+    /// For `element_filter` results this is the number of matched elements (each entity may match
+    /// several), the index space addressed by [`Self::get_output_row`]; otherwise it equals
+    /// [`Self::get_row_count`].
+    pub fn get_element_row_count(&self) -> u64 {
+        if self.element_indices.is_empty() {
+            self.get_row_count()
+        } else {
+            self.element_offsets.len() as u64
+        }
+    }
+
     /// Adds one output field name to the existing values.
     pub fn add_output_field_name(mut self, value: impl Into<String>) -> Self {
         self.output_field_names.push(value.into());
@@ -1471,15 +1509,17 @@ impl QueryResults {
     /// Sets the per-row element indices and returns the updated value.
     ///
     /// Each inner list holds the element offsets within an entity when an `element_filter`
-    /// iterator is used; ordinary queries leave this empty.
+    /// iterator is used; ordinary queries leave this empty. The row materializers expand these
+    /// into one row per matched element, mirroring pymilvus.
     pub fn element_indices(mut self, value: Vec<Vec<i64>>) -> Self {
-        self.element_indices = value;
+        self.set_element_indices(value);
         self
     }
 
     /// Sets the per-row element indices and returns this value for further mutation.
     pub fn set_element_indices(&mut self, value: Vec<Vec<i64>>) -> &mut Self {
         self.element_indices = value;
+        self.sync_element_rows();
         self
     }
 
@@ -1491,6 +1531,7 @@ impl QueryResults {
     /// Appends one entity's element indices and returns the updated value.
     pub fn add_element_indices(mut self, value: Vec<i64>) -> Self {
         self.element_indices.push(value);
+        self.sync_element_rows();
         self
     }
 
@@ -1503,6 +1544,12 @@ impl QueryResults {
     ///
     /// The iterator reads values directly from the column-oriented result data
     /// without materializing JSON maps for every row.
+    ///
+    /// When the result carries `element_indices` (an `element_filter` query), each yielded row is
+    /// one matched element of the parent entity: the entity's field values are repeated per
+    /// matched element and [`ResultRow::element_offset`] reports the element's offset within the
+    /// parent struct-array or array field, mirroring pymilvus. Ordinary queries yield one row per
+    /// entity.
     ///
     /// ```
     /// # use milvus::v2::prelude::*;
@@ -1520,6 +1567,20 @@ impl QueryResults {
     /// ```
     pub fn rows(&self) -> Result<ResultRowIter<'_>> {
         let row_count = output_row_count(&self.output_fields)?;
+        if self.element_indices.is_empty() {
+            return Ok(ResultRowIter {
+                output_fields: &self.output_fields,
+                output_field_names: &self.output_field_names,
+                ids: None,
+                primary_field_name: None,
+                scores: None,
+                score_field_name: None,
+                element_indices: None,
+                element_entity_index: None,
+                next: 0,
+                row_count,
+            });
+        }
         Ok(ResultRowIter {
             output_fields: &self.output_fields,
             output_field_names: &self.output_field_names,
@@ -1527,9 +1588,10 @@ impl QueryResults {
             primary_field_name: None,
             scores: None,
             score_field_name: None,
-            element_indices: None,
+            element_indices: Some(&self.element_offsets),
+            element_entity_index: Some(&self.element_entity_index),
             next: 0,
-            row_count,
+            row_count: self.element_offsets.len(),
         })
     }
 
@@ -1541,7 +1603,11 @@ impl QueryResults {
     ///
     /// # Returns
     ///
-    /// One [`EntityRow`] per result row, in server order.
+    /// One [`EntityRow`] per result row, in server order. When the result carries
+    /// `element_indices` (an `element_filter` query), rows are expanded to one per matched element
+    /// and each row additionally carries the matched element's `offset` within its parent field
+    /// (exposed as `_offset` when a real `offset` field is requested, mirroring the C++ SDK) and
+    /// its original entity index `_original_idx`, mirroring pymilvus.
     ///
     /// # Errors
     ///
@@ -1549,8 +1615,28 @@ impl QueryResults {
     /// inconsistent row counts.
     pub fn get_output_rows(&self) -> Result<Vec<EntityRow>> {
         let row_count = output_row_count(&self.output_fields)?;
-        (0..row_count)
-            .map(|index| output_row(&self.output_fields, &self.output_field_names, index))
+        if self.element_indices.is_empty() {
+            return (0..row_count)
+                .map(|index| output_row(&self.output_fields, &self.output_field_names, index))
+                .collect();
+        }
+        self.element_offsets
+            .iter()
+            .enumerate()
+            .map(|(element, offset)| {
+                let entity = self.element_entity_index[element];
+                let mut row = output_row(&self.output_fields, &self.output_field_names, entity)?;
+                // The synthetic offset column is renamed on collision with a requested `offset`
+                // field so the element position stays available while the real field keeps its
+                // value (mirroring the C++ SDK); `_original_idx` is kept when a real field does
+                // not already use that name.
+                let offset_column = element_offset_column_name(&self.output_field_names, &row);
+                row.insert(offset_column.to_owned(), serde_json::json!(offset));
+                if !row.contains_key("_original_idx") {
+                    row.insert("_original_idx".to_owned(), serde_json::json!(entity));
+                }
+                Ok(row)
+            })
             .collect()
     }
 
@@ -1558,7 +1644,8 @@ impl QueryResults {
     ///
     /// Use this when an owned or serializable row is required. Prefer
     /// [`Self::rows`] when processing result values through borrowing typed
-    /// accessors.
+    /// accessors. For `element_filter` results `index` addresses the expanded
+    /// element rows (see [`Self::get_output_rows`]).
     ///
     /// # Errors
     ///
@@ -1567,10 +1654,30 @@ impl QueryResults {
     /// bounds.
     pub fn get_output_row(&self, index: usize) -> Result<EntityRow> {
         let row_count = output_row_count(&self.output_fields)?;
-        if index >= row_count {
-            return Err(row_index_error(index, row_count));
+        if self.element_indices.is_empty() {
+            if index >= row_count {
+                return Err(row_index_error(index, row_count));
+            }
+            return output_row(&self.output_fields, &self.output_field_names, index);
         }
-        output_row(&self.output_fields, &self.output_field_names, index)
+        let element_count = self.element_offsets.len();
+        if index >= element_count {
+            return Err(row_index_error(index, element_count));
+        }
+        let entity = self.element_entity_index[index];
+        let mut row = output_row(&self.output_fields, &self.output_field_names, entity)?;
+        // The synthetic offset column is renamed on collision with a requested `offset` field so
+        // the element position stays available while the real field keeps its value (mirroring the
+        // C++ SDK); `_original_idx` is kept when a real field does not already use that name.
+        let offset_column = element_offset_column_name(&self.output_field_names, &row);
+        row.insert(
+            offset_column.to_owned(),
+            serde_json::json!(self.element_offsets[index]),
+        );
+        if !row.contains_key("_original_idx") {
+            row.insert("_original_idx".to_owned(), serde_json::json!(entity));
+        }
+        Ok(row)
     }
 }
 
@@ -1903,6 +2010,7 @@ impl SingleResult {
             scores: Some(&self.scores),
             score_field_name: Some(&self.score_field_name),
             element_indices: self.element_indices.as_deref(),
+            element_entity_index: None,
             next: 0,
             row_count: self.len(),
         })
@@ -2019,40 +2127,78 @@ pub struct ResultRow<'a> {
     scores: Option<&'a [f32]>,
     score_field_name: Option<&'a str>,
     element_indices: Option<&'a [i64]>,
+    // For expanded `element_filter` query rows this maps the element row position to the parent
+    // entity row whose field data backs the values; `None` for ordinary and search rows.
+    element_entity_index: Option<&'a [usize]>,
     index: usize,
 }
 
 impl<'a> ResultRow<'a> {
     /// Returns the row's zero-based position within its query result.
+    ///
+    /// For expanded `element_filter` query rows this is the position among the matched elements;
+    /// for search rows it is the hit position within the result.
     pub fn index(&self) -> usize {
         self.index
     }
 
-    /// Returns the matched element's offset within its parent struct-array or
-    /// ArrayOfVector field.
+    /// Returns the matched element's offset within its parent struct-array,
+    /// ArrayOfVector, or array field.
     ///
-    /// Ordinary entity-level search rows and query rows return `None`.
+    /// Element-level search rows and expanded `element_filter` query rows carry the offset;
+    /// ordinary entity-level rows return `None`.
     pub fn element_offset(&self) -> Option<i64> {
         self.element_indices
             .and_then(|indices| indices.get(self.index))
             .copied()
     }
 
+    /// Returns the entity row whose field data backs this element row.
+    ///
+    /// Ordinary and search rows map to themselves.
+    fn row_index(&self) -> usize {
+        self.element_entity_index
+            .and_then(|mapping| mapping.get(self.index))
+            .copied()
+            .unwrap_or(self.index)
+    }
+
     /// Materializes this row as an owned JSON object.
     ///
     /// Use this for generic display, serialization, or APIs that require an
     /// owned map. Prefer the typed getters when the field types are known.
+    ///
+    /// Expanded `element_filter` query rows additionally carry the matched element's `offset`
+    /// within its parent field (exposed as `_offset` when a real `offset` field is requested,
+    /// mirroring the C++ SDK) and its original entity index `_original_idx`, mirroring pymilvus.
     pub fn to_entity_row(&self) -> Result<EntityRow> {
-        let mut row = output_row(self.output_fields, self.output_field_names, self.index)?;
+        let row_index = self.row_index();
+        let mut row = output_row(self.output_fields, self.output_field_names, row_index)?;
         if let (Some(ids), Some(name)) = (self.ids, self.primary_field_name) {
-            row.insert(name.to_owned(), ids.value_at(self.index)?);
+            row.insert(name.to_owned(), ids.value_at(row_index)?);
         }
         if let (Some(scores), Some(name)) = (self.scores, self.score_field_name) {
             let score = scores
-                .get(self.index)
+                .get(row_index)
                 .copied()
-                .ok_or_else(|| row_index_error(self.index, scores.len()))?;
+                .ok_or_else(|| row_index_error(row_index, scores.len()))?;
             row.insert(name.to_owned(), serde_json::to_value(score)?);
+        }
+        if let Some(entity) = self
+            .element_entity_index
+            .and_then(|mapping| mapping.get(self.index))
+        {
+            // The synthetic offset column is renamed on collision with a requested `offset` field
+            // so the element position stays available while the real field keeps its value
+            // (mirroring the C++ SDK); `_original_idx` is kept when a real field does not already
+            // use that name.
+            if !row.contains_key("_original_idx") {
+                row.insert("_original_idx".to_owned(), serde_json::json!(entity));
+            }
+            if let Some(offset) = self.element_offset() {
+                let offset_column = element_offset_column_name(self.output_field_names, &row);
+                row.insert(offset_column.to_owned(), serde_json::json!(offset));
+            }
         }
         Ok(row)
     }
@@ -2321,18 +2467,19 @@ impl<'a> ResultRow<'a> {
     }
 
     fn value(&self, name: &str) -> Result<ResultValue<'a>> {
+        let row_index = self.row_index();
         if self.primary_field_name == Some(name) {
             let ids = self.ids.ok_or_else(|| {
                 Error::MalformedResponse("result row primary-key source is missing".into())
             })?;
             return match ids {
-                Ids::Int64(values) => values.get(self.index).copied().map(ResultValue::Int64),
+                Ids::Int64(values) => values.get(row_index).copied().map(ResultValue::Int64),
                 Ids::VarChar(values) => values
-                    .get(self.index)
+                    .get(row_index)
                     .map(String::as_str)
                     .map(ResultValue::String),
             }
-            .ok_or_else(|| row_index_error(self.index, ids.len()));
+            .ok_or_else(|| row_index_error(row_index, ids.len()));
         }
 
         if self.score_field_name == Some(name) {
@@ -2340,14 +2487,14 @@ impl<'a> ResultRow<'a> {
                 Error::MalformedResponse("result row score source is missing".into())
             })?;
             return scores
-                .get(self.index)
+                .get(row_index)
                 .copied()
                 .map(ResultValue::Float)
-                .ok_or_else(|| row_index_error(self.index, scores.len()));
+                .ok_or_else(|| row_index_error(row_index, scores.len()));
         }
 
         if let Some(field) = self.output_fields.iter().find(|field| field.name() == name) {
-            return result_field_value(field, self.index);
+            return result_field_value(field, row_index);
         }
 
         let dynamic_requested = self
@@ -2361,7 +2508,7 @@ impl<'a> ResultRow<'a> {
                 .filter(|field| field.name() == "$meta")
             {
                 if let ResultValue::Json(Value::Object(values)) =
-                    result_field_value(field, self.index)?
+                    result_field_value(field, row_index)?
                 {
                     if let Some(value) = values.get(name) {
                         return Ok(ResultValue::Json(value));
@@ -2391,6 +2538,7 @@ pub struct ResultRowIter<'a> {
     scores: Option<&'a [f32]>,
     score_field_name: Option<&'a str>,
     element_indices: Option<&'a [i64]>,
+    element_entity_index: Option<&'a [usize]>,
     next: usize,
     row_count: usize,
 }
@@ -2410,6 +2558,7 @@ impl<'a> Iterator for ResultRowIter<'a> {
             scores: self.scores,
             score_field_name: self.score_field_name,
             element_indices: self.element_indices,
+            element_entity_index: self.element_entity_index,
             index: self.next,
         };
         self.next += 1;
@@ -3559,6 +3708,19 @@ fn row_index_error(index: usize, row_count: usize) -> Error {
     )
 }
 
+/// Returns the name under which the synthetic element-offset column is materialized.
+///
+/// Mirrors the C++ SDK: when a real `offset` field is requested (or the materialized row already
+/// carries one, e.g. from a dynamic `$meta` object), the matched element's offset is exposed under
+/// `_offset` so the real field keeps its value while the element position stays available.
+fn element_offset_column_name(requested_field_names: &[String], row: &EntityRow) -> &'static str {
+    if row.contains_key("offset") || requested_field_names.iter().any(|name| name == "offset") {
+        "_offset"
+    } else {
+        "offset"
+    }
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // OrderByField
 ///////////////////////////////////////////////////////////////////////////////
@@ -3793,6 +3955,123 @@ mod result_row_tests {
             &[0.1, 0.2]
         );
         assert!(borrowed[1].get_str("nullable_text").is_err());
+    }
+
+    #[test]
+    fn query_results_expand_element_filter_rows() {
+        let results = QueryResults::new()
+            .output_fields(vec![
+                FieldData::Int64 {
+                    name: "id".into(),
+                    values: vec![1, 2, 3],
+                },
+                FieldData::ArrayVarChar {
+                    name: "tags".into(),
+                    values: vec![
+                        vec!["a".into(), "b".into()],
+                        vec!["c".into()],
+                        vec!["d".into(), "e".into(), "f".into()],
+                    ],
+                },
+            ])
+            .output_field_names(["id", "tags"])
+            .element_indices(vec![vec![1], vec![0], vec![2, 0]]);
+
+        // The entity-level view is preserved for direct column access.
+        assert_eq!(results.get_element_indices().len(), 3);
+        assert_eq!(results.get_row_count(), 3);
+        assert_eq!(results.get_element_row_count(), 4);
+
+        // rows() yields one row per matched element, reading the parent entity's fields.
+        let rows = results.rows().unwrap().collect::<Vec<_>>();
+        assert_eq!(rows.len(), 4);
+        assert_eq!(rows[0].index(), 0);
+        assert_eq!(rows[0].get_i64("id").unwrap(), 1);
+        assert_eq!(rows[0].element_offset(), Some(1));
+        assert_eq!(rows[1].get_i64("id").unwrap(), 2);
+        assert_eq!(rows[1].element_offset(), Some(0));
+        assert_eq!(rows[2].get_i64("id").unwrap(), 3);
+        assert_eq!(rows[2].element_offset(), Some(2));
+        assert_eq!(rows[3].get_i64("id").unwrap(), 3);
+        assert_eq!(rows[3].element_offset(), Some(0));
+
+        // to_entity_row carries the matched element offset and original entity index.
+        let materialized = rows[2].to_entity_row().unwrap();
+        assert_eq!(materialized["id"], 3);
+        assert_eq!(materialized["offset"], 2);
+        assert_eq!(materialized["_original_idx"], 2);
+
+        // get_output_rows expands with offset/_original_idx.
+        let output_rows = results.get_output_rows().unwrap();
+        assert_eq!(output_rows.len(), 4);
+        assert_eq!(output_rows[0]["id"], 1);
+        assert_eq!(output_rows[0]["offset"], 1);
+        assert_eq!(output_rows[0]["_original_idx"], 0);
+        assert_eq!(output_rows[2]["offset"], 2);
+        assert_eq!(output_rows[2]["_original_idx"], 2);
+        assert_eq!(output_rows[3]["offset"], 0);
+        assert_eq!(output_rows[3]["_original_idx"], 2);
+
+        // get_output_row addresses the expanded element rows.
+        assert_eq!(results.get_output_row(2).unwrap()["offset"], 2);
+        assert!(results.get_output_row(4).is_err());
+
+        // Ordinary results (no element_indices) keep one row per entity.
+        let plain = QueryResults::new()
+            .output_fields(vec![FieldData::Int64 {
+                name: "id".into(),
+                values: vec![1, 2],
+            }])
+            .output_field_names(["id"]);
+        let plain_rows = plain.rows().unwrap().collect::<Vec<_>>();
+        assert_eq!(plain_rows.len(), 2);
+        assert_eq!(plain_rows[0].element_offset(), None);
+        assert_eq!(plain.get_element_row_count(), 2);
+        assert_eq!(plain.get_output_rows().unwrap().len(), 2);
+        assert!(!plain.get_output_rows().unwrap()[0].contains_key("offset"));
+    }
+
+    #[test]
+    fn element_rows_do_not_overwrite_real_offset_fields() {
+        let results = QueryResults::new()
+            .output_fields(vec![FieldData::Int64 {
+                name: "id".into(),
+                values: vec![1],
+            }])
+            .output_field_names(["id"])
+            .element_indices(vec![vec![3]]);
+        let row = results.get_output_row(0).unwrap();
+        assert_eq!(row["offset"], 3);
+        assert_eq!(row["_original_idx"], 0);
+
+        // A real output field named `offset` keeps its value; the element position is exposed
+        // under `_offset` instead (mirroring the C++ SDK).
+        let results = QueryResults::new()
+            .output_fields(vec![
+                FieldData::Int64 {
+                    name: "id".into(),
+                    values: vec![1],
+                },
+                FieldData::Int64 {
+                    name: "offset".into(),
+                    values: vec![7],
+                },
+            ])
+            .output_field_names(["id", "offset"])
+            .element_indices(vec![vec![3]]);
+        let row = results.get_output_row(0).unwrap();
+        assert_eq!(row["offset"], 7);
+        assert_eq!(row["_offset"], 3);
+        assert_eq!(row["_original_idx"], 0);
+
+        // get_output_rows and to_entity_row apply the same renaming.
+        let output_rows = results.get_output_rows().unwrap();
+        assert_eq!(output_rows[0]["offset"], 7);
+        assert_eq!(output_rows[0]["_offset"], 3);
+        let borrowed = results.rows().unwrap().collect::<Vec<_>>();
+        let materialized = borrowed[0].to_entity_row().unwrap();
+        assert_eq!(materialized["offset"], 7);
+        assert_eq!(materialized["_offset"], 3);
     }
 
     #[test]

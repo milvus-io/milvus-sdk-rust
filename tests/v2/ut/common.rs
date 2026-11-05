@@ -2103,6 +2103,116 @@ impl MilvusService for MockMilvus {
                     }],
                     ..Default::default()
                 }
+            } else if request.expr.contains("big_element_page_query_iterator") {
+                // reduce_stop_for_best=true uses IReduceInOrderForBest, which does not enforce
+                // elementLimit, so one entity returns all its matched elements in a single page.
+                if request.expr.contains("id >=") {
+                    pb::QueryResults {
+                        status: Some(success_status()),
+                        fields_data: vec![int64_field("id", vec![])],
+                        collection_name: "books".into(),
+                        output_fields: vec!["id".into()],
+                        session_ts: 300,
+                        primary_field_name: "id".into(),
+                        ..Default::default()
+                    }
+                } else {
+                    pb::QueryResults {
+                        status: Some(success_status()),
+                        fields_data: vec![int64_field("id", vec![0])],
+                        collection_name: "books".into(),
+                        output_fields: vec!["id".into()],
+                        session_ts: 300,
+                        primary_field_name: "id".into(),
+                        element_indices: vec![pb::ElementIndices {
+                            indices: Some(schema::LongArray {
+                                data: (0..500).collect(),
+                                ..Default::default()
+                            }),
+                        }],
+                        ..Default::default()
+                    }
+                }
+            } else if request.expr.contains("boundary_element_query_iterator") {
+                // Each entity `id` in 0..4 matches elements [id*2, id*2+1]. A resume
+                // (`id >= X` + `query_iter_last_element_offset=K`) re-enters entity X and delivers
+                // its elements with offset > K, then continues with the following entities; an
+                // exclusive `id > X` starts at entity X+1. Fresh requests start at entity 0. Pages
+                // are capped at `limit` elements (whole entities, mirroring elementLimit).
+                let reenter = request
+                    .expr
+                    .split_once("id >=")
+                    .and_then(|(_, value)| value.split_whitespace().next())
+                    .and_then(|value| value.parse::<i64>().ok());
+                let exclusive = reenter
+                    .is_none()
+                    .then(|| {
+                        request
+                            .expr
+                            .split_once("id > ")
+                            .and_then(|(_, value)| value.split_whitespace().next())
+                            .and_then(|value| value.parse::<i64>().ok())
+                    })
+                    .flatten();
+                let resume_offset = request
+                    .query_params
+                    .iter()
+                    .find(|param| param.key == "query_iter_last_element_offset")
+                    .and_then(|param| param.value.parse::<i64>().ok());
+                let start = reenter
+                    .or_else(|| exclusive.map(|value| value + 1))
+                    .unwrap_or(0);
+                let limit = request
+                    .query_params
+                    .iter()
+                    .find(|param| param.key == "limit")
+                    .and_then(|param| param.value.parse::<i64>().ok())
+                    .unwrap_or(1)
+                    .max(1);
+                let mut pairs: Vec<(i64, Vec<i64>)> = Vec::new();
+                let mut elements_seen = 0usize;
+                for id in start..4 {
+                    let elements = if id == start {
+                        match resume_offset {
+                            Some(offset) => vec![id * 2, id * 2 + 1]
+                                .into_iter()
+                                .filter(|element| *element > offset)
+                                .collect::<Vec<_>>(),
+                            None => vec![id * 2, id * 2 + 1],
+                        }
+                    } else {
+                        vec![id * 2, id * 2 + 1]
+                    };
+                    if elements.is_empty() {
+                        // The server advances past an entity with no remaining elements.
+                        continue;
+                    }
+                    pairs.push((id, elements));
+                    elements_seen += pairs.last().expect("just pushed").1.len();
+                    if elements_seen >= limit as usize {
+                        break;
+                    }
+                }
+                let ids = pairs.iter().map(|(id, _)| *id).collect::<Vec<_>>();
+                let element_indices = pairs
+                    .into_iter()
+                    .map(|(_, indices)| pb::ElementIndices {
+                        indices: Some(schema::LongArray {
+                            data: indices,
+                            ..Default::default()
+                        }),
+                    })
+                    .collect();
+                pb::QueryResults {
+                    status: Some(success_status()),
+                    fields_data: vec![int64_field("id", ids)],
+                    collection_name: "books".into(),
+                    output_fields: vec!["id".into()],
+                    session_ts: 300,
+                    primary_field_name: "id".into(),
+                    element_indices,
+                    ..Default::default()
+                }
             } else if request.expr.contains("decode_failure_query_iterator")
                 && !request.output_fields.is_empty()
             {
