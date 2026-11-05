@@ -1231,11 +1231,13 @@ impl MilvusService for MockMilvus {
                 .map(|principals| principals.keys().cloned().collect())
                 .unwrap_or_default();
             principals.sort();
+            let principal_cnt = principals.len() as i64;
             pb::ListRlsPrincipalsResponse {
                 status: Some(success_status()),
                 principal_names: principals,
                 db_name: request.db_name,
                 collection_name: request.collection_name,
+                principal_cnt,
             }
         }
     );
@@ -3107,6 +3109,7 @@ impl MilvusService for MockMilvus {
         pb::ListSnapshotsResponse {
             status: Some(success_status()),
             snapshots: vec!["snap-1".into(), "snap-2".into()],
+            snapshot_summaries: Vec::new(),
         }
     );
     response_method!(

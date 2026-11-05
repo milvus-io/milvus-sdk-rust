@@ -441,6 +441,7 @@ mod tests {
             principal_names: vec!["alice".into(), "bob".into()],
             db_name: "default".into(),
             collection_name: "books".into(),
+            principal_cnt: 2,
         });
         assert_eq!(response.principal_names(), ["alice", "bob"]);
         assert_eq!(response.database_name(), "default");
