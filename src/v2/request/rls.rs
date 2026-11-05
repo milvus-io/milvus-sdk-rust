@@ -984,6 +984,7 @@ impl ListRLSPrincipalsRequest {
             base: None,
             db_name: self.database_name.unwrap_or_else(|| default_db.to_owned()),
             collection_name: self.collection_name,
+            count: false,
         }
     }
 }
