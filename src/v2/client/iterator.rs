@@ -48,6 +48,10 @@ struct SearchIteratorCollectionInfo {
 // QueryIterator
 ///////////////////////////////////////////////////////////////////////////////
 /// Iterator that retrieves query results in stable, paginated batches.
+///
+/// Pagination advances a primary-key cursor and preserves one MVCC session timestamp across pages.
+/// For `element_filter` iterators the requested `limit` and `offset` count matched elements (the
+/// pages expand to one row per matched element, mirroring pymilvus); otherwise they count rows.
 pub struct QueryIterator {
     client: ClientV2,
     request: milvus::QueryRequest,
@@ -112,14 +116,22 @@ impl QueryIterator {
             return Ok(None);
         }
 
-        let (mut response, source_exhausted, next_cache) = if self
-            .cache
-            .as_ref()
-            .is_some_and(|cached| query_response_row_count(cached) >= self.batch_size)
-        {
+        let (mut response, source_exhausted, next_cache) = if self.cache.as_ref().is_some_and(
+            |cached| {
+                if self.is_element_filter {
+                    query_response_element_count(cached) >= self.batch_size
+                } else {
+                    query_response_row_count(cached) >= self.batch_size
+                }
+            },
+        ) {
             trace_debug!(target: "milvus_sdk::iterator", kind = "query", batch_size = self.batch_size, "serving query iterator page from local cache");
             let cached = self.cache.take().expect("checked query iterator cache");
-            let (page, remaining) = cached.split_at(self.batch_size)?;
+            let (page, remaining) = if self.is_element_filter {
+                cached.split_elements(self.batch_size)?
+            } else {
+                cached.split_at(self.batch_size)?
+            };
             (page, false, remaining)
         } else {
             trace_debug!(target: "milvus_sdk::iterator", kind = "query", batch_size = self.batch_size, remaining = ?self.remaining, "requesting next query iterator page");
@@ -141,35 +153,39 @@ impl QueryIterator {
             let raw = rpc_with_retry!(self.client, query, self.request.clone())?;
             status_to_result(&raw.status)?;
             let decoded = response::dql::QueryResponse::from_proto(raw)?;
-            let count = query_response_row_count(&decoded);
+            // Element-filter pages are judged by matched elements (the server limits them by
+            // `elementLimit = limit` unless `reduce_stop_for_best=true` over-returns); ordinary
+            // pages are judged by entity rows.
+            let count = if self.is_element_filter {
+                query_response_element_count(&decoded)
+            } else {
+                query_response_row_count(&decoded)
+            };
             if count == 0 {
                 self.finished = true;
                 return Ok(None);
             }
-            // The server limits element_filter pages by element count (`elementLimit = limit`),
-            // so a page of multi-element entities can contain fewer than `batch_size` entities
-            // while more matching entities remain. Judging exhaustion by entity count would
-            // terminate such an iterator early and silently drop rows.
-            let source_exhausted = if self.is_element_filter {
-                query_response_element_count(&decoded) < self.batch_size
-            } else {
-                count < self.batch_size
-            };
+            let source_exhausted = count < self.batch_size;
             // With iterator reduce_stop_for_best enabled, Milvus may return more rows than the
             // requested limit. Retain complete surplus batches so subsequent next() calls avoid
             // another RPC while advancing the cursor only through rows delivered to the caller.
             let should_cache = count >= self.batch_size.saturating_mul(2);
-            let (page, remaining) = decoded.split_at(self.batch_size)?;
+            let (page, remaining) = if self.is_element_filter {
+                decoded.split_elements(self.batch_size)?
+            } else {
+                decoded.split_at(self.batch_size)?
+            };
             let next_cache = should_cache.then_some(remaining).flatten();
             trace_debug!(target: "milvus_sdk::iterator", kind = "query", rows = count, source_exhausted, cached_surplus = next_cache.is_some(), "received query iterator page");
             (page, source_exhausted, next_cache)
         };
 
         if let Some(left) = self.remaining {
-            let (limited, _) = response.split_at(left)?;
-            response = limited;
+            // The requested limit counts matched elements for element_filter iterators (mirroring
+            // pymilvus) and entity rows otherwise.
+            response = response.truncate_elements(left)?;
         }
-        let count = query_response_row_count(&response);
+        let count = query_response_element_count(&response);
         if count == 0 {
             self.finished = true;
             return Ok(None);
@@ -213,22 +229,54 @@ impl QueryIterator {
         while offset > 0 {
             let size = offset.min(MAX_BATCH_SIZE);
             let mut request = self.request.clone();
-            request.expr = self.next_filter_exclusive();
             request.output_fields.clear();
             set_param(&mut request.query_params, "limit", size.to_string());
             set_param(&mut request.query_params, "offset", "0".into());
-            set_param(&mut request.query_params, "iterator", "false".into());
             set_param(
                 &mut request.query_params,
                 "reduce_stop_for_best",
                 "false".into(),
             );
+            // Element-filter seeks resume at the recorded element position (`pk >=` plus the
+            // `query_iter_last_*` params), which the server only accepts with iterator=true; plain
+            // seeks advance strictly after the key (`pk >`) with iterator=false.
+            if self.is_element_filter {
+                request.expr = self.next_filter();
+                set_param(&mut request.query_params, "iterator", "true".into());
+                apply_element_cursor_params(self.cursor.as_ref(), true, &mut request.query_params);
+            } else {
+                request.expr = self.next_filter_exclusive();
+                set_param(&mut request.query_params, "iterator", "false".into());
+            }
 
             let raw = rpc_with_retry!(self.client, query, request)?;
             status_to_result(&raw.status)?;
-            let entity_count = query_row_count(&raw);
-            if entity_count == 0 {
+            // Element-filter seeks consume matched elements (the server caps seek pages by element
+            // count via `elementLimit`); ordinary seeks consume entity rows.
+            let consumed = if self.is_element_filter {
+                query_proto_element_count(&raw)
+            } else {
+                query_row_count(&raw)
+            };
+            if consumed == 0 {
                 self.finished = true;
+                break;
+            }
+            // Element-filter seek pages may overshoot the remaining element budget (a future server
+            // delivering whole entities, or a boundary entity crossing the budget). Consuming the
+            // whole boundary entity would over-skip its tail, so when the budget is exhausted inside
+            // such a batch, re-enter the boundary entity at its in-budget element so its remaining
+            // elements are delivered on the resumed page (matching the element-exact limit
+            // truncation).
+            let final_batch = size == offset;
+            if self.is_element_filter && consumed > size && final_batch {
+                self.cursor = Some(query_proto_boundary_cursor(
+                    &raw,
+                    &self.primary_field_name,
+                    self.primary_field_type,
+                    self.session_ts,
+                    size,
+                )?);
                 break;
             }
             self.cursor = Some(query_proto_cursor(
@@ -238,16 +286,12 @@ impl QueryIterator {
                 self.session_ts,
                 self.is_element_filter,
             )?);
+            offset = offset.saturating_sub(consumed);
             // The server caps element_filter seek pages by element count (`elementLimit = limit`),
-            // so a page of multi-element entities can carry fewer than `size` entities while more
-            // matching rows remain; judging exhaustion by entity count would truncate the seek.
-            let exhausted = if self.is_element_filter {
-                query_proto_element_count(&raw) < size
-            } else {
-                entity_count < size
-            };
-            offset = offset.saturating_sub(entity_count);
-            if exhausted {
+            // so a page of multi-element entities can carry fewer than `size` elements while more
+            // matching rows remain; judging exhaustion by the consumed count mirrors the
+            // element-count budget of the requested offset.
+            if consumed < size {
                 self.finished = true;
                 break;
             }
@@ -270,8 +314,8 @@ impl QueryIterator {
     }
 
     /// Builds the filter with a strict-exclusive primary-key predicate (`pk > value`), used by the
-    /// `iterator=false` offset seek, where Milvus rejects the `query_iter_last_*` element-resume
-    /// params (they are only accepted when `iterator=true`).
+    /// plain (non-element-filter) `iterator=false` offset seek, where Milvus rejects the
+    /// `query_iter_last_*` element-resume params (they are only accepted when `iterator=true`).
     fn next_filter_exclusive(&self) -> String {
         self.build_filter(false)
     }
@@ -1668,6 +1712,15 @@ fn query_proto_field_cursor(
     data_type: DataType,
     session_ts: u64,
 ) -> Result<QueryCursor> {
+    query_proto_field_cursor_at_index(field, data_type, session_ts, None)
+}
+
+fn query_proto_field_cursor_at_index(
+    field: &schema::FieldData,
+    data_type: DataType,
+    session_ts: u64,
+    index: Option<usize>,
+) -> Result<QueryCursor> {
     use schema::{field_data, scalar_field};
 
     let scalar = match field.field.as_ref() {
@@ -1680,33 +1733,108 @@ fn query_proto_field_cursor(
         }
     };
     match (data_type, scalar.data.as_ref()) {
-        (DataType::Int64, Some(scalar_field::Data::LongData(values))) => values
-            .data
-            .last()
-            .copied()
-            .map(|pk| QueryCursor::int64(session_ts, pk))
-            .ok_or_else(|| {
-                Error::MalformedResponse(format!(
-                    "primary-key field {:?} has no values",
-                    field.field_name
-                ))
-            }),
-        (DataType::VarChar, Some(scalar_field::Data::StringData(values))) => values
-            .data
-            .last()
-            .cloned()
-            .map(|pk| QueryCursor::varchar(session_ts, pk))
-            .ok_or_else(|| {
-                Error::MalformedResponse(format!(
-                    "primary-key field {:?} has no values",
-                    field.field_name
-                ))
-            }),
+        (DataType::Int64, Some(scalar_field::Data::LongData(values))) => {
+            let pk = index
+                .and_then(|index| values.data.get(index))
+                .or_else(|| values.data.last())
+                .copied()
+                .map(|pk| QueryCursor::int64(session_ts, pk))
+                .ok_or_else(|| {
+                    Error::MalformedResponse(format!(
+                        "primary-key field {:?} has no values",
+                        field.field_name
+                    ))
+                })?;
+            Ok(pk)
+        }
+        (DataType::VarChar, Some(scalar_field::Data::StringData(values))) => {
+            let pk = index
+                .and_then(|index| values.data.get(index))
+                .or_else(|| values.data.last())
+                .cloned()
+                .map(|pk| QueryCursor::varchar(session_ts, pk))
+                .ok_or_else(|| {
+                    Error::MalformedResponse(format!(
+                        "primary-key field {:?} has no values",
+                        field.field_name
+                    ))
+                })?;
+            Ok(pk)
+        }
         _ => Err(Error::MalformedResponse(format!(
             "primary-key field {:?} does not match its collection schema",
             field.field_name
         ))),
     }
+}
+
+/// Returns a cursor that re-enters the entity whose matched elements cross `budget`, positioned at
+/// the in-budget element. Used when an element-filter seek batch overshoots the remaining offset:
+/// resuming at the boundary element delivers the entity's remaining elements instead of skipping
+/// them.
+fn query_proto_boundary_cursor(
+    response: &milvus::QueryResults,
+    primary_field_name: &str,
+    data_type: DataType,
+    session_ts: u64,
+    budget: usize,
+) -> Result<QueryCursor> {
+    let field = response
+        .fields_data
+        .iter()
+        .find(|field| field.field_name == primary_field_name)
+        .ok_or_else(|| {
+            Error::MalformedResponse(format!(
+                "primary-key field {primary_field_name:?} is missing from query iterator response"
+            ))
+        })?;
+    let mut before = 0usize;
+    for (row, element_indices) in response.element_indices.iter().enumerate() {
+        let indices = element_indices
+            .indices
+            .as_ref()
+            .map(|indices| indices.data.as_slice())
+            .unwrap_or_default();
+        if before + indices.len() > budget {
+            // When the entities before the boundary sum to exactly `budget`, the in-budget element
+            // is the last element of the PREVIOUS entity rather than one of this entity's; resume
+            // from that element so nothing between the requested offset and the boundary entity is
+            // skipped.
+            let (boundary_row, offset) = if before == budget {
+                let previous = response.element_indices[row - 1]
+                    .indices
+                    .as_ref()
+                    .map(|indices| indices.data.as_slice())
+                    .unwrap_or_default();
+                let offset = *previous.last().ok_or_else(|| {
+                    Error::MalformedResponse(
+                        "element seek boundary previous entity has no element offsets".into(),
+                    )
+                })?;
+                (row - 1, offset)
+            } else {
+                let within = budget - before;
+                let offset = *indices.get(within - 1).ok_or_else(|| {
+                    Error::MalformedResponse(
+                        "element seek boundary has no element offset at the budget cut".into(),
+                    )
+                })?;
+                (row, offset)
+            };
+            let mut cursor = query_proto_field_cursor_at_index(
+                field,
+                data_type,
+                session_ts,
+                Some(boundary_row),
+            )?;
+            cursor = cursor.last_element_offset(offset);
+            return Ok(cursor);
+        }
+        before += indices.len();
+    }
+    Err(Error::MalformedResponse(
+        "element seek boundary not found in seek response".into(),
+    ))
 }
 
 fn field_row_count(field: &schema::FieldData) -> usize {
@@ -1769,14 +1897,14 @@ fn field_row_count(field: &schema::FieldData) -> usize {
 mod search_iterator_v2_tests {
     use super::{
         format_iterator_bound, hybrid_timestamp_from_millis, is_element_filter_expr,
-        search_iterator_result_count, search_iterator_v2_metadata, set_search_extra_param,
-        set_search_numeric_param, validate_search_iterator_input, validate_search_iterator_range,
-        LegacyFilteredIds,
+        query_proto_boundary_cursor, search_iterator_result_count, search_iterator_v2_metadata,
+        set_search_extra_param, set_search_numeric_param, validate_search_iterator_input,
+        validate_search_iterator_range, LegacyFilteredIds,
     };
     use crate::proto::{common, milvus, schema};
     use crate::v2::request::dql::{SearchRequest, SearchVectors};
-    use crate::v2::types::FunctionChain;
-    use crate::v2::MetricType;
+    use crate::v2::types::{FunctionChain, QueryCursorPk};
+    use crate::v2::{DataType, MetricType};
 
     #[test]
     fn is_element_filter_expr_requires_the_function_call() {
@@ -1801,6 +1929,51 @@ mod search_iterator_v2_tests {
     fn last_bound_uses_double_precision_wire_text() {
         assert_eq!(format_iterator_bound(0.1), "0.100000001490116");
         assert_eq!(format_iterator_bound(-1.25), "-1.250000000000000");
+    }
+
+    #[test]
+    fn query_proto_boundary_cursor_handles_budget_on_entity_boundary() {
+        let id_field = || schema::FieldData {
+            r#type: schema::DataType::Int64 as i32,
+            field_name: "id".into(),
+            field: Some(schema::field_data::Field::Scalars(schema::ScalarField {
+                data: Some(schema::scalar_field::Data::LongData(schema::LongArray {
+                    data: vec![0, 1, 2],
+                    ..Default::default()
+                })),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let element_indices = |data: Vec<i64>| milvus::ElementIndices {
+            indices: Some(schema::LongArray {
+                data,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let response = milvus::QueryResults {
+            fields_data: vec![id_field()],
+            element_indices: vec![
+                element_indices(vec![0, 1]),
+                element_indices(vec![2, 3]),
+                element_indices(vec![4, 5]),
+            ],
+            ..Default::default()
+        };
+
+        // The entities before the boundary sum to exactly the budget (2 + 2 == 4): the in-budget
+        // element is the previous entity's last element, not a member of the boundary entity.
+        let cursor = query_proto_boundary_cursor(&response, "id", DataType::Int64, 300, 4)
+            .expect("boundary cursor on an exact entity boundary");
+        assert_eq!(cursor.get_pk(), &QueryCursorPk::Int64(1));
+        assert_eq!(cursor.get_last_element_offset(), Some(3));
+
+        // A budget that lands inside the boundary entity (within == 1).
+        let cursor = query_proto_boundary_cursor(&response, "id", DataType::Int64, 300, 3)
+            .expect("boundary cursor inside the boundary entity");
+        assert_eq!(cursor.get_pk(), &QueryCursorPk::Int64(1));
+        assert_eq!(cursor.get_last_element_offset(), Some(2));
     }
 
     #[test]

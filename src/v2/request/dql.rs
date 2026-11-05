@@ -372,6 +372,9 @@ impl QueryRequestBuilder {
     }
 
     /// Sets the offset and returns the updated value.
+    ///
+    /// For `element_filter` queries the offset counts matched elements (the server and the query
+    /// iterator seek both skip matched elements, mirroring pymilvus); otherwise it counts rows.
     pub fn offset(mut self, value: i64) -> Self {
         self.value.offset = Some(value);
         self
@@ -2136,6 +2139,9 @@ impl QueryIteratorRequestBuilder {
     }
 
     /// Sets the limit and returns the updated value.
+    ///
+    /// For `element_filter` iterators the limit counts matched elements (mirroring pymilvus);
+    /// otherwise it counts result rows/entities.
     pub fn limit(mut self, value: i64) -> Self {
         self.value.query.limit = Some(value);
         self

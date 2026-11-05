@@ -924,7 +924,7 @@ async fn query_iterator_element_filter_captures_and_resumes_from_element_cursor(
                         .build()
                         .expect("valid request"),
                 )
-                .batch_size(1)
+                .batch_size(2)
                 .cursor(cursor)
                 .build()
                 .expect("valid request"),
@@ -1051,6 +1051,69 @@ async fn query_iterator_element_filter_does_not_stop_at_entity_batch_boundary() 
 }
 
 #[tokio::test]
+async fn query_iterator_element_filter_rows_expand_to_matched_elements() {
+    let server = MockServer::start().await;
+    let filter = "element_filter(tags, tag == \"x\") and multi_element_query_iterator";
+    let mut iterator = server
+        .client
+        .query_iterator(
+            QueryIteratorRequest::builder()
+                .query(
+                    QueryRequest::builder()
+                        .collection_name("books")
+                        .filter(filter)
+                        .output_fields(["id"])
+                        .build()
+                        .expect("valid request"),
+                )
+                .batch_size(4)
+                .reduce_stop_for_best(false)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("create query iterator");
+
+    // The row materializers expand each entity into one row per matched element, carrying the
+    // element offset and the original entity index (mirroring pymilvus).
+    let mut element_rows = Vec::new();
+    let mut materialized_rows = Vec::new();
+    while let Some(page) = iterator.next().await.expect("fetch iterator page") {
+        for row in page.results().rows().expect("borrow element rows") {
+            element_rows.push((
+                row.get_i64("id").expect("read id"),
+                row.element_offset().expect("element offset"),
+            ));
+        }
+        for row in page.results().get_output_rows().expect("materialize rows") {
+            materialized_rows.push((
+                row["id"].as_i64().expect("materialized id"),
+                row["offset"].as_i64().expect("materialized offset"),
+            ));
+            assert!(
+                row["_original_idx"].is_i64(),
+                "materialized element row carries _original_idx"
+            );
+        }
+    }
+    // 4 entities x 2 matched elements each, expanded into element rows.
+    let expected = vec![
+        (0, 0),
+        (0, 1),
+        (1, 2),
+        (1, 3),
+        (2, 4),
+        (2, 5),
+        (3, 6),
+        (3, 7),
+    ];
+    assert_eq!(element_rows, expected);
+    assert_eq!(materialized_rows, expected);
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn query_iterator_element_filter_offset_seek_does_not_truncate() {
     let server = MockServer::start().await;
     let filter = "element_filter(tags, tag == \"x\") and multi_element_query_iterator";
@@ -1078,9 +1141,141 @@ async fn query_iterator_element_filter_offset_seek_does_not_truncate() {
     while let Some(page) = iterator.next().await.expect("fetch iterator page") {
         ids.extend(query_ids(&page));
     }
-    // The offset seek must not treat an element-capped page (fewer entities than the seek size)
-    // as exhausted: the offset skips two entities and the remaining two are returned.
-    assert_eq!(ids, [2, 3]);
+    // The offset seek counts matched elements for element_filter iterators (mirroring pymilvus):
+    // offset 2 skips the two elements of entity 0, so iteration resumes at entity 1. The seek must
+    // not treat an element-capped page (fewer entities than the seek size) as exhausted.
+    assert_eq!(ids, [1, 2, 3]);
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn query_iterator_element_filter_limit_counts_matched_elements() {
+    let server = MockServer::start().await;
+    let filter = "element_filter(tags, tag == \"x\") and multi_element_query_iterator";
+    let mut iterator = server
+        .client
+        .query_iterator(
+            QueryIteratorRequest::builder()
+                .query(
+                    QueryRequest::builder()
+                        .collection_name("books")
+                        .filter(filter)
+                        .output_fields(["id"])
+                        .build()
+                        .expect("valid request"),
+                )
+                .batch_size(4)
+                .limit(3)
+                .reduce_stop_for_best(false)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("create query iterator");
+
+    let mut element_rows = Vec::new();
+    while let Some(page) = iterator.next().await.expect("fetch iterator page") {
+        for row in page.results().rows().expect("borrow element rows") {
+            element_rows.push((
+                row.get_i64("id").expect("read id"),
+                row.element_offset().expect("element offset"),
+            ));
+        }
+    }
+    // The limit counts matched elements: the page holds 4 elements across 2 entities, so it is cut
+    // to 3 elements (entity 0's two elements plus one element of entity 1), mirroring pymilvus.
+    assert_eq!(element_rows, vec![(0, 0), (0, 1), (1, 2)]);
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn query_iterator_element_filter_batch_size_bounds_over_returned_pages() {
+    let server = MockServer::start().await;
+    let filter = "element_filter(tags, tag == \"x\") and big_element_page_query_iterator";
+    let mut iterator = server
+        .client
+        .query_iterator(
+            QueryIteratorRequest::builder()
+                .query(
+                    QueryRequest::builder()
+                        .collection_name("books")
+                        .filter(filter)
+                        .output_fields(["id"])
+                        .build()
+                        .expect("valid request"),
+                )
+                .batch_size(100)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("create query iterator");
+
+    let mut element_rows = Vec::new();
+    let mut page_sizes = Vec::new();
+    while let Some(page) = iterator.next().await.expect("fetch iterator page") {
+        let rows: Vec<_> = page
+            .results()
+            .rows()
+            .expect("borrow element rows")
+            .collect();
+        page_sizes.push(rows.len());
+        for row in &rows {
+            element_rows.push((
+                row.get_i64("id").expect("read id"),
+                row.element_offset().expect("element offset"),
+            ));
+        }
+    }
+    // reduce_stop_for_best=true (the default) does not enforce elementLimit, so the single entity's
+    // 500 matched elements arrive in one page; batch_size (in elements) must bound each delivered
+    // page and the cached surplus must keep every element, mirroring pymilvus.
+    let expected = (0..500).map(|offset| (0, offset)).collect::<Vec<_>>();
+    assert_eq!(element_rows, expected);
+    assert_eq!(page_sizes, vec![100, 100, 100, 100, 100]);
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn query_iterator_element_filter_offset_seek_is_boundary_exact() {
+    let server = MockServer::start().await;
+    let filter = "element_filter(tags, tag == \"x\") and boundary_element_query_iterator";
+    let mut iterator = server
+        .client
+        .query_iterator(
+            QueryIteratorRequest::builder()
+                .query(
+                    QueryRequest::builder()
+                        .collection_name("books")
+                        .filter(filter)
+                        .offset(3)
+                        .output_fields(["id"])
+                        .build()
+                        .expect("valid request"),
+                )
+                .batch_size(2)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("create query iterator");
+
+    let mut element_rows = Vec::new();
+    while let Some(page) = iterator.next().await.expect("fetch iterator page") {
+        for row in page.results().rows().expect("borrow element rows") {
+            element_rows.push((
+                row.get_i64("id").expect("read id"),
+                row.element_offset().expect("element offset"),
+            ));
+        }
+    }
+    // offset 3 skips the first three matched elements (entity 0's two plus entity 1's first). The
+    // seek must not over-skip entity 1's remaining element: the whole tail [3..] is delivered.
+    let expected = vec![(1, 3), (2, 4), (2, 5), (3, 6), (3, 7)];
+    assert_eq!(element_rows, expected);
 
     server.shutdown().await;
 }
@@ -1101,7 +1296,7 @@ async fn query_iterator_element_cursor_resume_reenters_the_primary_key() {
                         .build()
                         .expect("valid request"),
                 )
-                .batch_size(1)
+                .batch_size(2)
                 .build()
                 .expect("valid request"),
         )
@@ -1131,7 +1326,7 @@ async fn query_iterator_element_cursor_resume_reenters_the_primary_key() {
                         .build()
                         .expect("valid request"),
                 )
-                .batch_size(1)
+                .batch_size(2)
                 .cursor(cursor)
                 .build()
                 .expect("valid request"),
@@ -1223,7 +1418,7 @@ async fn query_iterator_var_char_cursor_resumes_from_quoted_predicate_and_raw_la
                         .build()
                         .expect("valid request"),
                 )
-                .batch_size(1)
+                .batch_size(2)
                 .cursor(cursor)
                 .build()
                 .expect("valid request"),
@@ -1323,7 +1518,7 @@ async fn query_iterator_plain_var_char_cursor_resumes_with_exclusive_predicate()
                         .build()
                         .expect("valid request"),
                 )
-                .batch_size(1)
+                .batch_size(2)
                 .cursor(cursor)
                 .build()
                 .expect("valid request"),
