@@ -1,6 +1,6 @@
 name: Notify private PR reviewer
 
-run-name: notify PR reviewer for PR #${{ github.event.pull_request.number }}
+run-name: 'notify PR reviewer for PR #${{ github.event.pull_request.number }}'
 
 on:
   pull_request_target:
