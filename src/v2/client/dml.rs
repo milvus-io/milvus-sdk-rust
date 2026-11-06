@@ -141,6 +141,7 @@ impl ClientV2 {
                                 .cloned()
                                 .map(crate::v2::types::FieldPartialUpdateOp::into_proto)
                                 .collect(),
+                            ..Default::default()
                         })
                     },
                     RetrySemantics::NonIdempotent,

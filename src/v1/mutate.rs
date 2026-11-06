@@ -223,6 +223,7 @@ impl Client {
                 hash_keys: Vec::new(),
                 schema_timestamp: 0,
                 namespace: options.namespace,
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -259,6 +260,7 @@ impl Client {
                 hash_keys: Vec::new(),
                 consistency_level: crate::proto::common::ConsistencyLevel::Strong.into(),
                 expr_template_values: std::collections::HashMap::new(),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -356,6 +358,7 @@ impl Client {
                 partial_update: options.partial_update,
                 namespace: options.namespace,
                 field_ops: Vec::new(),
+                ..Default::default()
             })
             .await?
             .into_inner();
