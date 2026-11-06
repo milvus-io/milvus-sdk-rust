@@ -598,6 +598,7 @@ impl QueryIterator {
                 use_default_consistency: self.options.consistency_level.is_none(),
                 expr_template_values: self.options.expr_template_values.clone(),
                 namespace: self.options.namespace.clone(),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -754,6 +755,7 @@ impl QueryIterator {
                 use_default_consistency: self.options.consistency_level.is_none(),
                 expr_template_values: self.options.expr_template_values.clone(),
                 namespace: self.options.namespace.clone(),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -998,6 +1000,7 @@ impl QueryIterator {
                     use_default_consistency: self.options.consistency_level.is_none(),
                     expr_template_values: self.options.expr_template_values.clone(),
                     namespace: self.options.namespace.clone(),
+                    ..Default::default()
                 })
                 .await?
                 .into_inner();
@@ -1467,6 +1470,7 @@ impl SearchIterator {
                 function_score: None,
                 namespace: self.options.namespace.clone(),
                 highlighter: None,
+                ..Default::default()
             })
             .await?
             .into_inner();

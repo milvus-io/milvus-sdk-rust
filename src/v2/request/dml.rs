@@ -112,6 +112,7 @@ impl InsertRequest {
             num_rows: num_rows as u32,
             schema_timestamp,
             namespace: None,
+            ..Default::default()
         })
     }
 }
@@ -407,6 +408,7 @@ impl DeleteRequest {
             hash_keys: Vec::new(),
             consistency_level: crate::proto::common::ConsistencyLevel::Strong as i32,
             expr_template_values,
+            ..Default::default()
         })
     }
 }

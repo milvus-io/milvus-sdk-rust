@@ -1280,6 +1280,7 @@ impl Client {
                 use_default_consistency: options.consistency_level.is_none(),
                 expr_template_values: options.expr_template_values.clone(),
                 namespace: options.namespace.clone(),
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -1514,6 +1515,7 @@ impl Client {
                 function_score: None,
                 namespace: options.namespace,
                 highlighter: options.highlighter,
+                ..Default::default()
             })
             .await?
             .into_inner();
@@ -1733,6 +1735,7 @@ impl Client {
                 function_score: None,
                 namespace: None,
                 highlighter: None,
+                ..Default::default()
             };
 
             search_requests.push(search_request);
@@ -1771,6 +1774,7 @@ impl Client {
             use_default_consistency,
             function_score: None,
             namespace: options.namespace,
+            ..Default::default()
         };
 
         let res = self

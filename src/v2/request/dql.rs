@@ -217,6 +217,7 @@ impl QueryRequest {
                 .map(|(key, value)| Ok((key, json_template(value)?)))
                 .collect::<Result<_>>()?,
             namespace: None,
+            ..Default::default()
         })
     }
 }
@@ -414,6 +415,7 @@ impl GetRequest {
             use_default_consistency: self.consistency_level.is_none(),
             expr_template_values: HashMap::from([(template_name.to_owned(), json_template(ids)?)]),
             namespace: None,
+            ..Default::default()
         })
     }
 }
@@ -884,6 +886,7 @@ impl SearchRequest {
             namespace: None,
             highlighter: self.highlighter.map(Highlighter::into_proto),
             search_input: Some(search_input),
+            ..Default::default()
         })
     }
 }
@@ -1485,6 +1488,7 @@ impl HybridSearchRequest {
             use_default_consistency: self.consistency_level.is_none(),
             function_score: None,
             namespace: None,
+            ..Default::default()
         })
     }
 }
