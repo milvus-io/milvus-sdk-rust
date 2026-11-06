@@ -130,7 +130,7 @@ async fn query_iterator_with_cursor(
         .await?
         .ok_or_else(|| Error::Unexpected("query iterator returned no first page".into()))?;
     let first_count = first_page.results().rows()?.count();
-    println!("First page fetched {first_count} rows.");
+    println!("First page fetched {first_count} rows (batch size {batch_size}).");
     let cursor = iterator
         .cursor()
         .ok_or_else(|| Error::Unexpected("query iterator has no cursor".into()))?;
@@ -150,7 +150,7 @@ async fn query_iterator_with_cursor(
         .await?
         .ok_or_else(|| Error::Unexpected("resumed query iterator returned no page".into()))?;
     let resumed_count = resumed_page.results().rows()?.count();
-    println!("Resumed iterator fetched {resumed_count} rows.");
+    println!("Resumed iterator fetched {resumed_count} rows (batch size {batch_size}).");
     println!("=====================================================");
     Ok(())
 }
