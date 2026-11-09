@@ -37,6 +37,8 @@ pub struct InsertRequest {
     pub(crate) partition_name: String,
     pub(crate) columns: Vec<FieldData>,
     pub(crate) rows: Vec<EntityRow>,
+    pub(crate) rls_principal: Option<String>,
+    pub(crate) skip_rls: bool,
 }
 
 impl InsertRequest {
@@ -47,6 +49,8 @@ impl InsertRequest {
             partition_name: Default::default(),
             columns: Default::default(),
             rows: Default::default(),
+            rls_principal: Default::default(),
+            skip_rls: Default::default(),
         }
     }
 
@@ -92,6 +96,16 @@ impl InsertRequest {
         &self.rows
     }
 
+    /// Returns the row-level security principal name.
+    pub fn rls_principal(&self) -> &Option<String> {
+        &self.rls_principal
+    }
+
+    /// Returns whether the request explicitly bypasses row-level security.
+    pub fn should_skip_rls(&self) -> bool {
+        self.skip_rls
+    }
+
     pub(crate) fn to_proto_with_fields(
         &self,
         fields_data: Vec<crate::proto::schema::FieldData>,
@@ -112,6 +126,8 @@ impl InsertRequest {
             num_rows: num_rows as u32,
             schema_timestamp,
             namespace: None,
+            rls_principal: self.rls_principal.clone().unwrap_or_default(),
+            skip_rls: self.skip_rls,
             ..Default::default()
         })
     }
@@ -143,6 +159,22 @@ impl InsertRequestBuilder {
     /// Sets the partition name and returns the updated value.
     pub fn partition_name(mut self, value: impl Into<String>) -> Self {
         self.value.partition_name = value.into();
+        self
+    }
+
+    /// Sets the row-level security principal name and returns the updated value.
+    ///
+    /// Required on row-bearing requests against collections with RLS enabled unless
+    /// [`Self::skip_rls`] is set.
+    pub fn rls_principal(mut self, value: impl Into<String>) -> Self {
+        self.value.rls_principal = Some(value.into());
+        self
+    }
+
+    /// Sets whether the request explicitly bypasses row-level security and returns the updated
+    /// value.
+    pub fn skip_rls(mut self, value: bool) -> Self {
+        self.value.skip_rls = value;
         self
     }
 
@@ -241,6 +273,16 @@ impl UpsertRequest {
         &self.insert
     }
 
+    /// Returns the row-level security principal name.
+    pub fn rls_principal(&self) -> &Option<String> {
+        &self.insert.rls_principal
+    }
+
+    /// Returns whether the request explicitly bypasses row-level security.
+    pub fn should_skip_rls(&self) -> bool {
+        self.insert.skip_rls
+    }
+
     /// Returns whether partial update.
     pub fn is_partial_update(&self) -> bool {
         self.partial_update
@@ -269,6 +311,22 @@ impl UpsertRequestBuilder {
     /// Sets the insert and returns the updated value.
     pub fn insert(mut self, value: InsertRequest) -> Self {
         self.value.insert = value;
+        self
+    }
+
+    /// Sets the row-level security principal name and returns the updated value.
+    ///
+    /// Required on row-bearing requests against collections with RLS enabled unless
+    /// [`Self::skip_rls`] is set.
+    pub fn rls_principal(mut self, value: impl Into<String>) -> Self {
+        self.value.insert.rls_principal = Some(value.into());
+        self
+    }
+
+    /// Sets whether the request explicitly bypasses row-level security and returns the updated
+    /// value.
+    pub fn skip_rls(mut self, value: bool) -> Self {
+        self.value.insert.skip_rls = value;
         self
     }
 
@@ -326,6 +384,8 @@ pub struct DeleteRequest {
     pub(crate) filter: String,
     pub(crate) filter_templates: HashMap<String, Value>,
     pub(crate) ids: Ids,
+    pub(crate) rls_principal: Option<String>,
+    pub(crate) skip_rls: bool,
 }
 
 impl DeleteRequest {
@@ -371,6 +431,16 @@ impl DeleteRequest {
         &self.ids
     }
 
+    /// Returns the row-level security principal name.
+    pub fn rls_principal(&self) -> &Option<String> {
+        &self.rls_principal
+    }
+
+    /// Returns whether the request explicitly bypasses row-level security.
+    pub fn should_skip_rls(&self) -> bool {
+        self.skip_rls
+    }
+
     pub(crate) fn has_ids(&self) -> bool {
         !self.ids.is_empty()
     }
@@ -408,6 +478,8 @@ impl DeleteRequest {
             hash_keys: Vec::new(),
             consistency_level: crate::proto::common::ConsistencyLevel::Strong as i32,
             expr_template_values,
+            rls_principal: self.rls_principal.unwrap_or_default(),
+            skip_rls: self.skip_rls,
             ..Default::default()
         })
     }
@@ -422,6 +494,8 @@ impl DeleteRequest {
             filter: String::new(),
             filter_templates: HashMap::new(),
             ids: Ids::default(),
+            rls_principal: None,
+            skip_rls: false,
         }
     }
 }
@@ -469,6 +543,22 @@ impl DeleteRequestBuilder {
     /// Sets the ids and returns the updated value.
     pub fn ids(mut self, value: Ids) -> Self {
         self.value.ids = value;
+        self
+    }
+
+    /// Sets the row-level security principal name and returns the updated value.
+    ///
+    /// Required on row-bearing requests against collections with RLS enabled unless
+    /// [`Self::skip_rls`] is set.
+    pub fn rls_principal(mut self, value: impl Into<String>) -> Self {
+        self.value.rls_principal = Some(value.into());
+        self
+    }
+
+    /// Sets whether the request explicitly bypasses row-level security and returns the updated
+    /// value.
+    pub fn skip_rls(mut self, value: bool) -> Self {
+        self.value.skip_rls = value;
         self
     }
 
@@ -986,6 +1076,91 @@ mod builder_value_tests {
         assert_eq!(value.insert().to_owned(), insert);
         assert_eq!(value.is_partial_update().to_owned(), partial_update);
         assert_eq!(value.field_ops(), field_ops);
+    }
+
+    #[test]
+    fn insert_request_carries_rls_principal_and_skip_rls() {
+        let value = InsertRequest::builder()
+            .collection_name("books")
+            .rows(vec![EntityRow::new()])
+            .rls_principal("alice")
+            .build()
+            .expect("valid insert request");
+        assert_eq!(value.rls_principal().as_deref(), Some("alice"));
+        assert!(!value.should_skip_rls());
+        let proto = value
+            .to_proto_with_fields(Vec::new(), 1, 0, "default")
+            .expect("encode insert");
+        assert_eq!(proto.rls_principal, "alice");
+        assert!(!proto.skip_rls);
+
+        let value = InsertRequest::builder()
+            .collection_name("books")
+            .rows(vec![EntityRow::new()])
+            .skip_rls(true)
+            .build()
+            .expect("valid insert request");
+        assert!(value.should_skip_rls());
+        let proto = value
+            .to_proto_with_fields(Vec::new(), 1, 0, "default")
+            .expect("encode insert");
+        assert!(proto.skip_rls);
+        assert!(proto.rls_principal.is_empty());
+    }
+
+    #[test]
+    fn upsert_request_proxies_rls_principal_and_skip_rls() {
+        let insert = InsertRequest::builder()
+            .collection_name("books")
+            .rows(vec![EntityRow::new()])
+            .build()
+            .expect("valid insert request");
+        let value = UpsertRequest::builder()
+            .insert(insert)
+            .rls_principal("alice")
+            .build()
+            .expect("valid upsert request");
+        assert_eq!(value.rls_principal().as_deref(), Some("alice"));
+        assert!(!value.should_skip_rls());
+
+        let value = UpsertRequest::builder()
+            .insert(
+                InsertRequest::builder()
+                    .collection_name("books")
+                    .rows(vec![EntityRow::new()])
+                    .build()
+                    .expect("valid insert request"),
+            )
+            .skip_rls(true)
+            .build()
+            .expect("valid upsert request");
+        assert!(value.should_skip_rls());
+        assert!(value.rls_principal().is_none());
+    }
+
+    #[test]
+    fn delete_request_carries_rls_principal_and_skip_rls() {
+        let value = DeleteRequest::builder()
+            .collection_name("books")
+            .filter("id > 0")
+            .rls_principal("alice")
+            .build()
+            .expect("valid delete request");
+        assert_eq!(value.rls_principal().as_deref(), Some("alice"));
+        let proto = value.into_proto("default", None).expect("encode delete");
+        assert_eq!(proto.rls_principal, "alice");
+        assert!(!proto.skip_rls);
+
+        let value = DeleteRequest::builder()
+            .collection_name("books")
+            .filter("id > 0")
+            .skip_rls(true)
+            .build()
+            .expect("valid delete request");
+        assert!(value.should_skip_rls());
+        let proto = value.into_proto("default", None).expect("encode delete");
+        assert!(proto.skip_rls);
+        assert!(proto.rls_principal.is_empty());
     }
 
     #[test]
