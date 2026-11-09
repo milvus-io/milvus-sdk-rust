@@ -753,7 +753,9 @@ impl ClientV2 {
         &self,
         request: request::utility::CancelRequestsRequest,
     ) -> Result<response::utility::CancelRequestsResponse> {
-        let response = rpc_with_retry!(self, cancel_requests, request.into_proto())?;
+        // Cancel is safe to replay: the server answers a repeated cancel again and audits it once
+        // (see the method doc). This is a deliberate choice rather than the macro default.
+        let response = rpc_with_retry!(Idempotent, self, cancel_requests, request.into_proto())?;
         status_to_result(&response.status)?;
         Ok(response::utility::CancelRequestsResponse::from_proto(
             response,

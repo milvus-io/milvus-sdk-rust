@@ -849,3 +849,31 @@ async fn list_running_requests_retries_transport_failures() {
 
     server.shutdown().await;
 }
+
+#[tokio::test]
+async fn cancel_requests_retries_transport_failures() {
+    let server = MockServer::start().await;
+    server.service.set_cancel_requests_result(
+        vec![grpc_running_request("7-to03zu-1", "Running")],
+        Vec::new(),
+        Vec::new(),
+    );
+    server
+        .service
+        .fail_next_transport("cancel_requests", tonic::Code::Unavailable);
+
+    let response = server
+        .client
+        .cancel_requests(
+            CancelRequestsRequest::builder()
+                .request_ids(["7-to03zu-1"])
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("cancel is deliberately retried after a transport failure");
+    assert_eq!(response.canceled().len(), 1);
+    assert!(server.service.call_count("cancel_requests") > 1);
+
+    server.shutdown().await;
+}
