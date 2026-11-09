@@ -1851,6 +1851,245 @@ impl ListFileResourcesRequestBuilder {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// ListRunningRequestsRequest
+///////////////////////////////////////////////////////////////////////////////
+/// Parameters for the ClientV2 list_running_requests operation.
+///
+/// Lists the Search, HybridSearch and Query requests running on every proxy of
+/// the cluster. The filters are combined with AND; an unset filter does not
+/// constrain the result. A caller without the ListRunningRequests privilege may
+/// only see their own requests.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ListRunningRequestsRequest {
+    pub(crate) database_name: Option<String>,
+    pub(crate) collection_name: Option<String>,
+    pub(crate) user: Option<String>,
+    pub(crate) min_elapsed_ms: Option<i64>,
+}
+
+impl ListRunningRequestsRequest {
+    fn empty() -> Self {
+        Self {
+            database_name: Default::default(),
+            collection_name: Default::default(),
+            user: Default::default(),
+            min_elapsed_ms: Default::default(),
+        }
+    }
+
+    /// Creates a builder for this request.
+    pub fn builder() -> ListRunningRequestsRequestBuilder {
+        ListRunningRequestsRequestBuilder {
+            value: Self::empty(),
+        }
+    }
+
+    /// Converts this request back into a builder while preserving its current values.
+    pub fn into_builder(self) -> ListRunningRequestsRequestBuilder {
+        ListRunningRequestsRequestBuilder { value: self }
+    }
+
+    /// Returns the database name filter; an unset value matches any database.
+    pub fn database_name(&self) -> &Option<String> {
+        &self.database_name
+    }
+
+    /// Returns the collection name filter; an unset value matches any collection.
+    pub fn collection_name(&self) -> &Option<String> {
+        &self.collection_name
+    }
+
+    /// Returns the user whose requests to list; an unset value means every user
+    /// the caller may see.
+    pub fn user(&self) -> &Option<String> {
+        &self.user
+    }
+
+    /// Returns the minimum elapsed time filter in milliseconds; an unset value
+    /// means no constraint.
+    pub fn min_elapsed_ms(&self) -> Option<i64> {
+        self.min_elapsed_ms
+    }
+
+    pub(crate) fn into_proto(self) -> milvus::ListRunningRequestsRequest {
+        milvus::ListRunningRequestsRequest {
+            base: None,
+            db_name: self.database_name.unwrap_or_default(),
+            collection_name: self.collection_name.unwrap_or_default(),
+            user: self.user.unwrap_or_default(),
+            min_elapsed_ms: self.min_elapsed_ms.unwrap_or_default(),
+            ..Default::default()
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// ListRunningRequestsRequestBuilder
+///////////////////////////////////////////////////////////////////////////////
+/// Builder for ListRunningRequestsRequest.
+#[derive(Debug, Clone)]
+pub struct ListRunningRequestsRequestBuilder {
+    value: ListRunningRequestsRequest,
+}
+
+impl ListRunningRequestsRequestBuilder {
+    /// Sets the database name filter and returns the updated value.
+    pub fn database_name(mut self, value: impl Into<String>) -> Self {
+        self.value.database_name = Some(value.into());
+        self
+    }
+
+    /// Sets the collection name filter and returns the updated value.
+    pub fn collection_name(mut self, value: impl Into<String>) -> Self {
+        self.value.collection_name = Some(value.into());
+        self
+    }
+
+    /// Sets the user whose requests to list and returns the updated value.
+    pub fn user(mut self, value: impl Into<String>) -> Self {
+        self.value.user = Some(value.into());
+        self
+    }
+
+    /// Sets the minimum elapsed time filter in milliseconds and returns the
+    /// updated value.
+    pub fn min_elapsed_ms(mut self, value: i64) -> Self {
+        self.value.min_elapsed_ms = Some(value);
+        self
+    }
+
+    /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `min_elapsed_ms`: must not be negative
+    pub fn build(self) -> Result<ListRunningRequestsRequest> {
+        if self.value.min_elapsed_ms.is_some_and(|value| value < 0) {
+            return Err(Error::validation(
+                "min_elapsed_ms".into(),
+                "must not be negative".into(),
+            ));
+        }
+        Ok(self.value)
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// CancelRequestsRequest
+///////////////////////////////////////////////////////////////////////////////
+/// Parameters for the ClientV2 cancel_requests operation.
+///
+/// Cancels running requests by the ids returned by `list_running_requests`.
+/// The id list must not be empty. A caller without the CancelRequests
+/// privilege may only cancel their own requests.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct CancelRequestsRequest {
+    pub(crate) request_ids: Vec<String>,
+    pub(crate) reason: Option<String>,
+    pub(crate) user: Option<String>,
+}
+
+impl CancelRequestsRequest {
+    fn empty() -> Self {
+        Self {
+            request_ids: Default::default(),
+            reason: Default::default(),
+            user: Default::default(),
+        }
+    }
+
+    /// Creates a builder for this request.
+    pub fn builder() -> CancelRequestsRequestBuilder {
+        CancelRequestsRequestBuilder {
+            value: Self::empty(),
+        }
+    }
+
+    /// Converts this request back into a builder while preserving its current values.
+    pub fn into_builder(self) -> CancelRequestsRequestBuilder {
+        CancelRequestsRequestBuilder { value: self }
+    }
+
+    /// Returns the ids of the requests to cancel.
+    pub fn request_ids(&self) -> &[String] {
+        &self.request_ids
+    }
+
+    /// Returns the free-text reason recorded in the server's audit log and
+    /// returned to the client whose request is canceled.
+    pub fn reason(&self) -> &Option<String> {
+        &self.reason
+    }
+
+    /// Returns the user whose requests to cancel; an unset value means the
+    /// caller's own requests.
+    pub fn user(&self) -> &Option<String> {
+        &self.user
+    }
+
+    pub(crate) fn into_proto(self) -> milvus::CancelRequestsRequest {
+        milvus::CancelRequestsRequest {
+            base: None,
+            request_ids: self.request_ids,
+            reason: self.reason.unwrap_or_default(),
+            user: self.user.unwrap_or_default(),
+            ..Default::default()
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// CancelRequestsRequestBuilder
+///////////////////////////////////////////////////////////////////////////////
+/// Builder for CancelRequestsRequest.
+#[derive(Debug, Clone)]
+pub struct CancelRequestsRequestBuilder {
+    value: CancelRequestsRequest,
+}
+
+impl CancelRequestsRequestBuilder {
+    /// Sets the ids of the requests to cancel and returns the updated value.
+    pub fn request_ids(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.value.request_ids = values.into_iter().map(Into::into).collect();
+        self
+    }
+
+    /// Adds a single request id to cancel and returns the updated value.
+    pub fn add_request_id(mut self, value: impl Into<String>) -> Self {
+        self.value.request_ids.push(value.into());
+        self
+    }
+
+    /// Sets the free-text reason and returns the updated value.
+    pub fn reason(mut self, value: impl Into<String>) -> Self {
+        self.value.reason = Some(value.into());
+        self
+    }
+
+    /// Sets the user whose requests to cancel and returns the updated value.
+    pub fn user(mut self, value: impl Into<String>) -> Self {
+        self.value.user = Some(value.into());
+        self
+    }
+
+    /// Validates the configured values and builds the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::v2::error::Error::Validation`] when:
+    /// - `request_ids` must contain at least one value
+    /// - `request_ids` must not contain empty values
+    pub fn build(self) -> Result<CancelRequestsRequest> {
+        required_slice("request_ids", &self.value.request_ids)?;
+        non_empty_strings("request_ids", &self.value.request_ids)?;
+        Ok(self.value)
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // Test Cases
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -2558,5 +2797,115 @@ mod external_collection_request_tests {
                 ..Default::default()
             }
         );
+    }
+}
+
+#[cfg(test)]
+mod running_requests_request_tests {
+    use super::*;
+    use crate::v2::error::Error;
+
+    #[test]
+    fn list_running_requests_defaults_mean_no_filter() {
+        let value = ListRunningRequestsRequest::builder()
+            .build()
+            .expect("valid request");
+        assert_eq!(value.database_name(), &None);
+        assert_eq!(value.collection_name(), &None);
+        assert_eq!(value.user(), &None);
+        assert_eq!(value.min_elapsed_ms(), None);
+
+        let proto = value.into_proto();
+        assert_eq!(proto.db_name, "");
+        assert_eq!(proto.collection_name, "");
+        assert_eq!(proto.user, "");
+        assert_eq!(proto.min_elapsed_ms, 0);
+    }
+
+    #[test]
+    fn list_running_requests_builder_sets_all_fields() {
+        let value = ListRunningRequestsRequest::builder()
+            .database_name("db")
+            .collection_name("coll")
+            .user("alice")
+            .min_elapsed_ms(5_000)
+            .build()
+            .expect("valid request");
+        assert_eq!(value.database_name().as_deref(), Some("db"));
+        assert_eq!(value.collection_name().as_deref(), Some("coll"));
+        assert_eq!(value.user().as_deref(), Some("alice"));
+        assert_eq!(value.min_elapsed_ms(), Some(5_000));
+
+        let proto = value.into_proto();
+        assert_eq!(proto.db_name, "db");
+        assert_eq!(proto.collection_name, "coll");
+        assert_eq!(proto.user, "alice");
+        assert_eq!(proto.min_elapsed_ms, 5_000);
+    }
+
+    #[test]
+    fn list_running_requests_rejects_negative_min_elapsed() {
+        assert!(matches!(
+            ListRunningRequestsRequest::builder()
+                .min_elapsed_ms(-1)
+                .build()
+                .unwrap_err(),
+            Error::Validation(_)
+        ));
+        ListRunningRequestsRequest::builder()
+            .min_elapsed_ms(0)
+            .build()
+            .expect("zero min_elapsed_ms is allowed");
+    }
+
+    #[test]
+    fn cancel_requests_defaults_are_empty() {
+        let value = CancelRequestsRequest::empty();
+        assert!(value.request_ids().is_empty());
+        assert_eq!(value.reason(), &None);
+        assert_eq!(value.user(), &None);
+        assert!(CancelRequestsRequest::builder().build().is_err());
+    }
+
+    #[test]
+    fn cancel_requests_builder_sets_all_fields() {
+        let value = CancelRequestsRequest::builder()
+            .request_ids(["1-to03zu-1", "1-to03zu-2"])
+            .reason("too heavy")
+            .user("alice")
+            .build()
+            .expect("valid request");
+        assert_eq!(value.request_ids(), ["1-to03zu-1", "1-to03zu-2"]);
+        assert_eq!(value.reason().as_deref(), Some("too heavy"));
+        assert_eq!(value.user().as_deref(), Some("alice"));
+
+        let proto = value.into_proto();
+        assert_eq!(proto.request_ids, ["1-to03zu-1", "1-to03zu-2"]);
+        assert_eq!(proto.reason, "too heavy");
+        assert_eq!(proto.user, "alice");
+    }
+
+    #[test]
+    fn cancel_requests_add_request_id_appends() {
+        let value = CancelRequestsRequest::builder()
+            .add_request_id("1-to03zu-1")
+            .add_request_id("1-to03zu-2")
+            .build()
+            .expect("valid request");
+        assert_eq!(value.request_ids(), ["1-to03zu-1", "1-to03zu-2"]);
+    }
+
+    #[test]
+    fn cancel_requests_rejects_empty_and_blank_ids() {
+        let empty = CancelRequestsRequest::builder()
+            .build()
+            .expect_err("empty id list must be rejected by build");
+        assert!(matches!(empty, Error::Validation(_)));
+
+        let blank = CancelRequestsRequest::builder()
+            .request_ids(["", "1-to03zu-1"])
+            .build()
+            .expect_err("blank id must be rejected by build");
+        assert!(matches!(blank, Error::Validation(_)));
     }
 }
