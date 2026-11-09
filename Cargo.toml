@@ -252,6 +252,10 @@ name = "v2_run_analyzer"
 path = "examples/v2/run_analyzer.rs"
 
 [[example]]
+name = "v2_running_requests"
+path = "examples/v2/running_requests.rs"
+
+[[example]]
 name = "v2_simple"
 path = "examples/v2/simple.rs"
 

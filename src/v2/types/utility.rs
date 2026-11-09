@@ -1485,6 +1485,516 @@ impl FileResourceInfo {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// RunningRequestInfo
+///////////////////////////////////////////////////////////////////////////////
+/// One Search, HybridSearch or Query request that a proxy is executing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct RunningRequestInfo {
+    pub(crate) request_id: String,
+    pub(crate) proxy_id: i64,
+    pub(crate) request_type: String,
+    pub(crate) database_name: String,
+    pub(crate) collection_name: String,
+    pub(crate) user: String,
+    pub(crate) client_addr: String,
+    pub(crate) nq: i64,
+    pub(crate) top_k: i64,
+    pub(crate) expr: String,
+    pub(crate) start_time_ms: i64,
+    pub(crate) queued_ms: i64,
+    pub(crate) elapsed_ms: i64,
+    pub(crate) state: String,
+    pub(crate) task_ids: Vec<i64>,
+    pub(crate) trace_id: String,
+    pub(crate) cancellable: bool,
+}
+
+impl RunningRequestInfo {
+    /// Creates a value initialized with its SDK defaults.
+    pub fn new() -> Self {
+        Self {
+            request_id: String::new(),
+            proxy_id: 0,
+            request_type: String::new(),
+            database_name: String::new(),
+            collection_name: String::new(),
+            user: String::new(),
+            client_addr: String::new(),
+            nq: 0,
+            top_k: 0,
+            expr: String::new(),
+            start_time_ms: 0,
+            queued_ms: 0,
+            elapsed_ms: 0,
+            state: String::new(),
+            task_ids: Vec::new(),
+            trace_id: String::new(),
+            cancellable: false,
+        }
+    }
+
+    /// Sets the request id and returns the updated value.
+    pub fn request_id(mut self, value: impl Into<String>) -> Self {
+        self.request_id = value.into();
+        self
+    }
+
+    /// Sets the request id and returns this value for further mutation.
+    pub fn set_request_id(&mut self, value: impl Into<String>) -> &mut Self {
+        self.request_id = value.into();
+        self
+    }
+
+    /// Returns the request id, an opaque string such as `"25-to03zu-rs"`; pass
+    /// it to `cancel_requests` unchanged.
+    pub fn get_request_id(&self) -> &str {
+        &self.request_id
+    }
+
+    /// Sets the node id of the proxy that holds the request and returns the
+    /// updated value.
+    pub fn proxy_id(mut self, value: i64) -> Self {
+        self.proxy_id = value;
+        self
+    }
+
+    /// Sets the node id of the proxy that holds the request and returns this
+    /// value for further mutation.
+    pub fn set_proxy_id(&mut self, value: i64) -> &mut Self {
+        self.proxy_id = value;
+        self
+    }
+
+    /// Returns the node id of the proxy that holds the request.
+    pub fn get_proxy_id(&self) -> i64 {
+        self.proxy_id
+    }
+
+    /// Sets the request type and returns the updated value.
+    pub fn request_type(mut self, value: impl Into<String>) -> Self {
+        self.request_type = value.into();
+        self
+    }
+
+    /// Sets the request type and returns this value for further mutation.
+    pub fn set_request_type(&mut self, value: impl Into<String>) -> &mut Self {
+        self.request_type = value.into();
+        self
+    }
+
+    /// Returns the request type: `Search`, `HybridSearch` or `Query`.
+    pub fn get_type(&self) -> &str {
+        &self.request_type
+    }
+
+    /// Sets the database name and returns the updated value.
+    pub fn database_name(mut self, value: impl Into<String>) -> Self {
+        self.database_name = value.into();
+        self
+    }
+
+    /// Sets the database name and returns this value for further mutation.
+    pub fn set_database_name(&mut self, value: impl Into<String>) -> &mut Self {
+        self.database_name = value.into();
+        self
+    }
+
+    /// Returns the database name.
+    pub fn get_database_name(&self) -> &str {
+        &self.database_name
+    }
+
+    /// Sets the collection name and returns the updated value.
+    pub fn collection_name(mut self, value: impl Into<String>) -> Self {
+        self.collection_name = value.into();
+        self
+    }
+
+    /// Sets the collection name and returns this value for further mutation.
+    pub fn set_collection_name(&mut self, value: impl Into<String>) -> &mut Self {
+        self.collection_name = value.into();
+        self
+    }
+
+    /// Returns the collection name.
+    pub fn get_collection_name(&self) -> &str {
+        &self.collection_name
+    }
+
+    /// Sets the user who issued the request and returns the updated value.
+    pub fn user(mut self, value: impl Into<String>) -> Self {
+        self.user = value.into();
+        self
+    }
+
+    /// Sets the user who issued the request and returns this value for further
+    /// mutation.
+    pub fn set_user(&mut self, value: impl Into<String>) -> &mut Self {
+        self.user = value.into();
+        self
+    }
+
+    /// Returns the user who issued the request.
+    pub fn get_user(&self) -> &str {
+        &self.user
+    }
+
+    /// Sets the client address seen by the proxy and returns the updated value.
+    pub fn client_addr(mut self, value: impl Into<String>) -> Self {
+        self.client_addr = value.into();
+        self
+    }
+
+    /// Sets the client address seen by the proxy and returns this value for
+    /// further mutation.
+    pub fn set_client_addr(&mut self, value: impl Into<String>) -> &mut Self {
+        self.client_addr = value.into();
+        self
+    }
+
+    /// Returns the client address seen by the proxy.
+    pub fn get_client_addr(&self) -> &str {
+        &self.client_addr
+    }
+
+    /// Sets the number of query vectors and returns the updated value.
+    pub fn nq(mut self, value: i64) -> Self {
+        self.nq = value;
+        self
+    }
+
+    /// Sets the number of query vectors and returns this value for further
+    /// mutation.
+    pub fn set_nq(&mut self, value: i64) -> &mut Self {
+        self.nq = value;
+        self
+    }
+
+    /// Returns the number of query vectors.
+    pub fn get_nq(&self) -> i64 {
+        self.nq
+    }
+
+    /// Sets the top-k of the request and returns the updated value.
+    pub fn top_k(mut self, value: i64) -> Self {
+        self.top_k = value;
+        self
+    }
+
+    /// Sets the top-k of the request and returns this value for further
+    /// mutation.
+    pub fn set_top_k(&mut self, value: i64) -> &mut Self {
+        self.top_k = value;
+        self
+    }
+
+    /// Returns the top-k of the request.
+    pub fn get_top_k(&self) -> i64 {
+        self.top_k
+    }
+
+    /// Sets the leading part of the filter expression and returns the updated
+    /// value.
+    pub fn expr(mut self, value: impl Into<String>) -> Self {
+        self.expr = value.into();
+        self
+    }
+
+    /// Sets the leading part of the filter expression and returns this value
+    /// for further mutation.
+    pub fn set_expr(&mut self, value: impl Into<String>) -> &mut Self {
+        self.expr = value.into();
+        self
+    }
+
+    /// Returns the leading part (at most 256 bytes) of the filter expression.
+    pub fn get_expr(&self) -> &str {
+        &self.expr
+    }
+
+    /// Sets the start time in milliseconds since the Unix epoch and returns the
+    /// updated value.
+    pub fn start_time_ms(mut self, value: i64) -> Self {
+        self.start_time_ms = value;
+        self
+    }
+
+    /// Sets the start time in milliseconds since the Unix epoch and returns
+    /// this value for further mutation.
+    pub fn set_start_time_ms(&mut self, value: i64) -> &mut Self {
+        self.start_time_ms = value;
+        self
+    }
+
+    /// Returns the time the request started, in milliseconds since the Unix
+    /// epoch.
+    pub fn get_start_time_ms(&self) -> i64 {
+        self.start_time_ms
+    }
+
+    /// Sets the queued time in milliseconds and returns the updated value.
+    pub fn queued_ms(mut self, value: i64) -> Self {
+        self.queued_ms = value;
+        self
+    }
+
+    /// Sets the queued time in milliseconds and returns this value for further
+    /// mutation.
+    pub fn set_queued_ms(&mut self, value: i64) -> &mut Self {
+        self.queued_ms = value;
+        self
+    }
+
+    /// Returns how long the request's first task waited in the proxy queue, in
+    /// milliseconds; 0 until that task starts.
+    pub fn get_queued_ms(&self) -> i64 {
+        self.queued_ms
+    }
+
+    /// Sets the elapsed time in milliseconds and returns the updated value.
+    pub fn elapsed_ms(mut self, value: i64) -> Self {
+        self.elapsed_ms = value;
+        self
+    }
+
+    /// Sets the elapsed time in milliseconds and returns this value for further
+    /// mutation.
+    pub fn set_elapsed_ms(&mut self, value: i64) -> &mut Self {
+        self.elapsed_ms = value;
+        self
+    }
+
+    /// Returns how long the request has been running, in milliseconds. In a
+    /// `cancel_requests` answer it is how long the request had been running when
+    /// it was canceled.
+    pub fn get_elapsed_ms(&self) -> i64 {
+        self.elapsed_ms
+    }
+
+    /// Sets the request state and returns the updated value.
+    pub fn state(mut self, value: impl Into<String>) -> Self {
+        self.state = value.into();
+        self
+    }
+
+    /// Sets the request state and returns this value for further mutation.
+    pub fn set_state(&mut self, value: impl Into<String>) -> &mut Self {
+        self.state = value.into();
+        self
+    }
+
+    /// Returns the request state: `Queued`, `Running` or `Canceling`. In a
+    /// `cancel_requests` answer it is the state before the cancel, or
+    /// `Canceling` when the call repeated an earlier cancel.
+    pub fn get_state(&self) -> &str {
+        &self.state
+    }
+
+    /// Sets the task ids and returns the updated value.
+    pub fn task_ids(mut self, values: Vec<i64>) -> Self {
+        self.task_ids = values;
+        self
+    }
+
+    /// Sets the task ids and returns this value for further mutation.
+    pub fn set_task_ids(&mut self, values: Vec<i64>) -> &mut Self {
+        self.task_ids = values;
+        self
+    }
+
+    /// Adds a single task id and returns the updated value.
+    pub fn add_task_id(mut self, value: i64) -> Self {
+        self.task_ids.push(value);
+        self
+    }
+
+    /// Returns the ids of the proxy tasks the request has created.
+    pub fn get_task_ids(&self) -> &[i64] {
+        &self.task_ids
+    }
+
+    /// Sets the trace id and returns the updated value.
+    pub fn trace_id(mut self, value: impl Into<String>) -> Self {
+        self.trace_id = value.into();
+        self
+    }
+
+    /// Sets the trace id and returns this value for further mutation.
+    pub fn set_trace_id(&mut self, value: impl Into<String>) -> &mut Self {
+        self.trace_id = value.into();
+        self
+    }
+
+    /// Returns the trace id of the request.
+    pub fn get_trace_id(&self) -> &str {
+        &self.trace_id
+    }
+
+    /// Sets whether the request can be canceled and returns the updated value.
+    pub fn cancellable(mut self, value: bool) -> Self {
+        self.cancellable = value;
+        self
+    }
+
+    /// Sets whether the request can be canceled and returns this value for
+    /// further mutation.
+    pub fn set_cancellable(&mut self, value: bool) -> &mut Self {
+        self.cancellable = value;
+        self
+    }
+
+    /// Returns whether the request can be canceled.
+    pub fn is_cancellable(&self) -> bool {
+        self.cancellable
+    }
+
+    pub(crate) fn from_proto(value: milvus::RunningRequestInfo) -> Self {
+        Self {
+            request_id: value.request_id,
+            proxy_id: value.proxy_id,
+            request_type: value.r#type,
+            database_name: value.db_name,
+            collection_name: value.collection_name,
+            user: value.user,
+            client_addr: value.client_addr,
+            nq: value.nq,
+            top_k: value.topk,
+            expr: value.expr,
+            start_time_ms: value.start_time_ms,
+            queued_ms: value.queued_ms,
+            elapsed_ms: value.elapsed_ms,
+            state: value.state,
+            task_ids: value.task_ids,
+            trace_id: value.trace_id,
+            cancellable: value.cancellable,
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// RunningRequestNodeResult
+///////////////////////////////////////////////////////////////////////////////
+/// The outcome of a `list_running_requests` or `cancel_requests` call on one
+/// proxy.
+///
+/// Both calls are sent to every proxy. A proxy that did not answer contributed
+/// nothing to the result; its requests are missing from it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct RunningRequestNodeResult {
+    pub(crate) node_id: i64,
+    pub(crate) error_code: i32,
+    pub(crate) reason: String,
+    pub(crate) unimplemented: bool,
+}
+
+impl RunningRequestNodeResult {
+    /// Creates a value initialized with its SDK defaults.
+    pub fn new() -> Self {
+        Self {
+            node_id: 0,
+            error_code: 0,
+            reason: String::new(),
+            unimplemented: false,
+        }
+    }
+
+    /// Sets the node id and returns the updated value.
+    pub fn node_id(mut self, value: i64) -> Self {
+        self.node_id = value;
+        self
+    }
+
+    /// Sets the node id and returns this value for further mutation.
+    pub fn set_node_id(&mut self, value: i64) -> &mut Self {
+        self.node_id = value;
+        self
+    }
+
+    /// Returns the node id of the proxy.
+    pub fn get_node_id(&self) -> i64 {
+        self.node_id
+    }
+
+    /// Sets the error code and returns the updated value.
+    pub fn error_code(mut self, value: i32) -> Self {
+        self.error_code = value;
+        self
+    }
+
+    /// Sets the error code and returns this value for further mutation.
+    pub fn set_error_code(&mut self, value: i32) -> &mut Self {
+        self.error_code = value;
+        self
+    }
+
+    /// Returns the error code of the proxy's answer; 0 means the proxy answered.
+    pub fn get_error_code(&self) -> i32 {
+        self.error_code
+    }
+
+    /// Sets the reason and returns the updated value.
+    pub fn reason(mut self, value: impl Into<String>) -> Self {
+        self.reason = value.into();
+        self
+    }
+
+    /// Sets the reason and returns this value for further mutation.
+    pub fn set_reason(&mut self, value: impl Into<String>) -> &mut Self {
+        self.reason = value.into();
+        self
+    }
+
+    /// Returns the error message when the proxy did not answer.
+    pub fn get_reason(&self) -> &str {
+        &self.reason
+    }
+
+    /// Sets whether the proxy is too old to serve the call and returns the
+    /// updated value.
+    pub fn unimplemented(mut self, value: bool) -> Self {
+        self.unimplemented = value;
+        self
+    }
+
+    /// Sets whether the proxy is too old to serve the call and returns this
+    /// value for further mutation.
+    pub fn set_unimplemented(&mut self, value: bool) -> &mut Self {
+        self.unimplemented = value;
+        self
+    }
+
+    /// Returns whether the proxy is too old to serve the call, as during a
+    /// rolling upgrade. Such a proxy holds no listable requests.
+    pub fn is_unimplemented(&self) -> bool {
+        self.unimplemented
+    }
+
+    /// Returns whether the proxy answered the call.
+    pub fn is_success(&self) -> bool {
+        self.error_code == 0
+    }
+
+    pub(crate) fn from_proto(value: milvus::RunningRequestNodeResult) -> Self {
+        let status = value.status.unwrap_or_default();
+        #[allow(deprecated)]
+        let error_code =
+            if status.code == 0 && status.error_code != common::ErrorCode::Success as i32 {
+                status.error_code
+            } else {
+                status.code
+            };
+        Self {
+            node_id: value.node_id,
+            error_code,
+            reason: status.reason,
+            unimplemented: value.unimplemented,
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // Test Cases
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -1948,5 +2458,123 @@ mod direct_value_tests {
         let value = AnalyzerResult::new().tokens(tokens.clone());
 
         assert_eq!(value.get_tokens().to_owned(), tokens);
+    }
+}
+
+#[cfg(test)]
+mod running_request_type_tests {
+    use super::{RunningRequestInfo, RunningRequestNodeResult};
+    use crate::proto::common;
+
+    fn grpc_running_request(id: &str, state: &str) -> crate::proto::milvus::RunningRequestInfo {
+        crate::proto::milvus::RunningRequestInfo {
+            request_id: id.into(),
+            proxy_id: 7,
+            r#type: "Search".into(),
+            db_name: "db".into(),
+            collection_name: "coll".into(),
+            user: "alice".into(),
+            client_addr: "10.0.0.1:5000".into(),
+            nq: 4_000,
+            topk: 100,
+            expr: "id > 0".into(),
+            start_time_ms: 1_700_000_000_000,
+            queued_ms: 3,
+            elapsed_ms: 1_500,
+            state: state.into(),
+            task_ids: vec![11, 12],
+            trace_id: "trace-1".into(),
+            cancellable: true,
+        }
+    }
+
+    #[test]
+    fn running_request_info_converts_from_proto() {
+        let value = RunningRequestInfo::from_proto(grpc_running_request("7-to03zu-1", "Running"));
+        assert_eq!(value.get_request_id(), "7-to03zu-1");
+        assert_eq!(value.get_proxy_id(), 7);
+        assert_eq!(value.get_type(), "Search");
+        assert_eq!(value.get_database_name(), "db");
+        assert_eq!(value.get_collection_name(), "coll");
+        assert_eq!(value.get_user(), "alice");
+        assert_eq!(value.get_client_addr(), "10.0.0.1:5000");
+        assert_eq!(value.get_nq(), 4_000);
+        assert_eq!(value.get_top_k(), 100);
+        assert_eq!(value.get_expr(), "id > 0");
+        assert_eq!(value.get_start_time_ms(), 1_700_000_000_000);
+        assert_eq!(value.get_queued_ms(), 3);
+        assert_eq!(value.get_elapsed_ms(), 1_500);
+        assert_eq!(value.get_state(), "Running");
+        assert_eq!(value.get_task_ids(), &[11, 12]);
+        assert_eq!(value.get_trace_id(), "trace-1");
+        assert!(value.is_cancellable());
+    }
+
+    #[test]
+    fn running_request_info_default_values() {
+        let value = RunningRequestInfo::new();
+        assert_eq!(value.get_request_id(), "");
+        assert_eq!(value.get_proxy_id(), 0);
+        assert_eq!(value.get_type(), "");
+        assert!(value.get_task_ids().is_empty());
+        assert!(!value.is_cancellable());
+    }
+
+    #[test]
+    fn running_request_node_result_default_values() {
+        let value = RunningRequestNodeResult::new();
+        assert_eq!(value.get_node_id(), 0);
+        assert_eq!(value.get_error_code(), 0);
+        assert!(value.is_success());
+        assert!(!value.is_unimplemented());
+        assert_eq!(value.get_reason(), "");
+    }
+
+    #[test]
+    fn running_request_node_result_error_code_follows_status() {
+        let success =
+            RunningRequestNodeResult::from_proto(crate::proto::milvus::RunningRequestNodeResult {
+                node_id: 7,
+                status: Some(common::Status {
+                    code: 0,
+                    ..Default::default()
+                }),
+                unimplemented: false,
+            });
+        assert!(success.is_success());
+        assert_eq!(success.get_error_code(), 0);
+
+        let silent =
+            RunningRequestNodeResult::from_proto(crate::proto::milvus::RunningRequestNodeResult {
+                node_id: 8,
+                status: Some(common::Status {
+                    code: 65_535,
+                    reason: "node unreachable".into(),
+                    ..Default::default()
+                }),
+                unimplemented: false,
+            });
+        assert!(!silent.is_success());
+        assert_eq!(silent.get_error_code(), 65_535);
+        assert_eq!(silent.get_reason(), "node unreachable");
+
+        #[allow(deprecated)]
+        let old =
+            RunningRequestNodeResult::from_proto(crate::proto::milvus::RunningRequestNodeResult {
+                node_id: 9,
+                status: Some(common::Status {
+                    code: 0,
+                    error_code: common::ErrorCode::UnexpectedError as i32,
+                    reason: "unimplemented".into(),
+                    ..Default::default()
+                }),
+                unimplemented: true,
+            });
+        assert!(!old.is_success());
+        assert_eq!(
+            old.get_error_code(),
+            common::ErrorCode::UnexpectedError as i32
+        );
+        assert!(old.is_unimplemented());
     }
 }

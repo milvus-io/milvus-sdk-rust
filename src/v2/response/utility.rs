@@ -21,6 +21,7 @@ use crate::v2::error::{Error, Result};
 pub use crate::v2::types::{
     AnalyzerResult, AnalyzerToken, CompactionMerge, FileResourceInfo, PersistentSegmentInfo,
     QuerySegmentInfo, RefreshExternalCollectionJobInfo, RefreshExternalCollectionStateCode,
+    RunningRequestInfo, RunningRequestNodeResult,
 };
 use crate::v2::types::{
     CompactionStateCode, CompactionTaskState, CompactionType, SegmentLevel, SegmentState,
@@ -1608,6 +1609,229 @@ impl ListFileResourcesResponseBuilder {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// ListRunningRequestsResponse
+///////////////////////////////////////////////////////////////////////////////
+/// Response returned by the ClientV2 list_running_requests operation.
+///
+/// The call succeeds as long as at least one proxy answered. Check
+/// [`ListRunningRequestsResponse::node_results`] to tell a complete answer from
+/// a partial one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ListRunningRequestsResponse {
+    pub(crate) requests: Vec<RunningRequestInfo>,
+    pub(crate) node_results: Vec<RunningRequestNodeResult>,
+}
+
+impl ListRunningRequestsResponse {
+    #[cfg(test)]
+    fn empty() -> Self {
+        Self {
+            requests: Vec::new(),
+            node_results: Vec::new(),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn builder() -> ListRunningRequestsResponseBuilder {
+        ListRunningRequestsResponseBuilder {
+            value: Self::empty(),
+        }
+    }
+
+    /// Returns the requests running on the proxies that answered.
+    pub fn requests(&self) -> &[RunningRequestInfo] {
+        &self.requests
+    }
+
+    /// Returns the outcome on each proxy.
+    pub fn node_results(&self) -> &[RunningRequestNodeResult] {
+        &self.node_results
+    }
+
+    pub(crate) fn from_proto(value: milvus::ListRunningRequestsResponse) -> Self {
+        Self {
+            requests: value
+                .requests
+                .into_iter()
+                .map(RunningRequestInfo::from_proto)
+                .collect(),
+            node_results: value
+                .node_results
+                .into_iter()
+                .map(RunningRequestNodeResult::from_proto)
+                .collect(),
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// ListRunningRequestsResponseBuilder
+///////////////////////////////////////////////////////////////////////////////
+/// Builder for ListRunningRequestsResponse.
+#[derive(Debug, Clone)]
+///////////////////////////////////////////////////////////////////////////////
+// Test Cases
+///////////////////////////////////////////////////////////////////////////////
+#[cfg(test)]
+pub(crate) struct ListRunningRequestsResponseBuilder {
+    value: ListRunningRequestsResponse,
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Test Cases
+///////////////////////////////////////////////////////////////////////////////
+
+#[cfg(test)]
+impl ListRunningRequestsResponseBuilder {
+    /// Sets the requests and returns the updated value.
+    pub fn requests(mut self, value: Vec<RunningRequestInfo>) -> Self {
+        self.value.requests = value;
+        self
+    }
+
+    /// Sets the node results and returns the updated value.
+    pub fn node_results(mut self, value: Vec<RunningRequestNodeResult>) -> Self {
+        self.value.node_results = value;
+        self
+    }
+
+    /// Validates the configured values and builds the response.
+    pub fn build(self) -> ListRunningRequestsResponse {
+        self.value
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// CancelRequestsResponse
+///////////////////////////////////////////////////////////////////////////////
+/// Response returned by the ClientV2 cancel_requests operation.
+///
+/// Every requested id is in exactly one of [`CancelRequestsResponse::canceled`],
+/// [`CancelRequestsResponse::not_found`] and
+/// [`CancelRequestsResponse::undetermined`]. Cancellation is asynchronous: a
+/// canceled request stops at its next cancellation check, usually within
+/// milliseconds, and until then `list_running_requests` shows it in state
+/// `Canceling`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct CancelRequestsResponse {
+    pub(crate) canceled: Vec<RunningRequestInfo>,
+    pub(crate) not_found: Vec<String>,
+    pub(crate) undetermined: Vec<String>,
+    pub(crate) node_results: Vec<RunningRequestNodeResult>,
+}
+
+impl CancelRequestsResponse {
+    #[cfg(test)]
+    fn empty() -> Self {
+        Self {
+            canceled: Vec::new(),
+            not_found: Vec::new(),
+            undetermined: Vec::new(),
+            node_results: Vec::new(),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn builder() -> CancelRequestsResponseBuilder {
+        CancelRequestsResponseBuilder {
+            value: Self::empty(),
+        }
+    }
+
+    /// Returns the canceled requests, each as it was at the moment it was
+    /// canceled.
+    pub fn canceled(&self) -> &[RunningRequestInfo] {
+        &self.canceled
+    }
+
+    /// Returns the ids no proxy holds, known because every proxy answered: the
+    /// request already finished, never existed, or was issued by another user.
+    pub fn not_found(&self) -> &[String] {
+        &self.not_found
+    }
+
+    /// Returns the ids not canceled while some proxy did not answer: each may be
+    /// running on that proxy or may have finished. Retry the cancel, or list
+    /// again, once the proxy is back.
+    pub fn undetermined(&self) -> &[String] {
+        &self.undetermined
+    }
+
+    /// Returns the outcome on each proxy.
+    pub fn node_results(&self) -> &[RunningRequestNodeResult] {
+        &self.node_results
+    }
+
+    pub(crate) fn from_proto(value: milvus::CancelRequestsResponse) -> Self {
+        Self {
+            canceled: value
+                .canceled
+                .into_iter()
+                .map(RunningRequestInfo::from_proto)
+                .collect(),
+            not_found: value.not_found,
+            undetermined: value.undetermined,
+            node_results: value
+                .node_results
+                .into_iter()
+                .map(RunningRequestNodeResult::from_proto)
+                .collect(),
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// CancelRequestsResponseBuilder
+///////////////////////////////////////////////////////////////////////////////
+/// Builder for CancelRequestsResponse.
+#[derive(Debug, Clone)]
+///////////////////////////////////////////////////////////////////////////////
+// Test Cases
+///////////////////////////////////////////////////////////////////////////////
+#[cfg(test)]
+pub(crate) struct CancelRequestsResponseBuilder {
+    value: CancelRequestsResponse,
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Test Cases
+///////////////////////////////////////////////////////////////////////////////
+
+#[cfg(test)]
+impl CancelRequestsResponseBuilder {
+    /// Sets the canceled requests and returns the updated value.
+    pub fn canceled(mut self, value: Vec<RunningRequestInfo>) -> Self {
+        self.value.canceled = value;
+        self
+    }
+
+    /// Sets the not-found ids and returns the updated value.
+    pub fn not_found(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.value.not_found = values.into_iter().map(Into::into).collect();
+        self
+    }
+
+    /// Sets the undetermined ids and returns the updated value.
+    pub fn undetermined(mut self, values: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.value.undetermined = values.into_iter().map(Into::into).collect();
+        self
+    }
+
+    /// Sets the node results and returns the updated value.
+    pub fn node_results(mut self, value: Vec<RunningRequestNodeResult>) -> Self {
+        self.value.node_results = value;
+        self
+    }
+
+    /// Validates the configured values and builds the response.
+    pub fn build(self) -> CancelRequestsResponse {
+        self.value
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // Test Cases
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -2233,5 +2457,161 @@ mod external_collection_response_tests {
             .resources(vec![resource.clone()])
             .build();
         assert_eq!(value.resources(), &[resource]);
+    }
+}
+
+#[cfg(test)]
+mod running_requests_response_tests {
+    use super::{CancelRequestsResponse, ListRunningRequestsResponse};
+    use crate::proto::{common, milvus};
+    use crate::v2::types::{RunningRequestInfo, RunningRequestNodeResult};
+
+    fn grpc_running_request(id: &str, state: &str) -> milvus::RunningRequestInfo {
+        milvus::RunningRequestInfo {
+            request_id: id.into(),
+            proxy_id: 7,
+            r#type: "Search".into(),
+            db_name: "db".into(),
+            collection_name: "coll".into(),
+            user: "alice".into(),
+            client_addr: "10.0.0.1:5000".into(),
+            nq: 4_000,
+            topk: 100,
+            expr: "id > 0".into(),
+            start_time_ms: 1_700_000_000_000,
+            queued_ms: 3,
+            elapsed_ms: 1_500,
+            state: state.into(),
+            task_ids: vec![11, 12],
+            trace_id: "trace-1".into(),
+            cancellable: true,
+        }
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn list_running_requests_response_decodes_requests_and_node_results() {
+        let response =
+            ListRunningRequestsResponse::from_proto(milvus::ListRunningRequestsResponse {
+                status: None,
+                requests: vec![grpc_running_request("7-to03zu-1", "Running")],
+                node_results: vec![
+                    milvus::RunningRequestNodeResult {
+                        node_id: 7,
+                        status: Some(common::Status::default()),
+                        unimplemented: false,
+                    },
+                    milvus::RunningRequestNodeResult {
+                        node_id: 8,
+                        status: Some(common::Status {
+                            code: 65_535,
+                            reason: "node unreachable".into(),
+                            ..Default::default()
+                        }),
+                        unimplemented: false,
+                    },
+                    milvus::RunningRequestNodeResult {
+                        node_id: 9,
+                        status: Some(common::Status {
+                            error_code: common::ErrorCode::UnexpectedError as i32,
+                            reason: "unimplemented".into(),
+                            ..Default::default()
+                        }),
+                        unimplemented: true,
+                    },
+                ],
+            });
+
+        assert_eq!(response.requests().len(), 1);
+        let info = &response.requests()[0];
+        assert_eq!(info.get_request_id(), "7-to03zu-1");
+        assert_eq!(info.get_type(), "Search");
+        assert_eq!(info.get_state(), "Running");
+        assert_eq!(info.get_task_ids(), &[11, 12]);
+        assert!(info.is_cancellable());
+
+        assert_eq!(response.node_results().len(), 3);
+        assert!(response.node_results()[0].is_success());
+        assert!(!response.node_results()[0].is_unimplemented());
+        assert!(!response.node_results()[1].is_success());
+        assert_eq!(response.node_results()[1].get_error_code(), 65_535);
+        assert_eq!(response.node_results()[1].get_reason(), "node unreachable");
+        assert!(!response.node_results()[2].is_success());
+        assert!(response.node_results()[2].is_unimplemented());
+        assert_eq!(
+            response.node_results()[2].get_error_code(),
+            common::ErrorCode::UnexpectedError as i32
+        );
+    }
+
+    #[test]
+    fn list_running_requests_response_default_values() {
+        let value = ListRunningRequestsResponse::builder().build();
+        assert!(value.requests().is_empty());
+        assert!(value.node_results().is_empty());
+    }
+
+    #[test]
+    fn list_running_requests_response_populated_values() {
+        let info = RunningRequestInfo::new().request_id("7-to03zu-1");
+        let node = RunningRequestNodeResult::new().node_id(7);
+        let value = ListRunningRequestsResponse::builder()
+            .requests(vec![info.clone()])
+            .node_results(vec![node.clone()])
+            .build();
+        assert_eq!(value.requests(), &[info]);
+        assert_eq!(value.node_results(), &[node]);
+    }
+
+    #[test]
+    fn cancel_requests_response_decodes_all_id_lists() {
+        let response = CancelRequestsResponse::from_proto(milvus::CancelRequestsResponse {
+            status: None,
+            canceled: vec![grpc_running_request("7-to03zu-1", "Running")],
+            not_found: vec!["7-to03zu-2".into()],
+            undetermined: vec!["8-to03zv-3".into()],
+            node_results: vec![milvus::RunningRequestNodeResult {
+                node_id: 8,
+                status: Some(common::Status {
+                    code: 65_535,
+                    reason: "node unreachable".into(),
+                    ..Default::default()
+                }),
+                unimplemented: false,
+            }],
+        });
+
+        assert_eq!(response.canceled().len(), 1);
+        assert_eq!(response.canceled()[0].get_request_id(), "7-to03zu-1");
+        assert_eq!(response.canceled()[0].get_state(), "Running");
+        assert_eq!(response.not_found(), ["7-to03zu-2"]);
+        assert_eq!(response.undetermined(), ["8-to03zv-3"]);
+        assert_eq!(response.node_results().len(), 1);
+        assert!(!response.node_results()[0].is_success());
+    }
+
+    #[test]
+    fn cancel_requests_response_default_values() {
+        let value = CancelRequestsResponse::builder().build();
+        assert!(value.canceled().is_empty());
+        assert!(value.not_found().is_empty());
+        assert!(value.undetermined().is_empty());
+        assert!(value.node_results().is_empty());
+    }
+
+    #[test]
+    fn cancel_requests_response_populated_values() {
+        let info = RunningRequestInfo::new().request_id("7-to03zu-1");
+        let node = RunningRequestNodeResult::new().node_id(7);
+        let value = CancelRequestsResponse::builder()
+            .canceled(vec![info.clone()])
+            .not_found(["7-to03zu-2"])
+            .undetermined(["8-to03zv-3"])
+            .node_results(vec![node.clone()])
+            .build();
+        assert_eq!(value.canceled(), &[info]);
+        assert_eq!(value.not_found(), ["7-to03zu-2"]);
+        assert_eq!(value.undetermined(), ["8-to03zv-3"]);
+        assert_eq!(value.node_results(), &[node]);
     }
 }

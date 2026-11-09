@@ -15,6 +15,7 @@
 // limitations under the License.
 
 use super::common::MockServer;
+use milvus::proto::{common, milvus as pb};
 use milvus::v2::error::Error;
 use milvus::v2::request::collection::{
     CreateSimpleCollectionRequest, LoadCollectionRequest, RefreshLoadRequest,
@@ -599,5 +600,252 @@ async fn utility_interfaces_reach_rpc_server() {
     ] {
         server.assert_called(rpc);
     }
+    server.shutdown().await;
+}
+
+fn grpc_running_request(id: &str, state: &str) -> pb::RunningRequestInfo {
+    pb::RunningRequestInfo {
+        request_id: id.into(),
+        proxy_id: 7,
+        r#type: "Search".into(),
+        db_name: "db".into(),
+        collection_name: "coll".into(),
+        user: "alice".into(),
+        client_addr: "10.0.0.1:5000".into(),
+        nq: 4_000,
+        topk: 100,
+        expr: "id > 0".into(),
+        start_time_ms: 1_700_000_000_000,
+        queued_ms: 3,
+        elapsed_ms: 1_500,
+        state: state.into(),
+        task_ids: vec![11, 12],
+        trace_id: "trace-1".into(),
+        cancellable: true,
+    }
+}
+
+#[tokio::test]
+async fn list_running_requests_applies_filters_and_decodes_rows() {
+    let server = MockServer::start().await;
+    server
+        .service
+        .set_running_requests(vec![grpc_running_request("7-to03zu-1", "Running")]);
+
+    let response = server
+        .client
+        .list_running_requests(
+            ListRunningRequestsRequest::builder()
+                .database_name("db")
+                .collection_name("coll")
+                .user("alice")
+                .min_elapsed_ms(1_000)
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("list running requests");
+
+    server.assert_request_contains(
+        "list_running_requests",
+        &[
+            "db_name: \"db\"",
+            "collection_name: \"coll\"",
+            "user: \"alice\"",
+            "min_elapsed_ms: 1000",
+        ],
+    );
+
+    assert_eq!(response.requests().len(), 1);
+    let info = &response.requests()[0];
+    assert_eq!(info.get_request_id(), "7-to03zu-1");
+    assert_eq!(info.get_proxy_id(), 7);
+    assert_eq!(info.get_type(), "Search");
+    assert_eq!(info.get_database_name(), "db");
+    assert_eq!(info.get_collection_name(), "coll");
+    assert_eq!(info.get_user(), "alice");
+    assert_eq!(info.get_client_addr(), "10.0.0.1:5000");
+    assert_eq!(info.get_nq(), 4_000);
+    assert_eq!(info.get_top_k(), 100);
+    assert_eq!(info.get_expr(), "id > 0");
+    assert_eq!(info.get_start_time_ms(), 1_700_000_000_000);
+    assert_eq!(info.get_queued_ms(), 3);
+    assert_eq!(info.get_elapsed_ms(), 1_500);
+    assert_eq!(info.get_state(), "Running");
+    assert_eq!(info.get_task_ids(), &[11, 12]);
+    assert_eq!(info.get_trace_id(), "trace-1");
+    assert!(info.is_cancellable());
+
+    assert_eq!(response.node_results().len(), 3);
+    assert!(response.node_results()[0].is_success());
+    assert!(!response.node_results()[0].is_unimplemented());
+    assert!(!response.node_results()[1].is_success());
+    assert_eq!(response.node_results()[1].get_error_code(), 65_535);
+    assert_eq!(response.node_results()[1].get_reason(), "node unreachable");
+    assert!(!response.node_results()[2].is_success());
+    assert!(response.node_results()[2].is_unimplemented());
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn list_running_requests_without_filters_sends_no_filters() {
+    let server = MockServer::start().await;
+
+    let response = server
+        .client
+        .list_running_requests(
+            ListRunningRequestsRequest::builder()
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("list running requests");
+
+    server.assert_request_contains(
+        "list_running_requests",
+        &[
+            "db_name: \"\"",
+            "collection_name: \"\"",
+            "user: \"\"",
+            "min_elapsed_ms: 0",
+        ],
+    );
+    assert!(response.requests().is_empty());
+    assert_eq!(response.node_results().len(), 3);
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn list_running_requests_propagates_server_error() {
+    let server = MockServer::start().await;
+    server.service.set_running_requests_status(common::Status {
+        code: 1100,
+        reason: "permission denied".into(),
+        ..Default::default()
+    });
+
+    let error = server
+        .client
+        .list_running_requests(
+            ListRunningRequestsRequest::builder()
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect_err("server error must fail the call");
+    assert!(matches!(error, Error::Server(ref server_error) if server_error.code() == 1100));
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn cancel_requests_sends_ids_reason_user_and_decodes_result() {
+    let server = MockServer::start().await;
+    server.service.set_cancel_requests_result(
+        vec![grpc_running_request("7-to03zu-1", "Running")],
+        vec!["7-to03zu-2".into()],
+        vec!["8-to03zv-3".into()],
+    );
+
+    let response = server
+        .client
+        .cancel_requests(
+            CancelRequestsRequest::builder()
+                .request_ids(["7-to03zu-1", "7-to03zu-2", "8-to03zv-3"])
+                .reason("too heavy")
+                .user("alice")
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("cancel requests");
+
+    server.assert_request_contains(
+        "cancel_requests",
+        &[
+            "request_ids: [\"7-to03zu-1\", \"7-to03zu-2\", \"8-to03zv-3\"]",
+            "reason: \"too heavy\"",
+            "user: \"alice\"",
+        ],
+    );
+
+    assert_eq!(response.canceled().len(), 1);
+    assert_eq!(response.canceled()[0].get_request_id(), "7-to03zu-1");
+    assert_eq!(response.canceled()[0].get_state(), "Running");
+    assert_eq!(response.not_found(), ["7-to03zu-2"]);
+    assert_eq!(response.undetermined(), ["8-to03zv-3"]);
+    assert_eq!(response.node_results().len(), 1);
+    assert!(response.node_results()[0].is_success());
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn cancel_requests_rejects_empty_id_list_without_an_rpc() {
+    let server = MockServer::start().await;
+
+    let empty = CancelRequestsRequest::builder()
+        .build()
+        .expect_err("empty id list must be rejected by build");
+    assert!(matches!(empty, Error::Validation(_)));
+
+    let blank = CancelRequestsRequest::builder()
+        .request_ids([""])
+        .build()
+        .expect_err("blank id must be rejected by build");
+    assert!(matches!(blank, Error::Validation(_)));
+
+    assert_eq!(server.service.call_count("cancel_requests"), 0);
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn cancel_requests_propagates_server_error() {
+    let server = MockServer::start().await;
+    server.service.set_cancel_requests_status(common::Status {
+        code: 1100,
+        reason: "permission denied".into(),
+        ..Default::default()
+    });
+
+    let error = server
+        .client
+        .cancel_requests(
+            CancelRequestsRequest::builder()
+                .request_ids(["7-to03zu-1"])
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect_err("server error must fail the call");
+    assert!(matches!(error, Error::Server(ref server_error) if server_error.code() == 1100));
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn list_running_requests_retries_transport_failures() {
+    let server = MockServer::start().await;
+    server
+        .service
+        .set_running_requests(vec![grpc_running_request("7-to03zu-1", "Running")]);
+    server
+        .service
+        .fail_next_transport("list_running_requests", tonic::Code::Unavailable);
+
+    let response = server
+        .client
+        .list_running_requests(
+            ListRunningRequestsRequest::builder()
+                .build()
+                .expect("valid request"),
+        )
+        .await
+        .expect("transport failure is retried");
+    assert_eq!(response.requests().len(), 1);
+    assert!(server.service.call_count("list_running_requests") > 1);
+
     server.shutdown().await;
 }

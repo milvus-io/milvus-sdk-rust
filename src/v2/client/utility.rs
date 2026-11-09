@@ -725,6 +725,41 @@ impl ClientV2 {
         ))
     }
 
+    /// Lists the Search, HybridSearch and Query requests running on every proxy of the cluster.
+    ///
+    /// The call succeeds as long as at least one proxy answered; a proxy that did not answer is
+    /// reported in the response's [`response::utility::ListRunningRequestsResponse::node_results`]
+    /// and its requests are missing from the result. Listing other users' requests requires the
+    /// ListRunningRequests privilege; any user may list their own.
+    pub async fn list_running_requests(
+        &self,
+        request: request::utility::ListRunningRequestsRequest,
+    ) -> Result<response::utility::ListRunningRequestsResponse> {
+        let response = rpc_with_retry!(self, list_running_requests, request.into_proto())?;
+        status_to_result(&response.status)?;
+        Ok(response::utility::ListRunningRequestsResponse::from_proto(
+            response,
+        ))
+    }
+
+    /// Cancels running requests by the ids returned by [`ClientV2::list_running_requests`].
+    ///
+    /// Cancellation is asynchronous: a canceled request stops at its next cancellation check. The
+    /// client of a canceled request gets an error whose server code is 3002 (request canceled),
+    /// carrying the reason given here. Canceling other users' requests requires the CancelRequests
+    /// privilege; any user may cancel their own. A repeated cancel of an id that is already on its
+    /// way out is answered again on the server and audited once, so retrying is safe.
+    pub async fn cancel_requests(
+        &self,
+        request: request::utility::CancelRequestsRequest,
+    ) -> Result<response::utility::CancelRequestsResponse> {
+        let response = rpc_with_retry!(self, cancel_requests, request.into_proto())?;
+        status_to_result(&response.status)?;
+        Ok(response::utility::CancelRequestsResponse::from_proto(
+            response,
+        ))
+    }
+
     async fn get_flush_state(
         &self,
         database: &str,

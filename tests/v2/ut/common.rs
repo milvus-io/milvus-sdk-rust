@@ -113,6 +113,12 @@ struct MockState {
     privilege_groups: HashMap<String, HashSet<String>>,
     row_policies: HashMap<(String, String), Vec<pb::RowPolicy>>,
     principal_tags: HashMap<(String, String), HashMap<String, String>>,
+    running_requests: Vec<pb::RunningRequestInfo>,
+    running_requests_status: Option<common::Status>,
+    canceled_requests: Vec<pb::RunningRequestInfo>,
+    cancel_not_found: Vec<String>,
+    cancel_undetermined: Vec<String>,
+    cancel_requests_status: Option<common::Status>,
 }
 
 impl Default for MockState {
@@ -155,6 +161,12 @@ impl Default for MockState {
             privilege_groups: HashMap::new(),
             row_policies: HashMap::new(),
             principal_tags: HashMap::new(),
+            running_requests: Vec::new(),
+            running_requests_status: None,
+            canceled_requests: Vec::new(),
+            cancel_not_found: Vec::new(),
+            cancel_undetermined: Vec::new(),
+            cancel_requests_status: None,
         }
     }
 }
@@ -269,6 +281,30 @@ impl MockMilvus {
 
     pub fn set_alter_collection_schema_status(&self, status: common::Status) {
         self.state.lock().unwrap().alter_collection_schema_status = Some(status);
+    }
+
+    pub fn set_running_requests(&self, requests: Vec<pb::RunningRequestInfo>) {
+        self.state.lock().unwrap().running_requests = requests;
+    }
+
+    pub fn set_running_requests_status(&self, status: common::Status) {
+        self.state.lock().unwrap().running_requests_status = Some(status);
+    }
+
+    pub fn set_cancel_requests_result(
+        &self,
+        canceled: Vec<pb::RunningRequestInfo>,
+        not_found: Vec<String>,
+        undetermined: Vec<String>,
+    ) {
+        let mut state = self.state.lock().unwrap();
+        state.canceled_requests = canceled;
+        state.cancel_not_found = not_found;
+        state.cancel_undetermined = undetermined;
+    }
+
+    pub fn set_cancel_requests_status(&self, status: common::Status) {
+        self.state.lock().unwrap().cancel_requests_status = Some(status);
     }
 
     fn take_transport_failure(&self, method: &'static str) -> Option<Status> {
@@ -3003,6 +3039,76 @@ impl MilvusService for MockMilvus {
             pb::ListFileResourcesResponse {
                 status: Some(success_status()),
                 resources,
+            }
+        }
+    );
+    response_method_with!(
+        list_running_requests,
+        pb::ListRunningRequestsRequest,
+        pb::ListRunningRequestsResponse,
+        |service, _request| {
+            let state = service.state.lock().unwrap();
+            if let Some(status) = &state.running_requests_status {
+                pb::ListRunningRequestsResponse {
+                    status: Some(status.clone()),
+                    ..Default::default()
+                }
+            } else {
+                pb::ListRunningRequestsResponse {
+                    status: Some(success_status()),
+                    requests: state.running_requests.clone(),
+                    node_results: vec![
+                        pb::RunningRequestNodeResult {
+                            node_id: 7,
+                            status: Some(success_status()),
+                            unimplemented: false,
+                        },
+                        pb::RunningRequestNodeResult {
+                            node_id: 8,
+                            status: Some(common::Status {
+                                code: 65_535,
+                                reason: "node unreachable".into(),
+                                ..Default::default()
+                            }),
+                            unimplemented: false,
+                        },
+                        pb::RunningRequestNodeResult {
+                            node_id: 9,
+                            status: Some(common::Status {
+                                error_code: common::ErrorCode::UnexpectedError as i32,
+                                reason: "unimplemented".into(),
+                                ..Default::default()
+                            }),
+                            unimplemented: true,
+                        },
+                    ],
+                }
+            }
+        }
+    );
+    response_method_with!(
+        cancel_requests,
+        pb::CancelRequestsRequest,
+        pb::CancelRequestsResponse,
+        |service, _request| {
+            let state = service.state.lock().unwrap();
+            if let Some(status) = &state.cancel_requests_status {
+                pb::CancelRequestsResponse {
+                    status: Some(status.clone()),
+                    ..Default::default()
+                }
+            } else {
+                pb::CancelRequestsResponse {
+                    status: Some(success_status()),
+                    canceled: state.canceled_requests.clone(),
+                    not_found: state.cancel_not_found.clone(),
+                    undetermined: state.cancel_undetermined.clone(),
+                    node_results: vec![pb::RunningRequestNodeResult {
+                        node_id: 7,
+                        status: Some(success_status()),
+                        unimplemented: false,
+                    }],
+                }
             }
         }
     );
