@@ -34,8 +34,8 @@ use crate::v2::types::{
     FunctionChain, FunctionScore, MetricType, OrderByField, QueryCursor, SearchAggregation,
 };
 pub use crate::v2::types::{
-    EmbeddingList, HighlightQuery, HighlightType, Highlighter, LexicalHighlighter, SearchVectors,
-    SemanticHighlighter,
+    EmbeddingList, EmbeddingListValues, HighlightQuery, HighlightType, Highlighter,
+    LexicalHighlighter, SearchVectors, SemanticHighlighter,
 };
 use crate::v2::types::{SearchIteratorFilter, SingleResult};
 use prost::Message;
@@ -970,22 +970,55 @@ impl SearchRequest {
                 ),
                 SearchVectors::EmbeddingLists(lists) => {
                     let nq = lists.len() as i64;
+                    let mut kind = None;
+                    for list in &lists {
+                        let list_kind = match list.values() {
+                            EmbeddingListValues::Float(_) => EmbeddingListKind::Float,
+                            EmbeddingListValues::Binary(_) => EmbeddingListKind::Binary,
+                            EmbeddingListValues::Int8(_) => EmbeddingListKind::Int8,
+                        };
+                        if let Some(previous) = kind {
+                            if previous != list_kind {
+                                return Err(Error::validation(
+                                    "vectors".into(),
+                                    "all embedding lists in one request must use the same vector type"
+                                        .into(),
+                                ));
+                            }
+                        } else {
+                            kind = Some(list_kind);
+                        }
+                    }
+                    let kind = kind.unwrap_or(EmbeddingListKind::Float);
                     let mut values = Vec::with_capacity(lists.len());
                     for list in lists {
-                        validate_float_search_vectors("embedding_lists", &list.vectors)?;
-                        values.push(
-                            list.vectors
-                                .into_iter()
-                                .flatten()
-                                .flat_map(f32::to_le_bytes)
-                                .collect(),
-                        );
+                        match list.values() {
+                            EmbeddingListValues::Float(vectors) => {
+                                validate_float_search_vectors("embedding_lists", vectors)?;
+                                values.push(
+                                    vectors
+                                        .iter()
+                                        .flatten()
+                                        .flat_map(|value| value.to_le_bytes())
+                                        .collect(),
+                                );
+                            }
+                            EmbeddingListValues::Binary(vectors) => {
+                                values.push(vectors.iter().flatten().copied().collect());
+                            }
+                            EmbeddingListValues::Int8(vectors) => {
+                                values.push(
+                                    vectors.iter().flatten().map(|value| *value as u8).collect(),
+                                );
+                            }
+                        }
                     }
-                    (
-                        common::PlaceholderType::EmbListFloatVector,
-                        values,
-                        Some(nq),
-                    )
+                    let placeholder_type = match kind {
+                        EmbeddingListKind::Float => common::PlaceholderType::EmbListFloatVector,
+                        EmbeddingListKind::Binary => common::PlaceholderType::EmbListBinaryVector,
+                        EmbeddingListKind::Int8 => common::PlaceholderType::EmbListInt8Vector,
+                    };
+                    (placeholder_type, values, Some(nq))
                 }
             };
             if values.is_empty() {
@@ -2541,7 +2574,17 @@ fn validate_search_vectors(vectors: &SearchVectors) -> Result<()> {
         SearchVectors::EmbeddingLists(lists) => {
             required_slice("embedding_lists", lists)?;
             for list in lists {
-                validate_float_search_vectors("embedding_lists", &list.vectors)?;
+                match list.values() {
+                    EmbeddingListValues::Float(vectors) => {
+                        validate_float_search_vectors("embedding_lists", vectors)?
+                    }
+                    EmbeddingListValues::Binary(vectors) => {
+                        validate_dense_search_vectors("embedding_lists", vectors)?
+                    }
+                    EmbeddingListValues::Int8(vectors) => {
+                        validate_dense_search_vectors("embedding_lists", vectors)?
+                    }
+                }
             }
             Ok(())
         }
@@ -2553,6 +2596,13 @@ fn validate_finite_range_parameter(name: &str, value: Option<f64>) -> Result<()>
         return Err(Error::validation(name.into(), "must be finite".into()));
     }
     Ok(())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EmbeddingListKind {
+    Float,
+    Binary,
+    Int8,
 }
 
 fn validate_dense_search_vectors<T>(name: &str, vectors: &[Vec<T>]) -> Result<()> {
@@ -2849,6 +2899,20 @@ mod search_request_tests {
                     EmbeddingList::new().vectors(vec![vec![0.1, 0.2], vec![0.3, 0.4]])
                 ]),
                 common::PlaceholderType::EmbListFloatVector,
+                1,
+            ),
+            (
+                SearchVectors::EmbeddingLists(vec![
+                    EmbeddingList::new().binary_vectors(vec![vec![0b10101010, 0b11110000]])
+                ]),
+                common::PlaceholderType::EmbListBinaryVector,
+                1,
+            ),
+            (
+                SearchVectors::EmbeddingLists(vec![
+                    EmbeddingList::new().int8_vectors(vec![vec![1, -2, 3]])
+                ]),
+                common::PlaceholderType::EmbListInt8Vector,
                 1,
             ),
         ];

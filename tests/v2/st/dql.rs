@@ -1491,7 +1491,10 @@ async fn query_decodes_nullable_struct_rows() {
         .await
         .expect("load nullable-struct collection");
 
-    // The nullable struct's nullable is propagated to every sub-field on the wire.
+    // The struct's row-level nullable is preserved on the struct itself. Sub-fields are not
+    // element-nullable here: element-level null is carried by the wire `element_nullable` (which
+    // pymilvus maps to the user-facing sub-field `nullable`), so sub-fields created without
+    // `nullable(true)` describe as non-nullable.
     let description = client
         .describe_collection(
             DescribeCollectionRequest::builder()
@@ -1511,8 +1514,8 @@ async fn query_decodes_nullable_struct_rows() {
     assert!(described.is_nullable());
     for sub_field in described.get_fields() {
         assert!(
-            sub_field.is_nullable(),
-            "struct sub-field must inherit nullable"
+            !sub_field.is_nullable(),
+            "struct sub-fields without element-level nullable must describe as non-nullable"
         );
     }
 

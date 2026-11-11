@@ -1316,3 +1316,130 @@ async fn struct_and_function_field_mutations_reach_the_rpc_server() {
 
     server.shutdown().await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn struct_sub_field_add_and_drop_reach_the_rpc_server() {
+    let server = MockServer::start().await;
+
+    // Element-nullable scalar sub-field add through the modern AlterCollectionSchema RPC. The
+    // name keeps the `struct[sub]` path; the wire schema is wrapped as Array with element_type
+    // and element_nullable on, matching pymilvus.
+    server
+        .client
+        .add_collection_field(
+            AddCollectionFieldRequest::builder()
+                .collection_name("books")
+                .field(
+                    FieldSchema::new()
+                        .name("clips[note]")
+                        .data_type(DataType::VarChar)
+                        .max_length(64)
+                        .nullable(true),
+                )
+                .build()
+                .expect("valid sub-field add request"),
+        )
+        .await
+        .expect("add struct sub-field");
+    server.assert_called("alter_collection_schema");
+    server.assert_request_contains(
+        "alter_collection_schema",
+        &[
+            "collection_name: \"books\"",
+            "AddRequest(",
+            r#"name: "clips[note]""#,
+            "data_type: Array",
+            "element_type: VarChar",
+            "element_nullable: true",
+            "nullable: false",
+            r#"key: "max_length", value: "64""#,
+        ],
+    );
+
+    // Nested Array sub-field add carries the recursive type_schema.
+    server
+        .client
+        .add_collection_field(
+            AddCollectionFieldRequest::builder()
+                .collection_name("books")
+                .field(
+                    FieldSchema::new()
+                        .name("clips[marks]")
+                        .data_type(DataType::Array)
+                        .element_type(DataType::Int32)
+                        .max_capacity(4)
+                        .nullable(true)
+                        .element_nullable(true),
+                )
+                .build()
+                .expect("valid nested array sub-field add request"),
+        )
+        .await
+        .expect("add nested array struct sub-field");
+    server.assert_request_contains(
+        "alter_collection_schema",
+        &[
+            r#"name: "clips[marks]""#,
+            "data_type: Array",
+            "element_type: Array",
+            "element_nullable: true",
+            r#"key: "max_capacity", value: "4""#,
+        ],
+    );
+
+    // Drop a struct sub-field by its bracketed path.
+    server
+        .client
+        .drop_collection_field(
+            DropCollectionFieldRequest::builder()
+                .collection_name("books")
+                .field_name("clips[note]")
+                .build()
+                .expect("valid sub-field drop request"),
+        )
+        .await
+        .expect("drop struct sub-field");
+    server.assert_request_contains(
+        "alter_collection_schema",
+        &[
+            "collection_name: \"books\"",
+            "DropRequest(",
+            "FieldName(\"clips[note]\")",
+        ],
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn struct_sub_field_add_does_not_fall_back_to_legacy_rpc() {
+    let server = MockServer::start().await;
+    server
+        .service
+        .set_alter_collection_schema_unimplemented(true);
+
+    server
+        .client
+        .add_collection_field(
+            AddCollectionFieldRequest::builder()
+                .collection_name("books")
+                .field(
+                    FieldSchema::new()
+                        .name("clips[note]")
+                        .data_type(DataType::VarChar)
+                        .max_length(64)
+                        .nullable(true),
+                )
+                .build()
+                .expect("valid sub-field add request"),
+        )
+        .await
+        .expect_err("sub-field add must not fall back to the legacy RPC");
+    assert_eq!(
+        server.service.call_count("add_collection_field"),
+        0,
+        "legacy add_collection_field must not be invoked for a struct sub-field"
+    );
+
+    server.shutdown().await;
+}

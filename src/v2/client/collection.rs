@@ -595,13 +595,17 @@ impl ClientV2 {
     ///
     /// The field is added through the modern `AlterCollectionSchema` RPC (as in pymilvus/java/cpp),
     /// falling back to the legacy `AddCollectionField` RPC when the server does not support schema
-    /// alteration (gRPC `UNIMPLEMENTED` or an external-collection alter rejection).
+    /// alteration (gRPC `UNIMPLEMENTED` or an external-collection alter rejection). A struct
+    /// sub-field add (`clips[note]`) never falls back to the legacy RPC, matching pymilvus.
     pub async fn add_collection_field(
         &self,
         request: request::collection::AddCollectionFieldRequest,
     ) -> Result<()> {
         let database = self.effective_database(request.database_name.as_deref());
         let collection = request.collection_name.clone();
+        let is_sub_field = request
+            .field()
+            .is_some_and(|field| request::collection::is_struct_sub_field_name(field.get_name()));
         let alter = request.clone().into_alter_schema_proto()?;
         let response = self
             .retry_rpc(
@@ -613,10 +617,14 @@ impl ClientV2 {
             .await;
         match response {
             Ok(_) => {}
-            Err(Error::Grpc(status)) if status.code() == tonic::Code::Unimplemented => {
+            Err(Error::Grpc(status))
+                if status.code() == tonic::Code::Unimplemented && !is_sub_field =>
+            {
                 self.add_collection_field_legacy(request).await?;
             }
-            Err(Error::Server(error)) if external_collection_alter_unsupported(&error) => {
+            Err(Error::Server(error))
+                if external_collection_alter_unsupported(&error) && !is_sub_field =>
+            {
                 self.add_collection_field_legacy(request).await?;
             }
             Err(error) => return Err(error),

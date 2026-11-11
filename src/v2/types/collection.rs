@@ -171,6 +171,7 @@ pub struct FieldSchema {
     pub(crate) is_partition_key: bool,
     pub(crate) is_clustering_key: bool,
     pub(crate) nullable: bool,
+    pub(crate) element_nullable: bool,
     pub(crate) is_dynamic: bool,
     pub(crate) is_function_output: bool,
     pub(crate) default_value: Option<DefaultValue>,
@@ -193,6 +194,7 @@ impl FieldSchema {
             is_partition_key: false,
             is_clustering_key: false,
             nullable: false,
+            element_nullable: false,
             is_dynamic: false,
             is_function_output: false,
             default_value: None,
@@ -353,6 +355,29 @@ impl FieldSchema {
     /// Returns whether nullable.
     pub fn is_nullable(&self) -> bool {
         self.nullable
+    }
+
+    /// Sets whether the field's elements can be null and returns the updated value.
+    ///
+    /// Element-level null is supported for Array sub-fields of a struct array field: it
+    /// permits individual inner-array values to be null. Struct sub-fields that are
+    /// themselves arrays use [`Self::element_nullable`] for the inner values and
+    /// [`Self::nullable`] for the inner array as a whole.
+    pub fn element_nullable(mut self, enabled: bool) -> Self {
+        self.element_nullable = enabled;
+        self
+    }
+
+    /// Sets whether the field's elements can be null and returns this value for further
+    /// mutation.
+    pub fn set_element_nullable(&mut self, enabled: bool) -> &mut Self {
+        self.element_nullable = enabled;
+        self
+    }
+
+    /// Returns whether the field's elements can be null.
+    pub fn is_element_nullable(&self) -> bool {
+        self.element_nullable
     }
 
     /// Sets the default value and returns the updated value.
@@ -637,6 +662,7 @@ impl FieldSchema {
             is_partition_key: self.is_partition_key,
             is_clustering_key: self.is_clustering_key,
             nullable: self.nullable,
+            element_nullable: self.element_nullable,
             is_dynamic: self.is_dynamic,
             is_function_output: self.is_function_output,
             default_value: self.default_value.map(DefaultValue::into_proto),
@@ -710,6 +736,12 @@ impl FieldSchema {
                 "array fields require an element type".into(),
             ));
         }
+        if self.element_nullable && self.data_type != DataType::Array {
+            return Err(Error::validation(
+                self.name.clone(),
+                "element_nullable is only supported for Array fields".into(),
+            ));
+        }
         Ok(())
     }
 
@@ -770,6 +802,7 @@ impl FieldSchema {
             is_partition_key: value.is_partition_key,
             is_clustering_key: value.is_clustering_key,
             nullable: value.nullable,
+            element_nullable: value.element_nullable,
             is_dynamic: value.is_dynamic,
             is_function_output: value.is_function_output,
             default_value,
@@ -999,6 +1032,7 @@ impl StructFieldSchema {
                     | DataType::Float
                     | DataType::Double
                     | DataType::VarChar
+                    | DataType::Array
                     | DataType::FloatVector
                     | DataType::BinaryVector
                     | DataType::Float16Vector
@@ -1037,16 +1071,18 @@ impl StructFieldSchema {
                     "struct sub-fields cannot be clustering keys".into(),
                 ));
             }
-            if field.nullable && !self.nullable {
-                return Err(Error::validation(
-                    field.name.clone(),
-                    "struct sub-fields cannot be nullable individually, set nullable on the struct instead".into(),
-                ));
-            }
             if field.default_value.is_some() {
                 return Err(Error::validation(
                     field.name.clone(),
                     "struct sub-fields cannot have default values".into(),
+                ));
+            }
+            if field.data_type == DataType::Array {
+                validate_struct_sub_field(field)?;
+            } else if field.is_element_nullable() {
+                return Err(Error::validation(
+                    field.name.clone(),
+                    "element_nullable is only supported for Array struct sub-fields".into(),
                 ));
             }
             field.validate()?;
@@ -1054,36 +1090,19 @@ impl StructFieldSchema {
         Ok(())
     }
 
-    pub(crate) fn into_proto(self) -> schema::StructArrayFieldSchema {
-        let max_capacity = self.max_capacity.to_string();
+    pub(crate) fn into_proto(self) -> Result<schema::StructArrayFieldSchema> {
         let nullable = self.nullable;
-        schema::StructArrayFieldSchema {
+        let outer_max_capacity = self.max_capacity;
+        let fields = self
+            .fields
+            .into_iter()
+            .map(|field| struct_subfield_schema(&field, nullable, Some(outer_max_capacity)))
+            .collect::<Result<Vec<_>>>()?;
+        Ok(schema::StructArrayFieldSchema {
             field_id: 0,
             name: self.name,
             description: self.description,
-            fields: self
-                .fields
-                .into_iter()
-                .map(|field| {
-                    let data_type = field.data_type;
-                    let mut value = field.into_proto();
-                    value.data_type = if data_type.is_vector() {
-                        schema::DataType::ArrayOfVector
-                    } else {
-                        schema::DataType::Array
-                    } as i32;
-                    value.element_type = data_type.into_proto() as i32;
-                    // A struct is nullable as a whole: the struct's nullable is applied to
-                    // every sub-field on the wire (aligned with pymilvus and the Java SDK).
-                    value.nullable = nullable;
-                    value.type_params.retain(|pair| pair.key != "max_capacity");
-                    value.type_params.push(common::KeyValuePair {
-                        key: "max_capacity".into(),
-                        value: max_capacity.clone(),
-                    });
-                    value
-                })
-                .collect(),
+            fields,
             type_params: self
                 .type_params
                 .into_iter()
@@ -1095,7 +1114,7 @@ impl StructFieldSchema {
                 .collect(),
             nullable,
             ..Default::default()
-        }
+        })
     }
 
     pub(crate) fn from_proto(value: schema::StructArrayFieldSchema) -> Result<Self> {
@@ -1104,20 +1123,32 @@ impl StructFieldSchema {
             .fields
             .iter()
             .map(|field| {
-                let capacity = field
+                // Every sub-field carries the struct's outer max_capacity, either in its
+                // top-level `type_params` (create path, `into_proto`) or, for nested Array
+                // sub-fields added via `add_collection_field`, in the root of the recursive
+                // `type_schema` the server echoes back on describe.
+                let pair = field
                     .type_params
                     .iter()
                     .find(|pair| pair.key == "max_capacity")
+                    .or_else(|| {
+                        field.type_schema.as_ref().and_then(|schema| {
+                            schema
+                                .type_params
+                                .iter()
+                                .find(|pair| pair.key == "max_capacity")
+                        })
+                    })
                     .ok_or_else(|| {
                         Error::MalformedResponse(format!(
                             "struct field {struct_name:?} sub-field {:?} has no max_capacity",
                             field.name
                         ))
                     })?;
-                capacity.value.parse::<u32>().map_err(|_| {
+                pair.value.parse::<u32>().map_err(|_| {
                     Error::MalformedResponse(format!(
                         "struct field {struct_name:?} sub-field {:?} has invalid max_capacity {:?}",
-                        field.name, capacity.value
+                        field.name, pair.value
                     ))
                 })
             })
@@ -1144,13 +1175,40 @@ impl StructFieldSchema {
                 .fields
                 .into_iter()
                 .map(|mut field| {
-                    field.data_type = field.element_type;
-                    field.element_type = schema::DataType::None as i32;
+                    let nested = decode_nested_array_schema(&field)?;
+                    let wire_element_nullable = field.element_nullable;
+                    if let Some((leaf_type, _, _, _)) = &nested {
+                        // A nested Array sub-field carries `element_type = Array` plus a
+                        // type_schema; the SDK field becomes `Array` whose element_type is the
+                        // leaf, so substitute the leaf type before the FieldSchema decode.
+                        field.element_type = leaf_type.into_proto() as i32;
+                    } else {
+                        // Scalar / vector sub-fields carry the real type in `element_type`;
+                        // wire `element_nullable` maps to the user-facing sub-field `nullable`,
+                        // not to the SDK `element_nullable` (which only applies to Array
+                        // sub-fields), so clear it before the FieldSchema decode validates.
+                        field.data_type = field.element_type;
+                        field.element_type = schema::DataType::None as i32;
+                        field.element_nullable = false;
+                    }
                     field.type_params.retain(|pair| pair.key != "max_capacity");
                     let mut field = FieldSchema::from_proto(field)?;
-                    // A struct's nullable is applied to every sub-field on the wire, so the
-                    // decoded sub-fields inherit the struct's nullable.
-                    field.nullable = value.nullable;
+                    // The sub-field's `nullable` encodes element-level null (whether a struct
+                    // element's value for this sub-field can be null), decoded from the proto
+                    // `element_nullable`. Row-level null belongs to the struct as a whole and is
+                    // stored on `StructFieldSchema::nullable`.
+                    field.nullable = wire_element_nullable;
+                    if let Some((_, element_nullable, inner_capacity, max_length)) = nested {
+                        field.element_nullable = element_nullable;
+                        field.set_max_capacity(inner_capacity);
+                        if let Some(max_length) = max_length {
+                            field.set_max_length(max_length);
+                        }
+                    } else {
+                        // Scalar/vector sub-fields map element-level null to `nullable`; the
+                        // SDK `element_nullable` only applies to nested Array sub-fields.
+                        field.element_nullable = false;
+                    }
                     Ok(field)
                 })
                 .collect::<Result<Vec<_>>>()?,
@@ -1188,6 +1246,218 @@ impl StructFieldSchema {
         }
         Ok(field)
     }
+}
+
+/// Decodes a struct sub-field's recursive `type_schema` into its SDK representation.
+///
+/// A nested Array sub-field carries `element_type = Array` plus a `type_schema` whose
+/// recursion is `root (nullable=row) -> inner (nullable=inner array) -> leaf (nullable=leaf
+/// value)`. Returns the leaf type, leaf nullability, inner array capacity, and optional leaf
+/// `max_length`; `None` when the sub-field is not a nested array (no `type_schema`).
+pub(crate) fn decode_nested_array_schema(
+    field: &schema::FieldSchema,
+) -> Result<Option<(DataType, bool, u32, Option<u32>)>> {
+    use schema::type_schema::Kind;
+    let Some(root) = &field.type_schema else {
+        return Ok(None);
+    };
+    let Some(Kind::ArrayElement(inner)) = &root.kind else {
+        return Ok(None);
+    };
+    let Some(Kind::ArrayElement(leaf)) = &inner.kind else {
+        return Ok(None);
+    };
+    let Some(Kind::LeafType(leaf_type)) = leaf.kind else {
+        return Ok(None);
+    };
+    let proto_leaf_type = schema::DataType::try_from(leaf_type).map_err(|_| {
+        Error::MalformedResponse(format!(
+            "struct sub-field {:?} has unknown nested array leaf type {leaf_type}",
+            field.name
+        ))
+    })?;
+    let element_type = DataType::try_from_proto(proto_leaf_type).map_err(|_| {
+        Error::MalformedResponse(format!(
+            "struct sub-field {:?} has unsupported nested array leaf type {proto_leaf_type:?}",
+            field.name
+        ))
+    })?;
+    let inner_capacity = inner
+        .type_params
+        .iter()
+        .find(|pair| pair.key == "max_capacity")
+        .map(|pair| pair.value.parse::<u32>())
+        .transpose()
+        .map_err(|_| {
+            Error::MalformedResponse(format!(
+                "struct sub-field {:?} has invalid nested array max_capacity",
+                field.name
+            ))
+        })?
+        .ok_or_else(|| {
+            Error::MalformedResponse(format!(
+                "struct sub-field {:?} nested array has no max_capacity",
+                field.name
+            ))
+        })?;
+    let max_length = leaf
+        .type_params
+        .iter()
+        .find(|pair| pair.key == "max_length")
+        .map(|pair| pair.value.parse::<u32>())
+        .transpose()
+        .map_err(|_| {
+            Error::MalformedResponse(format!(
+                "struct sub-field {:?} has invalid nested array max_length",
+                field.name
+            ))
+        })?;
+    Ok(Some((
+        element_type,
+        leaf.nullable,
+        inner_capacity,
+        max_length,
+    )))
+}
+
+/// Validates the data-type-specific rules shared by struct create and struct sub-field add.
+///
+/// A struct sub-field that is itself an Array must carry a scalar element type (one of
+/// BOOL/INT8/INT16/INT32/INT64/FLOAT/DOUBLE/VARCHAR) and a positive `max_capacity`; a non-Array
+/// sub-field must not set `element_nullable`. Used by both [`StructFieldSchema::validate`] and
+/// `add_collection_field` for a `struct[sub]` path so create and add stay consistent.
+pub(crate) fn validate_struct_sub_field(field: &FieldSchema) -> Result<()> {
+    if field.data_type == DataType::Array {
+        let element_type = field.element_type.ok_or_else(|| {
+            Error::validation(
+                field.name.clone(),
+                "array struct sub-fields require an element type".into(),
+            )
+        })?;
+        if !matches!(
+            element_type,
+            DataType::Bool
+                | DataType::Int8
+                | DataType::Int16
+                | DataType::Int32
+                | DataType::Int64
+                | DataType::Float
+                | DataType::Double
+                | DataType::VarChar
+        ) {
+            return Err(Error::validation(
+                field.name.clone(),
+                format!(
+                    "array struct sub-field element type {element_type:?} is not supported; use a scalar element type"
+                ),
+            ));
+        }
+        if field.get_max_capacity() == 0 {
+            return Err(Error::validation(
+                field.name.clone(),
+                "array struct sub-fields require a positive max_capacity".into(),
+            ));
+        }
+    } else if field.is_element_nullable() {
+        return Err(Error::validation(
+            field.name.clone(),
+            "element_nullable is only supported for Array struct sub-fields".into(),
+        ));
+    }
+    Ok(())
+}
+
+/// Encodes one struct sub-field (`FieldSchema`) into the wire `schema::FieldSchema` used inside
+/// `StructArrayFieldSchema.fields` and by `add_collection_field` for a `struct[sub]` path.
+///
+/// On the wire a sub-field is wrapped as `Array` (scalar) or `ArrayOfVector` (vector) whose
+/// `element_type` is the real type; `nullable` carries the struct's row nullability (all
+/// sub-fields share it) and `element_nullable` carries the sub-field's own element nullability.
+/// Nested Array sub-fields additionally build a recursive `type_schema`.
+pub(crate) fn struct_subfield_schema(
+    field: &FieldSchema,
+    row_nullable: bool,
+    outer_max_capacity: Option<u32>,
+) -> Result<schema::FieldSchema> {
+    let data_type = field.data_type;
+    let element_type = field.element_type;
+    let field_nullable = field.nullable;
+    let field_element_nullable = field.element_nullable;
+    let field_type_params = field.type_params.clone();
+    let mut value = field.clone().into_proto();
+    value.data_type = if data_type.is_vector() {
+        schema::DataType::ArrayOfVector
+    } else {
+        schema::DataType::Array
+    } as i32;
+    value.element_type = data_type.into_proto() as i32;
+    value.nullable = row_nullable;
+    value.element_nullable = field_nullable;
+    if data_type == DataType::Array {
+        let inner_capacity = field_type_params
+            .get("max_capacity")
+            .and_then(|capacity| capacity.parse::<u32>().ok())
+            .ok_or_else(|| {
+                Error::validation(
+                    field.name.clone(),
+                    "array struct sub-fields require a positive max_capacity".into(),
+                )
+            })?;
+        let leaf_type = element_type.unwrap_or(DataType::Unknown);
+        let leaf_params = field_type_params
+            .get("max_length")
+            .map(|length| {
+                vec![common::KeyValuePair {
+                    key: "max_length".into(),
+                    value: length.clone(),
+                    ..Default::default()
+                }]
+            })
+            .unwrap_or_default();
+        let leaf = schema::TypeSchema {
+            nullable: field_element_nullable,
+            type_params: leaf_params,
+            kind: Some(schema::type_schema::Kind::LeafType(
+                leaf_type.into_proto() as i32
+            )),
+            ..Default::default()
+        };
+        let inner = schema::TypeSchema {
+            nullable: field_nullable,
+            type_params: vec![common::KeyValuePair {
+                key: "max_capacity".into(),
+                value: inner_capacity.to_string(),
+                ..Default::default()
+            }],
+            kind: Some(schema::type_schema::Kind::ArrayElement(Box::new(leaf))),
+            ..Default::default()
+        };
+        value.type_schema = Some(schema::TypeSchema {
+            nullable: row_nullable,
+            type_params: outer_max_capacity
+                .map(|max_capacity| {
+                    vec![common::KeyValuePair {
+                        key: "max_capacity".into(),
+                        value: max_capacity.to_string(),
+                        ..Default::default()
+                    }]
+                })
+                .unwrap_or_default(),
+            kind: Some(schema::type_schema::Kind::ArrayElement(Box::new(inner))),
+            ..Default::default()
+        });
+    }
+    value.type_params.retain(|pair| {
+        pair.key != "max_capacity" && !(data_type == DataType::Array && pair.key == "max_length")
+    });
+    if let Some(max_capacity) = outer_max_capacity {
+        value.type_params.push(common::KeyValuePair {
+            key: "max_capacity".into(),
+            value: max_capacity.to_string(),
+            ..Default::default()
+        });
+    }
+    Ok(value)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1401,8 +1671,8 @@ impl CollectionSchema {
         self.external_spec.as_ref()
     }
 
-    pub(crate) fn to_proto(&self) -> schema::CollectionSchema {
-        schema::CollectionSchema {
+    pub(crate) fn to_proto(&self) -> Result<schema::CollectionSchema> {
+        Ok(schema::CollectionSchema {
             description: self.description.clone(),
             fields: self
                 .fields
@@ -1415,7 +1685,7 @@ impl CollectionSchema {
                 .clone()
                 .into_iter()
                 .map(StructFieldSchema::into_proto)
-                .collect(),
+                .collect::<Result<Vec<_>>>()?,
             enable_dynamic_field: self.enable_dynamic_field,
             version: self.schema_version,
             properties: pairs(self.properties.clone()),
@@ -1432,7 +1702,7 @@ impl CollectionSchema {
                 .map(serde_json::Value::to_string)
                 .unwrap_or_default(),
             ..Default::default()
-        }
+        })
     }
 
     pub(crate) fn encode_for_collection(
@@ -1446,7 +1716,7 @@ impl CollectionSchema {
         for struct_field in &self.struct_fields {
             struct_field.validate()?;
         }
-        let mut schema = self.to_proto();
+        let mut schema = self.to_proto()?;
         schema.name = collection_name.to_owned();
         if let Some(description) = description {
             schema.description = description.to_owned();
@@ -2404,7 +2674,7 @@ mod collection_schema_tests {
         })
         .expect("valid collection schema");
 
-        assert!(!sdk.to_proto().enable_namespace);
+        assert!(!sdk.to_proto().unwrap().enable_namespace);
     }
 
     #[test]
@@ -2427,7 +2697,7 @@ mod collection_schema_tests {
             );
         let sdk = CollectionSchema::new().add_struct_field(struct_field);
 
-        let proto = sdk.to_proto();
+        let proto = sdk.to_proto().unwrap();
         assert_eq!(proto.struct_array_fields.len(), 1);
 
         let proto_struct = &proto.struct_array_fields[0];
@@ -2476,9 +2746,9 @@ mod collection_schema_tests {
 
     #[test]
     fn struct_field_schema_propagates_nullable_to_subfields_on_the_wire() {
-        // A struct is nullable as a whole: the struct's nullable is applied to every
-        // sub-field on the wire (aligned with pymilvus and the Java SDK). Sub-fields
-        // cannot be nullable individually.
+        // A struct's row nullability is applied to every sub-field's `nullable` on the wire,
+        // while a sub-field's own `nullable` encodes element-level null and maps to the proto
+        // `element_nullable` (aligned with pymilvus and the Java SDK).
         let nullable_struct = StructFieldSchema::new()
             .name("items")
             .max_capacity(8)
@@ -2489,12 +2759,16 @@ mod collection_schema_tests {
                     .data_type(DataType::Float)
                     .nullable(false),
             );
-        let proto = nullable_struct.clone().into_proto();
+        let proto = nullable_struct.clone().into_proto().unwrap();
         assert!(proto.nullable);
         assert_eq!(proto.fields.len(), 1);
         assert!(
             proto.fields[0].nullable,
-            "nullable struct must propagate to sub-fields"
+            "nullable struct row nullability must propagate to sub-fields"
+        );
+        assert!(
+            !proto.fields[0].element_nullable,
+            "a non-element-nullable sub-field keeps element_nullable off"
         );
 
         let non_nullable_struct = StructFieldSchema::new()
@@ -2507,18 +2781,19 @@ mod collection_schema_tests {
                     .data_type(DataType::Float)
                     .nullable(false),
             );
-        let proto = non_nullable_struct.clone().into_proto();
+        let proto = non_nullable_struct.clone().into_proto().unwrap();
         assert!(!proto.nullable);
         assert!(
             !proto.fields[0].nullable,
             "non-nullable struct sub-fields stay non-nullable"
         );
 
-        // Round-trip: a nullable struct decodes back with nullable sub-fields, and the
-        // decoded schema must pass validate() so describe -> recreate keeps working.
-        let decoded = StructFieldSchema::from_proto(nullable_struct.into_proto()).unwrap();
+        // Round-trip: a nullable struct decodes back with row nullability on the struct and
+        // element nullability on the sub-field, and the decoded schema must pass validate() so
+        // describe -> recreate keeps working.
+        let decoded = StructFieldSchema::from_proto(nullable_struct.into_proto().unwrap()).unwrap();
         assert!(decoded.is_nullable());
-        assert!(decoded.get_fields()[0].is_nullable());
+        assert!(!decoded.get_fields()[0].is_nullable());
         decoded
             .validate()
             .expect("decoded nullable struct must re-validate for describe -> recreate");
@@ -2534,7 +2809,7 @@ mod collection_schema_tests {
                 .max_capacity(16),
         );
 
-        let proto = sdk.to_proto();
+        let proto = sdk.to_proto().unwrap();
         assert_eq!(proto.fields.len(), 1);
         assert_eq!(
             schema::DataType::try_from(proto.fields[0].data_type).unwrap(),
@@ -2594,11 +2869,276 @@ mod collection_schema_tests {
                 if message.contains("broken") && message.contains("unknown data type")
         ));
     }
-}
 
-///////////////////////////////////////////////////////////////////////////////
-// Test Cases
-///////////////////////////////////////////////////////////////////////////////
+    #[test]
+    fn struct_field_schema_round_trips_element_nullable_and_nested_arrays() {
+        let struct_field = StructFieldSchema::new()
+            .name("clips")
+            .description("video clips")
+            .max_capacity(16)
+            .nullable(true)
+            .add_field(
+                FieldSchema::new()
+                    .name("score")
+                    .data_type(DataType::Int64)
+                    .nullable(true),
+            )
+            .add_field(
+                FieldSchema::new()
+                    .name("lang")
+                    .data_type(DataType::VarChar)
+                    .max_length(16)
+                    .nullable(true),
+            )
+            .add_field(
+                FieldSchema::new()
+                    .name("emb")
+                    .data_type(DataType::FloatVector)
+                    .dimension(4)
+                    .nullable(true),
+            )
+            .add_field(
+                FieldSchema::new()
+                    .name("tags")
+                    .data_type(DataType::Array)
+                    .element_type(DataType::VarChar)
+                    .max_capacity(8)
+                    .max_length(16)
+                    .nullable(true)
+                    .element_nullable(true),
+            );
+
+        let sdk = CollectionSchema::new().add_struct_field(struct_field.clone());
+        let proto = sdk.to_proto().unwrap();
+        assert_eq!(proto.struct_array_fields.len(), 1);
+        let struct_proto = &proto.struct_array_fields[0];
+        assert_eq!(struct_proto.fields.len(), 4);
+
+        // Row nullability is shared on `nullable`; element nullability on `element_nullable`.
+        for sub_field in &struct_proto.fields {
+            assert!(
+                sub_field.nullable,
+                "struct row nullability must propagate to every sub-field"
+            );
+        }
+        assert!(struct_proto.fields[0].element_nullable);
+        assert!(struct_proto.fields[1].element_nullable);
+        assert!(struct_proto.fields[2].element_nullable);
+        assert!(struct_proto.fields[3].element_nullable);
+
+        // Nested Array sub-field carries element_type = Array plus a recursive type_schema.
+        let tags = &struct_proto.fields[3];
+        assert_eq!(
+            schema::DataType::try_from(tags.data_type).unwrap(),
+            schema::DataType::Array
+        );
+        assert_eq!(
+            schema::DataType::try_from(tags.element_type).unwrap(),
+            schema::DataType::Array
+        );
+        let root = tags.type_schema.as_ref().expect("nested array type_schema");
+        assert!(root.nullable);
+        let schema::type_schema::Kind::ArrayElement(inner) = root.kind.as_ref().unwrap() else {
+            panic!("root must be an array element");
+        };
+        assert!(inner.nullable);
+        let schema::type_schema::Kind::ArrayElement(leaf) = inner.kind.as_ref().unwrap() else {
+            panic!("inner must be an array element");
+        };
+        assert!(leaf.nullable);
+        assert!(matches!(
+            leaf.kind,
+            Some(schema::type_schema::Kind::LeafType(leaf_type))
+                if schema::DataType::try_from(leaf_type).unwrap() == schema::DataType::VarChar
+        ));
+        assert!(root
+            .type_params
+            .iter()
+            .any(|pair| pair.key == "max_capacity" && pair.value == "16"));
+        assert!(inner
+            .type_params
+            .iter()
+            .any(|pair| pair.key == "max_capacity" && pair.value == "8"));
+
+        // Round trip preserves nullability, capacities, and nested-array shape.
+        let decoded = CollectionSchema::from_proto(proto).unwrap();
+        assert_eq!(decoded, sdk);
+        let decoded_struct = &decoded.get_struct_fields()[0];
+        decoded_struct
+            .validate()
+            .expect("decoded schema must re-validate for describe -> recreate");
+        assert!(decoded_struct.is_nullable());
+        let decoded_tags = &decoded_struct.get_fields()[3];
+        assert_eq!(decoded_tags.get_data_type(), DataType::Array);
+        assert_eq!(decoded_tags.get_element_type(), Some(DataType::VarChar));
+        assert!(decoded_tags.is_nullable());
+        assert!(decoded_tags.is_element_nullable());
+        assert_eq!(decoded_tags.get_max_capacity(), 8);
+        assert_eq!(decoded_tags.get_max_length(), 16);
+    }
+
+    #[test]
+    fn struct_field_from_proto_reads_nested_array_capacity_from_root_type_schema() {
+        use schema::type_schema::Kind;
+
+        // The server echoes a sub-field added via `add_collection_field` with its struct outer
+        // max_capacity in the root of the recursive `type_schema`, not in the top-level
+        // `type_params`. Scalar sub-fields keep the outer max_capacity in `type_params`.
+        let root = schema::TypeSchema {
+            nullable: true,
+            type_params: vec![common::KeyValuePair {
+                key: "max_capacity".into(),
+                value: "10".into(),
+                ..Default::default()
+            }],
+            kind: Some(Kind::ArrayElement(Box::new(schema::TypeSchema {
+                nullable: true,
+                type_params: vec![common::KeyValuePair {
+                    key: "max_capacity".into(),
+                    value: "4".into(),
+                    ..Default::default()
+                }],
+                kind: Some(Kind::ArrayElement(Box::new(schema::TypeSchema {
+                    nullable: true,
+                    type_params: Vec::new(),
+                    kind: Some(Kind::LeafType(schema::DataType::Int32 as i32)),
+                    ..Default::default()
+                }))),
+                ..Default::default()
+            }))),
+            ..Default::default()
+        };
+        let marks = schema::FieldSchema {
+            name: "marks".into(),
+            data_type: schema::DataType::Array as i32,
+            element_type: schema::DataType::Array as i32,
+            nullable: true,
+            element_nullable: true,
+            type_schema: Some(root),
+            ..Default::default()
+        };
+        let lang = schema::FieldSchema {
+            name: "lang".into(),
+            data_type: schema::DataType::Array as i32,
+            element_type: schema::DataType::VarChar as i32,
+            type_params: vec![common::KeyValuePair {
+                key: "max_capacity".into(),
+                value: "10".into(),
+                ..Default::default()
+            }],
+            nullable: true,
+            element_nullable: true,
+            ..Default::default()
+        };
+        let proto = schema::StructArrayFieldSchema {
+            name: "clips".into(),
+            fields: vec![lang, marks],
+            nullable: true,
+            ..Default::default()
+        };
+
+        let decoded =
+            StructFieldSchema::from_proto(proto).expect("decode add-time nested array sub-field");
+        assert_eq!(decoded.get_max_capacity(), 10);
+        let fields = decoded.get_fields();
+        assert_eq!(fields.len(), 2);
+        let marks_sdk = fields
+            .iter()
+            .find(|field| field.get_name() == "marks")
+            .unwrap();
+        assert_eq!(marks_sdk.get_data_type(), DataType::Array);
+        assert_eq!(marks_sdk.get_element_type(), Some(DataType::Int32));
+        assert_eq!(marks_sdk.get_max_capacity(), 4);
+        assert!(marks_sdk.is_nullable());
+        assert!(marks_sdk.is_element_nullable());
+        let lang_sdk = fields
+            .iter()
+            .find(|field| field.get_name() == "lang")
+            .unwrap();
+        assert_eq!(lang_sdk.get_data_type(), DataType::VarChar);
+        assert!(lang_sdk.is_nullable());
+        assert!(!lang_sdk.is_element_nullable());
+    }
+
+    #[test]
+    fn struct_into_proto_propagates_subfield_conversion_errors() {
+        // An Array sub-field without a valid max_capacity passes only if validate() runs first;
+        // into_proto must propagate the conversion error instead of panicking.
+        let struct_field = StructFieldSchema::new()
+            .name("clips")
+            .max_capacity(8)
+            .add_field(
+                FieldSchema::new()
+                    .name("tags")
+                    .data_type(DataType::Array)
+                    .element_type(DataType::VarChar),
+            );
+        let error = struct_field.into_proto().unwrap_err();
+        assert!(
+            error.to_string().contains("max_capacity"),
+            "unexpected conversion error: {error}"
+        );
+    }
+
+    #[test]
+    fn field_validate_rejects_element_nullable_outside_array_fields() {
+        let scalar = FieldSchema::new()
+            .name("score")
+            .data_type(DataType::Int64)
+            .element_nullable(true);
+        let error = scalar.validate().unwrap_err();
+        assert!(
+            error.to_string().contains("element_nullable"),
+            "unexpected validation error: {error}"
+        );
+
+        let array = FieldSchema::new()
+            .name("tags")
+            .data_type(DataType::Array)
+            .element_type(DataType::VarChar)
+            .element_nullable(true);
+        array
+            .validate()
+            .expect("Array fields may set element_nullable");
+    }
+
+    #[test]
+    fn struct_subfield_schema_rejects_element_nullable_outside_array_subfields() {
+        let struct_field = StructFieldSchema::new()
+            .name("clips")
+            .max_capacity(8)
+            .add_field(
+                FieldSchema::new()
+                    .name("lang")
+                    .data_type(DataType::VarChar)
+                    .element_nullable(true),
+            );
+        let error = struct_field.validate().unwrap_err();
+        assert!(
+            error.to_string().contains("element_nullable"),
+            "unexpected validation error: {error}"
+        );
+    }
+
+    #[test]
+    fn struct_subfield_schema_rejects_unsupported_nested_array_element_type() {
+        let struct_field = StructFieldSchema::new()
+            .name("clips")
+            .max_capacity(8)
+            .add_field(
+                FieldSchema::new()
+                    .name("tags")
+                    .data_type(DataType::Array)
+                    .element_type(DataType::Json)
+                    .max_capacity(4),
+            );
+        let error = struct_field.validate().unwrap_err();
+        assert!(
+            error.to_string().contains("scalar element type"),
+            "unexpected validation error: {error}"
+        );
+    }
+}
 
 #[cfg(test)]
 mod nullable_default_tests {
@@ -3309,7 +3849,7 @@ mod constructor_value_tests {
         assert_eq!(value.get_type_params()["warmup"], "full");
         assert_eq!(value.get_type_params()["custom"], "value");
 
-        let proto = value.clone().into_proto();
+        let proto = value.clone().into_proto().unwrap();
         let wire = proto
             .type_params
             .iter()
@@ -3341,11 +3881,13 @@ mod constructor_value_tests {
         assert_eq!(value.get_max_capacity().to_owned(), 16);
         assert!(value.is_nullable());
         assert_eq!(value.get_fields().to_owned(), [field]);
-        let round_tripped = StructFieldSchema::from_proto(value.clone().into_proto()).unwrap();
+        let round_tripped =
+            StructFieldSchema::from_proto(value.clone().into_proto().unwrap()).unwrap();
         assert!(round_tripped.is_nullable());
-        // The struct's nullable is applied to every sub-field on the wire, so the
-        // round-tripped sub-field inherits nullable=true.
-        assert!(round_tripped.get_fields()[0].is_nullable());
+        // The struct's row nullability is applied to every sub-field on the wire, so the
+        // round-tripped sub-field inherits row nullability while keeping its element
+        // nullability (which was unset here) off.
+        assert!(!round_tripped.get_fields()[0].is_nullable());
         assert_eq!(
             StructFieldSchema::new()
                 .name("items")
@@ -3357,17 +3899,17 @@ mod constructor_value_tests {
                         .name("text")
                         .data_type(DataType::VarChar)
                         .max_length(128)
-                        .nullable(true)
+                        .nullable(false)
                 ),
             round_tripped
         );
     }
 
     #[test]
-    fn struct_field_schema_allows_nullable_subfields_under_nullable_struct() {
-        // A nullable struct's sub-fields inherit nullable=true on the wire and on
-        // decode, so re-validating a described schema (describe -> recreate) must
-        // succeed. A sub-field may be nullable only when the struct is nullable.
+    fn struct_field_schema_allows_nullable_subfields_under_non_nullable_struct() {
+        // A sub-field's nullable encodes element-level null and is independent of the struct's
+        // row nullability, so an element-nullable sub-field is valid under a non-nullable
+        // struct, matching pymilvus.
         let nullable_parent = StructFieldSchema::new()
             .name("items")
             .max_capacity(8)
@@ -3393,8 +3935,19 @@ mod constructor_value_tests {
                     .max_length(64)
                     .nullable(true),
             );
-        let error = non_nullable_parent.validate().unwrap_err();
-        assert!(error.to_string().contains("nullable individually"));
+        non_nullable_parent
+            .validate()
+            .expect("element-nullable sub-fields under a non-nullable struct must validate");
+
+        // On the wire, element nullability travels on element_nullable and row nullability on
+        // nullable; they never conflate.
+        let proto = non_nullable_parent.into_proto().unwrap();
+        assert!(!proto.nullable);
+        assert!(!proto.fields[0].nullable);
+        assert!(proto.fields[0].element_nullable);
+        let decoded = StructFieldSchema::from_proto(proto).unwrap();
+        assert!(!decoded.is_nullable());
+        assert!(decoded.get_fields()[0].is_nullable());
     }
 
     #[test]
@@ -3447,7 +4000,7 @@ mod constructor_value_tests {
             Some("value")
         );
         assert_eq!(
-            CollectionSchema::from_proto(value.to_proto()).unwrap(),
+            CollectionSchema::from_proto(value.to_proto().unwrap()).unwrap(),
             value
         );
     }
@@ -3502,7 +4055,7 @@ mod constructor_value_tests {
         );
         assert_eq!(value.get_fields()[0].get_external_field(), "id");
 
-        let proto = value.to_proto();
+        let proto = value.to_proto().unwrap();
         assert_eq!(proto.external_source, "s3://bucket/path");
         assert_eq!(proto.external_spec, r#"{"format":"parquet"}"#);
         assert_eq!(proto.fields[0].external_field, "id");
@@ -3513,7 +4066,7 @@ mod constructor_value_tests {
     fn collection_schema_external_spec_defaults_to_none() {
         let value = CollectionSchema::new().external_source("s3://bucket/path");
         assert!(value.get_external_spec().is_none());
-        assert_eq!(value.to_proto().external_spec, "");
+        assert_eq!(value.to_proto().unwrap().external_spec, "");
     }
 }
 

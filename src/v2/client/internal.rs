@@ -50,15 +50,16 @@ impl ResolvedData {
         rows: &[request::dml::EntityRow],
         is_upsert: bool,
         partial_update: bool,
+        field_ops: &[FieldPartialUpdateOp],
     ) -> Result<Vec<schema::FieldData>> {
         let collection_schema = self.description.schema.as_ref().ok_or_else(|| {
             Error::MalformedResponse("describe collection returned no schema".into())
         })?;
         if columns.is_empty() {
             let columns = rows_to_columns(rows, collection_schema, is_upsert, partial_update)?;
-            columns_to_proto(columns, collection_schema)
+            columns_to_proto_with_ops(columns, collection_schema, field_ops)
         } else {
-            columns_to_proto_by_ref(columns, collection_schema)
+            columns_to_proto_by_ref_with_ops(columns, collection_schema, field_ops)
         }
     }
 }
@@ -348,11 +349,58 @@ fn validate_field_partial_update_ops(
 
         if operation.get_op_type() != FieldPartialUpdateOpType::Replace
             && !field.is_some_and(|field| field.data_type == schema::DataType::Array as i32)
+            && operation.get_op_type() != FieldPartialUpdateOpType::PathReplace
         {
             return Err(Error::validation(
                 field_name.to_owned(),
                 "ARRAY_APPEND and ARRAY_REMOVE operations require an array field".into(),
             ));
+        }
+
+        if operation.get_op_type() == FieldPartialUpdateOpType::PathReplace {
+            let is_array_field =
+                field.is_some_and(|field| field.data_type == schema::DataType::Array as i32);
+            // PATH_REPLACE only applies to an Array field (`[index]`) or a struct field
+            // (`[index][child]`); a plain scalar field cannot be patched by path.
+            if !is_array_field && !struct_field_exists {
+                return Err(Error::validation(
+                    field_name.to_owned(),
+                    "PATH_REPLACE requires an Array field ([index]) or a struct field ([index][child])"
+                        .into(),
+                ));
+            }
+            let (_, child) = parse_path_replace(operation.get_path()).map_err(|_| {
+                Error::validation(
+                    field_name.to_owned(),
+                    format!(
+                        "PATH_REPLACE requires a valid [index] or [index][child] path, got {:?}",
+                        operation.get_path()
+                    ),
+                )
+            })?;
+            if child.is_some() && !struct_field_exists {
+                return Err(Error::validation(
+                    field_name.to_owned(),
+                    format!(
+                        "PATH_REPLACE child path [index][{}] requires a struct field target",
+                        child.unwrap_or_default()
+                    ),
+                ));
+            }
+            if let (Some(child), Some(struct_field)) = (
+                child,
+                collection
+                    .struct_array_fields
+                    .iter()
+                    .find(|field| field.name == field_name),
+            ) {
+                if !struct_field.fields.iter().any(|field| field.name == child) {
+                    return Err(Error::validation(
+                        field_name.to_owned(),
+                        format!("PATH_REPLACE child sub-field {child:?} does not exist in struct field {field_name:?}"),
+                    ));
+                }
+            }
         }
     }
     Ok(())
@@ -468,12 +516,31 @@ fn rows_to_columns(
                         })?
                         .iter()
                         .map(|value| {
-                            value.as_object().cloned().ok_or_else(|| {
+                            let element = value.as_object().cloned().ok_or_else(|| {
                                 Error::validation(
                                     field_name.clone(),
                                     "every struct element must be an object".into(),
                                 )
-                            })
+                            })?;
+                            // A struct element may only carry sub-fields defined by the schema,
+                            // matching pymilvus's rejection of unexpected fields.
+                            if let Some(unknown) = element
+                                .keys()
+                                .find(|key| !field.fields.iter().any(|sub| &sub.name == *key))
+                            {
+                                return Err(Error::validation(
+                                    field_name.clone(),
+                                    format!(
+                                        "struct element has unexpected sub-field {unknown:?}; defined sub-fields: {:?}",
+                                        field
+                                            .fields
+                                            .iter()
+                                            .map(|sub| sub.name.as_str())
+                                            .collect::<Vec<_>>()
+                                    ),
+                                ));
+                            }
+                            Ok(element)
                         })
                         .collect::<Result<Vec<_>>>()?;
                     valid_data.push(true);
@@ -755,36 +822,63 @@ fn validate_column_type(column: &FieldData, field: &schema::FieldSchema) -> Resu
     Ok(())
 }
 
+#[cfg(test)]
 fn columns_to_proto(
     columns: Vec<FieldData>,
     collection: &schema::CollectionSchema,
 ) -> Result<Vec<schema::FieldData>> {
+    columns_to_proto_with_ops(columns, collection, &[])
+}
+
+fn columns_to_proto_with_ops(
+    columns: Vec<FieldData>,
+    collection: &schema::CollectionSchema,
+    field_ops: &[FieldPartialUpdateOp],
+) -> Result<Vec<schema::FieldData>> {
     columns
         .into_iter()
-        .map(|column| column_to_proto(column, collection))
+        .map(|column| column_to_proto_with_ops(column, collection, field_ops))
         .collect()
 }
 
+#[cfg(test)]
 fn columns_to_proto_by_ref(
     columns: &[FieldData],
     collection: &schema::CollectionSchema,
 ) -> Result<Vec<schema::FieldData>> {
+    columns_to_proto_by_ref_with_ops(columns, collection, &[])
+}
+
+fn columns_to_proto_by_ref_with_ops(
+    columns: &[FieldData],
+    collection: &schema::CollectionSchema,
+    field_ops: &[FieldPartialUpdateOp],
+) -> Result<Vec<schema::FieldData>> {
     columns
         .iter()
-        .map(|column| column_to_proto_by_ref(column, collection))
+        .map(|column| column_to_proto_by_ref_with_ops(column, collection, field_ops))
         .collect()
 }
 
+#[cfg(test)]
 fn column_to_proto_by_ref(
     column: &FieldData,
     collection: &schema::CollectionSchema,
+) -> Result<schema::FieldData> {
+    column_to_proto_by_ref_with_ops(column, collection, &[])
+}
+
+fn column_to_proto_by_ref_with_ops(
+    column: &FieldData,
+    collection: &schema::CollectionSchema,
+    field_ops: &[FieldPartialUpdateOp],
 ) -> Result<schema::FieldData> {
     if let Some(field) = collection
         .struct_array_fields
         .iter()
         .find(|field| field.name == column.name())
     {
-        return struct_column_to_proto(column, field);
+        return struct_column_to_proto_with_ops(column, field, field_ops);
     }
     if column.name() == "$meta" {
         if !collection.enable_dynamic_field || column.data_type() != DataType::Json {
@@ -812,16 +906,25 @@ fn column_to_proto_by_ref(
     column.to_proto_with_schema(field)
 }
 
+#[cfg(test)]
 fn column_to_proto(
     column: FieldData,
     collection: &schema::CollectionSchema,
+) -> Result<schema::FieldData> {
+    column_to_proto_with_ops(column, collection, &[])
+}
+
+fn column_to_proto_with_ops(
+    column: FieldData,
+    collection: &schema::CollectionSchema,
+    field_ops: &[FieldPartialUpdateOp],
 ) -> Result<schema::FieldData> {
     if let Some(field) = collection
         .struct_array_fields
         .iter()
         .find(|field| field.name == column.name())
     {
-        return struct_column_to_proto(&column, field);
+        return struct_column_to_proto_with_ops(&column, field, field_ops);
     }
     if column.name() == "$meta" {
         if !collection.enable_dynamic_field || column.data_type() != DataType::Json {
@@ -849,9 +952,65 @@ fn column_to_proto(
     column.into_proto_with_schema(field)
 }
 
+/// Parses a `PATH_REPLACE` path of the form `[index]` or `[index][child]` into the element
+/// index and the optional child sub-field, mirroring the Java SDK's strict regex
+/// `\[(?:0|[1-9][0-9]*)\](?:\[([^\[\]\s]+)\])?`. Malformed paths (leading zeros, empty or
+/// non-identifier children, nested brackets, trailing garbage) are rejected.
+fn parse_path_replace(path: &str) -> Result<(usize, Option<&str>)> {
+    let invalid = || {
+        Error::validation(
+            "field_ops.path".into(),
+            format!("invalid PATH_REPLACE path {path:?}; expected [index] or [index][child]"),
+        )
+    };
+    let Some(index_end) = path.find(']') else {
+        return Err(invalid());
+    };
+    if !path.starts_with('[') {
+        return Err(invalid());
+    }
+    let index_str = &path[1..index_end];
+    let valid_index = index_str == "0"
+        || (!index_str.is_empty()
+            && !index_str.starts_with('0')
+            && index_str.bytes().all(|byte| byte.is_ascii_digit()));
+    if !valid_index {
+        return Err(invalid());
+    }
+    let index = index_str.parse::<usize>().map_err(|_| invalid())?;
+    let rest = &path[index_end + 1..];
+    let child = match rest {
+        "" => None,
+        rest if rest.starts_with('[') => {
+            let Some(child) = rest[1..].strip_suffix(']') else {
+                return Err(invalid());
+            };
+            if child.is_empty()
+                || child
+                    .bytes()
+                    .any(|byte| matches!(byte, b'[' | b']') || byte.is_ascii_whitespace())
+            {
+                return Err(invalid());
+            }
+            Some(child)
+        }
+        _ => return Err(invalid()),
+    };
+    Ok((index, child))
+}
+
+#[cfg(test)]
 fn struct_column_to_proto(
     column: &FieldData,
     struct_schema: &schema::StructArrayFieldSchema,
+) -> Result<schema::FieldData> {
+    struct_column_to_proto_with_ops(column, struct_schema, &[])
+}
+
+fn struct_column_to_proto_with_ops(
+    column: &FieldData,
+    struct_schema: &schema::StructArrayFieldSchema,
+    field_ops: &[FieldPartialUpdateOp],
 ) -> Result<schema::FieldData> {
     use schema::{field_data, vector_field};
 
@@ -888,6 +1047,40 @@ fn struct_column_to_proto(
             ));
         }
     }
+    let row_nullable = struct_schema.nullable;
+
+    // A PATH_REPLACE op replaces one struct element (`[index]`) or one sub-field of an
+    // element (`[index][child]`). The payload carries a single-element struct array and,
+    // for a child path, only the targeted sub-field's data, matching the Java SDK.
+    let path_replace = field_ops.iter().find(|operation| {
+        operation.get_op_type() == FieldPartialUpdateOpType::PathReplace
+            && operation.get_field_name() == struct_schema.name
+    });
+    let path_replace_child = if let Some(operation) = path_replace {
+        let (_, child) = parse_path_replace(operation.get_path())?;
+        child
+    } else {
+        None
+    };
+    if path_replace.is_some() {
+        if values.iter().any(|row| row.len() != 1) {
+            return Err(Error::validation(
+                struct_schema.name.clone(),
+                "PATH_REPLACE requires exactly one struct element per row".into(),
+            ));
+        }
+        if let Some(child) = path_replace_child {
+            if values.iter().any(|row| {
+                row.first()
+                    .is_none_or(|element| !element.contains_key(child))
+            }) {
+                return Err(Error::validation(
+                    struct_schema.name.clone(),
+                    format!("PATH_REPLACE operand must explicitly contain child sub-field {child}"),
+                ));
+            }
+        }
+    }
     let max_capacity = struct_schema
         .type_params
         .iter()
@@ -912,6 +1105,12 @@ fn struct_column_to_proto(
     for sub_schema in &struct_schema.fields {
         if sub_schema.is_function_output {
             continue;
+        }
+        if let Some(child) = path_replace_child {
+            // PATH_REPLACE on a child path sends only the targeted sub-field's data.
+            if sub_schema.name != child {
+                continue;
+            }
         }
         let element_type = schema::DataType::try_from(sub_schema.element_type)
             .or_else(|_| schema::DataType::try_from(sub_schema.data_type))
@@ -946,6 +1145,7 @@ fn struct_column_to_proto(
         };
         let mut sub_valid_data = Vec::new();
         let default = field_default_json(&element_schema)?;
+        let nested_array_leaf = struct_nested_array_leaf(sub_schema)?;
 
         let mut value_index = 0;
         for row_index in 0..struct_row_count {
@@ -971,17 +1171,29 @@ fn struct_column_to_proto(
                         if let Some(default) = &default {
                             row_valid_data.push(true);
                             nested_values.push(default);
-                        } else if sub_schema.nullable {
+                        } else if sub_schema.element_nullable {
                             row_valid_data.push(false);
                         } else {
                             return Err(Error::validation(
                                 format!("{}[{}]", struct_schema.name, sub_schema.name),
-                                "struct element is missing or null but the subfield is neither nullable nor defaulted"
+                                "struct element is missing or null but the subfield is neither element-nullable nor defaulted"
                                     .into(),
                             ));
                         }
                     }
                 }
+            }
+            if let Some((leaf_type, leaf_nullable)) = &nested_array_leaf {
+                scalar_rows.push(encode_struct_nested_array_row(
+                    &sub_schema.name,
+                    *leaf_type,
+                    *leaf_nullable,
+                    sub_schema.element_nullable,
+                    &nested_values,
+                    &row_valid_data,
+                )?);
+                sub_valid_data.push(true);
+                continue;
             }
             let nested = json_values_to_field_data(
                 &sub_schema.name,
@@ -989,11 +1201,15 @@ fn struct_column_to_proto(
                 &element_schema,
                 nested_values,
             )?;
-            let nested = if row_valid_data.iter().all(|valid| *valid) {
-                nested
-            } else {
-                FieldData::nullable(nested, row_valid_data.clone())?
-            };
+            // For element-nullable sub-fields, always write the per-element validity into the
+            // payload, matching pymilvus's compacted encoding: `_compact_array_values` returns
+            // `validity if nullable else []`, so even an all-present row carries `valid_data`.
+            let nested =
+                if sub_schema.element_nullable || row_valid_data.iter().any(|valid| !*valid) {
+                    FieldData::nullable(nested, row_valid_data.clone())?
+                } else {
+                    nested
+                };
             if sdk_type.is_vector() {
                 validate_column_type(&nested, &element_schema)?;
             }
@@ -1012,11 +1228,20 @@ fn struct_column_to_proto(
             }
         }
 
+        // The struct's row-level validity is emitted on both the sub-field `FieldData` and
+        // the payload `ScalarField`/`VectorField` whenever the struct is nullable, matching
+        // pymilvus and the Java SDK (which write the row validity on both levels). Null
+        // struct rows are compacted out of the payload; the validity marks their positions.
+        let row_validity = if row_nullable {
+            sub_valid_data.clone()
+        } else {
+            Vec::new()
+        };
         let field = if !vector_rows.is_empty() || sdk_type.is_vector() {
             let dimension = vector_dimension.unwrap_or_default();
             field_data::Field::Vectors(schema::VectorField {
                 dim: dimension,
-                valid_data: Vec::new(),
+                valid_data: row_validity,
                 data: Some(vector_field::Data::VectorArray(schema::VectorArray {
                     dim: dimension,
                     data: vector_rows,
@@ -1026,7 +1251,7 @@ fn struct_column_to_proto(
             })
         } else {
             field_data::Field::Scalars(schema::ScalarField {
-                valid_data: Vec::new(),
+                valid_data: row_validity,
                 data: Some(schema::scalar_field::Data::ArrayData(schema::ArrayArray {
                     data: scalar_rows,
                     element_type: element_type as i32,
@@ -1043,10 +1268,10 @@ fn struct_column_to_proto(
             field_name: sub_schema.name.clone(),
             field_id: sub_schema.field_id,
             is_dynamic: false,
-            valid_data: if sub_valid_data.iter().all(|valid| *valid) {
-                Vec::new()
-            } else {
+            valid_data: if row_nullable {
                 sub_valid_data
+            } else {
+                Vec::new()
             },
             field: Some(field),
             ..Default::default()
@@ -1262,6 +1487,119 @@ fn json_values_to_field_data(
             ))
         }
     })
+}
+
+/// Resolves the leaf type and nullability of a nested Array struct sub-field from its recursive
+/// `type_schema`.
+///
+/// Returns `None` when the sub-field is not a nested Array. Delegates the wire traversal to the
+/// shared [`crate::v2::types::decode_nested_array_schema`] decoder so DML encode and schema
+/// round-trip cannot drift apart.
+fn struct_nested_array_leaf(sub_schema: &schema::FieldSchema) -> Result<Option<(DataType, bool)>> {
+    let Some((leaf_type, leaf_nullable, _, _)) =
+        crate::v2::types::decode_nested_array_schema(sub_schema)?
+    else {
+        return Ok(None);
+    };
+    Ok(Some((leaf_type, leaf_nullable)))
+}
+
+/// Encodes one struct row's nested Array sub-field values into the wire `ScalarField`.
+///
+/// `nested_values` holds the sub-field's value for each struct element of the row (each an inner
+/// JSON array); `row_valid_data[i]` marks whether element `i` has a non-null inner array. The
+/// result is a `ScalarField` whose own `valid_data` is the inner-array validity and whose
+/// `ArrayData` holds one leaf `ScalarField` per non-null inner array (leaf values compacted with
+/// leaf validity when the leaf is element-nullable). The inner-array validity is only emitted when
+/// the inner array is element-nullable; the server rejects `valid_data` on a non-nullable level,
+/// matching pymilvus's `_compact_array_values` (`validity if nullable else []`).
+fn encode_struct_nested_array_row(
+    name: &str,
+    leaf_type: DataType,
+    leaf_nullable: bool,
+    inner_nullable: bool,
+    nested_values: &[&Value],
+    row_valid_data: &[bool],
+) -> Result<schema::ScalarField> {
+    let mut leaf_fields = Vec::with_capacity(nested_values.len());
+    for value in nested_values {
+        let Some(inner) = value.as_array() else {
+            return Err(Error::validation(
+                name.to_owned(),
+                "nested array struct sub-field values must be arrays".into(),
+            ));
+        };
+        leaf_fields.push(encode_struct_leaf_array(
+            name,
+            leaf_type,
+            leaf_nullable,
+            inner,
+        )?);
+    }
+    Ok(schema::ScalarField {
+        valid_data: if inner_nullable {
+            row_valid_data.to_vec()
+        } else {
+            Vec::new()
+        },
+        data: Some(schema::scalar_field::Data::ArrayData(schema::ArrayArray {
+            element_type: leaf_type.into_proto() as i32,
+            data: leaf_fields,
+        })),
+        ..Default::default()
+    })
+}
+
+/// Encodes one inner array of a nested Array struct sub-field as a leaf `ScalarField`.
+///
+/// When the leaf is element-nullable, null leaf values are compacted out and marked through the
+/// leaf `valid_data`; otherwise any null leaf value is rejected.
+fn encode_struct_leaf_array(
+    name: &str,
+    leaf_type: DataType,
+    leaf_nullable: bool,
+    inner: &[Value],
+) -> Result<schema::ScalarField> {
+    let mut leaf_valid_data = Vec::with_capacity(inner.len());
+    let mut present = Vec::with_capacity(inner.len());
+    for value in inner {
+        if value.is_null() {
+            if !leaf_nullable {
+                return Err(Error::validation(
+                    name.to_owned(),
+                    "nested array struct sub-field does not allow null leaf values".into(),
+                ));
+            }
+            leaf_valid_data.push(false);
+        } else {
+            leaf_valid_data.push(true);
+            present.push(value);
+        }
+    }
+    let leaf_schema = schema::FieldSchema {
+        name: name.to_owned(),
+        data_type: leaf_type.into_proto() as i32,
+        element_type: schema::DataType::None as i32,
+        ..Default::default()
+    };
+    let data = json_values_to_field_data(name, leaf_type, &leaf_schema, present)?;
+    // When the leaf level is element-nullable, always write the per-value validity, matching
+    // pymilvus's `_encode_scalar_array`: `_compact_array_values` returns `validity if nullable
+    // else []`, so an all-present leaf row still carries its validity bitmap.
+    let data = if leaf_nullable || leaf_valid_data.iter().any(|valid| !*valid) {
+        FieldData::nullable(data, leaf_valid_data)?
+    } else {
+        data
+    };
+    let data = data.into_proto_with_schema(&leaf_schema)?;
+    use schema::field_data as proto_field_data;
+    match data.field {
+        Some(proto_field_data::Field::Scalars(scalars)) => Ok(scalars),
+        _ => Err(Error::validation(
+            name.to_owned(),
+            "nested array struct sub-field leaf must be scalar data".into(),
+        )),
+    }
 }
 
 fn field_default_json(field: &schema::FieldSchema) -> Result<Option<Value>> {
@@ -1496,9 +1834,10 @@ fn json_sparse_vector(value: &Value) -> Result<crate::v2::types::SparseVector> {
 #[cfg(test)]
 mod tests {
     use super::{
-        columns_to_proto, json_bf16_vector, json_f16_vector, json_f32_vector, json_sparse_vector,
-        json_values_to_field_data, rows_to_columns, validate_column_type,
-        validate_columns_against_schema, validate_field_partial_update_ops, ALLOW_INSERT_AUTO_ID,
+        columns_to_proto, columns_to_proto_with_ops, json_bf16_vector, json_f16_vector,
+        json_f32_vector, json_sparse_vector, json_values_to_field_data, parse_path_replace,
+        rows_to_columns, validate_column_type, validate_columns_against_schema,
+        validate_field_partial_update_ops, ALLOW_INSERT_AUTO_ID,
     };
     use crate::proto::{common, schema};
     use crate::v2::types::{FieldData, FieldPartialUpdateOp, FieldPartialUpdateOpType};
@@ -2148,6 +2487,447 @@ mod tests {
     }
 
     #[test]
+    fn element_nullable_struct_subfields_encode_null_elements() {
+        let mut schema = extended_collection_schema();
+        // Make the label sub-field element-nullable and the struct row nullable so that
+        // individual elements may omit the value while the struct itself stays present.
+        schema.struct_array_fields[0].fields[0].element_nullable = true;
+        let row = json!({
+            "id": 1,
+            "location": "POINT (1 1)",
+            "observed_at": "2026-07-15T12:30:00+08:00",
+            "events": [
+                {"label": "start", "location": "POINT (3 4)", "observed_at": "2026-07-15T12:31:00+08:00", "embedding": [0.1, 0.2]},
+                {"location": "POINT (5 6)", "observed_at": "2026-07-15T12:32:00+08:00", "embedding": [0.3, 0.4]}
+            ]
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let columns = rows_to_columns(&[row], &schema, false, false).unwrap();
+        let proto = columns_to_proto(columns, &schema).unwrap();
+        let Some(schema::field_data::Field::StructArrays(structs)) = &proto[3].field else {
+            panic!("expected struct array data");
+        };
+        let Some(schema::field_data::Field::Scalars(label)) = &structs.fields[0].field else {
+            panic!("expected scalar struct subfield");
+        };
+        let Some(schema::scalar_field::Data::ArrayData(labels)) = &label.data else {
+            panic!("expected array data for struct subfield");
+        };
+        // One struct row; the payload holds only the non-null element value, and the validity
+        // bitmap marks the missing second element as null.
+        assert_eq!(labels.data.len(), 1);
+        assert_eq!(labels.data[0].valid_data, vec![true, false]);
+        let Some(schema::scalar_field::Data::StringData(values)) = &labels.data[0].data else {
+            panic!("expected string struct subfield");
+        };
+        assert_eq!(values.data, vec!["start"]);
+        assert!(structs.fields[0].valid_data.is_empty());
+    }
+
+    #[test]
+    fn nullable_struct_double_writes_row_validity_in_both_slots() {
+        let mut schema = extended_collection_schema();
+        schema.struct_array_fields[0].nullable = true;
+        let rows = vec![
+            json!({
+                "id": 1,
+                "location": "POINT (1 1)",
+                "observed_at": "2026-07-15T12:30:00+08:00",
+                "events": [
+                    {"label": "start", "location": "POINT (3 4)", "observed_at": "2026-07-15T12:31:00+08:00", "embedding": [0.1, 0.2]},
+                    {"label": "stop", "location": "POINT (5 6)", "observed_at": "2026-07-15T12:32:00+08:00", "embedding": [0.3, 0.4]}
+                ]
+            }),
+            json!({"id": 2, "location": "POINT (7 8)", "observed_at": "2026-07-15T12:33:00+08:00", "events": null}),
+        ]
+        .into_iter()
+        .map(|value| value.as_object().unwrap().clone())
+        .collect::<Vec<_>>();
+        let columns = rows_to_columns(&rows, &schema, false, false).unwrap();
+        let proto = columns_to_proto(columns, &schema).unwrap();
+        let Some(schema::field_data::Field::StructArrays(structs)) = &proto[3].field else {
+            panic!("expected struct array data");
+        };
+        // Row-level validity is emitted on the sub-field FieldData (slot 1) whenever the struct
+        // is nullable, even when the null row is compacted out of the payload.
+        assert_eq!(structs.fields[0].valid_data, vec![true, false]);
+        let Some(schema::field_data::Field::Scalars(label)) = &structs.fields[0].field else {
+            panic!("expected scalar struct subfield");
+        };
+        let Some(schema::scalar_field::Data::ArrayData(labels)) = &label.data else {
+            panic!("expected array data for struct subfield");
+        };
+        // ...and on the payload ScalarField (slot 2), matching pymilvus and the Java SDK.
+        assert_eq!(label.valid_data, vec![true, false]);
+        // Only the present struct row is carried; the null row leaves no cell.
+        assert_eq!(labels.data.len(), 1);
+        // label is not element-nullable, so the element-level validity stays dense/empty.
+        assert!(labels.data[0].valid_data.is_empty());
+    }
+
+    #[test]
+    fn path_replace_struct_encode_keeps_only_the_targeted_child() {
+        let schema = extended_collection_schema();
+        let field_ops = [FieldPartialUpdateOp::new()
+            .field_name("events")
+            .op_type(FieldPartialUpdateOpType::PathReplace)
+            .path("[0][label]")];
+        let rows = vec![json!({
+            "id": 1,
+            "location": "POINT (1 1)",
+            "observed_at": "2026-07-15T12:30:00+08:00",
+            "events": [{"label": "start"}]
+        })
+        .as_object()
+        .unwrap()
+        .clone()];
+        let columns = rows_to_columns(&rows, &schema, false, true).unwrap();
+        let proto = columns_to_proto_with_ops(columns, &schema, &field_ops).unwrap();
+        let Some(schema::field_data::Field::StructArrays(structs)) = &proto[3].field else {
+            panic!("expected struct array data");
+        };
+        // A child PATH_REPLACE sends only the targeted sub-field's data.
+        assert_eq!(structs.fields.len(), 1);
+        assert_eq!(structs.fields[0].field_name, "label");
+        let Some(schema::field_data::Field::Scalars(label)) = &structs.fields[0].field else {
+            panic!("expected scalar struct subfield");
+        };
+        let Some(schema::scalar_field::Data::ArrayData(labels)) = &label.data else {
+            panic!("expected array data for struct subfield");
+        };
+        assert_eq!(labels.data.len(), 1);
+        let Some(schema::scalar_field::Data::StringData(values)) = &labels.data[0].data else {
+            panic!("expected string struct subfield");
+        };
+        assert_eq!(values.data, vec!["start"]);
+    }
+
+    #[test]
+    fn path_replace_struct_rejects_multi_element_operand_and_missing_child() {
+        let schema = extended_collection_schema();
+        let field_ops = [FieldPartialUpdateOp::new()
+            .field_name("events")
+            .op_type(FieldPartialUpdateOpType::PathReplace)
+            .path("[0][label]")];
+
+        // PATH_REPLACE requires exactly one struct element per row.
+        let multi = vec![json!({
+            "id": 1,
+            "location": "POINT (1 1)",
+            "observed_at": "2026-07-15T12:30:00+08:00",
+            "events": [{"label": "a"}, {"label": "b"}]
+        })
+        .as_object()
+        .unwrap()
+        .clone()];
+        let columns = rows_to_columns(&multi, &schema, false, true).unwrap();
+        assert!(columns_to_proto_with_ops(columns, &schema, &field_ops).is_err());
+
+        // The operand element must explicitly contain the targeted child key.
+        let missing_child = vec![json!({
+            "id": 1,
+            "location": "POINT (1 1)",
+            "observed_at": "2026-07-15T12:30:00+08:00",
+            "events": [{"location": "POINT (3 4)"}]
+        })
+        .as_object()
+        .unwrap()
+        .clone()];
+        let columns = rows_to_columns(&missing_child, &schema, false, true).unwrap();
+        assert!(columns_to_proto_with_ops(columns, &schema, &field_ops).is_err());
+    }
+
+    #[test]
+    fn path_replace_requires_an_array_or_struct_field_target() {
+        let schema = collection_schema();
+        let columns = vec![
+            FieldData::Int64 {
+                name: "id".into(),
+                values: vec![1],
+            },
+            FieldData::FloatVector {
+                name: "vector".into(),
+                values: vec![vec![0.1, 0.2]],
+            },
+        ];
+        // A `[index]` path on a plain scalar field must be rejected client-side.
+        let scalar_op = [FieldPartialUpdateOp::new()
+            .field_name("id")
+            .op_type(FieldPartialUpdateOpType::PathReplace)
+            .path("[0]")];
+        let error = validate_field_partial_update_ops(&scalar_op, &schema, &columns).unwrap_err();
+        assert!(
+            error.to_string().contains("PATH_REPLACE requires"),
+            "unexpected error: {error}"
+        );
+
+        // A `[index][child]` path on a non-struct field must be rejected client-side.
+        let vector_op = [FieldPartialUpdateOp::new()
+            .field_name("vector")
+            .op_type(FieldPartialUpdateOpType::PathReplace)
+            .path("[0][x]")];
+        assert!(validate_field_partial_update_ops(&vector_op, &schema, &columns).is_err());
+    }
+
+    #[test]
+    fn parse_path_replace_validates_index_and_child_syntax() {
+        assert_eq!(parse_path_replace("[0]").unwrap(), (0, None));
+        assert_eq!(parse_path_replace("[12]").unwrap(), (12, None));
+        assert_eq!(
+            parse_path_replace("[0][score]").unwrap(),
+            (0, Some("score"))
+        );
+        for bad in [
+            "",
+            "0",
+            "[0][score]x",
+            "[00]",
+            "[01][score]",
+            "[]",
+            "[0][]",
+            "[0][a b]",
+        ] {
+            assert!(
+                parse_path_replace(bad).is_err(),
+                "path {bad:?} must be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn nullable_vector_struct_subfield_encodes_rows() {
+        let mut schema = extended_collection_schema();
+        schema.struct_array_fields[0].fields[0].element_nullable = true;
+        // Make the vector sub-field element-nullable too.
+        schema.struct_array_fields[0].fields[3].element_nullable = true;
+        let row = json!({
+            "id": 1,
+            "location": "POINT (1 1)",
+            "observed_at": "2026-07-15T12:30:00+08:00",
+            "events": [
+                {"label": "a", "location": "POINT (3 4)", "observed_at": "2026-07-15T12:31:00+08:00", "embedding": [0.1, 0.2]},
+                {"label": "b", "location": "POINT (5 6)", "observed_at": "2026-07-15T12:32:00+08:00", "embedding": [0.3, 0.4]}
+            ]
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let columns = rows_to_columns(&[row], &schema, false, false).unwrap();
+        let proto = columns_to_proto(columns, &schema).unwrap();
+        let Some(schema::field_data::Field::StructArrays(structs)) = &proto[3].field else {
+            panic!("expected struct array data");
+        };
+        let embedding = structs
+            .fields
+            .iter()
+            .find(|f| f.field_name == "embedding")
+            .expect("embedding sub-field");
+        let Some(schema::field_data::Field::Vectors(vectors)) = &embedding.field else {
+            panic!("expected vector struct subfield, got {:?}", embedding.field);
+        };
+        let Some(schema::vector_field::Data::VectorArray(array)) = &vectors.data else {
+            panic!("expected vector array data");
+        };
+        assert_eq!(array.data.len(), 1);
+        assert_eq!(array.data[0].valid_data, vec![true, true]);
+        let Some(schema::vector_field::Data::FloatVector(data)) = &array.data[0].data else {
+            panic!("expected float vector row");
+        };
+        assert_eq!(data.data, vec![0.1, 0.2, 0.3, 0.4]);
+    }
+
+    #[test]
+    fn nested_array_struct_subfield_encodes_recursive_array_data() {
+        let mut schema = extended_collection_schema();
+        // Add a nested Array sub-field `tags` (Array<Int64>) with nullable inner arrays and
+        // nullable leaf values, resolved through the wire type_schema.
+        let mut tags = field(205, "tags", schema::DataType::Array);
+        tags.element_type = schema::DataType::Array as i32;
+        tags.element_nullable = true;
+        let inner = schema::TypeSchema {
+            nullable: true,
+            type_params: vec![common::KeyValuePair {
+                key: "max_capacity".into(),
+                value: "4".into(),
+                ..Default::default()
+            }],
+            kind: Some(schema::type_schema::Kind::ArrayElement(Box::new(
+                schema::TypeSchema {
+                    nullable: true,
+                    kind: Some(schema::type_schema::Kind::LeafType(
+                        schema::DataType::Int64 as i32,
+                    )),
+                    ..Default::default()
+                },
+            ))),
+            ..Default::default()
+        };
+        tags.type_schema = Some(schema::TypeSchema {
+            nullable: false,
+            type_params: vec![common::KeyValuePair {
+                key: "max_capacity".into(),
+                value: "4".into(),
+                ..Default::default()
+            }],
+            kind: Some(schema::type_schema::Kind::ArrayElement(Box::new(inner))),
+            ..Default::default()
+        });
+        schema.struct_array_fields[0].fields.push(tags);
+
+        let row = json!({
+            "id": 1,
+            "location": "POINT (1 1)",
+            "observed_at": "2026-07-15T12:30:00+08:00",
+            "events": [{
+                "label": "start",
+                "location": "POINT (3 4)",
+                "observed_at": "2026-07-15T12:31:00+08:00",
+                "embedding": [0.1, 0.2],
+                "tags": [1, 2, null]
+            }, {
+                "label": "stop",
+                "location": "POINT (5 6)",
+                "observed_at": "2026-07-15T12:32:00+08:00",
+                "embedding": [0.3, 0.4],
+                "tags": null
+            }]
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let columns = rows_to_columns(&[row], &schema, false, false).unwrap();
+        let proto = columns_to_proto(columns, &schema).unwrap();
+        let Some(schema::field_data::Field::StructArrays(structs)) = &proto[3].field else {
+            panic!("expected struct array data");
+        };
+        let tags = structs
+            .fields
+            .iter()
+            .find(|field| field.field_name == "tags")
+            .expect("tags sub-field");
+        assert_eq!(tags.r#type, schema::DataType::Array as i32);
+        let Some(schema::field_data::Field::Scalars(scalars)) = &tags.field else {
+            panic!("expected scalar tags data");
+        };
+        let Some(schema::scalar_field::Data::ArrayData(outer)) = &scalars.data else {
+            panic!("expected outer array data for tags");
+        };
+        // The outer ArrayArray carries element_type = Array (the nested sub-field's own type).
+        assert_eq!(
+            schema::DataType::try_from(outer.element_type).unwrap(),
+            schema::DataType::Array
+        );
+        assert_eq!(outer.data.len(), 1);
+        let row_field = &outer.data[0];
+        // The row's validity marks the two elements: first inner array present, second null.
+        assert_eq!(row_field.valid_data, vec![true, false]);
+        let Some(schema::scalar_field::Data::ArrayData(inner)) = &row_field.data else {
+            panic!("expected inner array data for tags row");
+        };
+        assert_eq!(
+            schema::DataType::try_from(inner.element_type).unwrap(),
+            schema::DataType::Int64
+        );
+        assert_eq!(inner.data.len(), 1);
+        let leaf = &inner.data[0];
+        // Leaf values compacted: [1, 2] with the trailing null marked invalid.
+        assert_eq!(leaf.valid_data, vec![true, true, false]);
+        let Some(schema::scalar_field::Data::LongData(values)) = &leaf.data else {
+            panic!("expected long leaf data for tags");
+        };
+        assert_eq!(values.data, vec![1, 2]);
+    }
+
+    #[test]
+    fn non_nullable_nested_array_struct_subfield_omits_inner_validity() {
+        let mut schema = extended_collection_schema();
+        // Add a nested Array sub-field `tags` (Array<Int64>) whose inner array is NOT nullable:
+        // the wire must not carry `valid_data` at the inner-array level (the server rejects
+        // valid_data on a non-nullable level, matching pymilvus's `validity if nullable else []`).
+        let mut tags = field(205, "tags", schema::DataType::Array);
+        tags.element_type = schema::DataType::Array as i32;
+        tags.element_nullable = false;
+        let inner = schema::TypeSchema {
+            nullable: false,
+            type_params: vec![common::KeyValuePair {
+                key: "max_capacity".into(),
+                value: "4".into(),
+                ..Default::default()
+            }],
+            kind: Some(schema::type_schema::Kind::ArrayElement(Box::new(
+                schema::TypeSchema {
+                    nullable: false,
+                    kind: Some(schema::type_schema::Kind::LeafType(
+                        schema::DataType::Int64 as i32,
+                    )),
+                    ..Default::default()
+                },
+            ))),
+            ..Default::default()
+        };
+        tags.type_schema = Some(schema::TypeSchema {
+            nullable: false,
+            type_params: vec![common::KeyValuePair {
+                key: "max_capacity".into(),
+                value: "4".into(),
+                ..Default::default()
+            }],
+            kind: Some(schema::type_schema::Kind::ArrayElement(Box::new(inner))),
+            ..Default::default()
+        });
+        schema.struct_array_fields[0].fields.push(tags);
+
+        let row = json!({
+            "id": 1,
+            "location": "POINT (1 1)",
+            "observed_at": "2026-07-15T12:30:00+08:00",
+            "events": [{
+                "label": "start",
+                "location": "POINT (3 4)",
+                "observed_at": "2026-07-15T12:31:00+08:00",
+                "embedding": [0.1, 0.2],
+                "tags": [1, 2]
+            }, {
+                "label": "stop",
+                "location": "POINT (5 6)",
+                "observed_at": "2026-07-15T12:32:00+08:00",
+                "embedding": [0.3, 0.4],
+                "tags": [3]
+            }]
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let columns = rows_to_columns(&[row], &schema, false, false).unwrap();
+        let proto = columns_to_proto(columns, &schema).unwrap();
+        let Some(schema::field_data::Field::StructArrays(structs)) = &proto[3].field else {
+            panic!("expected struct array data");
+        };
+        let tags = structs
+            .fields
+            .iter()
+            .find(|field| field.field_name == "tags")
+            .expect("tags sub-field");
+        let Some(schema::field_data::Field::Scalars(scalars)) = &tags.field else {
+            panic!("expected scalar tags data");
+        };
+        let Some(schema::scalar_field::Data::ArrayData(outer)) = &scalars.data else {
+            panic!("expected outer array data for tags");
+        };
+        assert_eq!(outer.data.len(), 1);
+        // Inner array is not nullable, so no valid_data is emitted at that level.
+        assert!(outer.data[0].valid_data.is_empty());
+        let Some(schema::scalar_field::Data::ArrayData(inner)) = &outer.data[0].data else {
+            panic!("expected inner array data for tags row");
+        };
+        assert_eq!(inner.data.len(), 2);
+        assert!(inner.data[0].valid_data.is_empty());
+        assert!(inner.data[1].valid_data.is_empty());
+    }
+
+    #[test]
     fn non_nullable_struct_rejects_null_rows() {
         let schema = extended_collection_schema();
         let rows = vec![json!({
@@ -2161,6 +2941,25 @@ mod tests {
         .clone()];
         let error = rows_to_columns(&rows, &schema, false, false).unwrap_err();
         assert!(error.to_string().contains("not nullable"));
+    }
+
+    #[test]
+    fn struct_element_rejects_unexpected_sub_fields() {
+        let schema = extended_collection_schema();
+        let rows = vec![json!({
+            "id": 1,
+            "location": "POINT (1 1)",
+            "observed_at": "2026-07-15T12:30:00+08:00",
+            "events": [{"label": "start", "bogus": 9}]
+        })
+        .as_object()
+        .unwrap()
+        .clone()];
+        let error = rows_to_columns(&rows, &schema, false, false).unwrap_err();
+        assert!(
+            error.to_string().contains("unexpected sub-field \"bogus\""),
+            "unexpected error: {error}"
+        );
     }
 
     #[test]
