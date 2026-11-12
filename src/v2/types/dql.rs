@@ -699,42 +699,126 @@ impl Default for SearchVectors {
 ///////////////////////////////////////////////////////////////////////////////
 // EmbeddingList
 ///////////////////////////////////////////////////////////////////////////////
+/// The vector payload held by one struct-vector embedding list.
+///
+/// Each embedding list is type-homogeneous: all vectors in one list use the
+/// same element type (`Float`, `Binary` or `Int8`), matching the `EmbList*`
+/// placeholder the server expects for struct-vector search.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum EmbeddingListValues {
+    /// 32-bit float vectors, one slice per query.
+    Float(Vec<Vec<f32>>),
+    /// Binary vectors stored as packed bytes, one slice per query.
+    Binary(Vec<Vec<u8>>),
+    /// Int8 vectors, one slice per query.
+    Int8(Vec<Vec<i8>>),
+}
+
 /// A list of embeddings used by struct-vector search.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub struct EmbeddingList {
-    pub(crate) vectors: Vec<Vec<f32>>,
+    pub(crate) values: EmbeddingListValues,
 }
 
 impl EmbeddingList {
     /// Creates a value initialized with its SDK defaults.
     pub fn new() -> Self {
         Self {
-            vectors: Vec::new(),
+            values: EmbeddingListValues::Float(Vec::new()),
         }
     }
 
-    /// Sets the vectors and returns the updated value.
+    /// Sets the float vectors and returns the updated value.
     pub fn vectors(mut self, value: Vec<Vec<f32>>) -> Self {
-        self.vectors = value;
+        self.values = EmbeddingListValues::Float(value);
         self
     }
 
-    /// Sets the vectors and returns this value for further mutation.
+    /// Sets the float vectors and returns this value for further mutation.
     pub fn set_vectors(&mut self, value: Vec<Vec<f32>>) -> &mut Self {
-        self.vectors = value;
+        self.values = EmbeddingListValues::Float(value);
         self
     }
 
-    /// Returns the configured vectors.
+    /// Returns the configured float vectors (empty when the list is not float-typed).
     pub fn get_vectors(&self) -> &[Vec<f32>] {
-        &self.vectors
+        match &self.values {
+            EmbeddingListValues::Float(vectors) => vectors,
+            _ => &[],
+        }
     }
 
-    /// Adds one vector to the existing values.
+    /// Adds one float vector to the existing values.
     pub fn add_vector(mut self, value: Vec<f32>) -> Self {
-        self.vectors.push(value);
+        match &mut self.values {
+            EmbeddingListValues::Float(vectors) => vectors.push(value),
+            _ => self.values = EmbeddingListValues::Float(vec![value]),
+        }
         self
+    }
+
+    /// Sets the binary vectors (packed bytes) and returns the updated value.
+    pub fn binary_vectors(mut self, value: Vec<Vec<u8>>) -> Self {
+        self.values = EmbeddingListValues::Binary(value);
+        self
+    }
+
+    /// Sets the binary vectors and returns this value for further mutation.
+    pub fn set_binary_vectors(&mut self, value: Vec<Vec<u8>>) -> &mut Self {
+        self.values = EmbeddingListValues::Binary(value);
+        self
+    }
+
+    /// Returns the configured binary vectors, or `None` when the list is not binary-typed.
+    pub fn get_binary_vectors(&self) -> Option<&[Vec<u8>]> {
+        match &self.values {
+            EmbeddingListValues::Binary(vectors) => Some(vectors),
+            _ => None,
+        }
+    }
+
+    /// Adds one binary vector to the existing values.
+    pub fn add_binary_vector(mut self, value: Vec<u8>) -> Self {
+        match &mut self.values {
+            EmbeddingListValues::Binary(vectors) => vectors.push(value),
+            _ => self.values = EmbeddingListValues::Binary(vec![value]),
+        }
+        self
+    }
+
+    /// Sets the int8 vectors and returns the updated value.
+    pub fn int8_vectors(mut self, value: Vec<Vec<i8>>) -> Self {
+        self.values = EmbeddingListValues::Int8(value);
+        self
+    }
+
+    /// Sets the int8 vectors and returns this value for further mutation.
+    pub fn set_int8_vectors(&mut self, value: Vec<Vec<i8>>) -> &mut Self {
+        self.values = EmbeddingListValues::Int8(value);
+        self
+    }
+
+    /// Returns the configured int8 vectors, or `None` when the list is not int8-typed.
+    pub fn get_int8_vectors(&self) -> Option<&[Vec<i8>]> {
+        match &self.values {
+            EmbeddingListValues::Int8(vectors) => Some(vectors),
+            _ => None,
+        }
+    }
+
+    /// Adds one int8 vector to the existing values.
+    pub fn add_int8_vector(mut self, value: Vec<i8>) -> Self {
+        match &mut self.values {
+            EmbeddingListValues::Int8(vectors) => vectors.push(value),
+            _ => self.values = EmbeddingListValues::Int8(vec![value]),
+        }
+        self
+    }
+
+    pub(crate) fn values(&self) -> &EmbeddingListValues {
+        &self.values
     }
 }
 
@@ -5114,6 +5198,23 @@ mod constructor_value_tests {
         let vectors = vec![vec![1.0, 2.0]];
         let value = EmbeddingList::new().vectors(vectors.clone());
         assert_eq!(value.get_vectors().to_owned(), vectors);
+    }
+
+    #[test]
+    fn embedding_list_supports_binary_and_int8_values() {
+        let binary = EmbeddingList::new().binary_vectors(vec![vec![0b10101010]]);
+        assert_eq!(
+            binary.get_binary_vectors(),
+            Some([vec![0b10101010]].as_slice())
+        );
+        assert!(binary.get_vectors().is_empty());
+
+        let int8 = EmbeddingList::new().int8_vectors(vec![vec![1, -2]]);
+        assert_eq!(int8.get_int8_vectors(), Some([vec![1, -2]].as_slice()));
+
+        let mut added = EmbeddingList::new();
+        added.set_binary_vectors(vec![vec![1]]);
+        assert_eq!(added.get_binary_vectors(), Some([vec![1]].as_slice()));
     }
 }
 

@@ -76,6 +76,7 @@ impl ClientV2 {
                                 &request.rows,
                                 false,
                                 false,
+                                &[],
                             )?;
                             request.to_proto_with_fields(
                                 fields,
@@ -148,6 +149,7 @@ impl ClientV2 {
                                 &request.rows,
                                 true,
                                 partial_update,
+                                &field_ops,
                             )?;
                             let insert = request.to_proto_with_fields(
                                 fields,

@@ -32,6 +32,9 @@ pub enum FieldPartialUpdateOpType {
     ArrayAppend,
     /// Remove every occurrence of the supplied elements from an existing array field.
     ArrayRemove,
+    /// Replace the existing value selected by `path` (e.g. `[0]` on an Array field, or
+    /// `[0][child]` on a struct field), matching pymilvus's `PATH_REPLACE` partial update.
+    PathReplace,
 }
 
 impl FieldPartialUpdateOpType {
@@ -40,6 +43,7 @@ impl FieldPartialUpdateOpType {
             Self::Replace => schema::field_partial_update_op::OpType::Replace,
             Self::ArrayAppend => schema::field_partial_update_op::OpType::ArrayAppend,
             Self::ArrayRemove => schema::field_partial_update_op::OpType::ArrayRemove,
+            Self::PathReplace => schema::field_partial_update_op::OpType::PathReplace,
         }
     }
 }
@@ -51,12 +55,14 @@ impl FieldPartialUpdateOpType {
 ///
 /// `ArrayAppend` and `ArrayRemove` apply only to array fields and implicitly
 /// enable partial-update semantics for the request. These array operations
-/// require Milvus 2.6.17 or later.
+/// require Milvus 2.6.17 or later. `PathReplace` replaces the value selected by
+/// `path` (`[index]` or `[index][child]`) and requires `path` to be set.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct FieldPartialUpdateOp {
     pub(crate) field_name: String,
     pub(crate) op_type: FieldPartialUpdateOpType,
+    pub(crate) path: String,
 }
 
 impl FieldPartialUpdateOp {
@@ -65,6 +71,7 @@ impl FieldPartialUpdateOp {
         Self {
             field_name: String::new(),
             op_type: FieldPartialUpdateOpType::Replace,
+            path: String::new(),
         }
     }
 
@@ -102,11 +109,28 @@ impl FieldPartialUpdateOp {
         self.op_type
     }
 
+    /// Sets the replacement path (`[index]` or `[index][child]`) and returns the updated value.
+    pub fn path(mut self, value: impl Into<String>) -> Self {
+        self.path = value.into();
+        self
+    }
+
+    /// Sets the replacement path and returns this value for further mutation.
+    pub fn set_path(&mut self, value: impl Into<String>) -> &mut Self {
+        self.path = value.into();
+        self
+    }
+
+    /// Returns the configured replacement path.
+    pub fn get_path(&self) -> &str {
+        &self.path
+    }
+
     pub(crate) fn into_proto(self) -> schema::FieldPartialUpdateOp {
         schema::FieldPartialUpdateOp {
             field_name: self.field_name,
             op: self.op_type.into_proto() as i32,
-            ..Default::default()
+            path: self.path,
         }
     }
 }
@@ -154,5 +178,24 @@ mod tests {
             operation.get_op_type(),
             FieldPartialUpdateOpType::ArrayRemove
         );
+    }
+
+    #[test]
+    fn path_replace_op_encodes_path_and_operation() {
+        let mut operation = FieldPartialUpdateOp::new()
+            .field_name("clips")
+            .op_type(FieldPartialUpdateOpType::PathReplace)
+            .path("[0][score]");
+        assert_eq!(operation.get_path(), "[0][score]");
+        operation.set_path("[1]");
+        assert_eq!(operation.get_path(), "[1]");
+
+        let proto = operation.into_proto();
+        assert_eq!(proto.field_name, "clips");
+        assert_eq!(
+            proto.op,
+            schema::field_partial_update_op::OpType::PathReplace as i32
+        );
+        assert_eq!(proto.path, "[1]");
     }
 }

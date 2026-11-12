@@ -388,6 +388,17 @@ impl UpsertRequestBuilder {
         required("collection_name", &self.value.insert.collection_name)?;
         for operation in &self.value.field_ops {
             required("field_ops.field_name", operation.get_field_name())?;
+            if operation.get_op_type() == FieldPartialUpdateOpType::PathReplace
+                && operation.get_path().is_empty()
+            {
+                return Err(Error::validation(
+                    "field_ops.path".into(),
+                    format!(
+                        "PATH_REPLACE requires a path for field {}",
+                        operation.get_field_name()
+                    ),
+                ));
+            }
         }
         if !self.value.insert.columns.is_empty() && !self.value.insert.rows.is_empty() {
             return Err(Error::validation(
@@ -1283,6 +1294,42 @@ mod builder_value_tests {
             .add_field_op(FieldPartialUpdateOp::new())
             .build()
             .is_err());
+    }
+
+    #[test]
+    fn path_replace_requires_a_path() {
+        let insert = InsertRequest::builder()
+            .collection_name("books")
+            .rows(vec![EntityRow::from_iter([
+                ("id".to_owned(), serde_json::json!(1)),
+                ("clips".to_owned(), serde_json::json!([{"score": 7}])),
+            ])])
+            .build()
+            .expect("valid insert request");
+
+        // A PATH_REPLACE op without a path is rejected by the builder.
+        assert!(UpsertRequest::builder()
+            .insert(insert.clone())
+            .add_field_op(
+                FieldPartialUpdateOp::new()
+                    .field_name("clips")
+                    .op_type(FieldPartialUpdateOpType::PathReplace),
+            )
+            .build()
+            .is_err());
+
+        // With a path the request builds and enables partial-update semantics.
+        let value = UpsertRequest::builder()
+            .insert(insert)
+            .add_field_op(
+                FieldPartialUpdateOp::new()
+                    .field_name("clips")
+                    .op_type(FieldPartialUpdateOpType::PathReplace)
+                    .path("[0][score]"),
+            )
+            .build()
+            .expect("valid upsert request");
+        assert!(value.is_partial_update());
     }
 }
 

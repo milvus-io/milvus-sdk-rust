@@ -591,22 +591,33 @@ fn struct_field_data(name: String, value: schema::StructArrayField) -> Option<Fi
                 let field_name = field_name.clone();
                 let element_type = array.element_type;
                 let field_id = field.field_id;
-                decode_struct_subfield_rows(
-                    array.data,
-                    parent_valid_data.as_deref(),
-                    &parent_valid_at,
-                    move |scalars| {
-                        field_data_to_json_values(decode_field_data(schema::FieldData {
-                            r#type: element_type,
-                            field_name: field_name.clone(),
-                            field_id,
-                            is_dynamic: false,
-                            valid_data: Vec::new(),
-                            field: Some(proto_field_data::Field::Scalars(scalars)),
-                            ..Default::default()
-                        })?)
-                    },
-                )?
+                if schema::DataType::try_from(element_type) == Ok(schema::DataType::Array) {
+                    // Nested Array sub-field: the sub-field is itself an Array whose rows are
+                    // inner arrays. Decode each row's inner ArrayArray into JSON values.
+                    decode_struct_subfield_rows(
+                        array.data,
+                        parent_valid_data.as_deref(),
+                        &parent_valid_at,
+                        move |scalars| decode_nested_array_row(&field_name, scalars),
+                    )?
+                } else {
+                    decode_struct_subfield_rows(
+                        array.data,
+                        parent_valid_data.as_deref(),
+                        &parent_valid_at,
+                        move |scalars| {
+                            field_data_to_json_values(decode_field_data(schema::FieldData {
+                                r#type: element_type,
+                                field_name: field_name.clone(),
+                                field_id,
+                                is_dynamic: false,
+                                valid_data: Vec::new(),
+                                field: Some(proto_field_data::Field::Scalars(scalars)),
+                                ..Default::default()
+                            })?)
+                        },
+                    )?
+                }
             }
             proto_field_data::Field::Vectors(vectors) => {
                 let vector_field::Data::VectorArray(array) = vectors.data? else {
@@ -733,6 +744,72 @@ fn decode_struct_subfield_rows<T>(
             .collect::<Option<Vec<_>>>()?
     };
     align_struct_subfield(grouped, valid_data)
+}
+
+/// Decodes one row of a nested Array struct sub-field into JSON values.
+///
+/// Each row is itself an `ArrayData` whose `ArrayData` holds the inner arrays for the struct
+/// elements. Null inner arrays are marked through the row's `valid_data` and decoded as `null`;
+/// null leaf values inside an inner array are marked through that inner array's own `valid_data`
+/// and decoded as `null` values within the array. When the inner-array level is not
+/// element-nullable the row carries an empty `valid_data` and all leaves are present; they are
+/// decoded as-is, matching pymilvus's `decode_scalar_array`.
+fn decode_nested_array_row(name: &str, row: schema::ScalarField) -> Option<Vec<serde_json::Value>> {
+    use schema::{field_data as proto_field_data, scalar_field};
+
+    let scalar_field::Data::ArrayData(inner) = row.data? else {
+        return None;
+    };
+    let element_type = schema::DataType::try_from(inner.element_type).ok()?;
+    let element_type = DataType::try_from_proto(element_type).ok()?;
+    let decode_leaf = |leaf: schema::ScalarField| {
+        field_data_to_json_values(decode_field_data(schema::FieldData {
+            r#type: element_type.into_proto() as i32,
+            field_name: name.to_owned(),
+            is_dynamic: false,
+            valid_data: Vec::new(),
+            field: Some(proto_field_data::Field::Scalars(leaf)),
+            ..Default::default()
+        })?)
+        .map(serde_json::Value::Array)
+    };
+    if row.valid_data.is_empty() {
+        // Not element-nullable: every inner array is present and non-null, so decode all leaves.
+        return inner
+            .data
+            .into_iter()
+            .map(decode_leaf)
+            .collect::<Option<Vec<_>>>();
+    }
+    // Dense payload: one leaf cell per logical position, invalid positions carrying a null
+    // placeholder. When the validity length matches the payload length, prefer this dense
+    // interpretation (pymilvus/Java decode the same lengths as dense) before falling back to
+    // the compacted payload below.
+    if row.valid_data.len() == inner.data.len() {
+        let mut rows = Vec::with_capacity(row.valid_data.len());
+        for (valid, leaf) in row.valid_data.iter().zip(inner.data) {
+            rows.push(if *valid {
+                decode_leaf(leaf)?
+            } else {
+                serde_json::Value::Null
+            });
+        }
+        return Some(rows);
+    }
+    // Compacted payload: only non-null inner arrays are stored, valid_data marks positions.
+    let mut rows = Vec::with_capacity(row.valid_data.len());
+    let mut values = inner.data.into_iter().map(decode_leaf);
+    for valid in &row.valid_data {
+        if *valid {
+            rows.push(values.next()??);
+        } else {
+            rows.push(serde_json::Value::Null);
+        }
+    }
+    if values.next().is_some() {
+        return None;
+    }
+    Some(rows)
 }
 
 fn field_data_to_json_values(value: FieldData) -> Option<Vec<serde_json::Value>> {
@@ -2857,6 +2934,219 @@ mod tests {
         assert_eq!(values[0].get("tag"), Some(&serde_json::json!("favorite")));
         assert_eq!(values[1].get("rating"), Some(&serde_json::json!(4)));
         assert_eq!(values[1].get("tag"), Some(&serde_json::json!("classic")));
+    }
+
+    #[test]
+    fn query_decodes_nested_array_struct_subfields() {
+        use schema::{field_data, scalar_field};
+
+        // Struct field `events` with a nested Array sub-field `tags` (Array<Int64>). The outer
+        // sub-field ArrayData carries element_type = Array; each row holds one inner ArrayArray
+        // whose leaf values are compacted with their own validity for leaf nulls.
+        let id = schema::FieldData {
+            r#type: schema::DataType::Int64 as i32,
+            field_name: "id".into(),
+            field: Some(field_data::Field::Scalars(schema::ScalarField {
+                data: Some(scalar_field::Data::LongData(schema::LongArray {
+                    data: vec![1],
+                })),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let tags = schema::FieldData {
+            r#type: schema::DataType::Array as i32,
+            field_name: "tags".into(),
+            field: Some(field_data::Field::Scalars(schema::ScalarField {
+                valid_data: vec![true],
+                data: Some(scalar_field::Data::ArrayData(schema::ArrayArray {
+                    element_type: schema::DataType::Array as i32,
+                    data: vec![schema::ScalarField {
+                        valid_data: vec![true, false, true],
+                        data: Some(scalar_field::Data::ArrayData(schema::ArrayArray {
+                            element_type: schema::DataType::Int64 as i32,
+                            data: vec![
+                                schema::ScalarField {
+                                    valid_data: vec![true, false],
+                                    data: Some(scalar_field::Data::LongData(schema::LongArray {
+                                        data: vec![1],
+                                    })),
+                                },
+                                schema::ScalarField {
+                                    valid_data: vec![true, true],
+                                    data: Some(scalar_field::Data::LongData(schema::LongArray {
+                                        data: vec![3, 4],
+                                    })),
+                                },
+                            ],
+                        })),
+                    }],
+                })),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let events = schema::FieldData {
+            r#type: schema::DataType::ArrayOfStruct as i32,
+            field_name: "events".into(),
+            field: Some(field_data::Field::StructArrays(schema::StructArrayField {
+                fields: vec![tags],
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let query = QueryResponse::from_proto(milvus::QueryResults {
+            collection_name: "ignored_collection".into(),
+            fields_data: vec![id, events],
+            output_fields: vec!["id".into(), "events".into()],
+            primary_field_name: "id".into(),
+            ..Default::default()
+        })
+        .unwrap();
+
+        let rows: Vec<_> = query.results().rows().unwrap().collect();
+        assert_eq!(rows.len(), 1);
+        let crate::v2::types::ResultValue::Struct(values) = rows[0].get("events").unwrap() else {
+            panic!("expected struct values");
+        };
+        assert_eq!(values.len(), 3);
+        // Element 0: inner array [1, null]; element 1: null inner array; element 2: [3, 4].
+        assert_eq!(values[0].get("tags"), Some(&serde_json::json!([1, null])));
+        assert_eq!(values[1].get("tags"), Some(&serde_json::json!(null)));
+        assert_eq!(values[2].get("tags"), Some(&serde_json::json!([3, 4])));
+    }
+
+    #[test]
+    fn query_decodes_nested_array_struct_subfields_with_empty_row_validity() {
+        use schema::{field_data, scalar_field};
+
+        // A nested Array sub-field whose inner-array level is not element-nullable carries an
+        // empty row `valid_data` (pymilvus writes `validity if nullable else []`), keeping the
+        // leaves full-length. All leaves must be decoded as-is rather than dropped.
+        let tags = schema::FieldData {
+            r#type: schema::DataType::Array as i32,
+            field_name: "tags".into(),
+            field: Some(field_data::Field::Scalars(schema::ScalarField {
+                valid_data: vec![true],
+                data: Some(scalar_field::Data::ArrayData(schema::ArrayArray {
+                    element_type: schema::DataType::Array as i32,
+                    data: vec![schema::ScalarField {
+                        valid_data: Vec::new(),
+                        data: Some(scalar_field::Data::ArrayData(schema::ArrayArray {
+                            element_type: schema::DataType::Int64 as i32,
+                            data: vec![
+                                schema::ScalarField {
+                                    valid_data: Vec::new(),
+                                    data: Some(scalar_field::Data::LongData(schema::LongArray {
+                                        data: vec![1, 2],
+                                    })),
+                                },
+                                schema::ScalarField {
+                                    valid_data: Vec::new(),
+                                    data: Some(scalar_field::Data::LongData(schema::LongArray {
+                                        data: vec![3],
+                                    })),
+                                },
+                            ],
+                        })),
+                    }],
+                })),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let events = schema::FieldData {
+            r#type: schema::DataType::ArrayOfStruct as i32,
+            field_name: "events".into(),
+            field: Some(field_data::Field::StructArrays(schema::StructArrayField {
+                fields: vec![tags],
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let query = QueryResponse::from_proto(milvus::QueryResults {
+            collection_name: "ignored_collection".into(),
+            fields_data: vec![events],
+            output_fields: vec!["events".into()],
+            primary_field_name: "id".into(),
+            ..Default::default()
+        })
+        .unwrap();
+
+        let rows: Vec<_> = query.results().rows().unwrap().collect();
+        assert_eq!(rows.len(), 1);
+        let crate::v2::types::ResultValue::Struct(values) = rows[0].get("events").unwrap() else {
+            panic!("expected struct values");
+        };
+        assert_eq!(values.len(), 2);
+        assert_eq!(values[0].get("tags"), Some(&serde_json::json!([1, 2])));
+        assert_eq!(values[1].get("tags"), Some(&serde_json::json!([3])));
+    }
+
+    #[test]
+    fn query_decodes_dense_nested_array_struct_subfield_row() {
+        use schema::{field_data, scalar_field};
+
+        // A dense nested-Array row carries one leaf cell per logical inner array with a null
+        // placeholder for an invalid position, so `valid_data.len() == data.len()`. The decoder
+        // must prefer this dense interpretation (pymilvus/Java) and emit the placeholder as null
+        // instead of treating the row as compacted.
+        let tags = schema::FieldData {
+            r#type: schema::DataType::Array as i32,
+            field_name: "tags".into(),
+            field: Some(field_data::Field::Scalars(schema::ScalarField {
+                valid_data: vec![true],
+                data: Some(scalar_field::Data::ArrayData(schema::ArrayArray {
+                    element_type: schema::DataType::Array as i32,
+                    data: vec![schema::ScalarField {
+                        valid_data: vec![true, false],
+                        data: Some(scalar_field::Data::ArrayData(schema::ArrayArray {
+                            element_type: schema::DataType::Int64 as i32,
+                            data: vec![
+                                schema::ScalarField {
+                                    valid_data: Vec::new(),
+                                    data: Some(scalar_field::Data::LongData(schema::LongArray {
+                                        data: vec![1, 2],
+                                    })),
+                                },
+                                // dense placeholder for the null inner array
+                                schema::ScalarField {
+                                    ..Default::default()
+                                },
+                            ],
+                        })),
+                    }],
+                })),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let events = schema::FieldData {
+            r#type: schema::DataType::ArrayOfStruct as i32,
+            field_name: "events".into(),
+            field: Some(field_data::Field::StructArrays(schema::StructArrayField {
+                fields: vec![tags],
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let query = QueryResponse::from_proto(milvus::QueryResults {
+            collection_name: "ignored_collection".into(),
+            fields_data: vec![events],
+            output_fields: vec!["events".into()],
+            primary_field_name: "id".into(),
+            ..Default::default()
+        })
+        .unwrap();
+
+        let rows: Vec<_> = query.results().rows().unwrap().collect();
+        assert_eq!(rows.len(), 1);
+        let crate::v2::types::ResultValue::Struct(values) = rows[0].get("events").unwrap() else {
+            panic!("expected struct values");
+        };
+        assert_eq!(values.len(), 2);
+        assert_eq!(values[0].get("tags"), Some(&serde_json::json!([1, 2])));
+        assert_eq!(values[1].get("tags"), Some(&serde_json::json!(null)));
     }
 
     #[test]

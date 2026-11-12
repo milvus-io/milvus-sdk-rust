@@ -20,8 +20,9 @@ use crate::proto::{common, milvus};
 use crate::v2::error::{Error, Result};
 use crate::v2::request::validation::{non_empty_strings, positive_i32, required};
 use crate::v2::types::{
-    CollectionSchema, ConsistencyLevel, DataType, FieldSchema, Function, FunctionType, IndexParam,
-    IndexType, MetricType, StructFieldSchema,
+    struct_subfield_schema, validate_struct_sub_field, CollectionSchema, ConsistencyLevel,
+    DataType, FieldSchema, Function, FunctionType, IndexParam, IndexType, MetricType,
+    StructFieldSchema,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -2260,15 +2261,22 @@ impl AddCollectionFieldRequest {
     }
 
     pub(crate) fn into_proto(self) -> Result<milvus::AddCollectionFieldRequest> {
+        let field = self
+            .field
+            .ok_or_else(|| Error::validation("field".into(), "must be specified".into()))?;
+        if is_struct_sub_field_name(field.get_name()) {
+            return Err(Error::validation(
+                "field.name".into(),
+                "struct sub-field add requires the modern AlterCollectionSchema RPC; the legacy AddCollectionField RPC cannot express a sub-field path"
+                    .into(),
+            ));
+        }
         Ok(milvus::AddCollectionFieldRequest {
             base: None,
             db_name: self.database_name.unwrap_or_default(),
             collection_name: self.collection_name,
             collection_id: 0,
-            schema: self
-                .field
-                .ok_or_else(|| Error::validation("field".into(), "must be specified".into()))?
-                .encode()?,
+            schema: field.encode()?,
             ..Default::default()
         })
     }
@@ -2282,9 +2290,17 @@ impl AddCollectionFieldRequest {
         let field = self
             .field
             .ok_or_else(|| Error::validation("field".into(), "must be specified".into()))?;
+        let field_proto = if is_struct_sub_field_name(field.get_name()) {
+            // Adding a struct sub-field uses the struct sub-field wire encoding: the name
+            // stays `struct[sub]`, `nullable` is off (the server resolves row nullability from
+            // the parent struct), and the sub-field must be element-nullable.
+            struct_subfield_schema(&field, false, None)?
+        } else {
+            field.into_proto()
+        };
         let add_request = req::AddRequest {
             field_infos: vec![req::FieldInfo {
-                field_schema: Some(field.into_proto()),
+                field_schema: Some(field_proto),
                 index_name: String::new(),
                 extra_params: Vec::new(),
             }],
@@ -2364,6 +2380,36 @@ impl AddCollectionFieldRequestBuilder {
                 "field.nullable".into(),
                 "adding a vector field to an existing collection requires nullable = true".into(),
             ));
+        }
+        if field.get_name().contains(['[', ']']) && !is_struct_sub_field_name(field.get_name()) {
+            return Err(Error::validation(
+                "field.name".into(),
+                format!(
+                    "invalid struct sub-field path {:?}; expected struct[sub] with identifier names",
+                    field.get_name()
+                ),
+            ));
+        }
+        if is_struct_sub_field_name(field.get_name()) {
+            if !field.is_nullable() {
+                return Err(Error::validation(
+                    "field.nullable".into(),
+                    "adding a struct sub-field to an existing collection requires element-level nullable = true"
+                        .into(),
+                ));
+            }
+            if field.is_primary_key()
+                || field.is_partition_key()
+                || field.is_clustering_key()
+                || field.get_default_value().is_some()
+            {
+                return Err(Error::validation(
+                    "field".into(),
+                    "a struct sub-field cannot be a primary, partition, or clustering key or have a default value"
+                        .into(),
+                ));
+            }
+            validate_struct_sub_field(field)?;
         }
         field.validate()?;
         Ok(self.value)
@@ -3039,6 +3085,46 @@ fn validate_collection_name(_database_name: Option<&str>, collection_name: &str)
     required("collection_name", collection_name)
 }
 
+/// Whether `name` is a struct sub-field path such as `clips[note]`.
+///
+/// Sub-field add/drop identify the parent struct and the child through the bracketed name; the
+/// server resolves them from the collection schema. The name must match pymilvus's
+/// `struct_field_path` identifier regex `([A-Za-z_][A-Za-z_0-9]*)\[([A-Za-z_][A-Za-z_0-9]*)\]`:
+/// both the parent struct and the child must be non-empty C-style identifiers.
+pub(crate) fn is_struct_sub_field_name(name: &str) -> bool {
+    parse_struct_sub_field_path(name).is_some()
+}
+
+/// Parses a struct sub-field path such as `clips[note]` into its `(struct, sub-field)` parts.
+///
+/// Returns `None` when the name is not a valid sub-field path, including malformed bracketed
+/// names (nested brackets, empty identifiers, or non-identifier characters) that pymilvus
+/// rejects up front with `ParamError`.
+fn parse_struct_sub_field_path(name: &str) -> Option<(&str, &str)> {
+    fn is_identifier(value: &str) -> bool {
+        let mut chars = value.chars();
+        match chars.next() {
+            Some(c) if c.is_ascii_alphabetic() || c == '_' => {}
+            _ => return false,
+        }
+        chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+    }
+
+    let open = name.find('[')?;
+    let close = name.rfind(']')?;
+    if close != name.len() - 1 || open == 0 {
+        return None;
+    }
+    let struct_name = &name[..open];
+    let sub_field_name = &name[open + 1..close];
+    if sub_field_name.is_empty() {
+        return None;
+    }
+    is_identifier(struct_name)
+        .then_some(())
+        .and_then(|_| is_identifier(sub_field_name).then_some((struct_name, sub_field_name)))
+}
+
 fn kv(values: HashMap<String, String>) -> Vec<common::KeyValuePair> {
     values
         .into_iter()
@@ -3099,18 +3185,15 @@ impl AddCollectionStructFieldRequest {
     }
 
     pub(crate) fn into_proto(self) -> Result<milvus::AddCollectionStructFieldRequest> {
+        let struct_field = self
+            .struct_field
+            .ok_or_else(|| Error::validation("struct_field".into(), "must be specified".into()))?;
         Ok(milvus::AddCollectionStructFieldRequest {
             base: None,
             db_name: self.database_name.unwrap_or_default(),
             collection_name: self.collection_name,
             collection_id: 0,
-            struct_array_field_schema: Some(
-                self.struct_field
-                    .ok_or_else(|| {
-                        Error::validation("struct_field".into(), "must be specified".into())
-                    })?
-                    .into_proto(),
-            ),
+            struct_array_field_schema: Some(struct_field.into_proto()?),
             ..Default::default()
         })
     }
@@ -4165,6 +4248,7 @@ mod collection_property_request_tests {
 #[cfg(test)]
 mod builder_value_tests {
     use super::*;
+    use crate::proto::schema;
 
     #[test]
     fn create_collection_request_default_values() {
@@ -4968,6 +5052,224 @@ mod builder_value_tests {
     }
 
     #[test]
+    fn add_collection_field_rejects_non_element_nullable_sub_field() {
+        let error = AddCollectionFieldRequest::builder()
+            .collection_name("books")
+            .field(
+                FieldSchema::new()
+                    .name("clips[note]")
+                    .data_type(DataType::VarChar)
+                    .max_length(64),
+            )
+            .build()
+            .expect_err("struct sub-field add requires element-level nullable");
+        assert!(matches!(error, Error::Validation(_)));
+        assert!(
+            error.to_string().contains("nullable"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn add_collection_field_rejects_sub_field_with_forbidden_attributes() {
+        let error = AddCollectionFieldRequest::builder()
+            .collection_name("books")
+            .field(
+                FieldSchema::new()
+                    .name("clips[note]")
+                    .data_type(DataType::VarChar)
+                    .max_length(64)
+                    .nullable(true)
+                    .primary_key(true),
+            )
+            .build()
+            .expect_err("sub-fields cannot be primary keys");
+        assert!(matches!(error, Error::Validation(_)));
+    }
+
+    #[test]
+    fn add_collection_field_encodes_struct_sub_field_as_wire_sub_field() {
+        let field = FieldSchema::new()
+            .name("clips[note]")
+            .data_type(DataType::VarChar)
+            .max_length(64)
+            .nullable(true);
+        let proto = AddCollectionFieldRequest::builder()
+            .collection_name("books")
+            .field(field)
+            .build()
+            .expect("valid request")
+            .into_alter_schema_proto()
+            .expect("valid proto");
+        let add = match proto.action.and_then(|action| action.op) {
+            Some(milvus::alter_collection_schema_request::action::Op::AddRequest(add)) => add,
+            _ => panic!("expected AddRequest action"),
+        };
+        assert_eq!(add.field_infos.len(), 1);
+        let schema = add.field_infos[0]
+            .field_schema
+            .as_ref()
+            .expect("field schema present");
+        assert_eq!(schema.name, "clips[note]");
+        // The sub-field is wrapped as an Array on the wire whose element_type is the real type;
+        // row nullability is left to the server while element nullability is on.
+        assert_eq!(
+            schema::DataType::try_from(schema.data_type).unwrap(),
+            schema::DataType::Array
+        );
+        assert_eq!(
+            schema::DataType::try_from(schema.element_type).unwrap(),
+            schema::DataType::VarChar
+        );
+        assert!(!schema.nullable);
+        assert!(schema.element_nullable);
+        assert!(schema
+            .type_params
+            .iter()
+            .any(|pair| pair.key == "max_length" && pair.value == "64"));
+    }
+
+    #[test]
+    fn add_collection_field_encodes_nested_array_sub_field_type_schema() {
+        let field = FieldSchema::new()
+            .name("clips[marks]")
+            .data_type(DataType::Array)
+            .element_type(DataType::Int32)
+            .max_capacity(4)
+            .nullable(true)
+            .element_nullable(true);
+        let proto = AddCollectionFieldRequest::builder()
+            .collection_name("books")
+            .field(field)
+            .build()
+            .expect("valid request")
+            .into_alter_schema_proto()
+            .expect("valid proto");
+        let add = match proto.action.and_then(|action| action.op) {
+            Some(milvus::alter_collection_schema_request::action::Op::AddRequest(add)) => add,
+            _ => panic!("expected AddRequest action"),
+        };
+        let schema = add.field_infos[0]
+            .field_schema
+            .as_ref()
+            .expect("field schema present");
+        assert_eq!(schema.name, "clips[marks]");
+        assert_eq!(
+            schema::DataType::try_from(schema.element_type).unwrap(),
+            schema::DataType::Array
+        );
+        assert!(!schema.nullable);
+        assert!(schema.element_nullable);
+        let root = schema
+            .type_schema
+            .as_ref()
+            .expect("nested array type_schema");
+        assert!(!root.nullable);
+        let schema::type_schema::Kind::ArrayElement(inner) = root.kind.as_ref().unwrap() else {
+            panic!("root must be an array element");
+        };
+        assert!(inner.nullable);
+        assert!(inner
+            .type_params
+            .iter()
+            .any(|pair| pair.key == "max_capacity" && pair.value == "4"));
+        let schema::type_schema::Kind::ArrayElement(leaf) = inner.kind.as_ref().unwrap() else {
+            panic!("inner must be an array element");
+        };
+        assert!(leaf.nullable);
+        assert!(matches!(
+            leaf.kind,
+            Some(schema::type_schema::Kind::LeafType(leaf_type))
+                if schema::DataType::try_from(leaf_type).unwrap() == schema::DataType::Int32
+        ));
+    }
+
+    #[test]
+    fn struct_sub_field_name_detection() {
+        use super::is_struct_sub_field_name;
+        assert!(is_struct_sub_field_name("clips[note]"));
+        assert!(is_struct_sub_field_name("clips[emb]"));
+        assert!(is_struct_sub_field_name("_clip[note]"));
+        assert!(is_struct_sub_field_name("c1[note]"));
+        assert!(!is_struct_sub_field_name("clips"));
+        assert!(!is_struct_sub_field_name("clips[]"));
+        assert!(!is_struct_sub_field_name("[note]"));
+        assert!(!is_struct_sub_field_name("clips[note][extra]"));
+        assert!(!is_struct_sub_field_name("clips[note]extra"));
+        assert!(!is_struct_sub_field_name("clips[no-te]"));
+        assert!(!is_struct_sub_field_name("cli-ps[note]"));
+        assert!(!is_struct_sub_field_name("clips[9note]"));
+        assert!(!is_struct_sub_field_name(""));
+    }
+
+    #[test]
+    fn add_collection_field_rejects_malformed_sub_field_path() {
+        for name in [
+            "clips[note][extra]",
+            "clips[]",
+            "[note]",
+            "clips[no-te]",
+            "cli-ps[note]",
+        ] {
+            let error = AddCollectionFieldRequest::builder()
+                .collection_name("books")
+                .field(
+                    FieldSchema::new()
+                        .name(name)
+                        .data_type(DataType::VarChar)
+                        .max_length(64)
+                        .nullable(true),
+                )
+                .build()
+                .expect_err("malformed struct sub-field path must be rejected");
+            assert!(
+                error.to_string().contains("sub-field path"),
+                "unexpected error for {name:?}: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn add_collection_field_rejects_element_nullable_on_non_array_sub_field() {
+        let error = AddCollectionFieldRequest::builder()
+            .collection_name("books")
+            .field(
+                FieldSchema::new()
+                    .name("clips[note]")
+                    .data_type(DataType::VarChar)
+                    .max_length(64)
+                    .nullable(true)
+                    .element_nullable(true),
+            )
+            .build()
+            .expect_err("element_nullable requires an Array sub-field");
+        assert!(
+            error.to_string().contains("element_nullable"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn add_collection_field_rejects_unsupported_array_sub_field_element_type() {
+        let error = AddCollectionFieldRequest::builder()
+            .collection_name("books")
+            .field(
+                FieldSchema::new()
+                    .name("clips[tags]")
+                    .data_type(DataType::Array)
+                    .element_type(DataType::Json)
+                    .max_capacity(4)
+                    .nullable(true),
+            )
+            .build()
+            .expect_err("array sub-field element type must be a scalar");
+        assert!(
+            error.to_string().contains("scalar element type"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
     #[allow(deprecated)]
     fn add_collection_function_request_default_values() {
         let value = AddCollectionFunctionRequest::empty();
@@ -5435,6 +5737,35 @@ mod function_struct_field_request_tests {
                 assert!(matches!(
                     drop.identifier,
                     Some(req::drop_request::Identifier::FieldId(7))
+                ));
+            }
+            req::action::Op::AddRequest(_) => panic!("expected drop action"),
+        }
+    }
+
+    #[test]
+    fn drop_collection_field_accepts_struct_sub_field_paths() {
+        // Sub-field drop identifies the child through the bracketed name and is passed to the
+        // server as a plain field name, matching pymilvus's drop_collection_field("demo",
+        // field_name="clips[note]").
+        let value = DropCollectionFieldRequest::builder()
+            .collection_name("books")
+            .field_name("clips[note]")
+            .build()
+            .expect("valid request");
+        match value
+            .into_proto()
+            .expect("proto")
+            .action
+            .expect("action")
+            .op
+            .expect("op")
+        {
+            req::action::Op::DropRequest(drop) => {
+                assert!(matches!(
+                    drop.identifier,
+                    Some(req::drop_request::Identifier::FieldName(ref name))
+                        if name == "clips[note]"
                 ));
             }
             req::action::Op::AddRequest(_) => panic!("expected drop action"),
