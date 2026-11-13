@@ -501,6 +501,14 @@ fn rows_to_columns(
                     .into(),
             ));
         }
+        // Sub-fields added via `add_collection_field("clips[note]")` may carry the bracketed
+        // wire name; compute the plain names once so the per-element key checks below avoid
+        // re-stripping (and re-allocating) for every element key x sub-field comparison.
+        let stripped_sub_field_names: Vec<String> = field
+            .fields
+            .iter()
+            .map(|sub| crate::v2::types::strip_struct_sub_field_name(&field.name, &sub.name))
+            .collect();
         let mut values = Vec::with_capacity(rows.len());
         let mut valid_data = Vec::with_capacity(rows.len());
         for row in rows {
@@ -526,17 +534,12 @@ fn rows_to_columns(
                             // matching pymilvus's rejection of unexpected fields.
                             if let Some(unknown) = element
                                 .keys()
-                                .find(|key| !field.fields.iter().any(|sub| &sub.name == *key))
+                                .find(|key| !stripped_sub_field_names.iter().any(|name| name == *key))
                             {
                                 return Err(Error::validation(
                                     field_name.clone(),
                                     format!(
-                                        "struct element has unexpected sub-field {unknown:?}; defined sub-fields: {:?}",
-                                        field
-                                            .fields
-                                            .iter()
-                                            .map(|sub| sub.name.as_str())
-                                            .collect::<Vec<_>>()
+                                        "struct element has unexpected sub-field {unknown:?}; defined sub-fields: {stripped_sub_field_names:?}"
                                     ),
                                 ));
                             }
@@ -1106,9 +1109,15 @@ fn struct_column_to_proto_with_ops(
         if sub_schema.is_function_output {
             continue;
         }
+        // The server may store a sub-field added via `add_collection_field("clips[note]")` with
+        // the bracketed wire name; match user JSON keys against the plain sub-field name and
+        // send the plain name on the encoded payload, mirroring pymilvus (and the Java
+        // struct-field PR), so describe, insert keys, decode keys and DML payload all agree.
+        let user_name =
+            crate::v2::types::strip_struct_sub_field_name(&struct_schema.name, &sub_schema.name);
         if let Some(child) = path_replace_child {
             // PATH_REPLACE on a child path sends only the targeted sub-field's data.
-            if sub_schema.name != child {
+            if user_name != child {
                 continue;
             }
         }
@@ -1159,10 +1168,7 @@ fn struct_column_to_proto_with_ops(
             let mut nested_values = Vec::with_capacity(row.len());
             let mut row_valid_data = Vec::with_capacity(row.len());
             for value in row {
-                match value
-                    .get(&sub_schema.name)
-                    .filter(|nested| !nested.is_null())
-                {
+                match value.get(&user_name).filter(|nested| !nested.is_null()) {
                     Some(nested) => {
                         row_valid_data.push(true);
                         nested_values.push(nested);
@@ -1265,7 +1271,10 @@ fn struct_column_to_proto_with_ops(
             } else {
                 schema::DataType::Array
             } as i32,
-            field_name: sub_schema.name.clone(),
+            // The server resolves a struct sub-field by any alias of its wire name, but pymilvus
+            // (and the Java struct-field PR) send the plain sub-field name on the payload; send
+            // the stripped name here too so the encoded bytes match them exactly.
+            field_name: user_name.clone(),
             field_id: sub_schema.field_id,
             is_dynamic: false,
             valid_data: if row_nullable {
@@ -2568,6 +2577,43 @@ mod tests {
     }
 
     #[test]
+    fn struct_encode_matches_plain_sub_field_name_with_bracketed_wire_name() {
+        let mut schema = extended_collection_schema();
+        // Simulate a sub-field added via `add_collection_field("events[label]")`: the server
+        // stores the bracketed wire name, while users provide the plain key `label`.
+        schema.struct_array_fields[0].fields[0].name = "events[label]".into();
+        let row = json!({
+            "id": 1,
+            "location": "POINT (1 1)",
+            "observed_at": "2026-07-15T12:30:00+08:00",
+            "events": [
+                {"label": "a", "location": "POINT (3 4)", "observed_at": "2026-07-15T12:31:00+08:00", "embedding": [0.1, 0.2]},
+            ]
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let columns = rows_to_columns(&[row], &schema, false, false).unwrap();
+        let proto = columns_to_proto(columns, &schema).unwrap();
+        let Some(schema::field_data::Field::StructArrays(structs)) = &proto[3].field else {
+            panic!("expected struct array data");
+        };
+        // The user's plain `label` key matched, and the encoded payload uses the same plain
+        // name (matching pymilvus and the Java SDK).
+        let label = &structs.fields[0];
+        assert_eq!(label.field_name, "label");
+        let Some(schema::field_data::Field::Scalars(scalars)) = &label.field else {
+            panic!("expected scalar sub-field");
+        };
+        let Some(schema::scalar_field::Data::ArrayData(array)) = &scalars.data else {
+            panic!("expected array data");
+        };
+        let Some(schema::scalar_field::Data::StringData(values)) = &array.data[0].data else {
+            panic!("expected string data");
+        };
+        assert_eq!(values.data, vec!["a"]);
+    }
+
     fn path_replace_struct_encode_keeps_only_the_targeted_child() {
         let schema = extended_collection_schema();
         let field_ops = [FieldPartialUpdateOp::new()
@@ -2602,6 +2648,36 @@ mod tests {
             panic!("expected string struct subfield");
         };
         assert_eq!(values.data, vec!["start"]);
+    }
+
+    #[test]
+    fn path_replace_matches_bracketed_wire_sub_field_name() {
+        let mut schema = extended_collection_schema();
+        // Simulate a sub-field added via `add_collection_field("events[label]")`: the server
+        // stores the bracketed wire name, so PATH_REPLACE child matching must compare against
+        // the stripped name `label`.
+        schema.struct_array_fields[0].fields[0].name = "events[label]".into();
+        let field_ops = [FieldPartialUpdateOp::new()
+            .field_name("events")
+            .op_type(FieldPartialUpdateOpType::PathReplace)
+            .path("[0][label]")];
+        let rows = vec![json!({
+            "id": 1,
+            "location": "POINT (1 1)",
+            "observed_at": "2026-07-15T12:30:00+08:00",
+            "events": [{"label": "start"}]
+        })
+        .as_object()
+        .unwrap()
+        .clone()];
+        let columns = rows_to_columns(&rows, &schema, false, true).unwrap();
+        let proto = columns_to_proto_with_ops(columns, &schema, &field_ops).unwrap();
+        let Some(schema::field_data::Field::StructArrays(structs)) = &proto[3].field else {
+            panic!("expected struct array data");
+        };
+        // The bracketed wire sub-field is matched by its plain `label` child and encoded.
+        assert_eq!(structs.fields.len(), 1);
+        assert_eq!(structs.fields[0].field_name, "label");
     }
 
     #[test]

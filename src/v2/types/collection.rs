@@ -1193,6 +1193,11 @@ impl StructFieldSchema {
                     }
                     field.type_params.retain(|pair| pair.key != "max_capacity");
                     let mut field = FieldSchema::from_proto(field)?;
+                    // The server may store a sub-field added via
+                    // `add_collection_field("clips[note]")` with the bracketed wire name; strip
+                    // the `struct[sub]` prefix so the SDK always exposes the plain sub-field
+                    // name, matching pymilvus and the Java SDK.
+                    field.name = strip_struct_sub_field_name(&struct_name, &field.name);
                     // The sub-field's `nullable` encodes element-level null (whether a struct
                     // element's value for this sub-field can be null), decoded from the proto
                     // `element_nullable`. Row-level null belongs to the struct as a whole and is
@@ -1365,6 +1370,21 @@ pub(crate) fn validate_struct_sub_field(field: &FieldSchema) -> Result<()> {
         ));
     }
     Ok(())
+}
+
+/// Strips a `struct[sub]` prefix from a wire sub-field name, returning the plain sub-field
+/// name. Mirrors pymilvus's `_strip_struct_sub_field_name` and the Java SDK: the server may
+/// store a sub-field added via `add_collection_field("clips[note]")` with the bracketed name,
+/// while sub-fields declared at create time already carry the plain name. Plain names pass
+/// through unchanged.
+pub(crate) fn strip_struct_sub_field_name(struct_name: &str, field_name: &str) -> String {
+    let prefix = format!("{struct_name}[");
+    if let Some(rest) = field_name.strip_prefix(&prefix) {
+        if let Some(name) = rest.strip_suffix(']') {
+            return name.to_owned();
+        }
+    }
+    field_name.to_owned()
 }
 
 /// Encodes one struct sub-field (`FieldSchema`) into the wire `schema::FieldSchema` used inside
@@ -3058,6 +3078,52 @@ mod collection_schema_tests {
         assert_eq!(lang_sdk.get_data_type(), DataType::VarChar);
         assert!(lang_sdk.is_nullable());
         assert!(!lang_sdk.is_element_nullable());
+    }
+
+    #[test]
+    fn struct_from_proto_strips_bracketed_sub_field_name() {
+        // The server may store a sub-field added via `add_collection_field("clips[note]")` with
+        // the bracketed wire name; from_proto must expose the plain sub-field name.
+        let proto = schema::StructArrayFieldSchema {
+            name: "clips".into(),
+            fields: vec![schema::FieldSchema {
+                name: "clips[note]".into(),
+                data_type: schema::DataType::Array as i32,
+                element_type: schema::DataType::VarChar as i32,
+                type_params: vec![common::KeyValuePair {
+                    key: "max_capacity".into(),
+                    value: "10".into(),
+                    ..Default::default()
+                }],
+                element_nullable: true,
+                ..Default::default()
+            }],
+            nullable: true,
+            ..Default::default()
+        };
+        let decoded = StructFieldSchema::from_proto(proto).expect("decode bracketed sub-field");
+        assert_eq!(decoded.get_fields().len(), 1);
+        let note = &decoded.get_fields()[0];
+        assert_eq!(note.get_name(), "note");
+        assert_eq!(note.get_data_type(), DataType::VarChar);
+        assert!(note.is_nullable());
+    }
+
+    #[test]
+    fn strip_struct_sub_field_name_returns_plain_or_prefixless_names() {
+        assert_eq!(
+            super::strip_struct_sub_field_name("clips", "clips[note]"),
+            "note"
+        );
+        assert_eq!(super::strip_struct_sub_field_name("clips", "note"), "note");
+        assert_eq!(
+            super::strip_struct_sub_field_name("clips", "other[note]"),
+            "other[note]"
+        );
+        assert_eq!(
+            super::strip_struct_sub_field_name("clips", "clips[note]x"),
+            "clips[note]x"
+        );
     }
 
     #[test]
