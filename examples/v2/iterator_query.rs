@@ -29,6 +29,11 @@ const NAME: &str = "user_name";
 const AGE: &str = "user_age";
 const FACE: &str = "user_face";
 const TAGS: &str = "user_tags";
+const TAG: &str = "tag";
+// element_filter iterators count matched elements (not rows) and the iterator path caps pages
+// by the requested query limit; keep it well above the demo's ~23k matched elements so the
+// pagination demo runs to completion.
+const ELEMENT_FILTER_LIMIT: usize = 100_000;
 const DIMENSION: usize = 128;
 
 async fn iterate(
@@ -157,16 +162,19 @@ async fn query_iterator_with_cursor(
 
 async fn query_iterator_element_filter(client: &ClientV2, batch_size: usize) -> Result<()> {
     println!("=====================================================");
-    println!("Iterate element_filter(user_tags, tag == \"news\")");
+    println!("Iterate element_filter(user_tags, $[tag] == \"news\")");
     // element_filter evaluates its predicate per element of the array field and the query results
     // expand into one row per matched element, each carrying the element offset within the parent
     // array field.
-    let filter = "element_filter(user_tags, tag == \"news\")";
+    let filter = "element_filter(user_tags, $[tag] == \"news\")";
     let query = QueryRequest::builder()
         .collection_name(COLLECTION)
         .filter(filter)
+        // Use default consistency: the element_filter iterator hangs under Bounded consistency on
+        // the growing segment (the guarantee bound waits for data the segment never reaches),
+        // matching pymilvus which iterates with default consistency.
+        .limit(ELEMENT_FILTER_LIMIT as i64)
         .output_fields([PRIMARY, TAGS])
-        .consistency_level(sdk::ConsistencyLevel::Bounded)
         .build()?;
     let mut iterator = client
         .query_iterator(
@@ -186,13 +194,27 @@ async fn query_iterator_element_filter(client: &ClientV2, batch_size: usize) -> 
         print!("No.{pages} page {} matched elements: ", rows.len());
         for row in rows {
             let id = row.get_i64(PRIMARY)?;
-            let tags = row.get_array_varchar(TAGS)?;
-            let offset = row
-                .element_offset()
-                .expect("element filter rows carry an element offset");
-            print!("[id={id} tags={tags:?} offset={offset}] ");
+            // Each expanded row is one matched element; its element_offset indexes into the
+            // struct array, so the matched `tag` is read at that offset.
+            let ResultValue::Struct(values) = row.get(TAGS)? else {
+                return Err(Error::Unexpected(format!(
+                    "expected struct array for {TAGS}, got non-struct value"
+                )));
+            };
+            let offset =
+                row.element_offset()
+                    .expect("element filter rows carry an element offset") as usize;
+            let tag = values.get(offset).and_then(|value| value.get(TAG));
+            print!("[id={id} tag={tag:?} offset={offset}] ");
         }
         println!();
+    }
+    // The iterator truncates at the query limit; surface a truncated run instead of silently
+    // printing a short total if the demo data ever grows past the cap.
+    if total >= ELEMENT_FILTER_LIMIT {
+        return Err(Error::Unexpected(format!(
+            "element_filter demo hit the query limit {ELEMENT_FILTER_LIMIT}; widen the limit or shrink the demo data"
+        )));
     }
     println!("element-filter iteration finished");
     println!("Total fetched matched elements: {total}");
@@ -219,14 +241,19 @@ async fn main() -> Result<()> {
                 .max_length(100),
         )
         .add_field(FieldSchema::new().name(AGE).data_type(DataType::Int8))
-        .add_field(
-            FieldSchema::new()
+        .add_struct_field(
+            // element_filter iterates struct elements, so `user_tags` must be a struct array
+            // with a `tag` sub-field; a plain Array field has no sub-fields to filter on.
+            StructFieldSchema::new()
                 .name(TAGS)
                 .description("user tags")
-                .data_type(DataType::Array)
-                .element_type(DataType::VarChar)
                 .max_capacity(10)
-                .max_length(100),
+                .add_field(
+                    FieldSchema::new()
+                        .name(TAG)
+                        .data_type(DataType::VarChar)
+                        .max_length(100),
+                ),
         )
         .add_field(
             FieldSchema::new()
@@ -269,13 +296,14 @@ async fn main() -> Result<()> {
             .map(|offset| {
                 let id = seed + offset;
                 // Some rows carry a "news" tag (some even twice) so the element_filter demo below
-                // has matching elements to iterate over.
-                let mut tags = vec!["sports".to_owned()];
+                // has matching elements to iterate over. Each element is a struct with a `tag`
+                // sub-field.
+                let mut tags = vec![json!({TAG: "sports"})];
                 if offset % 3 == 0 {
-                    tags.push("news".to_owned());
+                    tags.push(json!({TAG: "news"}));
                 }
                 if offset % 7 == 0 {
-                    tags.push("news".to_owned());
+                    tags.push(json!({TAG: "news"}));
                 }
                 json!({PRIMARY: id, NAME: format!("my name is {id}"), AGE: offset % 100, FACE: float_vector(DIMENSION), "a": id, "b": format!("b is {id}"), TAGS: tags})
             })

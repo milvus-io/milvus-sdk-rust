@@ -583,6 +583,10 @@ fn struct_field_data(name: String, value: schema::StructArrayField) -> Option<Fi
     let mut rows: Vec<Vec<crate::v2::types::StructValue>> = Vec::new();
     for field in value.fields {
         let field_name = field.field_name.clone();
+        // The server may store a sub-field added via `add_collection_field("clips[note]")`
+        // with the bracketed wire name; expose the plain sub-field name as the decoded
+        // struct-element key, matching pymilvus and the Java SDK.
+        let user_key = crate::v2::types::strip_struct_sub_field_name(&name, &field_name);
         let grouped_values = match field.field? {
             proto_field_data::Field::Scalars(scalars) => {
                 let scalar_field::Data::ArrayData(array) = scalars.data? else {
@@ -666,7 +670,7 @@ fn struct_field_data(name: String, value: schema::StructArrayField) -> Option<Fi
         }
         for (row, values) in rows.iter_mut().zip(grouped_values) {
             for (item, value) in row.iter_mut().zip(values) {
-                item.insert(field_name.clone(), value);
+                item.insert(user_key.clone(), value);
             }
         }
     }
@@ -3081,6 +3085,59 @@ mod tests {
         assert_eq!(values.len(), 2);
         assert_eq!(values[0].get("tags"), Some(&serde_json::json!([1, 2])));
         assert_eq!(values[1].get("tags"), Some(&serde_json::json!([3])));
+    }
+
+    #[test]
+    fn query_decodes_struct_sub_field_with_bracketed_wire_name() {
+        use schema::{field_data, scalar_field};
+
+        // The server may store a sub-field added via `add_collection_field("events[label]")`
+        // with the bracketed wire name; the decoded struct element must expose the plain
+        // sub-field name `label` as its key.
+        let label = schema::FieldData {
+            r#type: schema::DataType::Array as i32,
+            field_name: "events[label]".into(),
+            field: Some(field_data::Field::Scalars(schema::ScalarField {
+                data: Some(scalar_field::Data::ArrayData(schema::ArrayArray {
+                    element_type: schema::DataType::VarChar as i32,
+                    data: vec![schema::ScalarField {
+                        data: Some(scalar_field::Data::StringData(schema::StringArray {
+                            data: vec!["a".into(), "b".into()],
+                        })),
+                        ..Default::default()
+                    }],
+                })),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let events = schema::FieldData {
+            r#type: schema::DataType::ArrayOfStruct as i32,
+            field_name: "events".into(),
+            field: Some(field_data::Field::StructArrays(schema::StructArrayField {
+                fields: vec![label],
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let query = QueryResponse::from_proto(milvus::QueryResults {
+            collection_name: "ignored_collection".into(),
+            fields_data: vec![events],
+            output_fields: vec!["events".into()],
+            primary_field_name: "id".into(),
+            ..Default::default()
+        })
+        .unwrap();
+
+        let rows: Vec<_> = query.results().rows().unwrap().collect();
+        assert_eq!(rows.len(), 1);
+        let crate::v2::types::ResultValue::Struct(values) = rows[0].get("events").unwrap() else {
+            panic!("expected struct values");
+        };
+        assert_eq!(values.len(), 2);
+        assert_eq!(values[0].get("label"), Some(&serde_json::json!("a")));
+        assert_eq!(values[1].get("label"), Some(&serde_json::json!("b")));
+        assert!(values[0].get("events[label]").is_none());
     }
 
     #[test]
