@@ -359,6 +359,30 @@ impl MockMilvus {
         primary.auto_id = auto_id;
         description.update_timestamp = description.update_timestamp.saturating_add(1);
     }
+
+    /// Registers a collection description with an arbitrary schema, so a test can simulate
+    /// server-side storage details such as a bracketed struct sub-field wire name.
+    pub fn seed_collection(
+        &self,
+        database: &str,
+        collection: &str,
+        schema: schema::CollectionSchema,
+    ) {
+        let mut state = self.state.lock().unwrap();
+        let description = pb::DescribeCollectionResponse {
+            status: Some(success_status()),
+            schema: Some(schema),
+            collection_id: 99,
+            collection_name: collection.to_owned(),
+            db_name: database_name(database.to_owned()),
+            consistency_level: common::ConsistencyLevel::Bounded as i32,
+            ..Default::default()
+        };
+        state.collections.insert(
+            (database_name(database.to_owned()), collection.to_owned()),
+            description,
+        );
+    }
 }
 
 macro_rules! status_method {
