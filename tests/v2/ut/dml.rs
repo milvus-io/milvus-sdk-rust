@@ -435,6 +435,66 @@ async fn empty_insert_short_circuits_without_rpc() {
 }
 
 #[tokio::test]
+async fn struct_insert_encodes_plain_payload_name_for_bracketed_wire_sub_field() {
+    use milvus::proto::{common, schema};
+
+    // Simulate a server that stores a sub-field added via `add_collection_field("events[label]")`
+    // with the bracketed wire name. The SDK must match the user's plain `label` key and send the
+    // plain name on the insert payload.
+    let label = schema::FieldSchema {
+        field_id: 201,
+        name: "events[label]".into(),
+        data_type: schema::DataType::Array as i32,
+        element_type: schema::DataType::VarChar as i32,
+        type_params: vec![common::KeyValuePair {
+            key: "max_capacity".into(),
+            value: "10".into(),
+            ..Default::default()
+        }],
+        element_nullable: true,
+        ..Default::default()
+    };
+    let schema = schema::CollectionSchema {
+        name: "books".into(),
+        fields: vec![schema::FieldSchema {
+            field_id: 100,
+            name: "id".into(),
+            is_primary_key: true,
+            data_type: schema::DataType::Int64 as i32,
+            ..Default::default()
+        }],
+        struct_array_fields: vec![schema::StructArrayFieldSchema {
+            field_id: 200,
+            name: "events".into(),
+            fields: vec![label],
+            nullable: true,
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+
+    let server = MockServer::start().await;
+    server.service.seed_collection("default", "books", schema);
+    server
+        .client
+        .insert(
+            InsertRequest::builder()
+                .collection_name("books")
+                .rows(vec![
+                    serde_json::json!({"id": 1, "events": [{"label": "a"}]}),
+                ])
+                .build()
+                .expect("valid insert request"),
+        )
+        .await
+        .expect("mock insert succeeds");
+
+    // The DML payload carries the plain sub-field name (matching pymilvus), not `events[label]`.
+    server.assert_request_contains("insert", &["field_name: \"label\""]);
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn empty_upsert_short_circuits_without_rpc() {
     let server = MockServer::start().await;
     let client = &server.client;
