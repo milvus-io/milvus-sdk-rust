@@ -1,5 +1,26 @@
 # Changelog
 
+## milvus-sdk-rust 3.0.4 (2026-11-17)
+
+### Feature
+
+- Add `list_running_requests` and `cancel_requests` to `ClientV2`: observe cluster-level running
+  requests filtered by database, collection, user, and minimum elapsed time, and cancel them by
+  the returned opaque request ids (the response reports canceled, not-found, and undetermined
+  ids per proxy)
+- Support element-level null in struct sub-fields (`element_nullable`), nested `Array` sub-fields,
+  and struct sub-field add/drop through `add_collection_field` / `drop_collection_field`,
+  matching pymilvus
+- Element-filter query iterators: expand each entity into one row per matched element, count
+  `limit`/`offset` by matched elements, bound every page by elements, and resume between batches
+  at the recorded element position; search iterators match output fields by name so reordered
+  pages no longer break multi-page batches
+
+### Bug
+
+- Strip the struct sub-field wire-name prefix (`clips[note]` -> `note`) in describe conversion,
+  DQL decode, and DML key matching, and correct the `v2_iterator_query` element-filter example
+
 ## milvus-sdk-rust 3.0.3 (2026-10-23)
 
 ### Feature
