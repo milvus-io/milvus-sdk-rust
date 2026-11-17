@@ -10,7 +10,8 @@ then revokes and removes everything it created.
 - Milvus 2.6 or later is running.
 - The connection in `MILVUS_TOKEN` has permission to manage users and roles when authorization is
   enabled.
-- `milvus-sdk-rust` version `3.0.3` has been published to crates.io.
+- The `milvus-sdk-rust` version pinned in this tutorial's `Cargo.toml` is published to
+  crates.io.
 
 Connection settings use `MILVUS_URI` and `MILVUS_TOKEN`, defaulting to
 `http://localhost:19530` and `root:Milvus`.
