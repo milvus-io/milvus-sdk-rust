@@ -1,5 +1,14 @@
 # Changelog
 
+## milvus-sdk-rust 2.6.3 (2026-11-17)
+
+### Feature
+
+- Add row-level security (RLS) client APIs on the 2.6 line: create/update/drop/list row policies,
+  set/get/list/delete principal tags, list RLS principals, and `rls_principal` / `skip_rls`
+  enforcement on insert, upsert, delete, query, search, hybrid search, and the corresponding
+  iterators
+
 ## milvus-sdk-rust 2.6.2 (2026-10-23)
 
 ### Feature

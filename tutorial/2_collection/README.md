@@ -1,7 +1,7 @@
 # Tutorial 2: Manage collections
 
-This tutorial is a separate Cargo project that downloads `milvus-sdk-rust` version `2.6.2`
-from crates.io. It demonstrates how to:
+This tutorial is a separate Cargo project that downloads `milvus-sdk-rust` from crates.io at
+the version pinned in its `Cargo.toml`. It demonstrates how to:
 
 1. Connect with `ClientV2` and list collections.
 2. Define a schema and a vector index, then create a collection.
@@ -16,7 +16,8 @@ from crates.io. It demonstrates how to:
 
 - Rust and Cargo are installed.
 - Milvus is running and accessible.
-- `milvus-sdk-rust` version `2.6.2` has been published to crates.io.
+- The `milvus-sdk-rust` version pinned in this tutorial's `Cargo.toml` is published to
+  crates.io.
 
 The tutorial uses these environment variables:
 
