@@ -144,6 +144,7 @@ mod snapshot;
 mod telemetry;
 mod utility;
 
+pub use cache::CacheConfig;
 pub use iterator::{QueryIterator, SearchIterator, SearchIteratorV1, SearchIteratorV2};
 pub use session::MilvusClientV2Session;
 pub use telemetry::{

@@ -200,6 +200,7 @@ mod tests {
 
     #[tokio::test]
     async fn select_database_updates_shared_selection_without_clearing_global_schema_cache() {
+        let _guard = crate::v2::client::cache::tests::GLOBAL_CACHE_TEST_LOCK.lock();
         let client = client();
         let clone = client.clone();
         SCHEMA_CACHE.set(
