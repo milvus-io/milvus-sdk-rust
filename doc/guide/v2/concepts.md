@@ -50,7 +50,11 @@ Reads (query, get, search, hybrid search) can carry a `ConsistencyLevel`:
   configured policy.
 
 The SDK maintains an endpoint/database/collection timestamp cache that powers Session
-consistency automatically.
+consistency automatically. The cache is LRU-bounded (default 4096 entries, matching pymilvus):
+when a deployment tracks more collections than the configured capacity, the least-recently-used
+timestamps are evicted, and Session (and default) consistency reads for those collections fall
+back to `ts=1` until the next DML records a fresh timestamp. Tune the bound with
+[`CacheConfig::set_capacity`](crate::v2::CacheConfig::set_capacity) before heavy workloads.
 
 ## Indexes and metrics
 
