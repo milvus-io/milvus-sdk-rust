@@ -34,6 +34,6 @@ pub use crate::v2::response::{
 pub use crate::v2::types::*;
 pub use crate::v2::{bloom_filter::*, roaring_bitmap::*};
 pub use crate::v2::{
-    new_client_request_id, with_client_request_id, ClientTelemetry, ClientV2,
+    new_client_request_id, with_client_request_id, CacheConfig, ClientTelemetry, ClientV2,
     MilvusClientV2Session, OptimizeTask, QueryIterator, SearchIterator,
 };
