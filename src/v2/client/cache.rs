@@ -15,13 +15,18 @@
 // limitations under the License.
 
 //! Process-wide endpoint-scoped caches for V2 schemas and DML timestamps.
+//!
+//! Both caches are bounded LRU caches whose capacity can be configured process-wide through
+//! [`CacheConfig`], mirroring pymilvus's default of 4096 entries. Note that the Java and
+//! C++ SDKs keep the timestamp cache unbounded; the 4096 bound here is a deliberate pymilvus
+//! alignment.
 
 use crate::proto::milvus;
 use crate::v2::error::{Error, Result};
 use crate::v2::types::ConsistencyLevel;
 use lazy_static::lazy_static;
 use lru::LruCache;
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use std::collections::HashMap;
 use std::future::Future;
 use std::num::NonZeroUsize;
@@ -30,7 +35,6 @@ use std::sync::Arc;
 use tokio::sync::Notify;
 use tonic::transport::Uri;
 
-const DEFAULT_CAPACITY: usize = 4_096;
 type CacheKey = (String, String, String);
 static NEXT_SCHEMA_LOAD_SCOPE: AtomicU64 = AtomicU64::new(1);
 
@@ -102,27 +106,57 @@ fn cache_with_capacity<T>(capacity: usize) -> LruCache<CacheKey, T> {
     LruCache::new(NonZeroUsize::new(capacity).expect("cache capacity must be greater than zero"))
 }
 
+/// Resizes an LRU cache to `capacity`, evicting least-recently-used entries as needed.
+fn resize_cache<T>(cache: &RwLock<LruCache<CacheKey, T>>, capacity: usize) -> Result<()> {
+    let capacity = NonZeroUsize::new(capacity).ok_or_else(|| {
+        Error::validation("cache_capacity".into(), "must be greater than zero".into())
+    })?;
+    cache.write().resize(capacity);
+    Ok(())
+}
+
+/// Returns the maximum number of entries an LRU cache can hold.
+fn cache_capacity<T>(cache: &RwLock<LruCache<CacheKey, T>>) -> usize {
+    cache.read().cap().get()
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // SchemaCache
 ///////////////////////////////////////////////////////////////////////////////
 /// Process-wide collection-description cache keyed by endpoint, database, and collection.
 /// Completed schemas are shared process-wide, while in-flight loads are coalesced only within
 /// one client scope so another client's credentials or RPC deadline cannot control the load.
+///
+/// Reads (`get`/`get_or_load` hits) do not refresh LRU recency, so with more than the configured
+/// number of collections a constantly-read-but-seldom-loaded schema can be evicted by loads of
+/// other collections and re-fetched from the server on the next access. Re-fetch is always
+/// correct and coalesced; this is the deliberate read-contention trade-off of using `peek` under
+/// a read lock.
 pub(super) struct SchemaCache {
-    schemas: Mutex<LruCache<CacheKey, Arc<milvus::DescribeCollectionResponse>>>,
+    schemas: RwLock<LruCache<CacheKey, Arc<milvus::DescribeCollectionResponse>>>,
     loading: Mutex<HashMap<LoadKey, Arc<SchemaLoadState>>>,
 }
 
 impl SchemaCache {
     fn new() -> Self {
-        Self::with_capacity(DEFAULT_CAPACITY)
+        Self::with_capacity(CacheConfig::DEFAULT_CAPACITY)
     }
 
     pub(super) fn with_capacity(capacity: usize) -> Self {
         Self {
-            schemas: Mutex::new(cache_with_capacity(capacity)),
+            schemas: RwLock::new(cache_with_capacity(capacity)),
             loading: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// Resizes the completed-schema cache to `capacity`, evicting least-recently-used entries.
+    pub(super) fn set_capacity(&self, capacity: usize) -> Result<()> {
+        resize_cache(&self.schemas, capacity)
+    }
+
+    /// Returns the maximum number of completed-schema entries the cache can hold.
+    pub(super) fn get_capacity(&self) -> usize {
+        cache_capacity(&self.schemas)
     }
 
     #[cfg(test)]
@@ -133,7 +167,7 @@ impl SchemaCache {
         collection: &str,
     ) -> Option<Arc<milvus::DescribeCollectionResponse>> {
         let key = cache_key(endpoint, database, collection);
-        self.schemas.lock().get(&key).cloned()
+        self.schemas.read().peek(&key).cloned()
     }
 
     pub(super) async fn get_or_load<F, Fut>(
@@ -154,7 +188,7 @@ impl SchemaCache {
             collection: key.clone(),
             scope: load_scope.0,
         };
-        let initial = self.schemas.lock().get(&key).cloned();
+        let initial = self.schemas.read().peek(&key).cloned();
         if initial.is_some() && !force_update {
             trace_debug!(
                 target: "milvus_sdk::schema_cache",
@@ -196,7 +230,7 @@ impl SchemaCache {
         }
         let mut load_guard = SchemaLoadGuard::new(self, load_key.clone(), Arc::clone(&state));
 
-        let current = self.schemas.lock().get(&key).cloned();
+        let current = self.schemas.read().peek(&key).cloned();
         if current.is_some()
             && (!force_update
                 || match (initial.as_ref(), current.as_ref()) {
@@ -214,7 +248,7 @@ impl SchemaCache {
             Ok(response) => {
                 let response = Arc::new(response);
                 {
-                    let mut schemas = self.schemas.lock();
+                    let mut schemas = self.schemas.write();
                     if !state.invalidated.load(Ordering::Acquire) {
                         schemas.put(key.clone(), Arc::clone(&response));
                     }
@@ -255,7 +289,7 @@ impl SchemaCache {
         let key = cache_key(endpoint, database, collection);
         self.invalidate_load(&key);
         let schema = Arc::new(schema);
-        self.schemas.lock().put(key, Arc::clone(&schema));
+        self.schemas.write().put(key, Arc::clone(&schema));
         schema
     }
 
@@ -269,7 +303,7 @@ impl SchemaCache {
             "invalidating schema cache entry"
         );
         self.invalidate_load(&key);
-        self.schemas.lock().pop(&key);
+        self.schemas.write().pop(&key);
     }
 
     pub(super) fn invalidate_database(&self, endpoint: &str, database: &str) {
@@ -291,7 +325,7 @@ impl SchemaCache {
                 }
             }
         }
-        let mut schemas = self.schemas.lock();
+        let mut schemas = self.schemas.write();
         let keys = schemas
             .iter()
             .filter(|((entry_endpoint, entry_database, _), _)| {
@@ -309,12 +343,12 @@ impl SchemaCache {
         for (_, state) in self.loading.lock().drain() {
             state.invalidated.store(true, Ordering::Release);
         }
-        self.schemas.lock().clear();
+        self.schemas.write().clear();
     }
 
     #[allow(dead_code)]
     pub(super) fn size(&self) -> usize {
-        self.schemas.lock().len()
+        self.schemas.read().len()
     }
 
     fn invalidate_load(&self, key: &CacheKey) {
@@ -422,15 +456,48 @@ impl SchemaLoadState {
 // CollectionTsCache
 ///////////////////////////////////////////////////////////////////////////////
 /// Process-wide last-DML-timestamp cache keyed by endpoint, database, and collection.
+///
+/// LRU-bounded like pymilvus's `CollectionTsCache` (default capacity 4096); least-recently-used
+/// entries are evicted when the cache exceeds its capacity.
+///
+/// Evicting a timestamp drops the client's last-write guarantee: SESSION (and default) consistency
+/// reads fall back to `ts=1` for that collection until the next DML records a new timestamp.
+/// Unlike the schema cache, an evicted timestamp cannot be reloaded from the server, so
+/// applications relying on SESSION consistency across many collections should size the cache with
+/// [`CacheConfig::set_capacity`] accordingly.
+///
+/// `set` keeps the maximum timestamp per key and, unlike pymilvus's `get`-based compare, does not
+/// refresh LRU recency when an incoming timestamp is not greater; only a real update marks the key
+/// as recently used. Reads (`get`/`guarantee_timestamp`) use `peek` under a read lock and likewise
+/// never refresh recency, so a collection that is read constantly under Session consistency but
+/// written rarely can be evicted by writes to *other* collections once the cache exceeds its
+/// capacity, silently falling back to `ts=1` until the next DML. This is the same read-contention
+/// trade-off as the schema cache: actively-read-but-rarely-written collections are not protected
+/// from eviction, unlike pymilvus where reads go through the recency-refreshing `LRUCache.get`.
 pub(super) struct CollectionTsCache {
-    timestamps: Mutex<HashMap<CacheKey, u64>>,
+    timestamps: RwLock<LruCache<CacheKey, u64>>,
 }
 
 impl CollectionTsCache {
     fn new() -> Self {
+        Self::with_capacity(CacheConfig::DEFAULT_CAPACITY)
+    }
+
+    fn with_capacity(capacity: usize) -> Self {
         Self {
-            timestamps: Mutex::new(HashMap::new()),
+            timestamps: RwLock::new(cache_with_capacity(capacity)),
         }
+    }
+
+    /// Resizes the timestamp cache to `capacity`, evicting least-recently-used entries.
+    pub(super) fn set_capacity(&self, capacity: usize) -> Result<()> {
+        resize_cache(&self.timestamps, capacity)
+    }
+
+    /// Returns the maximum number of timestamp entries the cache can hold.
+    #[allow(dead_code)]
+    pub(super) fn get_capacity(&self) -> usize {
+        cache_capacity(&self.timestamps)
     }
 
     pub(super) fn set(&self, endpoint: &str, database: &str, collection: &str, timestamp: u64) {
@@ -438,24 +505,47 @@ impl CollectionTsCache {
             return;
         }
         let key = cache_key(endpoint, database, collection);
-        let mut timestamps = self.timestamps.lock();
-        let _previous = timestamps.get(&key).copied();
-        timestamps
-            .entry(key)
-            .and_modify(|current| *current = (*current).max(timestamp))
-            .or_insert(timestamp);
-        trace_debug!(target: "milvus_sdk::timestamp_cache", endpoint = %normalize_endpoint(endpoint), database = %database_name(database), collection, previous = ?_previous, timestamp, entries = timestamps.len(), "DML timestamp cache updated");
+        let mut timestamps = self.timestamps.write();
+        let previous = timestamps.peek(&key).copied();
+        let updated = previous.is_none_or(|current| timestamp > current);
+        if updated {
+            #[cfg(feature = "tracing")]
+            let evicted = timestamps.push(key, timestamp);
+            #[cfg(not(feature = "tracing"))]
+            let _ = timestamps.push(key, timestamp);
+            // `push` returns a pair both when it replaces an existing key's value and when it
+            // evicts the LRU entry for a brand-new key; only a previously-absent key can evict.
+            #[cfg(feature = "tracing")]
+            if previous.is_none() {
+                if let Some((
+                    (evicted_endpoint, evicted_database, evicted_collection),
+                    evicted_ts,
+                )) = evicted
+                {
+                    trace_warn!(
+                        target: "milvus_sdk::timestamp_cache",
+                        endpoint = %evicted_endpoint,
+                        database = %evicted_database,
+                        collection = %evicted_collection,
+                        evicted_ts,
+                        capacity = timestamps.cap().get(),
+                        "timestamp cache entry evicted; SESSION/default reads for this collection fall back to ts=1 until the next DML"
+                    );
+                }
+            }
+        }
+        trace_debug!(target: "milvus_sdk::timestamp_cache", endpoint = %normalize_endpoint(endpoint), database = %database_name(database), collection, previous = ?previous, timestamp, entries = timestamps.len(), "DML timestamp cache updated");
     }
 
     pub(super) fn get(&self, endpoint: &str, database: &str, collection: &str) -> Option<u64> {
         let key = cache_key(endpoint, database, collection);
-        self.timestamps.lock().get(&key).copied()
+        self.timestamps.read().peek(&key).copied()
     }
 
     pub(super) fn invalidate(&self, endpoint: &str, database: &str, collection: &str) {
         let key = cache_key(endpoint, database, collection);
-        let mut timestamps = self.timestamps.lock();
-        let _removed = timestamps.remove(&key).is_some();
+        let mut timestamps = self.timestamps.write();
+        let _removed = timestamps.pop(&key).is_some();
         trace_debug!(target: "milvus_sdk::timestamp_cache", endpoint = %key.0, database = %key.1, collection = %key.2, removed = _removed, entries = timestamps.len(), "DML timestamp cache entry invalidated");
     }
 
@@ -472,14 +562,14 @@ impl CollectionTsCache {
             return;
         }
 
-        let mut timestamps = self.timestamps.lock();
+        let mut timestamps = self.timestamps.write();
         let timestamp = timestamps
             .get(&source_key)
             .copied()
             .unwrap_or_default()
             .max(timestamps.get(&target_key).copied().unwrap_or_default());
         if timestamp != 0 {
-            timestamps.insert(target_key, timestamp);
+            timestamps.put(target_key, timestamp);
         }
         trace_debug!(target: "milvus_sdk::timestamp_cache", endpoint = %normalize_endpoint(endpoint), database = %database_name(database), source_collection, target_collection, timestamp, entries = timestamps.len(), "DML timestamp cache entry copied");
     }
@@ -487,12 +577,18 @@ impl CollectionTsCache {
     pub(super) fn invalidate_database(&self, endpoint: &str, database: &str) {
         let endpoint = normalize_endpoint(endpoint);
         let database = database_name(database);
-        let mut timestamps = self.timestamps.lock();
-        let _before = timestamps.len();
-        timestamps.retain(|(entry_endpoint, entry_database, _), _| {
-            entry_endpoint != &endpoint || entry_database != database
-        });
-        trace_debug!(target: "milvus_sdk::timestamp_cache", endpoint = %endpoint, database, removed = _before.saturating_sub(timestamps.len()), entries = timestamps.len(), "DML timestamp database entries invalidated");
+        let mut timestamps = self.timestamps.write();
+        let keys = timestamps
+            .iter()
+            .filter(|((entry_endpoint, entry_database, _), _)| {
+                entry_endpoint == &endpoint && entry_database == database
+            })
+            .map(|(key, _)| key.clone())
+            .collect::<Vec<_>>();
+        for key in &keys {
+            timestamps.pop(key);
+        }
+        trace_debug!(target: "milvus_sdk::timestamp_cache", endpoint = %endpoint, database, removed = keys.len(), entries = timestamps.len(), "DML timestamp database entries invalidated");
     }
 
     pub(super) fn move_ts(
@@ -509,28 +605,28 @@ impl CollectionTsCache {
             return;
         }
 
-        let mut timestamps = self.timestamps.lock();
+        let mut timestamps = self.timestamps.write();
         let timestamp = timestamps
             .get(&old_key)
             .copied()
             .unwrap_or_default()
             .max(timestamps.get(&new_key).copied().unwrap_or_default());
-        timestamps.remove(&old_key);
-        timestamps.remove(&new_key);
+        timestamps.pop(&old_key);
+        timestamps.pop(&new_key);
         if timestamp != 0 {
-            timestamps.insert(new_key, timestamp);
+            timestamps.put(new_key, timestamp);
         }
         trace_debug!(target: "milvus_sdk::timestamp_cache", endpoint = %normalize_endpoint(endpoint), old_database = %database_name(old_database), old_collection, new_database = %database_name(new_database), new_collection, timestamp, entries = timestamps.len(), "DML timestamp cache entry moved");
     }
 
     #[allow(dead_code)]
     pub(super) fn clear(&self) {
-        self.timestamps.lock().clear();
+        self.timestamps.write().clear();
     }
 
     #[allow(dead_code)]
     pub(super) fn size(&self) -> usize {
-        self.timestamps.lock().len()
+        self.timestamps.read().len()
     }
 
     pub(super) fn guarantee_timestamp(
@@ -553,6 +649,52 @@ impl CollectionTsCache {
 lazy_static! {
     pub(super) static ref SCHEMA_CACHE: SchemaCache = SchemaCache::new();
     pub(super) static ref COLLECTION_TS_CACHE: CollectionTsCache = CollectionTsCache::new();
+    /// Serializes concurrent [`CacheConfig::set_capacity`] calls so both caches always share one capacity.
+    static ref CACHE_CAPACITY_LOCK: Mutex<()> = Mutex::new(());
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// CacheConfig
+///////////////////////////////////////////////////////////////////////////////
+/// Static entry points to tune the process-wide schema and last-DML-timestamp caches.
+///
+/// Both caches are LRU-bounded; the least-recently-used entries are evicted when the cache exceeds
+/// the configured capacity. The default is [`CacheConfig::DEFAULT_CAPACITY`] entries, matching
+/// pymilvus; the Java and C++ SDKs
+/// leave the timestamp cache unbounded, so this bound is a deliberate pymilvus alignment.
+///
+/// Call [`CacheConfig::set_capacity`] before heavy workloads to raise or lower the bound; shrinking
+/// below the current size evicts entries immediately.
+pub struct CacheConfig;
+
+impl CacheConfig {
+    /// The default capacity of the process-wide schema and last-DML-timestamp caches, in entries.
+    pub const DEFAULT_CAPACITY: usize = 4_096;
+
+    /// Sets the capacity of the process-wide schema and last-DML-timestamp caches.
+    ///
+    /// The two resizes happen atomically under a shared lock, so concurrent callers cannot leave the
+    /// caches at different capacities.
+    ///
+    /// Shrinking evicts least-recently-used timestamp entries; SESSION and default-consistency reads
+    /// then fall back to `ts=1` for the evicted collections until the next DML records a new
+    /// timestamp, so deployments touching more than `capacity` collections can silently lose
+    /// read-your-writes guarantees for the affected collections.
+    ///
+    /// Returns a [`Error::Validation`] error when `capacity` is zero.
+    pub fn set_capacity(capacity: usize) -> Result<()> {
+        let _guard = CACHE_CAPACITY_LOCK.lock();
+        SCHEMA_CACHE.set_capacity(capacity)?;
+        COLLECTION_TS_CACHE.set_capacity(capacity)?;
+        Ok(())
+    }
+
+    /// Returns the capacity of the process-wide schema and last-DML-timestamp caches.
+    ///
+    /// Both caches share the same maximum entry count, defaulting to 4096, matching pymilvus.
+    pub fn get_capacity() -> usize {
+        SCHEMA_CACHE.get_capacity()
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -560,7 +702,7 @@ lazy_static! {
 ///////////////////////////////////////////////////////////////////////////////
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::{
         normalize_endpoint, CollectionTsCache, SchemaCache, SchemaLoadScope, COLLECTION_TS_CACHE,
         SCHEMA_CACHE,
@@ -571,6 +713,9 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
     use tokio::sync::Notify;
+
+    /// Serializes tests that mutate the process-wide global caches, which run in parallel.
+    pub(crate) static GLOBAL_CACHE_TEST_LOCK: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
 
     #[test]
     fn endpoint_normalization_uses_transport_default_ports() {
@@ -594,6 +739,7 @@ mod tests {
 
     #[test]
     fn caches_normalize_database_and_isolate_endpoints() {
+        let _guard = GLOBAL_CACHE_TEST_LOCK.lock();
         let first_endpoint = "http://CACHE-ISOLATION-A:19530/path";
         let normalized_first_endpoint = "cache-isolation-a:19530";
         let second_endpoint = "cache-isolation-b";
@@ -953,9 +1099,15 @@ mod tests {
                 },
             );
         }
-        cache
-            .get("host:19530", "db", "collection-1")
-            .expect("touch first schema");
+        cache.set(
+            "host:19530",
+            "db",
+            "collection-1",
+            milvus::DescribeCollectionResponse {
+                collection_id: 1,
+                ..Default::default()
+            },
+        );
         cache.set(
             "host:19530",
             "db",
@@ -981,9 +1133,9 @@ mod tests {
     }
 
     #[test]
-    fn collection_timestamps_do_not_evict_and_move_atomically() {
-        let cache = CollectionTsCache::new();
-        for index in 0..5_000_u64 {
+    fn collection_timestamps_evict_lru_and_move_atomically() {
+        let cache = CollectionTsCache::with_capacity(16);
+        for index in 0..16_u64 {
             cache.set(
                 "host:19530",
                 "db",
@@ -991,11 +1143,10 @@ mod tests {
                 index + 1,
             );
         }
-        assert_eq!(cache.get("host:19530", "db", "collection-0"), Some(1));
-        assert_eq!(
-            cache.get("host:19530", "db", "collection-4999"),
-            Some(5_000)
-        );
+        assert_eq!(cache.size(), 16);
+        cache.set("host:19530", "db", "collection-16", 17);
+        assert_eq!(cache.get("host:19530", "db", "collection-0"), None);
+        assert_eq!(cache.get("host:19530", "db", "collection-16"), Some(17));
 
         cache.set("host:19530", "source", "old", 100);
         cache.set("host:19530", "target", "new", 200);
@@ -1006,8 +1157,124 @@ mod tests {
         cache.set("host:19530", "source", "old", 300);
         cache.move_ts("host:19530", "source", "old", "target", "new");
         assert_eq!(cache.get("host:19530", "target", "new"), Some(300));
-        assert_eq!(cache.size(), 5_001);
         cache.clear();
         assert_eq!(cache.size(), 0);
+    }
+
+    #[test]
+    fn collection_timestamps_default_capacity_matches_pymilvus() {
+        let cache = CollectionTsCache::new();
+        for index in 0..crate::v2::CacheConfig::DEFAULT_CAPACITY as u64 {
+            cache.set(
+                "host:19530",
+                "db",
+                &format!("collection-{index}"),
+                index + 1,
+            );
+        }
+        assert_eq!(cache.size(), crate::v2::CacheConfig::DEFAULT_CAPACITY);
+        cache.set("host:19530", "db", "collection-4096", 4_097);
+        assert_eq!(cache.get("host:19530", "db", "collection-0"), None);
+    }
+
+    #[test]
+    fn cache_capacity_resizes_and_rejects_zero() {
+        let cache = CollectionTsCache::with_capacity(4);
+        assert_eq!(cache.get_capacity(), 4);
+        for index in 0..4_u64 {
+            cache.set(
+                "host:19530",
+                "db",
+                &format!("collection-{index}"),
+                index + 1,
+            );
+        }
+        cache.set_capacity(2).expect("resize to two entries");
+        assert_eq!(cache.get_capacity(), 2);
+        assert_eq!(cache.size(), 2);
+        assert!(cache.get("host:19530", "db", "collection-0").is_none());
+        assert!(cache.get("host:19530", "db", "collection-1").is_none());
+        assert!(cache.get("host:19530", "db", "collection-3").is_some());
+        assert!(matches!(cache.set_capacity(0), Err(Error::Validation(_))));
+        assert!(matches!(
+            crate::v2::CacheConfig::set_capacity(0),
+            Err(Error::Validation(_))
+        ));
+    }
+
+    #[test]
+    fn timestamp_set_skips_smaller_values_without_disturbing_lru_order() {
+        let cache = CollectionTsCache::with_capacity(3);
+        cache.set("host:19530", "db", "a", 1);
+        cache.set("host:19530", "db", "b", 2);
+        cache.set("host:19530", "db", "c", 3);
+
+        cache.set("host:19530", "db", "a", 10);
+        assert_eq!(cache.get("host:19530", "db", "a"), Some(10));
+
+        cache.set("host:19530", "db", "b", 1);
+        assert_eq!(cache.size(), 3);
+
+        cache.set("host:19530", "db", "d", 4);
+        assert!(cache.get("host:19530", "db", "b").is_none());
+        assert_eq!(cache.get("host:19530", "db", "a"), Some(10));
+        assert_eq!(cache.get("host:19530", "db", "c"), Some(3));
+        assert_eq!(cache.get("host:19530", "db", "d"), Some(4));
+    }
+
+    #[test]
+    fn public_cache_capacity_roundtrips_the_process_wide_caches() {
+        let _guard = GLOBAL_CACHE_TEST_LOCK.lock();
+        let original = crate::v2::CacheConfig::get_capacity();
+        crate::v2::CacheConfig::set_capacity(8192).expect("grow global caches");
+        assert_eq!(crate::v2::CacheConfig::get_capacity(), 8192);
+        assert_eq!(SCHEMA_CACHE.get_capacity(), 8192);
+        assert_eq!(COLLECTION_TS_CACHE.get_capacity(), 8192);
+
+        crate::v2::CacheConfig::set_capacity(original).expect("restore capacity");
+        assert_eq!(crate::v2::CacheConfig::get_capacity(), original);
+    }
+
+    #[test]
+    fn concurrent_set_capacity_keeps_both_caches_in_lockstep() {
+        let _guard = GLOBAL_CACHE_TEST_LOCK.lock();
+        let original = crate::v2::CacheConfig::get_capacity();
+        let mut handles = Vec::new();
+        for thread_index in 0..8 {
+            handles.push(std::thread::spawn(move || {
+                for round in 0..50 {
+                    let capacity = 64 + ((thread_index + round) % 8) * 64;
+                    crate::v2::CacheConfig::set_capacity(capacity)
+                        .expect("valid capacity during race");
+                }
+            }));
+        }
+        for handle in handles {
+            handle.join().expect("racing thread");
+        }
+        assert_eq!(
+            SCHEMA_CACHE.get_capacity(),
+            COLLECTION_TS_CACHE.get_capacity(),
+            "both caches must share the same capacity after all racing set_capacity calls"
+        );
+        crate::v2::CacheConfig::set_capacity(original).expect("restore capacity");
+        assert_eq!(crate::v2::CacheConfig::get_capacity(), original);
+    }
+
+    #[test]
+    fn evicted_timestamp_falls_back_to_one_for_session_consistency() {
+        let cache = CollectionTsCache::with_capacity(1);
+        cache.set("host:19530", "db", "kept", 100);
+        assert_eq!(
+            cache.guarantee_timestamp("host:19530", "db", "kept", ConsistencyLevel::Session),
+            100
+        );
+
+        cache.set("host:19530", "db", "other", 200);
+        assert_eq!(cache.get("host:19530", "db", "kept"), None);
+        assert_eq!(
+            cache.guarantee_timestamp("host:19530", "db", "kept", ConsistencyLevel::Session),
+            1
+        );
     }
 }
