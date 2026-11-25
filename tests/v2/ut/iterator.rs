@@ -748,6 +748,45 @@ async fn search_iterator_does_not_advance_state_when_decoding_fails() {
 }
 
 #[tokio::test]
+async fn search_iterator_updates_cursor_per_page_while_token_stays_fixed() {
+    let server = MockServer::start().await;
+    let mut iterator = server
+        .client
+        .search_iterator(
+            SearchIteratorRequest::builder()
+                .search(
+                    SearchRequest::builder()
+                        .collection_name("books")
+                        .vector_field("vector")
+                        .vectors(SearchVectors::Float(vec![vec![0.1, 0.2]]))
+                        .metric_type(MetricType::Cosine)
+                        .filter("cursor_search_iterator")
+                        .build()
+                        .expect("valid search request"),
+                )
+                .batch_size(1)
+                .build()
+                .expect("valid iterator request"),
+        )
+        .await
+        .expect("create search iterator");
+
+    assert!(iterator.next().await.expect("page 1").is_some());
+    assert!(iterator.next().await.expect("page 2").is_some());
+    assert!(iterator.next().await.expect("eof").is_none());
+
+    let requests = server.service.request_texts("search");
+    assert_eq!(requests.len(), 4);
+    assert!(!requests[1].contains("search_iter_cursor"));
+    assert!(requests[2].contains(r#"key: "search_iter_id", value: "page-tok""#));
+    assert!(requests[2].contains(r#"key: "search_iter_cursor", value: "c1:page1""#));
+    assert!(requests[3].contains(r#"key: "search_iter_id", value: "page-tok""#));
+    assert!(requests[3].contains(r#"key: "search_iter_cursor", value: "c1:page2""#));
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn query_iterator_advances_by_primary_key_beyond_query_window() {
     let server = MockServer::start().await;
     let client = &server.client;

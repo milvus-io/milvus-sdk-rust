@@ -678,9 +678,13 @@ impl SearchIteratorV2 {
                 }
                 let mut raw = rpc_with_retry!(self.client, search, request.clone())?;
                 status_to_result(&raw.status)?;
-                let (iterator_token, iterator_bound) = {
+                let (iterator_token, iterator_bound, iterator_cursor) = {
                     let iterator = search_iterator_v2_metadata(&raw)?;
-                    (iterator.token.clone(), iterator.last_bound)
+                    (
+                        iterator.token.clone(),
+                        iterator.last_bound,
+                        iterator.cursor.clone(),
+                    )
                 };
                 let next_token = self.token.clone().unwrap_or(iterator_token);
                 set_search_extra_param(
@@ -688,6 +692,17 @@ impl SearchIteratorV2 {
                     "search_iter_last_bound",
                     &format_iterator_bound(iterator_bound),
                 );
+                if !iterator_cursor.is_empty() {
+                    set_search_extra_param(
+                        &mut request.search_params,
+                        "search_iter_cursor",
+                        &iterator_cursor,
+                    );
+                } else {
+                    request
+                        .search_params
+                        .retain(|param| param.key != "search_iter_cursor");
+                }
                 if search_iterator_result_count(&raw) == Some(0) {
                     trace_debug!(target: "milvus_sdk::iterator", kind = "search_v2", "token-based search iterator reached end of results");
                     exhausted = true;

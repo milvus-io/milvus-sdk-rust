@@ -2518,6 +2518,39 @@ impl MilvusService for MockMilvus {
                     results.primary_field_name.clear();
                 }
             }
+            if request.dsl == "cursor_search_iterator" {
+                let call = service.call_count("search");
+                response = search_response();
+                if let Some(results) = response.results.as_mut() {
+                    let token = match call {
+                        1 => "probe-tok",
+                        2 => "page-tok",
+                        _ => "ignored-tok",
+                    };
+                    let cursor = match call {
+                        1 => "",
+                        2 => "c1:page1",
+                        3 => "c1:page2",
+                        _ => "",
+                    };
+                    results.search_iterator_v2_results = Some(schema::SearchIteratorV2Results {
+                        token: token.into(),
+                        last_bound: 0.1 * (call as f32),
+                        cursor: cursor.into(),
+                    });
+                    if call >= 4 {
+                        results.top_k = 0;
+                        results.topks = vec![0];
+                        results.scores.clear();
+                        results.ids = Some(schema::IDs::default());
+                        results.fields_data = vec![schema::FieldData {
+                            r#type: schema::DataType::VarChar as i32,
+                            field_name: "text".into(),
+                            ..Default::default()
+                        }];
+                    }
+                }
+            }
             response
         }
     );
