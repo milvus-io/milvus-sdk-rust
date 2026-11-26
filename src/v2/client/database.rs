@@ -171,6 +171,7 @@ mod tests {
             channel,
             interceptor,
             0,
+            false,
         )));
         let config = super::super::ConnectConfig::new()
             .telemetry(crate::v2::types::TelemetryConfig::new().enabled(false));

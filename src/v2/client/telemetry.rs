@@ -844,7 +844,8 @@ impl TelemetryInner {
                 if status.code() == Code::Unimplemented {
                     self.unsupported_streak.fetch_add(1, Ordering::Relaxed);
                 }
-                *self.last_heartbeat_error.write() = Some(status.to_string());
+                *self.last_heartbeat_error.write() =
+                    Some(crate::v2::error::format_grpc_status(&status));
                 return;
             }
             Ok(Ok(response)) => response.into_inner(),
@@ -1795,6 +1796,7 @@ mod tests {
             channel,
             interceptor,
             generation,
+            false,
         )));
         ClientTelemetry::new(
             config,
@@ -1815,7 +1817,7 @@ mod tests {
             database: Arc::clone(&database),
             database_explicit: Arc::clone(&database_explicit),
         };
-        let services = Arc::new(RwLock::new(service_bundle(channel, interceptor, 7)));
+        let services = Arc::new(RwLock::new(service_bundle(channel, interceptor, 7, false)));
         let connect = ConnectConfig::new().telemetry(config.clone());
         ClientTelemetry::new(
             config,

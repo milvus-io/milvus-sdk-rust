@@ -350,7 +350,12 @@ pub(crate) async fn build_services(
         database: Arc::clone(database),
         database_explicit: Arc::clone(database_explicit),
     };
-    Ok(super::service_bundle(channel, interceptor, generation))
+    Ok(super::service_bundle(
+        channel,
+        interceptor,
+        generation,
+        connect_config.zstd_compression,
+    ))
 }
 
 /// Shared global-cluster state that manages topology discovery and primary failover.
