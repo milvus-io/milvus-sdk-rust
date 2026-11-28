@@ -401,6 +401,7 @@ mod tests {
             delete_cnt: 0,
             upsert_cnt: 0,
             timestamp: 0,
+            ..Default::default()
         };
 
         assert!(status_to_result(&result.status).is_ok());
@@ -425,6 +426,7 @@ mod tests {
             delete_cnt: 0,
             upsert_cnt: 0,
             timestamp: 0,
+            ..Default::default()
         };
 
         let err = status_to_result(&result.status).unwrap_err();
