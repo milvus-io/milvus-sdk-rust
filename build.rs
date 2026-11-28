@@ -49,9 +49,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|proto_file| proto_path(proto_file))
         .collect();
 
-    tonic_build::configure()
+    tonic_prost_build::configure()
         .build_server(true)
         .generate_default_stubs(true)
-        .compile_protos(&proto_entry_files, &[PROTO_DIR])?;
+        .compile_protos(&proto_entry_files, &[PathBuf::from(PROTO_DIR)])?;
     Ok(())
 }

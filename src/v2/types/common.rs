@@ -3124,6 +3124,7 @@ pub struct ConnectConfig {
     pub(crate) keepalive_time: Duration,
     pub(crate) keepalive_timeout: Duration,
     pub(crate) keepalive_while_idle: bool,
+    pub(crate) zstd_compression: bool,
     pub(crate) database: String,
     pub(crate) retry: RetryConfig,
     pub(crate) telemetry: TelemetryConfig,
@@ -3150,6 +3151,7 @@ impl std::fmt::Debug for ConnectConfig {
             .field("keepalive_time", &self.keepalive_time)
             .field("keepalive_timeout", &self.keepalive_timeout)
             .field("keepalive_while_idle", &self.keepalive_while_idle)
+            .field("zstd_compression", &self.zstd_compression)
             .field("database", &self.database)
             .field("retry", &self.retry)
             .field("telemetry", &self.telemetry)
@@ -3176,6 +3178,7 @@ impl ConnectConfig {
             keepalive_time: Duration::from_secs(10),
             keepalive_timeout: Duration::from_secs(5),
             keepalive_while_idle: true,
+            zstd_compression: false,
             database: String::new(),
             retry: RetryConfig::new(),
             telemetry: TelemetryConfig::new(),
@@ -3474,6 +3477,23 @@ impl ConnectConfig {
     /// Returns the configured keepalive while idle.
     pub fn get_keepalive_while_idle(&self) -> bool {
         self.keepalive_while_idle
+    }
+
+    /// Enables zstd for outgoing and incoming gRPC messages. Disabled by default.
+    pub fn zstd_compression(mut self, enabled: bool) -> Self {
+        self.set_zstd_compression(enabled);
+        self
+    }
+
+    /// Changes whether this configuration negotiates zstd on gRPC connections.
+    pub fn set_zstd_compression(&mut self, enabled: bool) -> &mut Self {
+        self.zstd_compression = enabled;
+        self
+    }
+
+    /// Returns whether gRPC zstd compression is enabled.
+    pub fn get_zstd_compression(&self) -> bool {
+        self.zstd_compression
     }
 
     /// Sets the database and returns the updated value.

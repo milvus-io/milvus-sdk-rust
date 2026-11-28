@@ -118,6 +118,17 @@ impl ValidationError {
     }
 }
 
+// Keep the SDK's error and telemetry diagnostics stable across tonic versions.
+pub(super) fn format_grpc_status(status: &GrpcError) -> String {
+    format!(
+        "status: {:?}, message: {:?}, details: {:?}, metadata: {:?}",
+        status.code(),
+        status.message(),
+        status.details(),
+        status.metadata()
+    )
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // Error
 ///////////////////////////////////////////////////////////////////////////////
@@ -125,7 +136,7 @@ impl ValidationError {
 #[derive(Debug, Clone, Error)]
 #[non_exhaustive]
 pub enum Error {
-    #[error("gRPC error: {0}")]
+    #[error("gRPC error: {}", format_grpc_status(.0))]
     /// A transport-level gRPC failure occurred.
     Grpc(#[from] GrpcError),
 

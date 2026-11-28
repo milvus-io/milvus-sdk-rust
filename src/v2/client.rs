@@ -171,10 +171,18 @@ fn service_bundle(
     channel: Channel,
     interceptor: V2Interceptor,
     generation: TransportGeneration,
+    zstd_compression: bool,
 ) -> ServiceBundle {
+    let mut milvus = MilvusServiceClient::with_interceptor(channel.clone(), interceptor.clone());
+    let mut telemetry = ClientTelemetryServiceClient::with_interceptor(channel, interceptor);
+    if zstd_compression {
+        let zstd = tonic::codec::CompressionEncoding::Zstd;
+        milvus = milvus.send_compressed(zstd).accept_compressed(zstd);
+        telemetry = telemetry.send_compressed(zstd).accept_compressed(zstd);
+    }
     ServiceBundle {
-        milvus: MilvusServiceClient::with_interceptor(channel.clone(), interceptor.clone()),
-        telemetry: ClientTelemetryServiceClient::with_interceptor(channel, interceptor),
+        milvus,
+        telemetry,
         generation,
     }
 }
@@ -369,7 +377,7 @@ impl ClientV2 {
                 database: Arc::clone(&database),
                 database_explicit: Arc::clone(&database_explicit),
             };
-            let mut services = service_bundle(channel, interceptor, 0);
+            let mut services = service_bundle(channel, interceptor, 0, param.zstd_compression);
             wait_for_server(&mut services.milvus, param.connect_timeout).await?;
             (
                 Arc::new(RwLock::new(services)),
@@ -452,7 +460,8 @@ impl ClientV2 {
             database_explicit: Arc::clone(&self.database_explicit),
         };
         let generation = self.service.read().generation.saturating_add(1);
-        let mut services = service_bundle(channel, interceptor, generation);
+        let mut services =
+            service_bundle(channel, interceptor, generation, config.zstd_compression);
         wait_for_server(&mut services.milvus, config.connect_timeout).await?;
         *self.connect_config.write() = config;
         *self.service.write() = services;
@@ -922,7 +931,7 @@ mod retry_tests {
             database: Arc::clone(&database),
             database_explicit: Arc::clone(&database_explicit),
         };
-        let service = Arc::new(RwLock::new(service_bundle(channel, interceptor, 0)));
+        let service = Arc::new(RwLock::new(service_bundle(channel, interceptor, 0, false)));
         let config = ConnectConfig::new().telemetry(TelemetryConfig::new().enabled(false));
         let telemetry = ClientTelemetry::new(
             config.telemetry.clone(),

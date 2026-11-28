@@ -62,6 +62,13 @@ This program expects Milvus at `http://localhost:19530` and uses `root:Milvus` b
 another server, set `MILVUS_URI` and `MILVUS_TOKEN`. See the
 [Milvus installation guide](https://milvus.io/docs/install-overview.md) for deployment options.
 
+To use gRPC zstd with a compatible Milvus endpoint, pass
+`ConnectConfig::new().uri(uri).zstd_compression(true)` to `ClientV2::new`.
+The client sends compressed requests and accepts compressed responses on that connection,
+including after reconnection. Compression is disabled by default.
+Applications using generated protobuf messages or tonic transport types directly should
+align their dependencies with the SDK (prost 0.14 and tonic 0.14.5).
+
 For an independently buildable application that covers collection creation, insertion, loading,
 search, result handling, and cleanup, follow [Tutorial 1: Quick start](tutorial/1_quickstart/).
 

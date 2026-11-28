@@ -38,8 +38,10 @@ name = "milvus"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tonic = { version = "0.13.1", features = ["tls-native-roots", "prost"] }
-prost = ">=0.13, <0.14"
+# 0.14.5 bounds decompression and is the last tonic release supporting Rust 1.86.
+tonic = { version = "=0.14.5", features = ["tls-native-roots", "zstd"] }
+tonic-prost = "=0.14.5"
+prost = "0.14"
 tokio = { version = "1.17.0", features = ["full"] }
 thiserror = "1.0"
 serde = { version = "1.0", features = ["derive"] }
@@ -69,9 +71,9 @@ uuid = { version = "1.11", features = ["v4"] }
 xxhash-rust = { version = "0.8", features = ["xxh64"] }
 
 [build-dependencies]
-tonic-build = { version = "0.13", default-features = false, features = [
-    "prost",
-] }
+# Keep the transitive generator on the same MSRV-compatible tonic family.
+tonic-build = { version = "=0.14.5", default-features = false }
+tonic-prost-build = { version = "=0.14.5", default-features = false }
 protoc-bin-vendored = "=3.2.0"
 
 [dev-dependencies]
